@@ -1,0 +1,39 @@
+# 一起观影的 B 站片单（移植自 siios）：每小时取一次 B 站的推荐、番剧、热门、游戏，推到 bilibili-data 分支。
+# - 分支只有一个提交（每次强推覆盖），不往 main 加提交，也不会触发重新部署 Pages；
+# - App 从 https://raw.githubusercontent.com/<仓库>/bilibili-data/<分类>.json 读，<仓库>是构建 App 的那个（fork 的读 fork 自己的）；
+# - 有分类没取到时这次不推，分支上还是上一次的片单。也可以在 Actions 页手动运行；
+# - fork 以后 GitHub 默认不跑定时任务：在 fork 的 Actions 页启用工作流，再手动运行一次。
+name: Bilibili data
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bilibili-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node apps/web/scripts/update-bilibili.mjs out
+      - name: Push to bilibili-data
+        working-directory: out
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q -b bilibili-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "B 站片单 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" bilibili-data

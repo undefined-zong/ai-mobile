@@ -1,0 +1,128 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-image-game-kingdom",
+  "category": "image",
+  "name": "王国模拟 · 朝代立绘",
+  "defaultFor": [
+    "game-kingdom-image"
+  ],
+  "description": "按朝代、身份与固定外观绘制大臣、后宫和他国人物；使用已有NovelAI生图设置，单人竖幅全身立绘。",
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "朝代人物立绘",
+      "role": "system",
+      "content": "你是NovelAI提示词写手，为王国模拟中的单个人物写英文Danbooru风格tags。严格依照朝代、性别、年龄、人物身份、外貌和用户架空世界。锁定外貌与服饰由程序加入，不重复、不更换。只写构图、动作、表情、细节配饰与光线。成年人物用adult woman或adult man。禁止把秦汉人物画成清朝服饰，不混入现代服饰、器械或日本和服。",
+      "enabled": true,
+      "marker": false,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      }
+    },
+    {
+      "identifier": "imageSubject",
+      "name": "人物与固定服饰",
+      "role": "system",
+      "content": "",
+      "enabled": true,
+      "marker": true,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "imageScene",
+      "name": "朝代王庭",
+      "role": "system",
+      "content": "",
+      "enabled": true,
+      "marker": true,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "imageRecent",
+      "name": "人物生平与世界",
+      "role": "system",
+      "content": "",
+      "enabled": true,
+      "marker": true,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "portrait",
+      "name": "立绘构图",
+      "role": "system",
+      "content": "单人、完整全身、自然站立、人物居中，双足和衣摆完整，干净浅色背景。大臣仪态端肃，可手持文书或笏；后宫人物服饰与朝代相符，以自身性格体现姿态；他国人物服饰可体现输入明确的文化。画幅portrait。不要画文字、边框、姓名牌、其他人。",
+      "enabled": true,
+      "marker": false,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      },
+      "triggers": [
+        "portrait"
+      ]
+    },
+    {
+      "identifier": "imageCaption",
+      "name": "画面要求",
+      "role": "system",
+      "content": "",
+      "enabled": true,
+      "marker": true,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "format",
+      "name": "输出格式",
+      "role": "system",
+      "content": "只输出JSON：{\"caption\":\"人物名与身份，20字以内\",\"tags\":\"solo, full body, standing等英文tags\",\"negative\":\"额外英文负面tags\",\"size\":\"portrait\"}。不写质量词或画师名。",
+      "enabled": true,
+      "marker": false,
+      "injection": {
+        "position": "relative",
+        "depth": 0
+      }
+    }
+  ],
+  "sampler": {
+    "temperature": 0.55,
+    "topP": 0.95,
+    "maxTokens": 2000,
+    "contextTokens": 24000,
+    "frequencyPenalty": 0.3,
+    "presencePenalty": 0.3,
+    "stream": true
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": []
+}

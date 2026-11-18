@@ -1,0 +1,163 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-image-sleep",
+  "category": "image",
+  "name": "生图 · 哄睡",
+  "defaultFor": [
+    "image:sleep"
+  ],
+  "description": "哄睡连麦时画的图：连麦（刚连上，她躺在床上、戴着耳机小声和你说话）、这一刻（你点相机时她此刻的样子，画面按她刚说的话）；每块按触发条件只发这次画的那一块。长相（同人是角色 tag + 作品 tag）和今天的睡衣由程序按角色加在最前面；都是竖图，铺满整屏当连麦的画面。预设只管构图、光线和这一刻在做什么。",
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "任务",
+      "role": "system",
+      "content": "你是 NovelAI V4.5 的提示词写手，给\"哄睡\"画图：睡前，{{char}}躺在床上和{{user}}连麦，画面是{{user}}眼里看到的{{char}}（像躺在{{char}}旁边，或者视频里看到的{{char}}）。把要画的那一刻写成 Danbooru 风格的英文 tags。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "rules",
+      "name": "规则",
+      "role": "system",
+      "content": "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 写了\"服装（程序会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只画{{char}}一个人（solo）；{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "sceneRule",
+      "name": "这个场景",
+      "role": "system",
+      "content": "场景：深夜的卧室，{{char}}已经躺下了：床、枕头、被子（on bed, lying, on side, pillow, blanket, under covers），可以戴着耳机或者把手机放在枕边（earphones, phone）。光线很暗、很柔：床头灯的暖光、窗外的月光或者手机屏幕的微光（dim lighting, bedside lamp, moonlight, night, dark room, soft lighting），熄灯了就只剩月光。画面安静、亲密、让人犯困，有一点景深（depth of field）；不要明亮的白天，不要夸张的动作。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "momentMic",
+      "name": "时刻 · 连麦",
+      "role": "system",
+      "content": "这一刻：刚连上麦。{{char}}侧躺在床上，脸枕着枕头，看着你（looking at viewer），困困的、带一点笑（sleepy, half-closed eyes, gentle smile），像是把手机立在枕边和你说悄悄话；可以把被子拉到肩膀。竖图，上半身或脸的近景（upper body, close-up, pov, from side），留出枕头和被子。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "mic"
+      ]
+    },
+    {
+      "identifier": "momentNow",
+      "name": "时刻 · 这一刻",
+      "role": "system",
+      "content": "这一刻：连麦中{{user}}想看看{{char}}现在的样子，画面按\"要画的画面\"和\"最近的对话\"画——在小声说话、打哈欠（yawning）、眼睛快闭上了（closed eyes, drowsy）、抱着枕头或被子（hugging pillow）、已经睡着了（sleeping）……表情和动作要对上她刚说的话。竖图，上半身或近景，第一视角（pov）。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "now"
+      ]
+    },
+    {
+      "identifier": "format",
+      "name": "输出格式（JSON，字段名别改）",
+      "role": "system",
+      "content": "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait、square 或 landscape\"}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageSubject",
+      "name": "角色和外观 tags",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageScene",
+      "name": "地点、服装、时间天气、表情",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageRecent",
+      "name": "最近的对话",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageCaption",
+      "name": "要画的画面",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    }
+  ],
+  "sampler": {
+    "temperature": 0.7,
+    "topP": 1,
+    "maxTokens": 800,
+    "contextTokens": 32000,
+    "frequencyPenalty": 0,
+    "presencePenalty": 0,
+    "stream": false
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": []
+}

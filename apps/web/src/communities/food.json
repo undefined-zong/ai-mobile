@@ -1,0 +1,111 @@
+{
+  "format": "ai-mobile-community",
+  "version": 1,
+  "id": "community-food",
+  "joined": false,
+  "community": {
+    "name": "今天吃什么",
+    "description": "吃货聚集地：晒今天吃的、问明天吃什么、分享不翻车的菜谱和不踩雷的小店。自己做的、外卖点的、食堂打的都算。",
+    "vibe": "常见的帖子：晒一顿饭（自己做的、外卖、食堂、探店）、求菜谱和求救（翻车现场）、发菜谱和备菜经验、深夜放毒、吐槽踩雷的店和离谱的黑暗料理、\"今天吃什么\"选择困难求投票。大家说话随意、嘴馋、爱起哄，夸人夸得很具体（\"这个溏心蛋绝了\"），看到翻车会笑但也真给办法；甜咸豆腐脑、香菜、折耳根是永远吵不完的梗。不欢迎的：硬广、只发一句\"好吃\"没有任何细节的帖子。",
+    "tags": [
+      "美食",
+      "吃",
+      "做饭",
+      "菜谱",
+      "探店",
+      "外卖",
+      "夜宵",
+      "下厨",
+      "食堂"
+    ],
+    "icon": "🍜",
+    "color": "#e8734a",
+    "memberCount": 128600
+  },
+  "posts": [
+    {
+      "author": "kk_0417",
+      "title": "求助：一个人住，周末备菜怎么才能不吃腻",
+      "text": "每周日备四天的量，周三开始就完全不想打开冰箱了……现在是鸡胸肉+西兰花+糙米三件套轮回。有没有那种备一次、每天能变个花样的思路？",
+      "image": null,
+      "html": null,
+      "htmlTitle": "",
+      "likes": 41,
+      "bumps": 9,
+      "minutesAgo": 1560,
+      "comments": [
+        {
+          "author": "阿澈不吃香菜",
+          "text": "别备成品，备半成品。肉腌好分袋冻，菜洗好切好，每天现炒十分钟，酱汁换着来就不腻。",
+          "replyTo": null
+        },
+        {
+          "author": "今天也要吃饱",
+          "text": "同鸡胸肉受害者。后来换成鸡腿肉去骨，世界都亮了。",
+          "replyTo": null
+        },
+        {
+          "author": "kk_0417",
+          "text": "半成品这个思路可以！酱汁有推荐吗",
+          "replyTo": "阿澈不吃香菜"
+        },
+        {
+          "author": "阿澈不吃香菜",
+          "text": "照烧、蒜蓉黑椒、番茄底，三种轮着来。",
+          "replyTo": "kk_0417"
+        }
+      ]
+    },
+    {
+      "author": "阿澈不吃香菜",
+      "title": "番茄牛腩终于炖成功了，交作业",
+      "text": "翻车三次，这次总算软烂不柴。之前一直是焯完水用冷水冲，肉一激就紧了。把做法整理成卡片了，想抄的自取。",
+      "image": null,
+      "html": "<div style='max-width:340px;margin:0 auto;padding:16px;border-radius:16px;background:#fff8f0;color:#3a2a1e;font-family:system-ui,-apple-system,sans-serif;font-size:13px;line-height:1.7'><div style='font-size:16px;font-weight:700'>番茄牛腩 · 懒人版</div><div style='color:#a0714f;font-size:12px'>2–3 人份 · 动手 20 分钟 · 炖 90 分钟</div><div style='display:flex;gap:6px;flex-wrap:wrap;margin:10px 0'><span style='padding:2px 8px;border-radius:99px;background:#ffe3cc;font-size:12px'>牛腩 500g</span><span style='padding:2px 8px;border-radius:99px;background:#ffe3cc;font-size:12px'>番茄 4 个</span><span style='padding:2px 8px;border-radius:99px;background:#ffe3cc;font-size:12px'>洋葱半个</span><span style='padding:2px 8px;border-radius:99px;background:#ffe3cc;font-size:12px'>番茄酱 1 勺</span><span style='padding:2px 8px;border-radius:99px;background:#ffe3cc;font-size:12px'>姜 3 片</span></div><div style='border-top:1px dashed #e0b894;margin:8px 0'></div><div><b>1</b>　牛腩切块冷水下锅，加姜片焯到没有血沫，捞出来用热水冲干净。</div><div><b>2</b>　番茄顶上划十字烫一下去皮，两个切丁、两个切大块。</div><div><b>3</b>　少油炒洋葱到透明，下番茄丁和番茄酱炒出沙。</div><div><b>4</b>　倒牛腩翻匀，加开水没过，小火炖 80 分钟。</div><div><b>5</b>　下番茄大块，盐和一点点糖调味，再炖 10 分钟收汁。</div><div style='margin-top:10px;padding:8px 10px;border-radius:10px;background:#ffeedd;font-size:12px'>关键：焯完用<b>热水</b>冲，后面加的也是<b>开水</b>，肉才不柴。</div></div>",
+      "htmlTitle": "番茄牛腩菜谱卡",
+      "likes": 186,
+      "bumps": 27,
+      "minutesAgo": 540,
+      "comments": [
+        {
+          "author": "豆腐脑必须咸",
+          "text": "热水冲这个细节太真实了，我妈说了十年我没听。",
+          "replyTo": null
+        },
+        {
+          "author": "一只小馄饨",
+          "text": "收藏了，周末就做。汤能拌饭吗",
+          "replyTo": null
+        },
+        {
+          "author": "阿澈不吃香菜",
+          "text": "能，我就是冲着拌饭去的。",
+          "replyTo": "一只小馄饨"
+        }
+      ]
+    },
+    {
+      "author": "今天也要吃饱",
+      "title": "",
+      "text": "凌晨一点。本来只是想烧壶水。",
+      "image": "深夜的书桌上一碗加了溏心蛋和芝士片的泡面，冒着热气，俯拍，旁边是亮着屏幕的笔记本电脑",
+      "html": null,
+      "htmlTitle": "",
+      "likes": 93,
+      "bumps": 14,
+      "minutesAgo": 95,
+      "comments": [
+        {
+          "author": "深夜不放毒会死",
+          "text": "芝士片是灵魂。举报了。",
+          "replyTo": null
+        },
+        {
+          "author": "kk_0417",
+          "text": "我饿了，你负责。",
+          "replyTo": null
+        }
+      ]
+    }
+  ]
+}

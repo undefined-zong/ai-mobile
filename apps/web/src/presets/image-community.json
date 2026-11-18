@@ -1,0 +1,151 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-image-community",
+  "category": "image",
+  "name": "生图 · 社群",
+  "defaultFor": [
+    "community-image"
+  ],
+  "description": "社群里帖子的配图：把发帖时写下的画面翻成 NovelAI tags。网友的帖子像随手拍的照片（吃的、东西、场景），程序不加任何人的长相；她自己发的帖子画面里有她时，程序把她的长相加在最前面，只拍东西（no humans）时不加。两种各一块，按这一帖是谁发的只发一块；想换画风、换构图习惯就改规则。输出格式里的字段名别改，程序按它读。",
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "任务",
+      "role": "system",
+      "content": "你是 NovelAI V4.5 的提示词写手。线上社群里有人发帖要配一张图：把\"要画的画面\"写成 Danbooru 风格的英文 tags，画出来像发帖的人用手机随手拍的照片。写的是什么就画什么，不要自作主张换掉内容。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "rules",
+      "name": "规则",
+      "role": "system",
+      "content": "规则：\n- tags 顺序：人数（no humans / 1girl / 1boy…）→ 构图与镜头（from above, close-up, still life, selfie, pov…）→ 主体（食物、物件、人物的表情和动作）→ 场景与背景 → 光线、时段 → 氛围。\n- 食物、物件、风景这类画面用 no humans；食物写清楚是什么、装在什么里、冒不冒热气（food focus, steam…）。\n- 吃的、东西要画对：Danbooru 上有的直接用那个 tag；冷门的（地方小吃、家常菜）写最接近的 tag，再用 tags 写出外形（皮的厚薄透明、形状褶边、汤色、配料、切法……），\"要画的画面\"和正文里写到的细节都画进去；容易被画成别的东西的（馄饨画成饺子、肠粉画成春卷），在 negative 里写那个别的东西。\n- 画面描述很短时，补上合适的构图、背景和光线，让画面完整。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画幅按内容选：俯拍的一桌菜、一碗面用 square，竖着拍的街景、人物用 portrait，横着拍的风景用 landscape。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "communityNetizen",
+      "name": "网友的帖子",
+      "role": "system",
+      "content": "这一帖是网友发的：程序不会加任何人的长相。上面的\"角色\"只是发帖的网友，不在画面里。尽量不画人（no humans）；\"要画的画面\"里明确写了有人时，只写成不露脸的局部（手、背影）。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "community-netizen"
+      ]
+    },
+    {
+      "identifier": "communityMember",
+      "name": "她的帖子",
+      "role": "system",
+      "content": "这一帖是{{char}}自己发的。先看\"要画的画面\"里有没有{{char}}本人：\n- 没写到{{char}}（只拍了吃的、东西、风景）：这是{{char}}用手机拍的照片，画面里没有人。tags 以 no humans 开头，negative 写 1girl, 1boy；这时程序不会加{{char}}的长相。不要因为是{{char}}发的帖就把{{char}}画进去。\n- 写到了{{char}}（自拍、别人帮拍、{{char}}在画面里吃东西）：{{char}}是画面的主角，长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写。tags 以 1girl 或 1boy（按{{char}}的性别）、solo 开头；自拍用 selfie，别人帮拍用 upper body 或 cowboy shot；{{char}}在画面中间、整张脸都在画面里，吃的、东西拿在手里或摆在面前，大小和人对得上；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。不要用 food focus、still life 这类以东西为主的镜头，否则{{char}}会被挤到画面边上、只露半张脸。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "community-member"
+      ]
+    },
+    {
+      "identifier": "format",
+      "name": "输出格式（JSON，字段名别改）",
+      "role": "system",
+      "content": "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait、square 或 landscape\"}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageSubject",
+      "name": "角色和外观 tags",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageScene",
+      "name": "地点、服装、时间天气、表情",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageRecent",
+      "name": "这一帖的正文",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageCaption",
+      "name": "要画的画面",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    }
+  ],
+  "sampler": {
+    "temperature": 0.7,
+    "topP": 1,
+    "maxTokens": 800,
+    "contextTokens": 32000,
+    "frequencyPenalty": 0,
+    "presencePenalty": 0,
+    "stream": false
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": []
+}

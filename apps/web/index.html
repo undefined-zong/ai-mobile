@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI 陪伴</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script>
+      // iOS 主屏幕 App：带着 viewport-fit=cover 时，系统会在屏幕底部留一条页面元素够不到的边（WebKit bug 301994）。
+      // 这里去掉 cover：页面排在安全区以内，状态栏和底部横条那两截由系统用页面底色填上（底色见 styles/base.css 的 body）。
+      // 要在第一次排版之前改，所以写在这里而不是 main.ts。浏览器里、安卓不动。
+      if (navigator.standalone === true) {
+        document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=device-width, initial-scale=1');
+      }
+    </script>
+    <meta name="theme-color" content="#0b0714" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=little-world" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=little-world" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="AI 陪伴" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="会主动找你、陪你吃饭学习睡觉的 AI 陪伴" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

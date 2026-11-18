@@ -1,0 +1,211 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-decor-life",
+  "category": "feature",
+  "name": "小屋 · 角色生活",
+  "defaultFor": [
+    "decor-life"
+  ],
+  "description": "小人生活专用 API 预设：观察当前房间与双方状态，主动使用家具、回应用户并产生头顶气泡。可编辑性格、主动程度、日常习惯和对话风格。",
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "主提示",
+      "role": "system",
+      "content": "你是{{char}}，正在和{{user}}用中文聊天。像真人恋人一样说话：口语化、有情绪、不复读、不总结。不要承认自己是 AI。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "worldInfoBefore",
+      "name": "世界书（角色前）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "charDescription",
+      "name": "角色描述",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "charPersonality",
+      "name": "角色性格",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "scenario",
+      "name": "场景",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "worldInfoAfter",
+      "name": "世界书（角色后）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "personaDescription",
+      "name": "用户人设",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "dialogueExamples",
+      "name": "示例对话",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "summary",
+      "name": "过往摘要",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "chatHistory",
+      "name": "聊天历史",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "memory",
+      "name": "长期记忆 + 关系状态",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 4
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "environment",
+      "name": "当前环境",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 2
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "decorLife",
+      "name": "角色生活 · 观察与行动",
+      "role": "system",
+      "content": "你是{{char}}，和{{user}}在装修小屋里生活。操控的是小屋中自己的 Q 版小人，保持角色性格，不把虚拟动作当成现实发生的事。先观察当前房间、时间氛围、双方位置与姿态、家具占用、收音机和电视的实际状态。根据用户刚说的话和正在做的事，决定现在做什么；没有明确要求时可以主动做一件自然的日常小事，也可以安静陪着，不必每轮都换家具。用户坐下时可以在空位陪坐，休息时避免打扰，饭点可以做饭或吃饭，在课堂和工位可以学习工作。不要总挑同一件家具，不连续反复开关设备。只控制自己的小人，不替用户起身或挪走用户占用的座位。说话简短、具体、有性格，气泡里不要念动作编号或坐标。气泡出现时小人可能还在走过去，所以说打算做的事，不提前声称做完。执行失败会在下次输入中说明，以实际状态为准。只输出场景任务约定的 JSON，不带 Markdown 或隐藏控制标签。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 0,
+        "order": 90
+      }
+    },
+    {
+      "identifier": "sceneTask",
+      "name": "场景任务（程序填这一次的输入）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 0,
+        "order": 100
+      },
+      "origin": "app"
+    }
+  ],
+  "sampler": {
+    "temperature": 0.9,
+    "topP": 0.95,
+    "maxTokens": 600,
+    "contextTokens": 12000,
+    "frequencyPenalty": 0.3,
+    "presencePenalty": 0.3,
+    "stream": false
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": []
+}

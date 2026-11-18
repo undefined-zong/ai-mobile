@@ -1,0 +1,859 @@
+{
+  "dynasties": [
+    {
+      "id": "xia",
+      "name": "夏",
+      "setting": "方国共治，治水与农耕，礼器与祭祀构成王庭秩序。",
+      "clothing": "ancient chinese bronze age clothing, woven robe, jade ornament",
+      "offices": {
+        "civil": "司徒",
+        "war": "司马",
+        "science": "工正",
+        "culture": "秩宗"
+      },
+      "surnames": [
+        "姒",
+        "有扈",
+        "斟",
+        "姚"
+      ]
+    },
+    {
+      "id": "shang",
+      "name": "商",
+      "setting": "方国、邑落与青铜礼制，王庭重视农时、占卜和征伐。",
+      "clothing": "shang dynasty clothing, cross collar robe, bronze ornament",
+      "offices": {
+        "civil": "尹",
+        "war": "多马",
+        "science": "百工",
+        "culture": "卜正"
+      },
+      "surnames": [
+        "子",
+        "伊",
+        "傅",
+        "微"
+      ]
+    },
+    {
+      "id": "zhou",
+      "name": "周",
+      "setting": "封国与宗法并存，以礼乐维系诸侯，以农耕充实国力。",
+      "clothing": "zhou dynasty clothing, shenyi, jade pendant",
+      "offices": {
+        "civil": "司徒",
+        "war": "司马",
+        "science": "司空",
+        "culture": "宗伯"
+      },
+      "surnames": [
+        "姬",
+        "姜",
+        "召",
+        "毛"
+      ]
+    },
+    {
+      "id": "qin",
+      "name": "秦",
+      "setting": "郡县与法令，修驰道、整军备、兴水利。",
+      "clothing": "qin dynasty clothing, black hanfu, cross collar",
+      "offices": {
+        "civil": "丞相",
+        "war": "太尉",
+        "science": "少府",
+        "culture": "奉常"
+      },
+      "surnames": [
+        "李",
+        "王",
+        "蒙",
+        "冯"
+      ]
+    },
+    {
+      "id": "han",
+      "name": "汉",
+      "setting": "郡国并行，察举取士，农桑、经学与边塞互市。",
+      "clothing": "han dynasty clothing, quju, wide sleeves",
+      "offices": {
+        "civil": "丞相",
+        "war": "大将军",
+        "science": "少府",
+        "culture": "太常"
+      },
+      "surnames": [
+        "卫",
+        "窦",
+        "班",
+        "张"
+      ]
+    },
+    {
+      "id": "three",
+      "name": "三国",
+      "setting": "群雄割据，屯田养兵，谋臣与将领左右天下局势。",
+      "clothing": "three kingdoms clothing, hanfu, layered robe",
+      "offices": {
+        "civil": "丞相",
+        "war": "大将军",
+        "science": "少府",
+        "culture": "太常"
+      },
+      "surnames": [
+        "荀",
+        "诸葛",
+        "陆",
+        "鲁"
+      ]
+    },
+    {
+      "id": "jin",
+      "name": "晋",
+      "setting": "门阀、清谈与州郡政治，衣冠风雅与边境压力并存。",
+      "clothing": "jin dynasty clothing, loose hanfu, wide sleeves",
+      "offices": {
+        "civil": "尚书令",
+        "war": "大将军",
+        "science": "将作大匠",
+        "culture": "太常"
+      },
+      "surnames": [
+        "王",
+        "谢",
+        "裴",
+        "羊"
+      ]
+    },
+    {
+      "id": "northsouth",
+      "name": "南北朝",
+      "setting": "南北分立，多种文化交汇，重视军镇、土地与士族协调。",
+      "clothing": "northern southern dynasties clothing, layered hanfu",
+      "offices": {
+        "civil": "尚书令",
+        "war": "大将军",
+        "science": "将作大匠",
+        "culture": "太常卿"
+      },
+      "surnames": [
+        "萧",
+        "崔",
+        "卢",
+        "元"
+      ]
+    },
+    {
+      "id": "sui",
+      "name": "隋",
+      "setting": "统一后的整合，运河、均田与取士改革。",
+      "clothing": "sui dynasty clothing, round collar robe",
+      "offices": {
+        "civil": "尚书令",
+        "war": "大将军",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "高",
+        "苏",
+        "宇文",
+        "裴"
+      ]
+    },
+    {
+      "id": "tang",
+      "name": "唐",
+      "setting": "三省六部、科举与开放市集，诗歌、工艺和远方交流。",
+      "clothing": "tang dynasty clothing, round collar robe, silk, tang style hair ornament",
+      "offices": {
+        "civil": "中书令",
+        "war": "大将军",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "房",
+        "杜",
+        "韦",
+        "岑"
+      ]
+    },
+    {
+      "id": "five",
+      "name": "五代十国",
+      "setting": "藩镇与诸国并立，军政整合、修复田土和安定流民。",
+      "clothing": "five dynasties clothing, round collar robe",
+      "offices": {
+        "civil": "同平章事",
+        "war": "枢密使",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "冯",
+        "和",
+        "桑",
+        "王"
+      ]
+    },
+    {
+      "id": "song",
+      "name": "宋",
+      "setting": "文官政治与繁荣市井，书院、印刷、海贸与边防互相牵动。",
+      "clothing": "song dynasty clothing, beizi, restrained silk robe",
+      "offices": {
+        "civil": "同平章事",
+        "war": "枢密使",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "范",
+        "欧阳",
+        "苏",
+        "沈"
+      ]
+    },
+    {
+      "id": "liao",
+      "name": "辽",
+      "setting": "草原与农耕并治，南北官制，马政、互市与多元礼俗。",
+      "clothing": "liao dynasty clothing, khitan robe, leather belt",
+      "offices": {
+        "civil": "南院大王",
+        "war": "北院大王",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "耶律",
+        "萧",
+        "韩",
+        "张"
+      ]
+    },
+    {
+      "id": "westernxia",
+      "name": "西夏",
+      "setting": "绿洲、牧地和边贸，蕃汉制度交融，重军备与水利。",
+      "clothing": "western xia clothing, tangut robe, felt hat",
+      "offices": {
+        "civil": "中书令",
+        "war": "枢密使",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "嵬名",
+        "野利",
+        "仁多",
+        "梁"
+      ]
+    },
+    {
+      "id": "jurchen",
+      "name": "金",
+      "setting": "女真军制与州县治理并行，农耕恢复、学制和边境竞争。",
+      "clothing": "jin jurchen dynasty clothing, jurchen robe, leather belt",
+      "offices": {
+        "civil": "尚书令",
+        "war": "都元帅",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "完颜",
+        "纥石烈",
+        "徒单",
+        "张"
+      ]
+    },
+    {
+      "id": "yuan",
+      "name": "元",
+      "setting": "行省、驿站与跨区域贸易，草原传统和城市工艺交汇。",
+      "clothing": "yuan dynasty clothing, mongolian deel, silk belt",
+      "offices": {
+        "civil": "中书右丞相",
+        "war": "枢密使",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "伯颜",
+        "脱脱",
+        "赵",
+        "廉"
+      ]
+    },
+    {
+      "id": "ming",
+      "name": "明",
+      "setting": "内阁与六部，卫所、工匠、书院和海贸。",
+      "clothing": "ming dynasty clothing, hanfu, embroidered round collar robe",
+      "offices": {
+        "civil": "内阁首辅",
+        "war": "兵部尚书",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "徐",
+        "于",
+        "张",
+        "戚"
+      ]
+    },
+    {
+      "id": "qing",
+      "name": "清",
+      "setting": "内阁与军机，八旗、绿营、漕运和地方治理。",
+      "clothing": "qing dynasty clothing, changpao, mandarin collar, embroidered robe",
+      "offices": {
+        "civil": "大学士",
+        "war": "兵部尚书",
+        "science": "工部尚书",
+        "culture": "礼部尚书"
+      },
+      "surnames": [
+        "富察",
+        "佟佳",
+        "纳兰",
+        "张"
+      ]
+    },
+    {
+      "id": "fantasy",
+      "name": "架空",
+      "setting": "自定国号、制度、服饰与世界；周边三个国家各有利益。",
+      "clothing": "fantasy royal court, ceremonial robes, embroidered fabric",
+      "offices": {
+        "civil": "执政大臣",
+        "war": "统军大臣",
+        "science": "工艺大臣",
+        "culture": "文教大臣"
+      },
+      "surnames": [
+        "林",
+        "顾",
+        "沈",
+        "温"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "balanced",
+      "name": "新君登基",
+      "description": "国库与兵粮均衡，从四州之地经营一生。",
+      "stats": {
+        "treasury": 900,
+        "grain": 1400,
+        "population": 320,
+        "troops": 24,
+        "technology": 40,
+        "welfare": 50,
+        "culture": 40,
+        "stability": 70
+      }
+    },
+    {
+      "id": "frontier",
+      "name": "边关风云",
+      "description": "精兵在手，国库较紧，适合开疆与外交。",
+      "stats": {
+        "treasury": 600,
+        "grain": 1600,
+        "population": 280,
+        "troops": 42,
+        "technology": 30,
+        "welfare": 42,
+        "culture": 25,
+        "stability": 62
+      }
+    },
+    {
+      "id": "restoration",
+      "name": "百废待兴",
+      "description": "人口流失、民生低迷，以改革重建王朝。",
+      "stats": {
+        "treasury": 500,
+        "grain": 900,
+        "population": 220,
+        "troops": 18,
+        "technology": 20,
+        "welfare": 30,
+        "culture": 20,
+        "stability": 45
+      }
+    },
+    {
+      "id": "scholar",
+      "name": "文治之世",
+      "description": "学术文化领先，军力薄弱，适合经世与教化。",
+      "stats": {
+        "treasury": 1000,
+        "grain": 1300,
+        "population": 350,
+        "troops": 15,
+        "technology": 90,
+        "welfare": 60,
+        "culture": 100,
+        "stability": 78
+      }
+    }
+  ],
+  "policies": [
+    {
+      "id": "rest",
+      "name": "轻徭薄赋",
+      "group": "tax",
+      "cost": 0,
+      "description": "每季国库 −25，民生 +1.2、稳定 +1、人口 +1.5 万。",
+      "effects": {
+        "treasury": -25,
+        "welfare": 1.2,
+        "stability": 1,
+        "population": 1.5
+      }
+    },
+    {
+      "id": "tax",
+      "name": "征收重税",
+      "group": "tax",
+      "cost": 0,
+      "description": "每季国库 +55，民生 −1.5、稳定 −1.2。",
+      "effects": {
+        "treasury": 55,
+        "welfare": -1.5,
+        "stability": -1.2
+      }
+    },
+    {
+      "id": "school",
+      "name": "兴学育才",
+      "group": "school",
+      "cost": 24,
+      "description": "每季科技 +3、文化 +4。",
+      "effects": {
+        "technology": 3,
+        "culture": 4
+      }
+    },
+    {
+      "id": "army",
+      "name": "军屯戍边",
+      "group": "army",
+      "cost": 20,
+      "description": "每季兵力 +0.8 万、粮食 +35 万石，民生 −0.4。",
+      "effects": {
+        "troops": 0.8,
+        "grain": 35,
+        "welfare": -0.4
+      }
+    },
+    {
+      "id": "trade",
+      "name": "开埠通商",
+      "group": "trade",
+      "cost": 12,
+      "description": "每季国库 +42、文化 +1，稳定 −0.4。",
+      "effects": {
+        "treasury": 42,
+        "culture": 1,
+        "stability": -0.4
+      }
+    },
+    {
+      "id": "water",
+      "name": "广修水利",
+      "group": "water",
+      "cost": 22,
+      "description": "每季粮食 +65 万石、民生 +0.6。",
+      "effects": {
+        "grain": 65,
+        "welfare": 0.6
+      }
+    },
+    {
+      "id": "law",
+      "name": "整饬吏治",
+      "group": "law",
+      "cost": 18,
+      "description": "每季稳定 +1.8、民生 +0.5。",
+      "effects": {
+        "stability": 1.8,
+        "welfare": 0.5
+      }
+    },
+    {
+      "id": "craft",
+      "name": "百工新法",
+      "group": "craft",
+      "cost": 28,
+      "description": "每季科技 +6、国库 +8。",
+      "effects": {
+        "technology": 6,
+        "treasury": 8
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "harvest",
+      "title": "秋粮入仓",
+      "text": "田间丰收，地方请示这批余粮如何使用。",
+      "choices": [
+        {
+          "label": "收储备荒：粮食 +160",
+          "effects": {
+            "grain": 160
+          }
+        },
+        {
+          "label": "平价发售：国库 +70，民生 +1",
+          "effects": {
+            "treasury": 70,
+            "welfare": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "flood",
+      "title": "河堤告急",
+      "text": "连日大雨冲坏河堤，百姓等待朝廷调度。",
+      "choices": [
+        {
+          "label": "拨款修堤：国库 −60，民生 +3",
+          "effects": {
+            "treasury": -60,
+            "welfare": 3
+          }
+        },
+        {
+          "label": "军民抢修：粮食 −90，稳定 +2",
+          "effects": {
+            "grain": -90,
+            "stability": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "scholar",
+      "title": "学者献书",
+      "text": "学者整理了一部新的著作，希望朝廷扶持刊行。",
+      "choices": [
+        {
+          "label": "资助刊印：国库 −40，文化 +18",
+          "effects": {
+            "treasury": -40,
+            "culture": 18
+          }
+        },
+        {
+          "label": "奖励实学：科技 +10",
+          "effects": {
+            "technology": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "merchant",
+      "title": "远商来朝",
+      "text": "一支商队带来异域工艺，提出扩大互市。",
+      "choices": [
+        {
+          "label": "扩大互市：国库 +50，文化 +6",
+          "effects": {
+            "treasury": 50,
+            "culture": 6
+          }
+        },
+        {
+          "label": "延请工匠：国库 −35，科技 +15",
+          "effects": {
+            "treasury": -35,
+            "technology": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "refugees",
+      "title": "流民叩关",
+      "text": "边境聚集了一批寻找安身之地的流民。",
+      "choices": [
+        {
+          "label": "开仓安置：粮食 −100，人口 +10 万",
+          "effects": {
+            "grain": -100,
+            "population": 10
+          }
+        },
+        {
+          "label": "以工代赈：国库 −30，人口 +5 万、民生 +2",
+          "effects": {
+            "treasury": -30,
+            "population": 5,
+            "welfare": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "drill",
+      "title": "军中演武",
+      "text": "边军请求举行演武，磨合将士与军械。",
+      "choices": [
+        {
+          "label": "拨粮练兵：粮食 −70，军势提升 4 季",
+          "effects": {
+            "grain": -70
+          },
+          "buff": {
+            "id": "trained",
+            "name": "整军经武",
+            "description": "出征战力 +15%，持续 4 季。",
+            "remaining": 4,
+            "effects": {},
+            "attack": 0.15
+          }
+        },
+        {
+          "label": "转入屯田：粮食 +80",
+          "effects": {
+            "grain": 80
+          }
+        }
+      ]
+    },
+    {
+      "id": "festival",
+      "title": "乡里节会",
+      "text": "各地筹办节会，民间艺人请求入京献艺。",
+      "choices": [
+        {
+          "label": "共庆佳节：国库 −25，文化 +8、民生 +2",
+          "effects": {
+            "treasury": -25,
+            "culture": 8,
+            "welfare": 2
+          }
+        },
+        {
+          "label": "邀请入宫：文化 +5",
+          "effects": {
+            "culture": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "officials",
+      "title": "地方呈报",
+      "text": "郡县奏报政务积压，请求精简手续或增派吏员。",
+      "choices": [
+        {
+          "label": "精简政务：稳定 +2，国库 +15",
+          "effects": {
+            "stability": 2,
+            "treasury": 15
+          }
+        },
+        {
+          "label": "增派吏员：国库 −30，惠政持续 3 季",
+          "effects": {
+            "treasury": -30
+          },
+          "buff": {
+            "id": "service",
+            "name": "惠政及民",
+            "description": "每季民生 +2、人口 +2 万，持续 3 季。",
+            "remaining": 3,
+            "effects": {
+              "welfare": 2,
+              "population": 2
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "givenNames": [
+    "清和",
+    "景行",
+    "怀瑾",
+    "知远",
+    "明昭",
+    "令仪",
+    "文昭",
+    "承安",
+    "思齐",
+    "望舒",
+    "长宁",
+    "仲衡",
+    "元修",
+    "静姝",
+    "含章",
+    "允和",
+    "玉衡",
+    "云舒",
+    "子衿",
+    "若蘅",
+    "守正",
+    "季平"
+  ],
+  "personalities": [
+    "沉稳谨慎",
+    "直言敢谏",
+    "长于谋划",
+    "外柔内刚",
+    "锐意进取",
+    "博学多才",
+    "通达务实",
+    "温雅自持"
+  ],
+  "provinces": [
+    "关陇",
+    "河朔",
+    "幽燕",
+    "辽东",
+    "巴蜀",
+    "中原",
+    "齐鲁",
+    "淮海",
+    "岭南",
+    "荆楚",
+    "江南",
+    "闽越"
+  ],
+  "fantasyProvinces": [
+    "霜原",
+    "北境",
+    "风谷",
+    "远岬",
+    "云岭",
+    "王畿",
+    "晨野",
+    "东湾",
+    "赤沙",
+    "绿川",
+    "星湖",
+    "南海"
+  ],
+  "factionNames": [
+    "北境联盟",
+    "东境诸国",
+    "南境王庭"
+  ],
+  "npcRoles": {
+    "minister": "大臣",
+    "consort": "后宫",
+    "foreign": "他国角色"
+  },
+  "actions": [
+    {
+      "id": "rest",
+      "name": "休养生息",
+      "cost": 0,
+      "description": "无需国库与粮食，民生 +0.5、稳定 +1、粮食 +20。"
+    },
+    {
+      "id": "farm",
+      "name": "兴修农田",
+      "cost": 65,
+      "description": "粮食 +140、民生 +1.5，所选州发展 +1。"
+    },
+    {
+      "id": "trade",
+      "name": "发展商贸",
+      "cost": 40,
+      "description": "国库 +95、文化 +2，所选州发展 +1。"
+    },
+    {
+      "id": "research",
+      "name": "研制新技",
+      "cost": 85,
+      "description": "科技 +20，加上君主科技素养的收益。"
+    },
+    {
+      "id": "academy",
+      "name": "修学弘文",
+      "cost": 65,
+      "description": "文化 +22、科技 +4。"
+    },
+    {
+      "id": "relief",
+      "name": "巡抚赈济",
+      "cost": 60,
+      "description": "粮食 −65，民生 +5、稳定 +4、人口 +3 万。"
+    },
+    {
+      "id": "recruit",
+      "name": "招募军士",
+      "cost": 75,
+      "description": "粮食 −70，兵力 +6 万、人口 −1 万。"
+    },
+    {
+      "id": "talent",
+      "name": "访求贤才",
+      "cost": 55,
+      "description": "新增一位符合背景的大臣。"
+    },
+    {
+      "id": "visit",
+      "name": "宫廷雅集",
+      "cost": 55,
+      "description": "新增一位后宫人物，文化 +4。"
+    },
+    {
+      "id": "diplomacy",
+      "name": "遣使通好",
+      "cost": 45,
+      "description": "目标国家关系 +18，互不侵犯 4 季。"
+    },
+    {
+      "id": "war",
+      "name": "出征邻州",
+      "cost": 75,
+      "description": "消耗每万兵力 5 万石粮食；只能进攻接壤的他国州。"
+    }
+  ],
+  "focuses": [
+    {
+      "id": "politics",
+      "name": "研习政务",
+      "description": "政治素养 +3，稳定 +1"
+    },
+    {
+      "id": "technology",
+      "name": "钻研格物",
+      "description": "科技素养 +3，国家科技 +3"
+    },
+    {
+      "id": "culture",
+      "name": "诗书礼乐",
+      "description": "文化素养 +3，国家文化 +3"
+    },
+    {
+      "id": "audience",
+      "name": "召见大臣",
+      "description": "所选大臣忠诚 +7，政治素养 +1"
+    },
+    {
+      "id": "palace",
+      "name": "相伴后宫",
+      "description": "所选后宫亲密 +8，有机会迎来子嗣"
+    },
+    {
+      "id": "education",
+      "name": "教导子嗣",
+      "description": "所有子嗣四项教育 +2，文化素养 +1"
+    }
+  ]
+}

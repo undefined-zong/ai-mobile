@@ -1,0 +1,312 @@
+import type { PromptProcessing } from '@app/shared';
+import { anthropicBase, bearerHeaders, deepseekBase, geminiBase, isDeepSeekOfficial, isFullChatUrl, joinUrl, openaiChatUrl, transportOf, trimUrl, type Endpoint } from '../core/endpoint.ts';
+import { httpError } from '../core/errors.ts';
+import { request } from '../core/http.ts';
+import { claudeModelInfo } from './claude.ts';
+import { inlineNames, postProcessMessages, toClaude, toGemini, toOpenAIMessage } from './messages.ts';
+import { claudeHeadroom, claudeThinking, deepseekThinking, geminiHasThinkingConfig, geminiHeadroom, geminiThinking, openaiReasoningEffort, THINKING_HEADROOM, thinkingAlias, thinksByName } from './reasoning.ts';
+import { dropField, sendFixing, type RequestFix } from './retry.ts';
+import { readAIStream, readWhole } from './stream.ts';
+import type { ChatCallbacks, ChatRequest, ChatResult } from './types.ts';
+
+/**
+ * 三家对话协议。底子移植自 math-reader 的 doAIRequest / doClaudeRequest / doGeminiRequest，
+ * 参数规则对照 SillyTavern 的 chat-completions 后端（推理强度、Claude 采样限制和预填、Gemini 安全设置、
+ * 自定义来源的消息整理和请求体增删），备用 API 的"最简请求"和模型名后缀思考参考 SleepTogether 的 api-manager。
+ * 每个函数只负责"按这家的写法发一次请求、读出结果"；流式失败改普通请求、换备用 API 在 client.ts 和功能路由里做。
+ */
+
+export interface ProviderCall extends ChatCallbacks {
+  stream: boolean;
+  signal?: AbortSignal;
+}
+
+export type ChatProvider = (ep: Endpoint, req: ChatRequest, call: ProviderCall) => Promise<ChatResult>;
+
+type Json = Record<string, any>;
+
+/** OpenAI 格式的一次请求里，各家不同的部分：地址、鉴权头、模型名和请求体的小改动 */
+export interface OpenAIDialect {
+  url: string;
+  headers: Record<string, string>;
+  /** 实际发送的模型名（Vertex 的开源模型要带发布方前缀；DeepSeek 停用的旧名换成新名） */
+  model?: string;
+  /** 请求和连接都没指定消息整理时用的方式（Vertex 的开源模型要求 user 开头、轮流发言） */
+  processing?: PromptProcessing;
+  /** 不按模型名后缀开思考（DeepSeek 自己有思考开关） */
+  noAlias?: boolean;
+  /** 在并入连接的额外字段之前改请求体；返回 maxTokens 时改用这个输出上限 */
+  tweak?: (body: Record<string, unknown>, messages: Record<string, unknown>[]) => { maxTokens?: number } | void;
+}
+
+/**
+ * OpenAI 格式的对话（各家中转、DeepSeek、硅基流动、OpenRouter、Ollama、Vertex 上的开源模型…）。
+ * 发之前按连接的设置整理消息（merge / semi / strict / single），最后并入连接的额外字段、去掉要排除的字段。
+ */
+export async function openaiCompatible(ep: Endpoint, req: ChatRequest, call: ProviderCall, d: OpenAIDialect): Promise<ChatResult> {
+  const url = d.url;
+  const minimal = !!req.minimal;
+  // 最简请求同 math-reader：不发 name 字段，名字写进正文
+  const source = minimal ? inlineNames(req.messages, req.names) : req.messages;
+  const messages = postProcessMessages(source, req.processing ?? ep.promptProcessing ?? d.processing, req.names).map(toOpenAIMessage);
+  const body: Record<string, unknown> = {
+    ...(minimal ? {} : (req.extraBody ?? {})),
+    model: d.model ?? ep.model,
+    messages,
+    stream: call.stream,
+  };
+  if (req.temperature !== undefined) body.temperature = req.temperature;
+  if (!minimal) {
+    if (req.topP !== undefined) body.top_p = req.topP;
+    if (req.topK) body.top_k = req.topK;
+    if (req.frequencyPenalty) body.frequency_penalty = req.frequencyPenalty;
+    if (req.presencePenalty) body.presence_penalty = req.presencePenalty;
+    if (req.seed !== undefined && req.seed >= 0) body.seed = req.seed;
+    if (req.stop?.length) body.stop = req.stop;
+    if (req.json) body.response_format = { type: 'json_object' };
+    const effort = openaiReasoningEffort(req.reasoningEffort);
+    if (effort) body.reasoning_effort = effort;
+  }
+  // 中转用模型名后缀开思考（…-thinking-high、reasoner）：temperature 只能是 1，不能带 top_p 和惩罚项，输出上限要大过思考预算
+  const alias = d.noAlias ? null : thinkingAlias(ep.model);
+  let maxTokens = req.maxTokens;
+  if (alias) {
+    body.temperature = 1;
+    delete body.top_p;
+    delete body.presence_penalty;
+    delete body.frequency_penalty;
+    if (maxTokens !== undefined) maxTokens = Math.max(maxTokens, alias.budget + 4096);
+  } else if (!d.noAlias && maxTokens !== undefined && thinksByName(ep.model)) {
+    // 名字看得出默认会思考（中转上的 Gemini 2.5、o 系列……）：上限之外留出思考的余量，不然短回复的预设会被思考吃光
+    maxTokens += req.reasoningEffort === 'none' || req.reasoningEffort === 'min' ? 2048 : THINKING_HEADROOM;
+  }
+  const tweaked = d.tweak?.(body, messages as Record<string, unknown>[]);
+  if (tweaked?.maxTokens !== undefined) maxTokens = tweaked.maxTokens;
+  Object.assign(body, ep.includeBody ?? {});
+  const excluded = new Set(ep.excludeBody ?? []);
+  for (const k of excluded) delete body[k];
+
+  // OpenAI 的推理模型不认 max_tokens，要 max_completion_tokens
+  let tokenField = 'max_tokens';
+  const fixes: RequestFix[] = [
+    (err) => {
+      if (tokenField !== 'max_tokens' || !/max_completion_tokens/i.test(err)) return false;
+      tokenField = 'max_completion_tokens';
+      delete body.max_tokens;
+      return true;
+    },
+    dropField(body, 'reasoning_effort', /reasoning_effort|reasoning effort/i),
+    dropField(body, 'thinking', /thinking/i),
+    dropField(body, 'top_k', /top_k/i),
+    dropField(body, 'response_format', /response_format|json_object|json mode/i),
+    dropField(body, 'seed', /\bseed\b/i),
+    dropField(body, 'frequency_penalty', /frequency_penalty/i),
+    dropField(body, 'presence_penalty', /presence_penalty/i),
+    dropField(body, 'top_p', /top_p/i),
+    dropField(body, 'temperature', /temperature/i),
+    dropField(body, 'stop', /\bstop\b/i),
+  ];
+  const send = (max: number | undefined) => {
+    if (max === undefined || excluded.has(tokenField)) delete body[tokenField];
+    else body[tokenField] = max;
+    return request(transportOf(ep), ep.name, url, { method: 'POST', headers: d.headers, body: JSON.stringify(body), signal: call.signal });
+  };
+  const { response, errText } = await sendFixing(`${url}|${String(body.model)}`, maxTokens, call.onState, send, fixes);
+  if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
+  const textOf = (j: Json) => j.choices?.[0]?.message?.content ?? null;
+  const opts = { onDelta: call.onDelta, onState: call.onState, signal: call.signal, textOf };
+  if (call.stream) return readAIStream(response, { ...opts, deltaOf: (e: Json) => e.choices?.[0]?.delta?.content });
+  return readWhole(response, ep.name, opts);
+}
+
+/** OpenAI 兼容：URL 写到 …/chat/completions 的原样用（同 math-reader），只填 Base URL 的拼上 /chat/completions */
+export const openaiChat: ChatProvider = (ep, req, call) => openaiCompatible(ep, req, call, { url: openaiChatUrl(ep.baseUrl), headers: bearerHeaders(ep) });
+
+/**
+ * DeepSeek：同 math-reader 的 deepseek 渠道，OpenAI 格式，模型名原样发（deepseek-chat / deepseek-reasoner…），
+ * URL 写到 …/chat/completions 的原样用。
+ * 只有在智能体里设了推理强度时才发思考开关和 reasoning_effort；开了思考时回复上限也算思考的 token，留出空间。
+ * 预设里有助手预填时走官方的前缀续写（Beta）：地址换成 /beta，最后一条 assistant 带 prefix: true；被拒时自动按最简请求重发。
+ */
+export const deepseekChat: ChatProvider = (ep, req, call) => {
+  const base = deepseekBase(ep.baseUrl);
+  const official = isDeepSeekOfficial(base);
+  const think = req.minimal ? {} : deepseekThinking(req.reasoningEffort);
+  const prefill = official && !req.minimal ? req.prefill?.trimEnd() : undefined;
+  const url = prefill ? `${new URL(base).origin}/beta/chat/completions` : isFullChatUrl(ep.baseUrl) ? trimUrl(ep.baseUrl) : joinUrl(base, 'chat/completions');
+  return openaiCompatible(ep, req, call, {
+    url,
+    headers: bearerHeaders(ep),
+    noAlias: true,
+    tweak: (body, messages) => {
+      delete body.reasoning_effort;
+      if (think.thinking) body.thinking = think.thinking;
+      if (think.effort) body.reasoning_effort = think.effort;
+      if (prefill) messages.push({ role: 'assistant', content: prefill, prefix: true });
+      if (think.thinking?.type === 'enabled') return { maxTokens: Math.max(req.maxTokens ?? 0, think.effort === 'max' ? 65536 : 16384) };
+      // 没设推理强度：现在的模型默认开着思考（旧名 deepseek-chat 除外），同样留出余量
+      if (!think.thinking && req.maxTokens !== undefined && !/deepseek-chat/i.test(ep.model)) return { maxTokens: req.maxTokens + THINKING_HEADROOM };
+    },
+  });
+};
+
+/**
+ * Claude Messages：…/messages（官方，或兼容 Anthropic 原生协议的中转），请求同 math-reader 的 doClaudeRequest。
+ * 中转站上的 Claude 多数只认 OpenAI 格式：URL 填中转给的 …/chat/completions 就按 OpenAI 格式发（同 math-reader 的 claude 渠道）。
+ */
+export const anthropicChat: ChatProvider = async (ep, req, call) => {
+  // 同 math-reader 的 claude 渠道：中转给的 …/chat/completions 按 OpenAI 格式发
+  if (isFullChatUrl(ep.baseUrl)) return openaiCompatible(ep, req, call, { url: trimUrl(ep.baseUrl), headers: bearerHeaders(ep) });
+  const url = joinUrl(anthropicBase(ep.baseUrl), 'messages');
+  const info = claudeModelInfo(ep.model);
+  const minimal = !!req.minimal;
+  const requested = req.maxTokens ?? 4096;
+  const think = minimal ? {} : claudeThinking(info, requested, req.reasoningEffort, call.stream, req.includeReasoning ?? call.stream);
+  const { system, messages } = toClaude(req.messages, req.names, {
+    prefill: minimal ? undefined : req.prefill,
+    noPrefill: !!info?.noPrefill || !!think.thinking,
+  });
+  const body: Record<string, unknown> = { model: ep.model, messages };
+  if (system) body.system = system;
+  // 采样参数：较新的模型不接受（400）；传统思考开着时也不能带；有的型号 temperature 和 top_p 只能二选一。
+  // Claude 的 temperature 范围是 0–1，预设里常见的 1.1 截到 1
+  if (!info?.noSampling && !think.budget) {
+    if (req.temperature !== undefined) body.temperature = Math.min(1, Math.max(0, req.temperature));
+    if (!minimal) {
+      if (req.topP !== undefined && req.topP < 1) body.top_p = req.topP;
+      if (req.topK && !think.thinking) body.top_k = req.topK;
+    }
+    if (info?.limitedSampling) {
+      if (body.top_p !== undefined) delete body.temperature;
+      else delete body.top_p;
+    }
+  }
+  if (think.thinking) body.thinking = think.thinking;
+  if (think.effort) body.output_config = { effort: think.effort };
+  if (!minimal && req.stop?.length) body.stop_sequences = req.stop;
+  if (call.stream) body.stream = true;
+  const fixes = [
+    dropField(body, 'thinking', /thinking/i),
+    dropField(body, 'output_config', /output_config|effort/i),
+    dropField(body, 'top_p', /top_p/i),
+    dropField(body, 'top_k', /top_k/i),
+    dropField(body, 'temperature', /temperature/i),
+  ];
+  const send = (max: number | undefined) => {
+    // Claude 必须带 max_tokens；传统思考要求至少比 1024 多（同 SillyTavern）
+    let m = max ?? 4096;
+    if (think.budget && m <= 1024) m += 1024;
+    body.max_tokens = m;
+    return request(transportOf(ep), ep.name, url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(ep.key ? { 'x-api-key': ep.key } : {}),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        ...(ep.headers ?? {}),
+      },
+      body: JSON.stringify(body),
+      signal: call.signal,
+    });
+  };
+  // 会思考时上限之外留出思考的余量（自适应思考、默认就思考的模型）
+  const { response, errText } = await sendFixing(`${url}|${ep.model}`, requested + claudeHeadroom(info, think), call.onState, send, fixes);
+  if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
+  const textOf = (d: Json) => (Array.isArray(d.content) ? d.content.filter((x: Json) => x.type === 'text').map((x: Json) => x.text).join('') : null);
+  const opts = { onDelta: call.onDelta, onState: call.onState, signal: call.signal, textOf };
+  if (call.stream) {
+    return readAIStream(response, {
+      ...opts,
+      deltaOf: (e: Json) => (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' ? e.delta.text : ''),
+    });
+  }
+  return readWhole(response, ep.name, opts);
+};
+
+/** 会思考的 Gemini 模型（2.5 及以后）：要思考内容时请求摘要 */
+const GEMINI_THINKS = /gemini-(?:2\.5|[3-9])|gemini-(?:pro|flash)(?:-lite)?-latest|thinking/i;
+
+/** Gemini 原生协议的一次请求里，AI Studio 和 Vertex 不同的部分 */
+export interface GeminiTarget {
+  /** 按流式与否给出地址和鉴权头（Vertex 用服务账号时要先换访问令牌，所以是异步的） */
+  target(stream: boolean): Promise<{ url: string; headers: Record<string, string> }>;
+  /** thinkingLevel 写成大写枚举（Vertex 文档的写法） */
+  upperLevel?: boolean;
+  /** 记住这个地址 + 模型的输出上限用 */
+  cacheKey: string;
+}
+
+/** Gemini 原生协议：contents / systemInstruction / generationConfig，AI Studio 和 Vertex 共用 */
+export async function geminiGenerate(ep: Endpoint, req: ChatRequest, call: ProviderCall, model: string, t: GeminiTarget): Promise<ChatResult> {
+  const minimal = !!req.minimal;
+  const { systemInstruction, contents } = toGemini(req.messages, req.names);
+  const generationConfig: Record<string, unknown> = {};
+  let effort: { thinkingBudget?: number; thinkingLevel?: string } = {};
+  if (req.temperature !== undefined) generationConfig.temperature = req.temperature;
+  if (!minimal) {
+    if (req.topP !== undefined) generationConfig.topP = req.topP;
+    if (req.topK) generationConfig.topK = req.topK;
+    if (req.stop?.length) generationConfig.stopSequences = req.stop;
+    if (req.seed !== undefined && req.seed >= 0) generationConfig.seed = req.seed;
+    if (req.presencePenalty) generationConfig.presencePenalty = req.presencePenalty;
+    if (req.frequencyPenalty) generationConfig.frequencyPenalty = req.frequencyPenalty;
+    if (req.json) generationConfig.responseMimeType = 'application/json';
+    // 思考：要不要返回思考内容（默认流式时要）；推理强度换成 thinkingBudget / thinkingLevel
+    const include = (req.includeReasoning ?? call.stream) && GEMINI_THINKS.test(model);
+    effort = geminiHasThinkingConfig(model) ? geminiThinking(model, req.maxTokens, req.reasoningEffort) : {};
+    if (effort.thinkingLevel && t.upperLevel) effort.thinkingLevel = effort.thinkingLevel.toUpperCase();
+    if (include || effort.thinkingBudget !== undefined || effort.thinkingLevel) {
+      generationConfig.thinkingConfig = { ...(include && effort.thinkingBudget !== 0 ? { includeThoughts: true } : {}), ...effort };
+    }
+  }
+  // 同 math-reader 的 doGeminiRequest：contents / systemInstruction / generationConfig，不带 safetySettings
+  const body: Record<string, unknown> = { contents, generationConfig };
+  if (systemInstruction) body.systemInstruction = systemInstruction;
+
+  const fixes = [
+    dropField(generationConfig, 'thinkingConfig', /think|thought/i),
+    dropField(generationConfig, 'responseMimeType', /mime|json/i),
+    dropField(generationConfig, 'topK', /top_?k/i),
+    dropField(generationConfig, 'seed', /seed/i),
+    dropField(generationConfig, 'presencePenalty', /presence_?penalty/i),
+    dropField(generationConfig, 'frequencyPenalty', /frequency_?penalty/i),
+  ];
+  const send = async (max: number | undefined) => {
+    if (max === undefined) delete generationConfig.maxOutputTokens;
+    else generationConfig.maxOutputTokens = max;
+    const { url, headers } = await t.target(call.stream);
+    return request(transportOf(ep), ep.name, url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers, ...(ep.headers ?? {}) },
+      body: JSON.stringify(body),
+      signal: call.signal,
+    });
+  };
+  // maxOutputTokens 把思考也算在内：在预设的上限之外留出思考的余量（关掉思考时不留）
+  const headroom = geminiHeadroom(GEMINI_THINKS.test(model), effort);
+  const { response, errText } = await sendFixing(t.cacheKey, req.maxTokens === undefined ? undefined : req.maxTokens + headroom, call.onState, send, fixes);
+  if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
+  // 流式时每个事件也是这种结构，只含新增的一段正文。标着 thought 的片段是思考内容，不算正文
+  const textOf = (j: Json) => {
+    const parts = j.candidates?.[0]?.content?.parts;
+    return Array.isArray(parts) && parts.length ? parts.filter((x: Json) => !x?.thought).map((x: Json) => x.text || '').join('') : null;
+  };
+  const opts = { onDelta: call.onDelta, onState: call.onState, signal: call.signal, textOf };
+  if (call.stream) return readAIStream(response, { ...opts, deltaOf: textOf });
+  return readWhole(response, ep.name, opts);
+}
+
+/** Gemini（AI Studio）：…/models/{model}:generateContent，Key 放在 URL 的 key 参数（同 math-reader） */
+export const geminiChat: ChatProvider = (ep, req, call) => {
+  const base = geminiBase(ep.baseUrl);
+  const model = ep.model.replace(/^models\//, '');
+  const key = encodeURIComponent(ep.key ?? '');
+  return geminiGenerate(ep, req, call, model, {
+    target: async (stream) => ({
+      url: `${base}/models/${encodeURIComponent(model)}${stream ? `:streamGenerateContent?alt=sse&key=${key}` : `:generateContent?key=${key}`}`,
+      headers: {},
+    }),
+    cacheKey: `${base}|${model}`,
+  });
+};

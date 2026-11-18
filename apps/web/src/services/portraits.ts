@@ -1,0 +1,316 @@
+import {
+  autoExpressionForMood,
+  defaultHotspotShapes,
+  emptyPortraitSet,
+  guessFromFileNames,
+  guessOutfitKind,
+  guessPoseFits,
+  hasPortraits,
+  labelId,
+  type Character,
+  type Expression,
+  type OutfitKind,
+  type PokeHotspot,
+  type Portrait,
+  type PortraitFit,
+  type PortraitGen,
+  type PortraitSet,
+  type Pose,
+} from '@app/shared';
+import { assetUrl, dropAsset, putAsset } from './assets';
+import { PLACEHOLDER_CANVAS, PLACEHOLDER_FACE } from '@/components/figure/placeholder';
+import { pokeHotspots } from '@/mock/library';
+import { uid } from '@/utils/id';
+import { compressPortrait } from '@/utils/image';
+
+/**
+ * 立绘的导入、删除、显示前的准备（挑哪张见 @app/shared 的 pickPortrait）。
+ * 图片压好后存进本机素材库（按内容哈希，同一张图导两次只存一份），角色上只记元数据。
+ */
+
+export function ensurePortraitSet(c: Character): PortraitSet {
+  c.portraits ??= emptyPortraitSet();
+  return c.portraits;
+}
+
+/** 她的表情：按名字找，没有就新建（她的第一个表情当默认表情） */
+export function ensureExpression(set: PortraitSet, label: string): string {
+  const found = set.expressions.find((e) => e.label === label || e.id === label);
+  if (found) return found.id;
+  const id = labelId(label, set.expressions.map((e) => e.id));
+  set.expressions.push({ id, label });
+  if (!set.defaultExpression) set.defaultExpression = id;
+  return id;
+}
+
+export function ensurePose(set: PortraitSet, label: string): string {
+  const found = set.poses.find((p) => p.label === label || p.id === label);
+  if (found) return found.id;
+  const id = labelId(label, set.poses.map((p) => p.id));
+  const fits = guessPoseFits(label);
+  set.poses.push({ id, label, ...(fits.length ? { fits } : {}) });
+  if (!set.defaultPose) set.defaultPose = id;
+  return id;
+}
+
+export function ensureOutfit(set: PortraitSet, label: string): string {
+  const found = set.outfits.find((o) => o.label === label || o.id === label);
+  if (found) return found.id;
+  const id = labelId(label, set.outfits.map((o) => o.id));
+  const kind = guessOutfitKind(label);
+  set.outfits.push({ id, label, ...(kind ? { kind } : {}) });
+  if (!set.defaultOutfit) set.defaultOutfit = id;
+  return id;
+}
+
+export interface ImportResult {
+  added: Portrait[];
+  skipped: string[];
+  failed: { name: string; error: string }[];
+}
+
+/**
+ * 批量导入：按文件名猜表情 / 动作 / 服装（{服装}_{动作}_{表情}、ST 表情文件夹的 joy.png……），猜不出的先空着（未标），导入后自己选。
+ * 第一次导入时立绘框的比例按第一张图定。
+ */
+export async function importPortraits(c: Character, files: File[], progress?: (done: number, total: number) => void): Promise<ImportResult> {
+  const set = ensurePortraitSet(c);
+  const result: ImportResult = { added: [], skipped: [], failed: [] };
+  const images = files.filter((f) => f.type.startsWith('image/') || /\.(png|webp|jpe?g|avif|gif)$/i.test(f.name));
+  for (const f of files) if (!images.includes(f)) result.failed.push({ name: f.name, error: '不是图片' });
+  const guesses = guessFromFileNames(
+    images.map((f) => f.name),
+    set,
+    [c.name, c.fandom?.characterTag ?? ''],
+  );
+  const first = !set.portraits.length;
+  const hadExpressions = set.expressions.length > 0;
+  const hadPoses = set.poses.length > 0;
+  const hadOutfits = set.outfits.length > 0;
+  for (const [i, file] of images.entries()) {
+    try {
+      const img = await compressPortrait(file);
+      const assetKey = await putAsset(img.bytes, img.mime);
+      if (set.portraits.some((p) => p.assetKey === assetKey)) {
+        result.skipped.push(file.name);
+        continue;
+      }
+      const g = guesses[i] ?? {};
+      const expression = g.expression ? (g.expression.id ?? ensureExpression(set, g.expression.label)) : '';
+      const pose = g.pose ? (g.pose.id ?? ensurePose(set, g.pose.label)) : set.defaultPose;
+      const outfit = g.outfit ? (g.outfit.id ?? ensureOutfit(set, g.outfit.label)) : set.defaultOutfit;
+      const p: Portrait = {
+        id: uid('pt'),
+        assetKey,
+        name: file.name.replace(/\.[a-z0-9]{2,5}$/i, ''),
+        width: img.width,
+        height: img.height,
+        expression,
+        pose,
+        outfit,
+      };
+      if (first && !result.added.length) set.aspect = Math.round((img.width / img.height) * 1000) / 1000;
+      set.portraits.push(p);
+      result.added.push(p);
+    } catch (e) {
+      result.failed.push({ name: file.name, error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      progress?.(i + 1, images.length);
+    }
+  }
+  // 第一次分出表情 / 动作 / 服装时，默认的取图最多的那个（文件的先后不算数）；表情有名字是"平静"一类的先用它
+  if (!hadExpressions && set.expressions.length) set.defaultExpression = autoExpressionForMood('neutral', set) || mostUsed(set, 'expression') || set.defaultExpression;
+  if (!hadPoses && set.poses.length) set.defaultPose = mostUsed(set, 'pose') || set.defaultPose;
+  if (!hadOutfits && set.outfits.length) set.defaultOutfit = mostUsed(set, 'outfit') || set.defaultOutfit;
+  if (result.added.length) c.updatedAt = Date.now();
+  return result;
+}
+
+/** 给 AI 画的立绘标表情 / 动作 / 服装：已有的 id，或者按名字找、没有就新建（带上预设里的说明、适合的场景、衣服的 tags） */
+export interface GeneratedLabels {
+  expression?: string | { label: string; hint?: string };
+  pose?: string | { label: string; hint?: string; fits?: Pose[] };
+  outfit?: string | { label: string; tags?: string; kind?: OutfitKind };
+}
+
+/**
+ * 存一张 AI 画的立绘（"AI 画立绘"）：压好存进本机素材库，标上表情、动作、服装。
+ * replace 给了时，删掉它挑中的那几张（重画同一个表情时换掉上一张）；hidden：留着备用、不参与自动挑选（和平时的构图不一样的）
+ */
+export async function addGeneratedPortrait(
+  c: Character,
+  img: { bytes: Uint8Array<ArrayBuffer>; mime: string },
+  labels: GeneratedLabels,
+  opts: { gen: PortraitGen; name: string; fit?: PortraitFit; hidden?: boolean; replace?: (p: Portrait) => boolean; everyone: Character[] },
+): Promise<Portrait> {
+  const set = ensurePortraitSet(c);
+  const small = await compressPortrait(new Blob([img.bytes], { type: img.mime }));
+  const assetKey = await putAsset(small.bytes, small.mime);
+  const replaced = opts.replace ? set.portraits.filter(opts.replace) : [];
+  const first = !set.portraits.length;
+  const l = labels;
+  let expression = '';
+  if (typeof l.expression === 'string') expression = l.expression;
+  else if (l.expression) {
+    expression = ensureExpression(set, l.expression.label);
+    const e = set.expressions.find((x) => x.id === expression);
+    if (e && !e.hint && l.expression.hint) e.hint = l.expression.hint;
+  }
+  let pose = '';
+  if (typeof l.pose === 'string') pose = l.pose;
+  else if (l.pose) {
+    const had = set.poses.some((x) => x.label === (l.pose as { label: string }).label);
+    pose = ensurePose(set, l.pose.label);
+    const p = set.poses.find((x) => x.id === pose);
+    if (p && !had && l.pose.fits?.length) p.fits = [...l.pose.fits];
+    if (p && !p.hint && l.pose.hint) p.hint = l.pose.hint;
+  }
+  let outfit = '';
+  if (typeof l.outfit === 'string') outfit = l.outfit;
+  else if (l.outfit) {
+    outfit = ensureOutfit(set, l.outfit.label);
+    const o = set.outfits.find((x) => x.id === outfit);
+    if (o && l.outfit.tags && !o.tags) o.tags = l.outfit.tags;
+    if (o && l.outfit.kind && !o.kind) o.kind = l.outfit.kind;
+  }
+  const p: Portrait = {
+    id: uid('pt'),
+    assetKey,
+    name: opts.name,
+    width: small.width,
+    height: small.height,
+    expression,
+    pose,
+    outfit,
+    ...(opts.fit && (opts.fit.zoom !== 1 || opts.fit.x || opts.fit.y) ? { fit: { ...opts.fit } } : {}),
+    ...(opts.hidden ? { hidden: true } : {}),
+    gen: opts.gen,
+  };
+  if (first) set.aspect = Math.round((small.width / small.height) * 1000) / 1000;
+  set.portraits.push(p);
+  c.updatedAt = Date.now();
+  // 新的一张放进去以后再删旧的：万一画出来一模一样（同一个素材），文件不会被当成没人用删掉
+  for (const old of replaced) await removePortrait(c, old.id, opts.everyone);
+  return p;
+}
+
+function mostUsed(set: PortraitSet, k: 'expression' | 'pose' | 'outfit'): string {
+  const n = new Map<string, number>();
+  for (const p of set.portraits) if (p[k]) n.set(p[k], (n.get(p[k]) ?? 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+}
+
+/** 删一张；别的角色都没用这张图时，本机素材库里的文件也删掉 */
+export async function removePortrait(c: Character, id: string, everyone: Character[]): Promise<void> {
+  const set = c.portraits;
+  const p = set?.portraits.find((x) => x.id === id);
+  if (!set || !p) return;
+  set.portraits = set.portraits.filter((x) => x.id !== id);
+  c.updatedAt = Date.now();
+  if (!everyone.some((o) => o.portraits?.portraits.some((x) => x.assetKey === p.assetKey))) await dropAsset(p.assetKey);
+}
+
+/**
+ * 改名字：id 跟着名字走（模型写的是 id，[expr:坏笑] 比 [expr:新表情] 好懂），用着它的图、默认值、热区一起改过来。返回新的 id
+ */
+export function renameLabel(c: Character, kind: 'expression' | 'pose' | 'outfit', id: string, label: string): string {
+  const set = c.portraits;
+  const name = label.trim();
+  if (!set || !name) return id;
+  const list: { id: string; label: string }[] = kind === 'expression' ? set.expressions : kind === 'pose' ? set.poses : set.outfits;
+  const item = list.find((x) => x.id === id);
+  if (!item) return id;
+  item.label = name;
+  const next = labelId(name, list.filter((x) => x !== item).map((x) => x.id));
+  if (next !== id) {
+    item.id = next;
+    for (const p of set.portraits) if (p[kind] === id) p[kind] = next;
+    if (kind === 'pose' && set.defaultPose === id) set.defaultPose = next;
+    if (kind === 'outfit' && set.defaultOutfit === id) set.defaultOutfit = next;
+    if (kind === 'expression') {
+      if (set.defaultExpression === id) set.defaultExpression = next;
+      const moments = set.moments ?? {};
+      for (const m of Object.keys(moments) as Expression[]) if (moments[m] === id) moments[m] = next;
+      for (const h of set.hotspots ?? []) {
+        if (h.tap.expression === id) h.tap.expression = next;
+        if (h.longPress?.expression === id) h.longPress.expression = next;
+      }
+    }
+  }
+  c.updatedAt = Date.now();
+  return next;
+}
+
+/** 删一个表情 / 动作 / 服装：用着它的图改成未标 / 默认动作 / 默认服装；图不删 */
+export function removeLabel(c: Character, kind: 'expression' | 'pose' | 'outfit', id: string): void {
+  const set = c.portraits;
+  if (!set) return;
+  if (kind === 'expression') {
+    set.expressions = set.expressions.filter((e) => e.id !== id);
+    if (set.defaultExpression === id) set.defaultExpression = set.expressions[0]?.id ?? '';
+    const moments = set.moments ?? {};
+    for (const m of Object.keys(moments) as Expression[]) if (moments[m] === id) delete moments[m];
+    for (const p of set.portraits) if (p.expression === id) p.expression = '';
+  } else if (kind === 'pose') {
+    set.poses = set.poses.filter((x) => x.id !== id);
+    if (set.defaultPose === id) set.defaultPose = set.poses[0]?.id ?? '';
+    for (const p of set.portraits) if (p.pose === id) p.pose = set.defaultPose;
+  } else {
+    set.outfits = set.outfits.filter((x) => x.id !== id);
+    if (set.defaultOutfit === id) set.defaultOutfit = set.outfits[0]?.id ?? '';
+    for (const p of set.portraits) if (p.outfit === id) p.outfit = set.defaultOutfit;
+  }
+  c.updatedAt = Date.now();
+}
+
+/**
+ * 戳戳乐热区：自己画过的 → 有立绘时按脸的位置摆一套 → 占位立绘的那套。
+ * 自己画过的那套里没有的部位（后来加的嘴唇、脖子、身子）按脸的位置补上
+ */
+export function hotspotsOf(c: Character | undefined): PokeHotspot[] {
+  const set = c?.portraits;
+  if (!hasPortraits(set)) return pokeHotspots;
+  const shapes = defaultHotspotShapes(set);
+  const auto = pokeHotspots.map((h) => ({ ...h, shape: shapes[h.id as keyof typeof shapes] ?? h.shape }));
+  const own = set.hotspots ?? [];
+  return own.length ? [...own, ...auto.filter((h) => !own.some((x) => x.id === h.id))] : auto;
+}
+
+const decoded = new Map<string, Promise<string | null>>();
+
+/** 取一张立绘的地址并解码好（切换时先解码再换上，不会闪一下空白） */
+export function portraitSrc(assetKey: string): Promise<string | null> {
+  let task = decoded.get(assetKey);
+  if (!task) {
+    task = (async () => {
+      const url = await assetUrl(assetKey);
+      if (!url) return null;
+      const img = new Image();
+      img.src = url;
+      try {
+        await img.decode();
+      } catch {
+        // 解码失败时照样交给 <img>，显示不出来时由它显示占位
+      }
+      return url;
+    })();
+    decoded.set(assetKey, task);
+    // 找不到的不缓存：可能是还没写进本机
+    void task.then((u) => {
+      if (!u) decoded.delete(assetKey);
+    });
+  }
+  return task;
+}
+
+/** 立绘框的宽高比：有立绘时按立绘，没有时是占位立绘的 600:1000 */
+export function portraitAspect(c: Character | undefined): number {
+  const set = c?.portraits;
+  return hasPortraits(set) && set.aspect > 0 ? set.aspect : PLACEHOLDER_CANVAS.w / PLACEHOLDER_CANVAS.h;
+}
+
+/** 头像框（脸在立绘框里的中心和方框边长）：有立绘时用她自己的（立绘设置里能拖），没有时是占位立绘的 */
+export function faceOf(c: Character | undefined): { x: number; y: number; size: number } {
+  const set = c?.portraits;
+  return hasPortraits(set) ? set.face : PLACEHOLDER_FACE;
+}

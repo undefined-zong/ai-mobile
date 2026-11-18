@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-mobile-hub",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-11",
+  "migrations": [{ "tag": "v1-bilibili-relay", "new_sqlite_classes": ["BilibiliRelay"] }, { "tag": "v2-remove-bilibili-relay", "deleted_classes": ["BilibiliRelay"] }],
+  // Includes local 04:00 in each saved IANA zone; later ticks retry missing daily rhythms.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true },
+  "vars": {
+    "APP_ORIGIN": "https://undefined-zong.github.io",
+    "APP_URL": "https://undefined-zong.github.io/ai-mobile/",
+    // 没绑 R2 时多设备同步的图片在 D1 里最多占多少 MB；部署时可用 HUB_BLOB_QUOTA_MB 改，删掉这一项就不限
+    "SYNC_BLOB_QUOTA_MB": "1024"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "ai-mobile-hub",
+    // Replaced by scripts/configure.mjs for deployment; local dev needs no account.
+    "database_id": "00000000-0000-0000-0000-000000000000",
+    "migrations_dir": "migrations"
+  }]
+}

@@ -1,0 +1,256 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-feature-game-brawl",
+  "category": "feature",
+  "name": "一起游戏 · 大乱斗",
+  "defaultFor": [
+    "game-brawl"
+  ],
+  "description": "给任意角色和用户人设生成可实际使用的战斗档案：血量、蓝量、普攻、三个技能、被动、战斗策略和外观。brawl-make 配招，brawl-open 开场，brawl-end 结算。战斗由本地程序运行，模型不参与逐帧判定。",
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "大乱斗规则",
+      "role": "system",
+      "content": "你在和{{user}}玩横版格斗小游戏「大乱斗」。只按本次任务块做事：配招时输出战斗档案，开场和结算时输出一句角色台词。场景任务给的参战者材料和战绩是事实；不自行判胜负，不改写实际战绩。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "worldInfoBefore",
+      "name": "世界书（角色前）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "charDescription",
+      "name": "角色描述",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "charPersonality",
+      "name": "角色性格",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "scenario",
+      "name": "场景",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "worldInfoAfter",
+      "name": "世界书（角色后）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "personaDescription",
+      "name": "用户人设",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "dialogueExamples",
+      "name": "示例对话",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "summary",
+      "name": "过往摘要",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "chatHistory",
+      "name": "聊天历史",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "memory",
+      "name": "长期记忆 + 关系状态",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 4
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "environment",
+      "name": "当前环境",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 2
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "sceneRules",
+      "name": "可用标签和表情（程序按场景填）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 1
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "brawlMake",
+      "name": "生成专属战斗档案",
+      "role": "system",
+      "content": "这次只生成场景任务点名的参战者的战斗档案，不扮演角色。参战者可能是用户的人设，也可能是聊天角色或另一张角色卡。仔细阅读这一位的材料，不能把{{char}}的能力混给别人。\n- 优先表现角色已有的能力、武器和性格；日常角色把爱好、职业或性格转成有辨识度的招式。用户有招式想法时按想法设计。\n- 每人三招，按顺序是技能一、技能二、奥义。名称、说明、类型与实际数值对应。不能只写技能故事。\n- 定位 style：balanced 均衡、rush 近身突进、ranged 远程牵制、guard 防守反击。普通角色初始总强度相近；高血量牺牲机动或伤害，高伤害招式用更长前摇、冷却和耗蓝换取。\n- hp 通常800–1300（可用600–1600），mp 通常100–150（80–200），attack 普攻伤害20–65，speed 移动速度160–320（单位/秒）。\n- kind 只用 strike 近战 / projectile 直线弹道 / dash 向前突进攻击 / burst 自身周围范围攻击 / shield 护盾。不存在召唤、隐身、复活、治疗、追踪、持续灼烧等效果，不要在说明中承诺程序不会执行的行为。\n- damage 是单次伤害；shield 时是吸收伤害的护盾值，持续3.5秒。技能一、二30–210，奥义30–420。mana 技能一、二10–60、奥义45–80；cooldown 技能一、二3–35秒、奥义14–35秒。\n- range 范围70–650单位，场地宽1000；burst 最大300。windup 前摇0.1–1.2秒，recovery 后摇0.15–1秒；knockback 击退速度50–380；launch 是否使目标浮空。shield 不会造成伤害，launch 对护盾无效，其余攻击按实际命中生效。\n- 被动 passive.kind 只用 flow（普攻命中额外回3蓝）、guard（防御耗蓝减半）、recovery（每秒回蓝由3.5升到6）、laststand（生命低于30%时伤害提高18%）。说明严格贴合所选效果。\n- 普攻三连、跳跃、防御和闪避是共有动作；自然回蓝3.5/秒，普攻命中回5蓝。不要往档案里写当前血蓝。\n- look 写外观：hair 只用 short/long/spiky/pony，hairColor 发色、outfit 衣服颜色、skin 肤色均为#rrggbb；color 是技能特效颜色。形象参考角色外观，保持辨识度。\n- 输出一个 JSON 对象，不加解释、不加 Markdown。以下只示范字段和结构，内容要为点名的参战者重新设计：\n{\"title\": \"破浪先锋\", \"style\": \"rush\", \"hp\": 1150, \"mp\": 100, \"attack\": 38, \"speed\": 255, \"color\": \"#8ec5e8\", \"look\": {\"hair\": \"short\", \"hairColor\": \"#202a38\", \"outfit\": \"#48789f\", \"skin\": \"#efd0b6\"}, \"passive\": {\"name\": \"越战越勇\", \"kind\": \"laststand\", \"description\": \"血量低于30%时，伤害提高18%。\"}, \"skills\": [{\"name\": \"破浪冲拳\", \"description\": \"向前冲刺，命中时击退对手。\", \"kind\": \"dash\", \"damage\": 135, \"mana\": 25, \"cooldown\": 7, \"range\": 240, \"windup\": 0.15, \"recovery\": 0.3, \"knockback\": 160, \"launch\": false}, {\"name\": \"回身上挑\", \"description\": \"近距离上挑，把对手打向空中。\", \"kind\": \"strike\", \"damage\": 155, \"mana\": 30, \"cooldown\": 9, \"range\": 125, \"windup\": 0.2, \"recovery\": 0.35, \"knockback\": 120, \"launch\": true}, {\"name\": \"怒涛爆发\", \"description\": \"蓄力后向周身释放冲击。\", \"kind\": \"burst\", \"damage\": 310, \"mana\": 70, \"cooldown\": 24, \"range\": 240, \"windup\": 0.55, \"recovery\": 0.6, \"knockback\": 300, \"launch\": true}]}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "brawl-make"
+      ]
+    },
+    {
+      "identifier": "brawlOpen",
+      "name": "开场说一句",
+      "role": "system",
+      "content": "开场倒计时开始，按你的性格向{{user}}说一句短话，轻松、有对手感。不替用户行动。只输出 JSON：{\"line\":\"一句开场白，最多50字\"}。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "brawl-open"
+      ]
+    },
+    {
+      "identifier": "brawlEnd",
+      "name": "结算说一句",
+      "role": "system",
+      "content": "根据本局真实战绩作出反应。赢了可以得意，输了可以嘴硬、约下一局；认输、平局要照实回应。可以提到伤害、连击或时间，但不能虚构战况。只输出 JSON：{\"line\":\"一句结算回应，最多80字\"}。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "brawl-end"
+      ]
+    },
+    {
+      "identifier": "sceneTask",
+      "name": "场景任务（程序填这一次的输入）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 0,
+        "order": 100
+      },
+      "origin": "app"
+    }
+  ],
+  "sampler": {
+    "temperature": 0.65,
+    "topP": 0.95,
+    "maxTokens": 6000,
+    "contextTokens": 24000,
+    "frequencyPenalty": 0.3,
+    "presencePenalty": 0.3,
+    "stream": true
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": []
+}

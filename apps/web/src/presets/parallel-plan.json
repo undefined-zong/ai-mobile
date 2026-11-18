@@ -1,0 +1,100 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-parallel-plan",
+  "category": "parallel",
+  "name": "平行时空 · 整理你的一天",
+  "defaultFor": [
+    "parallel-plan"
+  ],
+  "description": "平行时空用：每天到点（平行时空设置里改）把你的日程计划、家务、健康计划（有几份用几份）整理成平行时空里你的一份计划，说的是同一件事的合成一项。合并的规矩写在\"整理你的一天\"那一块里，可以改；输出格式里的字段名别改，程序按它读。",
+  "sampler": {
+    "temperature": 0.3,
+    "topP": 1,
+    "maxTokens": 4000,
+    "contextTokens": 32000,
+    "frequencyPenalty": 0,
+    "presencePenalty": 0,
+    "stream": false
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": [],
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "任务",
+      "role": "system",
+      "content": "你帮{{user}}把这一天的几份计划整理成一份，放在平行时空里{{user}}的那一边。下面列着{{user}}这一天几份计划里的事，每一项带编号（S1、S2……），写着来自哪一份：日程计划（日程系统排的时间线和待办）、家务、健康计划（健身、三顿饭）。几份计划常说的是同一件事：日程计划本来就把家务和健康排进了时间线，待办也常和时间线上的事重复。只输出一个 JSON 对象，不要任何其他文字。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "planTask",
+      "name": "整理你的一天",
+      "role": "system",
+      "content": "这一次的任务：整理成平行时空里{{user}}这一天的一份计划。\n- 说的是同一件事的几项合成一项：同一顿饭（\"早餐与晨间悠闲时光\"和\"早饭：牛奶鸡蛋\"）、同一件家务、同一次健身、待办和时间线上的同一件事。from 里写合进来的所有编号。不是同一件事的不要硬合。\n- 每个编号都要出现在某一项的 from 里，而且只出现一次：不要漏，不要编没有的编号，也不要加计划里没有的事。\n- time 用 24 小时制 \"HH:mm\"：合并时用日程计划里排的时间（它是照{{user}}这一天的安排排好的）；日程计划没排到的家务、健康按它原来的时间；原来就不定时、也没有合适时间的写 \"\"。\n- minutes 写大概多久，不知道写 0。\n- title 简短具体，留下有用的信息（吃什么、练什么、做哪件家务）；note 补一句有用的（怎么做、带什么、截止时间），没有写 \"\"。\n- 写了\"定死的，不能挪\"的照原来的时间。\n- 按时间先后排，不定时的放在最前面。\n输出格式：\n{\"items\": [{\"time\": \"09:00\", \"minutes\": 30, \"title\": \"早饭：微波温牛奶与水煮蛋\", \"note\": \"自己做，约 5 分钟\", \"from\": [\"S2\", \"S5\"]}]}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "parallel-plan"
+      ]
+    },
+    {
+      "identifier": "parallelNow",
+      "name": "现在（日期、星期、时间）",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "parallelSources",
+      "name": "你这一天几份计划里的事（日程计划、家务、健康计划，带编号；整理你的一天时）",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "parallelAsk",
+      "name": "这一次要做的",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    }
+  ]
+}

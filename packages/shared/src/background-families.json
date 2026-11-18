@@ -1,0 +1,2376 @@
+[
+  {
+    "id": "AP-study_room/书房/现代书房",
+    "set": "AP-study_room",
+    "scene": "书房",
+    "style": "现代书房",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-study_room/书房/古典书房",
+    "set": "AP-study_room",
+    "scene": "书房",
+    "style": "古典书房",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-study_room/书房/生活感书房",
+    "set": "AP-study_room",
+    "scene": "书房",
+    "style": "生活感书房",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "MC-pc_room/书房/现代电脑房1",
+    "set": "MC-pc_room",
+    "scene": "书房",
+    "style": "现代电脑房1",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-pc_room2/书房/现代电脑房2",
+    "set": "MC-pc_room2",
+    "scene": "书房",
+    "style": "现代电脑房2",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-tatami_pc/书房/榻榻米电脑房",
+    "set": "MC-tatami_pc",
+    "scene": "书房",
+    "style": "榻榻米电脑房",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-apartment/住宅外观/低层公寓",
+    "set": "MC-apartment",
+    "scene": "住宅外观",
+    "style": "低层公寓",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-condominium/住宅外观/城市公寓",
+    "set": "MC-condominium",
+    "scene": "住宅外观",
+    "style": "城市公寓",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-house/住宅外观/现代住宅1",
+    "set": "MC-house",
+    "scene": "住宅外观",
+    "style": "现代住宅1",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-house2/住宅外观/现代住宅2",
+    "set": "MC-house2",
+    "scene": "住宅外观",
+    "style": "现代住宅2",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-japanese_style_house/住宅外观/传统日式",
+    "set": "MC-japanese_style_house",
+    "scene": "住宅外观",
+    "style": "传统日式",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-storeroom/储藏室/家庭储物间",
+    "set": "MC-storeroom",
+    "scene": "储藏室",
+    "style": "家庭储物间",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-room/卧室/简约卧室",
+    "set": "AP-room",
+    "scene": "卧室",
+    "style": "简约卧室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-room/客厅/简约起居室",
+    "set": "AP-room",
+    "scene": "客厅",
+    "style": "简约起居室",
+    "indoor": true,
+    "periods": [
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-room/卧室/可爱卧室",
+    "set": "AP-room",
+    "scene": "卧室",
+    "style": "可爱卧室",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "day",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-room/卧室/个性卧室",
+    "set": "AP-room",
+    "scene": "卧室",
+    "style": "个性卧室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "night",
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-room/客厅/日式和室",
+    "set": "AP-room",
+    "scene": "客厅",
+    "style": "日式和室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "indoor",
+      "dusk"
+    ]
+  },
+  {
+    "id": "MC-attic_room/阁楼/木质阁楼",
+    "set": "MC-attic_room",
+    "scene": "阁楼",
+    "style": "木质阁楼",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-bedroom/卧室/窗边床铺",
+    "set": "MC-bedroom",
+    "scene": "卧室",
+    "style": "窗边床铺",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-cluttered_room/卧室/生活感杂物房",
+    "set": "MC-cluttered_room",
+    "scene": "卧室",
+    "style": "生活感杂物房",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-double_room/卧室/双人卧室",
+    "set": "MC-double_room",
+    "scene": "卧室",
+    "style": "双人卧室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-single_room/卧室/清爽单人间",
+    "set": "MC-single_room",
+    "scene": "卧室",
+    "style": "清爽单人间",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-single_room2/卧室/可爱单人间",
+    "set": "MC-single_room2",
+    "scene": "卧室",
+    "style": "可爱单人间",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-single_room3/卧室/素雅单人间",
+    "set": "MC-single_room3",
+    "scene": "卧室",
+    "style": "素雅单人间",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-kitchen/厨房/简约厨房",
+    "set": "AP-kitchen",
+    "scene": "厨房",
+    "style": "简约厨房",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-kitchen/厨房/居家厨房",
+    "set": "AP-kitchen",
+    "scene": "厨房",
+    "style": "居家厨房",
+    "indoor": true,
+    "periods": [
+      "day",
+      "night",
+      "dusk"
+    ]
+  },
+  {
+    "id": "MC-island_kitchen/厨房/现代中岛",
+    "set": "MC-island_kitchen",
+    "scene": "厨房",
+    "style": "现代中岛",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-living/客厅/现代温馨1",
+    "set": "MC-living",
+    "scene": "客厅",
+    "style": "现代温馨1",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-living2/客厅/现代温馨2",
+    "set": "MC-living2",
+    "scene": "客厅",
+    "style": "现代温馨2",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-retro_living/客厅/昭和复古和室",
+    "set": "MC-retro_living",
+    "scene": "客厅",
+    "style": "昭和复古和室",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-tatami_tv/客厅/榻榻米电视房",
+    "set": "MC-tatami_tv",
+    "scene": "客厅",
+    "style": "榻榻米电视房",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-garden/庭院/住宅花园",
+    "set": "AP-garden",
+    "scene": "庭院",
+    "style": "住宅花园",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-garden/庭院/日式庭园",
+    "set": "AP-garden",
+    "scene": "庭院",
+    "style": "日式庭园",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-garden/庭院/别墅庭院",
+    "set": "AP-garden",
+    "scene": "庭院",
+    "style": "别墅庭院",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "MC-japanese_corridor/庭院/日式缘侧",
+    "set": "MC-japanese_corridor",
+    "scene": "庭院",
+    "style": "日式缘侧",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-toilet/洗手间/简约卫生间",
+    "set": "AP-toilet",
+    "scene": "洗手间",
+    "style": "简约卫生间",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "day"
+    ]
+  },
+  {
+    "id": "AP-washroom/洗手间/现代盥洗室",
+    "set": "AP-washroom",
+    "scene": "洗手间",
+    "style": "现代盥洗室",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "day"
+    ]
+  },
+  {
+    "id": "AP-washroom/洗手间/西式盥洗室",
+    "set": "AP-washroom",
+    "scene": "洗手间",
+    "style": "西式盥洗室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "indoor",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-japanese_bathroom/洗手间/和风现代浴室",
+    "set": "MC-japanese_bathroom",
+    "scene": "洗手间",
+    "style": "和风现代浴室",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-small_bathroom/洗手间/小型公寓浴室",
+    "set": "MC-small_bathroom",
+    "scene": "洗手间",
+    "style": "小型公寓浴室",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-apartment_hallway/玄关/公寓入户",
+    "set": "MC-apartment_hallway",
+    "scene": "玄关",
+    "style": "公寓入户",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-house_hallway/玄关/现代住宅",
+    "set": "MC-house_hallway",
+    "scene": "玄关",
+    "style": "现代住宅",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-jp_entrance_hall/玄关/日式住宅",
+    "set": "MC-jp_entrance_hall",
+    "scene": "玄关",
+    "style": "日式住宅",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-2nd_floor_hallway/走廊/住宅二楼",
+    "set": "MC-2nd_floor_hallway",
+    "scene": "走廊",
+    "style": "住宅二楼",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-condominium_corridor/走廊/公寓外廊",
+    "set": "MC-condominium_corridor",
+    "scene": "走廊",
+    "style": "公寓外廊",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-jp_passage_way/走廊/日式长廊",
+    "set": "MC-jp_passage_way",
+    "scene": "走廊",
+    "style": "日式长廊",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-balcony/阳台/公寓阳台",
+    "set": "AP-balcony",
+    "scene": "阳台",
+    "style": "公寓阳台",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-veranda_condominium/阳台/公寓阳台",
+    "set": "MC-veranda_condominium",
+    "scene": "阳台",
+    "style": "公寓阳台",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-bookstore/书店/现代书店",
+    "set": "MC-bookstore",
+    "scene": "书店",
+    "style": "现代书店",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-used_bookstore/书店/复古旧书店",
+    "set": "MC-used_bookstore",
+    "scene": "书店",
+    "style": "复古旧书店",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-library/图书馆/市立图书馆",
+    "set": "MC-library",
+    "scene": "图书馆",
+    "style": "市立图书馆",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-library_room/图书馆/学校阅览室",
+    "set": "MC-library_room",
+    "scene": "图书馆",
+    "style": "学校阅览室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-garden/学校/校园庭院",
+    "set": "AP-garden",
+    "scene": "学校",
+    "style": "校园庭院",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-science_laboratory/学校/科学实验室",
+    "set": "AP-science_laboratory",
+    "scene": "学校",
+    "style": "科学实验室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "MC-back_of_classroom/学校/教室后排",
+    "set": "MC-back_of_classroom",
+    "scene": "学校",
+    "style": "教室后排",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-behind_school_gym/学校/体育馆后方",
+    "set": "MC-behind_school_gym",
+    "scene": "学校",
+    "style": "体育馆后方",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-blackboard/学校/教室黑板",
+    "set": "MC-blackboard",
+    "scene": "学校",
+    "style": "教室黑板",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-campus/学校/大学校园",
+    "set": "MC-campus",
+    "scene": "学校",
+    "style": "大学校园",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-connecting_corridor/学校/教学楼连廊",
+    "set": "MC-connecting_corridor",
+    "scene": "学校",
+    "style": "教学楼连廊",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-cultural_club_room/学校/文艺社团室",
+    "set": "MC-cultural_club_room",
+    "scene": "学校",
+    "style": "文艺社团室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-emergency_staircase/学校/室外楼梯",
+    "set": "MC-emergency_staircase",
+    "scene": "学校",
+    "style": "室外楼梯",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-front_of_classroom/学校/教室前排",
+    "set": "MC-front_of_classroom",
+    "scene": "学校",
+    "style": "教室前排",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_courtyard_bench/学校/校园长椅",
+    "set": "MC-school_courtyard_bench",
+    "scene": "学校",
+    "style": "校园长椅",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_entrance/学校/教学楼入口",
+    "set": "MC-school_entrance",
+    "scene": "学校",
+    "style": "教学楼入口",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_hallway/学校/教学楼走廊",
+    "set": "MC-school_hallway",
+    "scene": "学校",
+    "style": "教学楼走廊",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_in_spring/学校/春日校门",
+    "set": "MC-school_in_spring",
+    "scene": "学校",
+    "style": "春日校门",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_music_room/学校/音乐教室",
+    "set": "MC-school_music_room",
+    "scene": "学校",
+    "style": "音乐教室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_rooftop/学校/教学楼天台",
+    "set": "MC-school_rooftop",
+    "scene": "学校",
+    "style": "教学楼天台",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_store/学校/校园小卖部",
+    "set": "MC-school_store",
+    "scene": "学校",
+    "style": "校园小卖部",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "MC-staff_room/学校/教师办公室",
+    "set": "MC-staff_room",
+    "scene": "学校",
+    "style": "教师办公室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-school_ground/操场/学校运动场",
+    "set": "MC-school_ground",
+    "scene": "操场",
+    "style": "学校运动场",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-archive_room/档案室/资料档案室",
+    "set": "MC-archive_room",
+    "scene": "档案室",
+    "style": "资料档案室",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-counter/公共设施/服务窗口",
+    "set": "MC-counter",
+    "scene": "公共设施",
+    "style": "服务窗口",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-elevator_hall_facility/公共设施/电梯大厅",
+    "set": "MC-elevator_hall_facility",
+    "scene": "公共设施",
+    "style": "电梯大厅",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-facility/公共设施/现代楼宇1",
+    "set": "MC-facility",
+    "scene": "公共设施",
+    "style": "现代楼宇1",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-facility2/公共设施/现代楼宇2",
+    "set": "MC-facility2",
+    "scene": "公共设施",
+    "style": "现代楼宇2",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-stairs_facility/公共设施/室内楼梯",
+    "set": "MC-stairs_facility",
+    "scene": "公共设施",
+    "style": "室内楼梯",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-hospital-rooms/医院/护士站",
+    "set": "AP-hospital-rooms",
+    "scene": "医院",
+    "style": "护士站",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-hospital-rooms/医院/病房",
+    "set": "AP-hospital-rooms",
+    "scene": "医院",
+    "style": "病房",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-hospital-rooms/医院/手术室",
+    "set": "AP-hospital-rooms",
+    "scene": "医院",
+    "style": "手术室",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-hospital-rooms/医院/医院走廊",
+    "set": "AP-hospital-rooms",
+    "scene": "医院",
+    "style": "医院走廊",
+    "indoor": true,
+    "periods": [
+      "day",
+      "indoor",
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-school_infirmary/学校/校园医务室",
+    "set": "AP-school_infirmary",
+    "scene": "学校",
+    "style": "校园医务室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "MC-hospital/医院/医院外观",
+    "set": "MC-hospital",
+    "scene": "医院",
+    "style": "医院外观",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-hospital_lobby/医院/大厅前台",
+    "set": "MC-hospital_lobby",
+    "scene": "医院",
+    "style": "大厅前台",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-museum/博物馆/常设展厅",
+    "set": "AP-museum",
+    "scene": "博物馆",
+    "style": "常设展厅",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-museum/博物馆/化石展厅",
+    "set": "AP-museum",
+    "scene": "博物馆",
+    "style": "化石展厅",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "dusk",
+      "day"
+    ]
+  },
+  {
+    "id": "AP-museum/博物馆/深夜展厅",
+    "set": "AP-museum",
+    "scene": "博物馆",
+    "style": "深夜展厅",
+    "indoor": true,
+    "periods": [
+      "night"
+    ]
+  },
+  {
+    "id": "AP-museum/美术馆/夜间雕塑展厅",
+    "set": "AP-museum",
+    "scene": "美术馆",
+    "style": "夜间雕塑展厅",
+    "indoor": true,
+    "periods": [
+      "night"
+    ]
+  },
+  {
+    "id": "MC-shrine/神社/传统神社",
+    "set": "MC-shrine",
+    "scene": "神社",
+    "style": "传统神社",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-art-museum/美术馆/现代展厅",
+    "set": "MC-art-museum",
+    "scene": "美术馆",
+    "style": "现代展厅",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-police_station/警察局/警署外观",
+    "set": "MC-police_station",
+    "scene": "警察局",
+    "style": "警署外观",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-atm_corner/银行/自助取款区",
+    "set": "MC-atm_corner",
+    "scene": "银行",
+    "style": "自助取款区",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-cafe/咖啡厅/木质复古咖啡馆",
+    "set": "MC-cafe",
+    "scene": "咖啡厅",
+    "style": "木质复古咖啡馆",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-casual_restaurant/餐厅/休闲餐厅",
+    "set": "MC-casual_restaurant",
+    "scene": "餐厅",
+    "style": "休闲餐厅",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-conveyor_belt_sushi/餐厅/回转寿司",
+    "set": "MC-conveyor_belt_sushi",
+    "scene": "餐厅",
+    "style": "回转寿司",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-izakaya_table/餐厅/日式居酒屋",
+    "set": "MC-izakaya_table",
+    "scene": "餐厅",
+    "style": "日式居酒屋",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-restaurant/餐厅/西式餐厅",
+    "set": "MC-restaurant",
+    "scene": "餐厅",
+    "style": "西式餐厅",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-karaoke/KTV/卡拉OK包厢",
+    "set": "AP-karaoke",
+    "scene": "KTV",
+    "style": "卡拉OK包厢",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-karaoke/KTV/包厢",
+    "set": "MC-karaoke",
+    "scene": "KTV",
+    "style": "包厢",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-kyudo_hall/体育馆/日式弓道场",
+    "set": "MC-kyudo_hall",
+    "scene": "体育馆",
+    "style": "日式弓道场",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-bowling_alley/保龄球馆/保龄球道",
+    "set": "AP-bowling_alley",
+    "scene": "保龄球馆",
+    "style": "保龄球道",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-bowling_alley/保龄球馆/接待区",
+    "set": "AP-bowling_alley",
+    "scene": "保龄球馆",
+    "style": "接待区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-bowling_alley/保龄球馆/球架区",
+    "set": "AP-bowling_alley",
+    "scene": "保龄球馆",
+    "style": "球架区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-fitnessclub/健身房/器械训练区",
+    "set": "AP-fitnessclub",
+    "scene": "健身房",
+    "style": "器械训练区",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-fitnessclub/健身房/健身房更衣室",
+    "set": "AP-fitnessclub",
+    "scene": "健身房",
+    "style": "健身房更衣室",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "day"
+    ]
+  },
+  {
+    "id": "AP-fitnessclub/健身房/桑拿室",
+    "set": "AP-fitnessclub",
+    "scene": "健身房",
+    "style": "桑拿室",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-fitnessclub/健身房/健身操房",
+    "set": "AP-fitnessclub",
+    "scene": "健身房",
+    "style": "健身操房",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "day"
+    ]
+  },
+  {
+    "id": "AP-fitnessclub/健身房/其他区域",
+    "set": "AP-fitnessclub",
+    "scene": "健身房",
+    "style": "其他区域",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-zoo/动物园/动物园入口",
+    "set": "AP-zoo",
+    "scene": "动物园",
+    "style": "动物园入口",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-zoo/动物园/动物展区",
+    "set": "AP-zoo",
+    "scene": "动物园",
+    "style": "动物展区",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-zoo/动物园/园内步道",
+    "set": "AP-zoo",
+    "scene": "动物园",
+    "style": "园内步道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-shooting_stall/庙会/射击摊位",
+    "set": "MC-shooting_stall",
+    "scene": "庙会",
+    "style": "射击摊位",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-stalls/庙会/祭典摊位",
+    "set": "MC-stalls",
+    "scene": "庙会",
+    "style": "祭典摊位",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-botanical_garden/植物园/现代温室",
+    "set": "AP-botanical_garden",
+    "scene": "植物园",
+    "style": "现代温室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-aquarium/水族馆/巨型水槽",
+    "set": "AP-aquarium",
+    "scene": "水族馆",
+    "style": "巨型水槽",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-aquarium/水族馆/海底隧道",
+    "set": "AP-aquarium",
+    "scene": "水族馆",
+    "style": "海底隧道",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-aquarium/水族馆/水族展区",
+    "set": "AP-aquarium",
+    "scene": "水族馆",
+    "style": "水族展区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-aquarium/水族馆/售票处",
+    "set": "AP-aquarium",
+    "scene": "水族馆",
+    "style": "售票处",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-aquarium/水族馆/咨询台",
+    "set": "AP-aquarium",
+    "scene": "水族馆",
+    "style": "咨询台",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-aquarium/水族馆/纪念品店",
+    "set": "AP-aquarium",
+    "scene": "水族馆",
+    "style": "纪念品店",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-hot_spring/温泉/旅馆温泉",
+    "set": "MC-hot_spring",
+    "scene": "温泉",
+    "style": "旅馆温泉",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "GM-amusement-park/游乐园/摩天轮乐园",
+    "set": "GM-amusement-park",
+    "scene": "游乐园",
+    "style": "摩天轮乐园",
+    "indoor": false,
+    "periods": [
+      "day",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-game_center/游戏厅/抓娃娃机区",
+    "set": "AP-game_center",
+    "scene": "游戏厅",
+    "style": "抓娃娃机区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-game_center/游戏厅/街机区",
+    "set": "AP-game_center",
+    "scene": "游戏厅",
+    "style": "街机区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-game_center/游戏厅/格斗游戏区",
+    "set": "AP-game_center",
+    "scene": "游戏厅",
+    "style": "格斗游戏区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-pool/游泳池/校园泳池",
+    "set": "AP-pool",
+    "scene": "游泳池",
+    "style": "校园泳池",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-stage/演唱会/演出舞台",
+    "set": "AP-stage",
+    "scene": "演唱会",
+    "style": "演出舞台",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-cinema/电影院/放映厅",
+    "set": "AP-cinema",
+    "scene": "电影院",
+    "style": "放映厅",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-cinema/电影院/售票处",
+    "set": "AP-cinema",
+    "scene": "电影院",
+    "style": "售票处",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-cinema/电影院/售货区",
+    "set": "AP-cinema",
+    "scene": "电影院",
+    "style": "售货区",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-cinema/电影院/影城走廊",
+    "set": "AP-cinema",
+    "scene": "电影院",
+    "style": "影城走廊",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-bar/酒吧/吧台座位",
+    "set": "AP-bar",
+    "scene": "酒吧",
+    "style": "吧台座位",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-bar/酒吧/台球酒吧",
+    "set": "AP-bar",
+    "scene": "酒吧",
+    "style": "台球酒吧",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-bar/酒吧/飞镖酒吧",
+    "set": "AP-bar",
+    "scene": "酒吧",
+    "style": "飞镖酒吧",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-bar/酒吧/沙发卡座",
+    "set": "AP-bar",
+    "scene": "酒吧",
+    "style": "沙发卡座",
+    "indoor": true,
+    "periods": [
+      "night",
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-bar/酒吧/暖色吧台",
+    "set": "MC-bar",
+    "scene": "酒吧",
+    "style": "暖色吧台",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-local_bus_station/公交站/乡间车站",
+    "set": "MC-local_bus_station",
+    "scene": "公交站",
+    "style": "乡间车站",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-seaside_bus_stop/公交站/海边车站",
+    "set": "MC-seaside_bus_stop",
+    "scene": "公交站",
+    "style": "海边车站",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-airport/机场/航站楼外观",
+    "set": "AP-airport",
+    "scene": "机场",
+    "style": "航站楼外观",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-airport/机场/接待区",
+    "set": "AP-airport",
+    "scene": "机场",
+    "style": "接待区",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-airport/机场/候机大厅",
+    "set": "AP-airport",
+    "scene": "机场",
+    "style": "候机大厅",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-airport/机场/机场跑道",
+    "set": "AP-airport",
+    "scene": "机场",
+    "style": "机场跑道",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "MC-in_car/汽车/轿车内饰",
+    "set": "MC-in_car",
+    "scene": "汽车",
+    "style": "轿车内饰",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-inside_train/火车/通勤列车车厢",
+    "set": "MC-inside_train",
+    "scene": "火车",
+    "style": "通勤列车车厢",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-city_station/火车站/繁华站前",
+    "set": "MC-city_station",
+    "scene": "火车站",
+    "style": "繁华站前",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-local_station/火车站/乡间站前",
+    "set": "MC-local_station",
+    "scene": "火车站",
+    "style": "乡间站前",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-station_concourse/火车站/站内大厅",
+    "set": "MC-station_concourse",
+    "scene": "火车站",
+    "style": "站内大厅",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-station_platform/火车站/铁路站台",
+    "set": "MC-station_platform",
+    "scene": "火车站",
+    "style": "铁路站台",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-breakwater/码头/港湾防波堤",
+    "set": "AP-breakwater",
+    "scene": "码头",
+    "style": "港湾防波堤",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-luxury_cruise/轮船/游轮外观",
+    "set": "AP-luxury_cruise",
+    "scene": "轮船",
+    "style": "游轮外观",
+    "indoor": false,
+    "periods": [
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-luxury_cruise/轮船/游轮甲板",
+    "set": "AP-luxury_cruise",
+    "scene": "轮船",
+    "style": "游轮甲板",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-luxury_cruise/轮船/游轮泳池",
+    "set": "AP-luxury_cruise",
+    "scene": "轮船",
+    "style": "游轮泳池",
+    "indoor": false,
+    "periods": [
+      "night",
+      "day"
+    ]
+  },
+  {
+    "id": "AP-luxury_cruise/轮船/游轮娱乐厅",
+    "set": "AP-luxury_cruise",
+    "scene": "轮船",
+    "style": "游轮娱乐厅",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "AP-luxury_cruise/轮船/游轮餐厅",
+    "set": "AP-luxury_cruise",
+    "scene": "轮船",
+    "style": "游轮餐厅",
+    "indoor": true,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "MC-hotel_entrance/酒店/酒店入口",
+    "set": "MC-hotel_entrance",
+    "scene": "酒店",
+    "style": "酒店入口",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-ryokan-reception/酒店/日式旅馆前台",
+    "set": "MC-ryokan-reception",
+    "scene": "酒店",
+    "style": "日式旅馆前台",
+    "indoor": true,
+    "periods": [
+      "indoor",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-ryokan-room/酒店/日式旅馆客房",
+    "set": "MC-ryokan-room",
+    "scene": "酒店",
+    "style": "日式旅馆客房",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-rural_railside/铁路沿线/乡间铁道",
+    "set": "MC-rural_railside",
+    "scene": "铁路沿线",
+    "style": "乡间铁道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-railroad_crossing/铁路道口/城市平交道口",
+    "set": "MC-railroad_crossing",
+    "scene": "铁路道口",
+    "style": "城市平交道口",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-airplane/飞机/停机坪",
+    "set": "AP-airplane",
+    "scene": "飞机",
+    "style": "停机坪",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-airplane/飞机/空中飞行",
+    "set": "AP-airplane",
+    "scene": "飞机",
+    "style": "空中飞行",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "AP-airplane/飞机/客舱",
+    "set": "AP-airplane",
+    "scene": "飞机",
+    "style": "客舱",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-country_road/乡间道路/田园道路1",
+    "set": "MC-country_road",
+    "scene": "乡间道路",
+    "style": "田园道路1",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-country_road2/乡间道路/田园道路2",
+    "set": "MC-country_road2",
+    "scene": "乡间道路",
+    "style": "田园道路2",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-park_gazebo_bench/公园/凉亭长椅",
+    "set": "MC-park_gazebo_bench",
+    "scene": "公园",
+    "style": "凉亭长椅",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-park_in_autumn/公园/秋日红叶",
+    "set": "MC-park_in_autumn",
+    "scene": "公园",
+    "style": "秋日红叶",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-park_in_spring/公园/春日樱花",
+    "set": "MC-park_in_spring",
+    "scene": "公园",
+    "style": "春日樱花",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-playground/公园/宽阔城市公园",
+    "set": "MC-playground",
+    "scene": "公园",
+    "style": "宽阔城市公园",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-pond_park/公园/池塘公园",
+    "set": "MC-pond_park",
+    "scene": "公园",
+    "style": "池塘公园",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-shop_in_park/公园/公园售货亭",
+    "set": "MC-shop_in_park",
+    "scene": "公园",
+    "style": "公园售货亭",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-small_playground/公园/社区儿童公园",
+    "set": "MC-small_playground",
+    "scene": "公园",
+    "style": "社区儿童公园",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-mountain/山景/山地",
+    "set": "AP-mountain",
+    "scene": "山景",
+    "style": "山地",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-daytime_forrest/山间步道/森林",
+    "set": "AP-daytime_forrest",
+    "scene": "山间步道",
+    "style": "森林",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "GM-rocky_path/山间步道/山间石径",
+    "set": "GM-rocky_path",
+    "scene": "山间步道",
+    "style": "山间石径",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk"
+    ]
+  },
+  {
+    "id": "MC-summer_river/河岸/夏日河滩",
+    "set": "MC-summer_river",
+    "scene": "河岸",
+    "style": "夏日河滩",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-under_bridge/河岸/桥下河岸",
+    "set": "MC-under_bridge",
+    "scene": "河岸",
+    "style": "桥下河岸",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-levee_trail/河岸步道/河堤散步道",
+    "set": "MC-levee_trail",
+    "scene": "河岸步道",
+    "style": "河堤散步道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-sea_island/海边/海洋与岛屿",
+    "set": "MC-sea_island",
+    "scene": "海边",
+    "style": "海洋与岛屿",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-small_sandy_beach/海边/小沙滩",
+    "set": "MC-small_sandy_beach",
+    "scene": "海边",
+    "style": "小沙滩",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-summer_beach/海边/夏日沙滩",
+    "set": "MC-summer_beach",
+    "scene": "海边",
+    "style": "夏日沙滩",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-camping_ground/露营地/帐篷营地",
+    "set": "AP-camping_ground",
+    "scene": "露营地",
+    "style": "帐篷营地",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-camping_ground/露营地/野餐区",
+    "set": "AP-camping_ground",
+    "scene": "露营地",
+    "style": "野餐区",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "AP-camping_ground/露营地/户外厨房",
+    "set": "AP-camping_ground",
+    "scene": "露营地",
+    "style": "户外厨房",
+    "indoor": false,
+    "periods": [
+      "day"
+    ]
+  },
+  {
+    "id": "MC-residential_street/住宅街/现代住宅街1",
+    "set": "MC-residential_street",
+    "scene": "住宅街",
+    "style": "现代住宅街1",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-residential_street2/住宅街/现代住宅街2",
+    "set": "MC-residential_street2",
+    "scene": "住宅街",
+    "style": "现代住宅街2",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-convenience_store/便利店/商店外观",
+    "set": "MC-convenience_store",
+    "scene": "便利店",
+    "style": "商店外观",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-in_convenience_store/便利店/商店内景",
+    "set": "MC-in_convenience_store",
+    "scene": "便利店",
+    "style": "商店内景",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-shopping_arcade/商业街/有顶商业街",
+    "set": "MC-shopping_arcade",
+    "scene": "商业街",
+    "style": "有顶商业街",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-shopping_street/商业街/沿街商铺",
+    "set": "MC-shopping_street",
+    "scene": "商业街",
+    "style": "沿街商铺",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-back_alley/城市街道/都市后巷",
+    "set": "MC-back_alley",
+    "scene": "城市街道",
+    "style": "都市后巷",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-building/城市街道/办公楼外景",
+    "set": "MC-building",
+    "scene": "城市街道",
+    "style": "办公楼外景",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-crossing_in_city/城市街道/斑马线",
+    "set": "MC-crossing_in_city",
+    "scene": "城市街道",
+    "style": "斑马线",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-high_rise_building/城市街道/高楼外观",
+    "set": "MC-high_rise_building",
+    "scene": "城市街道",
+    "style": "高楼外观",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-intersection/城市街道/十字路口",
+    "set": "MC-intersection",
+    "scene": "城市街道",
+    "style": "十字路口",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-pedestrian_bridge/城市街道/人行天桥",
+    "set": "MC-pedestrian_bridge",
+    "scene": "城市街道",
+    "style": "人行天桥",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-street_in_autumn/城市街道/秋日街道",
+    "set": "MC-street_in_autumn",
+    "scene": "城市街道",
+    "style": "秋日街道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-street_in_spring/城市街道/春日街道",
+    "set": "MC-street_in_spring",
+    "scene": "城市街道",
+    "style": "春日街道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-street_in_summer/城市街道/夏日街道",
+    "set": "MC-street_in_summer",
+    "scene": "城市街道",
+    "style": "夏日街道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-street_in_winter/城市街道/冬日街道",
+    "set": "MC-street_in_winter",
+    "scene": "城市街道",
+    "style": "冬日街道",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-urban_street/城市街道/都市主街",
+    "set": "MC-urban_street",
+    "scene": "城市街道",
+    "style": "都市主街",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-vending_machine/城市街道/自动售货机",
+    "set": "MC-vending_machine",
+    "scene": "城市街道",
+    "style": "自动售货机",
+    "indoor": false,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-mall/购物中心/现代商场1",
+    "set": "MC-mall",
+    "scene": "购物中心",
+    "style": "现代商场1",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-mall2/购物中心/现代商场2",
+    "set": "MC-mall2",
+    "scene": "购物中心",
+    "style": "现代商场2",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-supermarket/超市/日常超市",
+    "set": "MC-supermarket",
+    "scene": "超市",
+    "style": "日常超市",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-medium_office/办公室/公司办公区",
+    "set": "MC-medium_office",
+    "scene": "办公室",
+    "style": "公司办公区",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "MC-office/办公室/小型事务所",
+    "set": "MC-office",
+    "scene": "办公室",
+    "style": "小型事务所",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-basement_room/地下室/地下房间",
+    "set": "MC-basement_room",
+    "scene": "地下室",
+    "style": "地下房间",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-hideout/地下室/地下据点",
+    "set": "MC-hideout",
+    "scene": "地下室",
+    "style": "地下据点",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-ruined_hallway_1f/废弃建筑/废弃走廊",
+    "set": "MC-ruined_hallway_1f",
+    "scene": "废弃建筑",
+    "style": "废弃走廊",
+    "indoor": true,
+    "periods": [
+      "day",
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-ruined_room/废弃建筑/废弃房间",
+    "set": "MC-ruined_room",
+    "scene": "废弃建筑",
+    "style": "废弃房间",
+    "indoor": true,
+    "periods": [
+      "day",
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-machine_room/机房/设备机房",
+    "set": "MC-machine_room",
+    "scene": "机房",
+    "style": "设备机房",
+    "indoor": true,
+    "periods": [
+      "indoor"
+    ]
+  },
+  {
+    "id": "MC-building_hallway/走廊/现代楼宇",
+    "set": "MC-building_hallway",
+    "scene": "走廊",
+    "style": "现代楼宇",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  }
+]

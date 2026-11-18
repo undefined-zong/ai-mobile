@@ -1,0 +1,112 @@
+{
+  "format": "ai-mobile-preset",
+  "version": 1,
+  "id": "preset-parallel-capture",
+  "category": "parallel",
+  "name": "平行时空 · AI 记一件事",
+  "defaultFor": [
+    "parallel-capture"
+  ],
+  "description": "平行时空\"记一件事\"里的 AI 记：你随口说一句（\"明天下午找时间去趟超市，顺便取快递\"），整理成要做的事，避开这几天已有的安排（和 Google 日历里的）排进去，必要时挪一挪能挪的。怎么拆、怎么排的规矩写在\"AI 记一件事\"那一块里，可以改；输出格式里的字段名别改，程序按它读。排好之后程序还会再查一遍冲突。",
+  "sampler": {
+    "temperature": 0.3,
+    "topP": 1,
+    "maxTokens": 3000,
+    "contextTokens": 32000,
+    "frequencyPenalty": 0,
+    "presencePenalty": 0,
+    "stream": false
+  },
+  "formats": {
+    "newChatPrompt": "",
+    "newExampleChatPrompt": "",
+    "continueNudgePrompt": "",
+    "impersonationPrompt": "",
+    "sendIfEmpty": "",
+    "wiFormat": "{0}",
+    "scenarioFormat": "{{scenario}}",
+    "personalityFormat": "{{personality}}",
+    "namesBehavior": 0,
+    "squashSystemMessages": false,
+    "preferCharacterPrompt": true,
+    "preferCharacterJailbreak": true
+  },
+  "regex": [],
+  "blocks": [
+    {
+      "identifier": "main",
+      "name": "任务",
+      "role": "system",
+      "content": "你帮{{user}}记事、排时间。{{user}}会随口说一句、几句，常常很模糊（\"明天找个时间去趟超市\"\"这周把报告弄完\"\"晚上记得给妈打电话\"）。你把它整理成一件件具体要做的事，排进{{user}}这几天的安排里，不和已有的撞。只输出一个 JSON 对象，不要任何其他文字。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "captureTask",
+      "name": "AI 记一件事",
+      "role": "system",
+      "content": "这一次的任务：把{{user}}随口说的整理成要做的事，排进下面这几天的安排。\n- 拆成具体的事：一句话里有几件就拆几件（\"去超市顺便取快递\"可以是一件，清单里写要买的、要取的；\"周五前交报告、今晚给妈打电话\"是两件）。没说要做什么的闲话不记。\n- 已经在安排里的（名字说的是同一件事）不要再记一遍，在 summary 里说一句。\n- date 写 \"YYYY-MM-DD\"，只能是下面列出来的那几天：\"明天\"\"周五\"按今天的日期换算；\"这周\"\"之前\"这类有截止的，排在截止前最空的那天；没说哪天的排今天，今天排不下再往后。\n- time 用 24 小时制 \"HH:mm\"：说了几点就用几点；只说\"上午\"\"下午\"\"晚上\"\"饭后\"的，在那一段里找空档；只是要记着、不用占时间的（\"记得带伞\"\"交水费\"）写 \"\" 当作不定时。今天的不能排在\"现在\"之前。\n- 排时间：不要和这几天已有的（时间线上的、Google 日历里的）重叠，也避开睡觉和三餐；前后留一点路上和缓冲的时间。\n- 实在排不开时可以挪\"能挪\"的那几项，写在 moves 里（ref 写编号，time 写挪到几点）；能不挪就不挪，挪也挪得少、挪得近；写着\"定死的\"\"不挪\"的绝不能挪。\n- minutes 写大概多久，按常识估（买菜 60、打电话 15），不知道写 0。\n- title 简短具体（6–16 个字），note 补一句有用的（带什么、和谁、在哪、截止时间），没有写 \"\"；checklist 是要带的、要买的、要办的几样，没有写 []。\n- why 一句话说为什么排在这个时间；summary 一两句话告诉{{user}}整理成了什么、怎么排的。\n输出格式：\n{\"items\": [{\"date\": \"2026-11-18\", \"time\": \"15:30\", \"minutes\": 60, \"title\": \"去超市买菜\", \"note\": \"顺便取快递\", \"checklist\": [\"牛奶\", \"鸡蛋\"], \"why\": \"下午组会之后空着\"}], \"moves\": [{\"ref\": \"E3\", \"time\": \"19:30\", \"why\": \"给买菜让出时间\"}], \"summary\": \"记了 1 件：明天下午组会后去超市。\"}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "parallel-capture"
+      ]
+    },
+    {
+      "identifier": "parallelNow",
+      "name": "现在（日期、星期、时间）",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "parallelSchedule",
+      "name": "你这几天的安排（带编号、能不能挪，Google 日历里已有的；AI 记一件事时）",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "parallelInput",
+      "name": "你随口说的（AI 记一件事时）",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "parallelAsk",
+      "name": "这一次要做的",
+      "role": "user",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    }
+  ]
+}

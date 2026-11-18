@@ -1,0 +1,810 @@
+import type { SyncPullResult, SyncPushRecord, SyncPushResult, SyncRecord } from '@app/shared';
+import { reactive } from 'vue';
+import {
+  applyRemote, clearStore, databaseState, flushAll, getAll, getChatMessages, getEntries, getKeys, getMany, getOne, hasKeys, msgKey, outboxKey, removeOutbox, setSyncHooks, splitMsgKey, STORES, write,
+  type OutboxEntry, type RemoteChange, type StoreName,
+} from '@/db/idb';
+import { BlobClient, BlobSkipped, decodeBinary, encodeBinary, hasBinary, hasBinRef, isBlobRef, packJson, unpackJson, type SyncApi } from './blobs';
+import { canonical, hashText, mergeValue } from './merge';
+
+/**
+ * 多设备同步（设计文档 §12）：连着同一个 Worker 的设备有同一份数据。
+ *
+ * 本机写库时（db/idb 的 write）在同一个事务里把改了的记录记进发件箱；这里定时（改动后几秒、每 20 秒、回到前台）：
+ * 1. 拉：按 seq 增量拉别的设备推上来的记录，写进本机库，交给内存里的 store（界面马上变）。
+ *    这条本机也改了、还没推：有底稿时三方合并（对象按键、带 id 的列表按 id），没底稿时以云端为准；
+ * 2. 推：发件箱里的记录和上次同步的样子比，变了的推上去（带上见过的 seq；云端被别的设备改过就退回来，合并后再推）。
+ *
+ * - 聊天消息按条存、按条同步（本机 chatMessages 表一条一行，线上 kind 'message'，parent 是聊天 id）：长聊天加一条只比、只传这一条；
+ * - 新设备第一次同步时每个聊天只拉最近 RECENT 条，更早的在聊天里往上翻时再从云端取（loadOlder）；
+ * - 图片、语音、Live2D 模型、书的原文件按 SHA-256 存进同步用的大文件：拉到记录时先不下载，用到时再取；
+ * - 第一次连上一个 Worker：先把云端有的全拉下来（同一条以云端为准），再把这台设备独有的推上去；空设备不会清掉云端；
+ * - 不同步：Key（secrets 表）、云端连接本身（settings 的 hub）、这台设备此刻的状态（正开着的场景、角色此刻的位置）；
+ * - 回复生成中不同步（生成完再同步）。
+ */
+
+const DELETED = '-';
+const META = '@meta';
+/** 只在这台设备上的表 */
+const LOCAL_STORES = new Set<string>(['secrets', 'syncState', 'syncOutbox']);
+/**
+ * settings 表里只在这台设备上的：云端连接（地址、各种游标）、正在进行的授权、早就迁移掉的旧格式，
+ * 图片缓存留几天和每张图上次用到是哪天（每台设备各自的）
+ */
+const LOCAL_SETTINGS = new Set(['hub', 'mcp-oauth-pending', 'connections', 'routes', 'apiSlots', 'assetCache', 'assetUsed']);
+/** settings 表里只在打开 App 时读一次的（迁移、放进来过的标记）：别的设备改了不用重新打开 */
+const STARTUP_SETTINGS = new Set(['envWeatherV2', 'memorySeeded', 'seededPresetFiles', 'presetUpgrades', 'seededLorebookFiles', 'lorebookUpgrades', 'seededSoupFiles',
+  'proactiveBudgetCleared', 'summaryBudgetCleared', 'memoryConsolidatedAt']);
+/**
+ * 只是这台设备此刻的状态：只改了它们不推；收到别的设备的版本时保留本机的
+ * （聊天：正开着的场景、在哪、怎么在一起；角色：按作息每分钟算的此刻在哪、在做什么）
+ */
+const SOFT: Partial<Record<StoreName, { fields: string[]; reset?: Record<string, unknown> }>> = {
+  chats: { fields: ['currentScene', 'togetherAt', 'togetherMode'], reset: { currentScene: null, togetherAt: null, togetherMode: null } },
+  characters: { fields: ['locationId', 'status'] },
+};
+/** 一条记录的 JSON 超过这么大就存成大文件；小于这么大才留底稿（合并用） */
+const PACK_CHARS = 900_000;
+const BASE_CHARS = 200_000;
+const PUSH_RECORDS = 100;
+const PUSH_CHARS = 400_000;
+/** 新设备第一次同步时每个聊天先拉最近几条（更早的用到时再取） */
+const RECENT = 500;
+const OLDER_PAGE = 200;
+
+interface RecordState {
+  /** 上次同步到的 seq */
+  s: number;
+  /** 那一版的指纹（去掉只在本机的字段）；DELETED 表示删了 */
+  h: string;
+  /** 那一版的 JSON（底稿，合并用；太大的不留） */
+  b?: string;
+  /** 大文件的记录（图片、模型……）：还没下载时留着引用，用到时再取 */
+  lazy?: unknown;
+}
+/** 旧版（v10 之前）一个聊天里每条消息上次同步到的 [指纹, seq]：打开时迁成每条消息一行 */
+interface ChatState { m: Record<string, [string, number]> }
+/** 云端还有更早的消息没拉的聊天：从哪往前取（createdAt, seq） */
+type Older = Record<string, [number, number]>;
+/**
+ * restored：刚从备份恢复过（本机的数据整个换了，记账作废）：下次同步时本机的每一条都当成改动，
+ * 和云端同一条按字段合并、同一处以本机（导入的）为准
+ */
+interface Meta {
+  hub: string; cursor: number; joined: boolean; enabled: boolean; parked?: number; restored?: boolean;
+  /** 第一次同步只拉最近的：拉到 head 之前，每个聊天 createdAt 不超过 at[聊天] 的消息先不拉 */
+  cut?: { head: number; at: Record<string, number> };
+  older?: Older;
+}
+
+const stateKey = (store: string, key: string) => `r\u0000${store}\u0000${key}`;
+/** 本机的表和键 → 线上的 kind / parent / id（聊天消息是 'message'，parent 是聊天 id） */
+function wire(store: StoreName, key: string): { kind: string; parent: string; id: string } {
+  const m = store === 'chatMessages' ? splitMsgKey(key) : null;
+  return m ? { kind: 'message', parent: m[0], id: m[1] } : { kind: store, parent: '', id: key };
+}
+const parkKey = (r: SyncRecord) => `p\u0000${r.kind}\u0000${r.parent}\u0000${r.id}`;
+
+/** 界面上显示的同步状态 */
+export const syncState = reactive({
+  /** 这台设备开着多设备同步 */
+  enabled: true,
+  /** 连着的 Worker 支持同步 */
+  supported: false,
+  /** 和这个 Worker 同步过（第一次的全量对齐做完了） */
+  joined: false,
+  running: false,
+  phase: '' as '' | 'pull' | 'push' | 'scan',
+  /** 发件箱里还有几条没推 */
+  pending: 0,
+  /** 拉到哪了 / 云端一共到哪了（第一次同步显示进度） */
+  cursor: 0,
+  head: 0,
+  lastAt: null as number | null,
+  error: '',
+  /** 大文件没传上去的原因（云端空间满了、文件太大） */
+  blobNote: '',
+  /** 别的设备改了只在打开 App 时读的东西：重新打开才显示 */
+  needsReload: false,
+  /** 云端还有更早消息没拉下来的聊天 */
+  older: {} as Record<string, true>,
+});
+
+let api: SyncApi | null = null;
+let blobs: BlobClient | null = null;
+let hubUrl = '';
+let meta: Meta = { hub: '', cursor: 0, joined: false, enabled: true };
+let metaLoaded: Promise<void> | null = null;
+let tracking = false;
+let running: Promise<void> | null = null;
+let again = false;
+let parkedChecked = false;
+/** 生成回复中（不同步）、这一条现在不能推（这个聊天正在生成） */
+let busy: () => boolean = () => false;
+let held: (store: StoreName, key: string) => boolean = () => false;
+/** 这次打开 App 以来传不上去的大文件记录（不每轮重试） */
+const skipped = new Set<string>();
+const isStore = (kind: string): kind is StoreName => (STORES as readonly string[]).includes(kind);
+
+/** 这条记录要不要同步 */
+export function isSynced(store: string, key: string): boolean {
+  return isStore(store) && !LOCAL_STORES.has(store) && !(store === 'settings' && LOCAL_SETTINGS.has(key)) && !(store === 'chatMessages' && !splitMsgKey(key));
+}
+
+/** 大文件（拉到记录时不下载，用到时再取） */
+function isLazy(store: string, key: string): boolean {
+  return store === 'assets' || store === 'live2d' || (store === 'books' && key.startsWith('file:'));
+}
+
+/** 不在内存里的（用到时才读库的）：别的设备改了不用重新打开 */
+function memoryless(store: StoreName, key: string): boolean {
+  return isLazy(store, key) || (store === 'books' && key.includes(':')) || (store === 'settings' && STARTUP_SETTINGS.has(key));
+}
+
+function strip(store: StoreName, value: unknown): unknown {
+  const soft = SOFT[store];
+  if (!soft || !value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const out = { ...(value as Record<string, unknown>) };
+  for (const f of soft.fields) delete out[f];
+  return out;
+}
+
+/** 别的设备的版本放进本机：只在本机的字段用本机的（本机没有这条时，聊天的场景状态清空） */
+function keepSoft(store: StoreName, incoming: unknown, local: unknown): unknown {
+  const soft = SOFT[store];
+  if (!soft || !incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return incoming;
+  const out = { ...(incoming as Record<string, unknown>) };
+  const mine = local && typeof local === 'object' ? (local as Record<string, unknown>) : null;
+  for (const f of soft.fields) {
+    if (mine && f in mine) out[f] = mine[f];
+    else if (soft.reset && f in soft.reset) out[f] = soft.reset[f];
+  }
+  return out;
+}
+
+const fingerprint = (store: StoreName, value: unknown) => hashText(canonical(strip(store, value)));
+
+function loadMeta(): Promise<void> {
+  return (metaLoaded ??= (async () => {
+    const saved = await getOne<Meta>('syncState', META, { local: true });
+    if (saved) meta = { ...meta, ...saved };
+    await migrateLedger();
+    Object.assign(syncState, { enabled: meta.enabled, joined: meta.joined && !!meta.hub, cursor: meta.cursor });
+    showOlder();
+  })().catch((e) => {
+    metaLoaded = null;
+    throw e;
+  }));
+}
+
+function showOlder() {
+  syncState.older = Object.fromEntries(Object.keys(meta.older ?? {}).map((k) => [k, true as const]));
+}
+
+/**
+ * 旧版的账本（一个聊天一行、发件箱里一个聊天一条）迁成一条消息一行：
+ * 发件箱里的聊天展开成它的每条消息（推的时候和账本比，没变的不推；账本里有、本机没了的推删除）
+ */
+async function migrateLedger() {
+  const [stateKeys, outKeys] = await Promise.all([getKeys('syncState'), getKeys('syncOutbox')]);
+  const chatStates = stateKeys.filter((k) => k.startsWith('c\u0000'));
+  const oldOut = outKeys.filter((k) => k.startsWith('messages\u0000'));
+  if (!chatStates.length && !oldOut.length) return;
+  const states = await getMany<ChatState>('syncState', chatStates);
+  const puts: { key: string; value: RecordState }[] = [];
+  const known = new Map<string, string[]>();
+  chatStates.forEach((k, i) => {
+    const chatId = k.slice(2);
+    const ids = Object.keys(states[i]?.m ?? {});
+    for (const id of ids) {
+      const [h, s] = states[i]!.m[id]!;
+      puts.push({ key: stateKey('chatMessages', msgKey(chatId, id)), value: { s, h } });
+    }
+    known.set(chatId, ids);
+  });
+  const outbox: { key: string; value: OutboxEntry }[] = [];
+  let n = 0;
+  for (const e of await getMany<OutboxEntry>('syncOutbox', oldOut)) {
+    if (!e) continue;
+    const chatId = e.key;
+    const keys = new Set([...(await getChatMessages<unknown>(chatId)).map((x) => x.key), ...(known.get(chatId) ?? []).map((id) => msgKey(chatId, id))]);
+    for (const key of keys) outbox.push({ key: outboxKey('chatMessages', key), value: { store: 'chatMessages', key, at: e.at, n: ++n, ...(e.join ? { join: true } : {}) } });
+  }
+  for (let i = 0; i < puts.length; i += 500) await write('syncState', puts.slice(i, i + 500), [], { sync: true });
+  for (let i = 0; i < outbox.length; i += 500) await write('syncOutbox', outbox.slice(i, i + 500), [], { sync: true });
+  await write('syncState', [], chatStates, { sync: true });
+  await write('syncOutbox', [], oldOut, { sync: true });
+}
+
+async function saveMeta() {
+  syncState.cursor = meta.cursor;
+  syncState.joined = meta.joined;
+  showOlder();
+  await write('syncState', [{ key: META, value: { ...meta } }], [], { sync: true });
+}
+
+function hooks() {
+  const on = tracking && meta.enabled && meta.joined;
+  setSyncHooks({
+    track: on ? isSynced : null,
+    changed: on ? soon : undefined,
+    miss: fetchMissing,
+  });
+}
+
+// —— 对外 ——
+
+/**
+ * 打开 App、本机数据都读完以后调用：开始记录本机的改动（读库时的整理、补的默认值不算改动）。
+ * busy：正在生成回复（这时不同步）；hold：这条记录现在不能推（这个聊天正在生成）
+ */
+export async function startSyncTracking(opts: { busy: () => boolean; hold: (store: StoreName, key: string) => boolean }) {
+  busy = opts.busy;
+  held = opts.hold;
+  await loadMeta();
+  tracking = true;
+  hooks();
+  void countPending();
+}
+
+/** 连上 / 换了 / 断开 Worker 时调用（api 为空 = 没连） */
+export async function configureSync(opts: { api: SyncApi | null; hub: string; supported: boolean; blobStore?: 'r2' | 'd1' }) {
+  await loadMeta();
+  api = opts.api;
+  hubUrl = opts.hub;
+  syncState.supported = opts.supported;
+  blobs = opts.api && opts.supported ? new BlobClient(opts.api, opts.blobStore ?? 'd1') : null;
+  if (!blobs) syncState.blobNote = '';
+  hooks();
+}
+
+/** 这台设备开 / 关多设备同步（关了以后改动不再记，再打开时把关着时的改动补上） */
+export async function setSyncEnabled(on: boolean) {
+  await loadMeta();
+  if (meta.enabled === on) return;
+  meta.enabled = on;
+  syncState.enabled = on;
+  // 关着的时候改的东西没记进发件箱：再打开时重新比一遍
+  if (on) meta.joined = false;
+  await saveMeta();
+  hooks();
+  if (on) void runSync().catch(() => undefined);
+}
+
+/**
+ * 要从备份恢复了（之后整页重新加载）：这台设备的同步记账作废。恢复写库时不经过发件箱，
+ * 下次同步时把导入的数据整个比一遍，和云端合并（同一处以导入的为准），再推给别的设备
+ */
+export async function forgetSyncForRestore() {
+  await loadMeta();
+  tracking = false;
+  hooks();
+  if (running) await running.catch(() => undefined);
+  await Promise.all([clearStore('syncState'), clearStore('syncOutbox')]);
+  meta = { hub: meta.hub, cursor: 0, joined: false, enabled: meta.enabled, restored: true };
+  await saveMeta();
+}
+
+/** 从头和云端对齐：忘掉同步到哪了，全部重新拉（同一条以云端为准），再把这台设备独有的推上去 */
+export async function resetSync() {
+  await loadMeta();
+  if (running) await running.catch(() => undefined);
+  await clearSyncLedger(meta.hub);
+  hooks();
+  await runSync();
+}
+
+/** 同步一轮（同时只跑一轮；跑着时又叫了，跑完再来一轮） */
+export function runSync(): Promise<void> {
+  if (running) {
+    again = true;
+    return running;
+  }
+  running = (async () => {
+    try {
+      do {
+        again = false;
+        await cycle();
+      } while (again);
+    } finally {
+      running = null;
+    }
+  })();
+  return running;
+}
+
+let timer: ReturnType<typeof setTimeout> | undefined;
+let firstChangeAt = 0;
+/** 本机改了东西：停下来 2.5 秒再同步（一直在改时最多等 15 秒） */
+function soon() {
+  void countPending();
+  const now = Date.now();
+  if (!timer) firstChangeAt = now;
+  clearTimeout(timer);
+  const wait = Math.max(0, Math.min(2500, firstChangeAt + 15_000 - now));
+  timer = setTimeout(() => {
+    timer = undefined;
+    void runSync().catch(() => undefined);
+  }, wait);
+}
+
+let counting: ReturnType<typeof setTimeout> | undefined;
+async function countPending() {
+  clearTimeout(counting);
+  counting = setTimeout(async () => {
+    try { syncState.pending = (await getKeys('syncOutbox')).length; } catch { /* 读不了就不显示 */ }
+  }, 300);
+}
+
+// —— 一轮 ——
+
+async function cycle() {
+  await loadMeta();
+  if (!api || !syncState.supported || !meta.enabled || !hubUrl || databaseState.status !== 'ready') return;
+  if (busy()) return;
+  syncState.running = true;
+  syncState.error = '';
+  try {
+    if (meta.hub !== hubUrl) await clearSyncLedger(hubUrl);
+    if (!meta.joined) {
+      // 第一次（或关了又开）：本机的记录都记进发件箱再拉。第一次连上时，云端也有的同一条以云端为准（演示数据、自带的预设不会盖掉云端的）；
+      // 关了又开时，关着时本机改的和云端改的按底稿合并
+      syncState.phase = 'scan';
+      if (meta.cursor === 0 && !meta.cut && !meta.restored) await planRecent();
+      await scanAll(meta.cursor === 0 && !meta.restored);
+      meta.joined = true;
+      delete meta.restored;
+      await saveMeta();
+      hooks();
+    }
+    if (!(await pullAll())) return;
+    if (!parkedChecked && meta.parked) await retryParked();
+    parkedChecked = true;
+    for (let round = 0; round < 3; round++) {
+      if (busy()) break;
+      if (!(await pushAll())) break;
+    }
+    syncState.lastAt = Date.now();
+  } catch (e) {
+    syncState.error = e instanceof Error ? e.message : String(e);
+    throw e;
+  } finally {
+    syncState.running = false;
+    syncState.phase = '';
+    void countPending();
+  }
+}
+
+/** 换了 Worker（或者要从头对齐）：同步的账本清掉，重新开始 */
+async function clearSyncLedger(hub: string) {
+  await Promise.all([clearStore('syncState'), clearStore('syncOutbox')]);
+  // 刚从备份恢复过的，换了 Worker 也照样以导入的为准
+  meta = { hub, cursor: 0, joined: false, enabled: meta.enabled, ...(meta.restored ? { restored: true } : {}) };
+  skipped.clear();
+  syncState.head = 0;
+  syncState.needsReload = false;
+  await saveMeta();
+}
+
+// —— 新设备只拉最近的，更早的用到时再取 ——
+
+/** 第一次同步前问云端：每个聊天最近 RECENT 条之前从哪开始（旧版 Worker 没有这个接口就全拉） */
+async function planRecent() {
+  try {
+    const { cut, head } = await api!.json<{ cut: Record<string, [number, number]>; head: number }>(`/v1/sync/recent?keep=${RECENT}`);
+    if (!Object.keys(cut).length) return;
+    meta.cut = { head, at: Object.fromEntries(Object.entries(cut).map(([k, v]) => [k, v[0]])) };
+    // 往前取从 (createdAt, 无穷大) 开始：createdAt 不超过它的都还在云端
+    meta.older = Object.fromEntries(Object.entries(cut).map(([k, v]) => [k, [v[0], Number.MAX_SAFE_INTEGER]]));
+    await saveMeta();
+  } catch {
+    // 旧版 Worker：照旧全拉
+  }
+}
+
+/** 这个聊天云端还有更早的消息：往前取一页，放进本机（返回取到几条） */
+export async function loadOlder(chatId: string): Promise<number> {
+  await loadMeta();
+  const from = meta.older?.[chatId];
+  if (!from || !api) return 0;
+  if (running) await running.catch(() => undefined);
+  const page = await api.json<{ records: SyncRecord[]; more: boolean }>(
+    `/v1/sync/older?parent=${encodeURIComponent(chatId)}&at=${from[0]}&seq=${from[1]}&limit=${OLDER_PAGE}`, { timeout: 60_000 });
+  if (page.records.length) await applyRecords(page.records);
+  const last = page.records.at(-1) as (SyncRecord & { createdAt?: number }) | undefined;
+  if (page.more && last && Number.isFinite(last.createdAt)) meta.older![chatId] = [last.createdAt!, last.seq];
+  else delete meta.older![chatId];
+  await saveMeta();
+  return page.records.length;
+}
+
+// —— 拉 ——
+
+/** 拉到最新；中途开始生成回复就停下（返回 false），下一轮接着拉 */
+async function pullAll(): Promise<boolean> {
+  syncState.phase = 'pull';
+  for (;;) {
+    if (meta.cut && meta.cursor >= meta.cut.head) delete meta.cut;
+    const page = meta.cut
+      ? await api!.json<SyncPullResult>('/v1/sync/pull', { method: 'POST', body: { since: meta.cursor, limit: 300, cut: meta.cut.at }, timeout: 60_000 })
+      : await api!.json<SyncPullResult>(`/v1/sync/pull?since=${meta.cursor}&limit=300`, { timeout: 60_000 });
+    syncState.head = page.head;
+    if (page.records.length) await applyRecords(page.records);
+    meta.cursor = Math.max(meta.cursor, page.next);
+    await saveMeta();
+    if (!page.more) return true;
+    if (busy()) return false;
+  }
+}
+
+/** 云端的记录放进本机（拉到的、推的时候被退回来的） */
+async function applyRecords(records: SyncRecord[]) {
+  // 本机内存里刚改、还没写进库的先写掉：这样它们在发件箱里，合并时不会被云端的盖掉
+  await flushAll();
+  const stores = new Map<StoreName, SyncRecord[]>();
+  const park: SyncRecord[] = [];
+  for (const r of records) {
+    if (r.kind === 'message') {
+      const list = stores.get('chatMessages') ?? [];
+      list.push({ ...r, id: msgKey(r.parent, r.id) });
+      stores.set('chatMessages', list);
+    } else if (r.kind !== 'chatMessages' && isStore(r.kind)) {
+      if (!isSynced(r.kind, r.id)) continue;
+      const list = stores.get(r.kind) ?? [];
+      list.push(r);
+      stores.set(r.kind, list);
+    } else park.push(r);
+  }
+  for (const [store, list] of stores) await applyStore(store, list);
+  if (park.length) {
+    // 新版 App 才有的数据：先收着，这台设备更新以后再放进去
+    await write('syncState', park.map((r) => ({ key: parkKey(r), value: r })), [], { sync: true });
+    meta.parked = (meta.parked ?? 0) + park.length;
+  }
+}
+
+function newest(list: SyncRecord[]): SyncRecord[] {
+  const out = new Map<string, SyncRecord>();
+  for (const r of list) {
+    const cur = out.get(r.id);
+    if (!cur || r.seq > cur.seq) out.set(r.id, r);
+  }
+  return [...out.values()];
+}
+
+/** 整条记录存成了大文件的先取回来；记录里的二进制引用留着（大文件的表用到时再下载） */
+async function expand(data: unknown): Promise<unknown> {
+  return isBlobRef(data) ? unpackJson(data, blobs!) : data;
+}
+
+async function applyStore(store: StoreName, list: SyncRecord[]) {
+  const recs = newest(list);
+  const ids = recs.map((r) => r.id);
+  // 先把要下载的（存成大文件的记录）都取回来，再读本机的：读和写之间不等网络，本机刚改的不会被盖掉
+  const resolved = new Map<string, { encoded: unknown; remote: unknown }>();
+  for (const r of recs) {
+    if (r.deleted || isLazy(store, r.id)) continue;
+    const encoded = await expand(r.data);
+    resolved.set(r.id, { encoded, remote: hasBinRef(encoded) ? await decodeBinary(encoded, blobs!) : encoded });
+  }
+  // 大文件只问本机有没有（不把图片、模型都读进内存），别的读出来合并用
+  const lazyIds = ids.filter((id) => isLazy(store, id));
+  const eagerIds = ids.filter((id) => !isLazy(store, id));
+  const [states, pend, have, values] = await Promise.all([
+    getMany<RecordState>('syncState', ids.map((id) => stateKey(store, id))),
+    getMany<OutboxEntry>('syncOutbox', ids.map((id) => outboxKey(store, id))),
+    hasKeys(store, lazyIds),
+    getMany<unknown>(store, eagerIds),
+  ]);
+  const exists = new Map(lazyIds.map((id, i) => [id, have[i]!]));
+  const locals = new Map(eagerIds.map((id, i) => [id, values[i]]));
+  const puts: { key: string; value: unknown }[] = [];
+  const dels: string[] = [];
+  const statePuts: { key: string; value: RecordState }[] = [];
+  const settled: OutboxEntry[] = [];
+  const changes: RemoteChange[] = [];
+  for (let i = 0; i < recs.length; i++) {
+    const r = recs[i]!;
+    const st = states[i];
+    if (st && st.s >= r.seq) continue;
+    const pending = pend[i];
+    if (isLazy(store, r.id)) {
+      // 同一个键的大文件内容不变（素材按内容哈希、模型和书的文件按 id）：本机有就留着
+      if (r.deleted) {
+        if (exists.get(r.id)) {
+          dels.push(r.id);
+          changes.push({ key: r.id, deleted: true });
+        }
+        statePuts.push({ key: stateKey(store, r.id), value: { s: r.seq, h: DELETED } });
+        if (pending) settled.push(pending);
+      } else {
+        statePuts.push({ key: stateKey(store, r.id), value: { s: r.seq, h: hashText(canonical(r.data)), ...(exists.get(r.id) ? {} : { lazy: r.data }) } });
+        if (pending) settled.push(pending);
+      }
+      continue;
+    }
+    const local = locals.get(r.id);
+    const { encoded, remote } = resolved.get(r.id) ?? { encoded: undefined, remote: undefined };
+    const remoteHash = encoded === undefined ? DELETED : fingerprint(store, encoded);
+    let final: unknown;
+    if (!pending || (!st && pending.join)) {
+      // 本机没改；或者是第一次连上时本机原有的、云端也有的同一条：以云端为准
+      final = remote === undefined ? undefined : keepSoft(store, remote, local);
+      if (pending) settled.push(pending);
+    } else {
+      // 两边都改了：有底稿按底稿合并；没有（两台设备各自第一次写同一条）按字段并起来，同一处以后改的为准
+      const preferLocal = pending.at > r.updatedAt;
+      const base = st?.b !== undefined ? (JSON.parse(st.b) as unknown) : undefined;
+      if (remote === undefined) {
+        // 云端删了：本机在上次同步之后改过就留着（改的比删的重要），没改就删
+        final = local !== undefined && (base === undefined ? preferLocal || !st : fingerprint(store, base) !== fingerprint(store, local)) ? local : undefined;
+      } else if (local === undefined) {
+        // 本机删了、云端改了：留云端改的
+        final = keepSoft(store, remote, undefined);
+      } else {
+        final = keepSoft(store, st && base === undefined ? (preferLocal ? local : remote) : mergeValue(base, local, remote, preferLocal), local);
+      }
+      if ((final === undefined ? DELETED : fingerprint(store, final)) === remoteHash) settled.push(pending);
+    }
+    if (final === undefined) {
+      if (local !== undefined) {
+        dels.push(r.id);
+        changes.push({ key: r.id, deleted: true });
+      }
+    } else if (local === undefined || canonical(local) !== canonical(final)) {
+      puts.push({ key: r.id, value: final });
+      changes.push({ key: r.id, value: final, deleted: false });
+    }
+    const json = encoded === undefined ? '' : JSON.stringify(encoded);
+    statePuts.push({ key: stateKey(store, r.id), value: { s: r.seq, h: remoteHash, ...(json && keepBase(store, json) && !hasBinRef(encoded) ? { b: json } : {}) } });
+  }
+  if (!(await write(store, puts, dels, { sync: true }))) throw new Error('同步的数据写不进本机存储');
+  await write('syncState', statePuts, [], { sync: true });
+  if (settled.length) await removeOutbox(settled);
+  if (changes.length) {
+    const unhandled = applyRemote(store, changes).filter((key) => !memoryless(store, key));
+    if (unhandled.length) syncState.needsReload = true;
+  }
+}
+
+/** 留不留底稿（合并用）：消息不留（长聊天每条再存一份太占地方），同一条两边都改了时后改的为准 */
+function keepBase(store: StoreName, json: string): boolean {
+  return store !== 'chatMessages' && json.length <= BASE_CHARS;
+}
+
+/** 以前收着的新版数据：这台设备更新以后认得了就放进去 */
+async function retryParked() {
+  const keys = (await getKeys('syncState')).filter((k) => k.startsWith('p\u0000'));
+  const records = (await getMany<SyncRecord>('syncState', keys)).filter((r): r is SyncRecord => !!r);
+  const known = records.filter((r) => r.kind === 'message' || (r.kind !== 'chatMessages' && isStore(r.kind)));
+  if (known.length) await applyRecords(known);
+  const done = new Set(known.map((r) => parkKey(r)));
+  await write('syncState', [], keys.filter((k) => done.has(k)), { sync: true });
+  meta.parked = keys.length - done.size;
+  await saveMeta();
+}
+
+// —— 第一次加入（或关了又开）：本机有、和上次同步不一样的都记进发件箱 ——
+
+async function scanAll(join: boolean) {
+  const now = Date.now();
+  let n = 0;
+  const outbox: { key: string; value: OutboxEntry }[] = [];
+  const add = (store: StoreName, key: string) => outbox.push({ key: outboxKey(store, key), value: { store, key, at: now, n: ++n, ...(join ? { join: true } : {}) } });
+  for (const store of STORES) {
+    if (LOCAL_STORES.has(store)) continue;
+    if (store === 'assets' || store === 'live2d' || store === 'books') {
+      // 大文件只看键：同步过的不再比内容（同一个键内容不变）；书目和正文推的时候再比
+      const keys = (await getKeys(store)).filter((k) => isSynced(store, k));
+      const states = await getMany<RecordState>('syncState', keys.map((k) => stateKey(store, k)));
+      keys.forEach((k, i) => {
+        if (!states[i] || !isLazy(store, k)) add(store, k);
+      });
+    } else {
+      const entries = (await getEntries<unknown>(store)).filter((e) => isSynced(store, e.key));
+      const states = await getMany<RecordState>('syncState', entries.map((e) => stateKey(store, e.key)));
+      entries.forEach((e, i) => {
+        const st = states[i];
+        if (!st || hasBinary(e.value) || st.h !== fingerprint(store, e.value)) add(store, e.key);
+      });
+    }
+  }
+  for (let i = 0; i < outbox.length; i += 500) await write('syncOutbox', outbox.slice(i, i + 500), [], { sync: true });
+}
+
+// —— 推 ——
+
+interface Out {
+  rec: SyncPushRecord;
+  size: number;
+  item: Item;
+  applied(seq: number): void;
+}
+interface Item {
+  entry: OutboxEntry;
+  waiting: number;
+  conflicted: boolean;
+  finish(): Promise<void>;
+}
+
+/** 推发件箱。返回 true：有记录被退回来合并了，要再推一轮 */
+async function pushAll(): Promise<boolean> {
+  syncState.phase = 'push';
+  const entries = (await getAll<OutboxEntry>('syncOutbox')).filter((e) => e && typeof e.key === 'string');
+  // 文字先推，大文件（要先传文件）最后
+  entries.sort((a, b) => Number(isLazy(a.store, a.key)) - Number(isLazy(b.store, b.key)) || a.at - b.at);
+  let queue: Out[] = [];
+  let chars = 0;
+  let conflicts: SyncRecord[] = [];
+  const open: Item[] = [];
+  const drop: OutboxEntry[] = [];
+
+  async function send() {
+    if (!queue.length) return;
+    const batch = queue;
+    queue = [];
+    chars = 0;
+    const result = await api!.json<SyncPushResult>('/v1/sync/push', { method: 'POST', body: { records: batch.map((o) => o.rec) }, timeout: 60_000 });
+    const applied = new Map(result.applied.map((a) => [`${a.kind}\n${a.parent}\n${a.id}`, a.seq]));
+    for (const o of batch) {
+      const seq = applied.get(`${o.rec.kind}\n${o.rec.parent}\n${o.rec.id}`);
+      if (seq !== undefined) o.applied(seq);
+      else o.item.conflicted = true;
+      o.item.waiting--;
+    }
+    conflicts = conflicts.concat(result.conflicts);
+    for (const item of open.filter((x) => x.waiting === 0)) {
+      open.splice(open.indexOf(item), 1);
+      await item.finish();
+    }
+  }
+
+  let failure: unknown = null;
+  let textDone = false;
+  for (const entry of entries) {
+    if (busy()) break;
+    if (!isSynced(entry.store, entry.key)) {
+      drop.push(entry);
+      continue;
+    }
+    if (held(entry.store, entry.key) || skipped.has(outboxKey(entry.store, entry.key))) continue;
+    // 文字都推上去了再传大文件：图片传不上去也不耽误聊天记录
+    if (!textDone && isLazy(entry.store, entry.key)) {
+      textDone = true;
+      await send();
+    }
+    let outs: Omit<Out, 'item'>[] | null;
+    let finish: (item: Item, applied: Map<string, number>) => Promise<void>;
+    const applied = new Map<string, number>();
+    try {
+      ({ outs, finish } = await recordOuts(entry, applied));
+    } catch (e) {
+      if (e instanceof BlobSkipped) {
+        // 云端放不下这个文件：这次打开 App 不再试，别的照常同步
+        syncState.blobNote = e.message;
+        skipped.add(outboxKey(entry.store, entry.key));
+      } else failure ??= e;
+      // 这一条下一轮再试，别的照常推
+      continue;
+    }
+    if (!outs) {
+      drop.push(entry);
+      continue;
+    }
+    if (!outs.length) continue;
+    const item: Item = { entry, waiting: outs.length, conflicted: false, finish: () => finish(item, applied) };
+    open.push(item);
+    for (const o of outs) {
+      queue.push({ ...o, item });
+      chars += o.size;
+      if (queue.length >= PUSH_RECORDS || chars >= PUSH_CHARS) await send();
+    }
+  }
+  await send();
+  if (drop.length) await removeOutbox(drop);
+  // 被退回来的：云端那一份按拉到的处理（合并），合并出来和云端不一样的下一轮再推
+  if (conflicts.length) await applyRecords(conflicts);
+  if (failure) throw failure;
+  return conflicts.length > 0;
+}
+
+/** 一条普通记录要推的（没变返回 null：从发件箱拿掉） */
+async function recordOuts(entry: OutboxEntry, applied: Map<string, number>): Promise<{ outs: Omit<Out, 'item'>[] | null; finish: (item: Item, applied: Map<string, number>) => Promise<void> }> {
+  const { store, key } = entry;
+  const [raw, st] = await Promise.all([
+    getOne<unknown>(store, key, { local: true }),
+    getOne<RecordState>('syncState', stateKey(store, key), { local: true }),
+  ]);
+  let next: RecordState;
+  const finish = async (item: Item) => {
+    const seq = applied.get(key);
+    if (item.conflicted || seq === undefined) return;
+    await write('syncState', [{ key: stateKey(store, key), value: { ...next, s: seq } }], [], { sync: true });
+    await removeOutbox([entry]);
+  };
+  if (raw === undefined) {
+    if (!st || st.h === DELETED) return { outs: null, finish };
+    next = { s: 0, h: DELETED };
+    return { outs: [{ rec: { ...wire(store, key), updatedAt: entry.at, deleted: true, data: null, base: st.s }, size: 100, applied: (seq) => applied.set(key, seq) }], finish };
+  }
+  // 大文件的表：拉到过、还没下载的（lazy）本机却有了，说明是这台设备自己存的同一个文件，也不用推
+  const encoded = hasBinary(raw) ? await encodeBinary(raw, blobs!) : raw;
+  const h = fingerprint(store, encoded);
+  if (st && st.h === h) return { outs: null, finish };
+  const json = JSON.stringify(encoded);
+  const data = json.length > PACK_CHARS ? await packJson(json, blobs!) : encoded;
+  next = { s: 0, h, ...(keepBase(store, json) && !isLazy(store, key) && !hasBinary(raw) ? { b: json } : {}) };
+  // 消息带上时间：存成大文件的云端也知道它是什么时候的（新设备只拉最近的）
+  const createdAt = store === 'chatMessages' ? Number((raw as { createdAt?: unknown }).createdAt) : NaN;
+  return {
+    outs: [{ rec: { ...wire(store, key), updatedAt: entry.at, deleted: false, data, base: st?.s ?? 0, ...(Number.isFinite(createdAt) ? { createdAt } : {}) }, size: Math.min(json.length, PACK_CHARS), applied: (seq) => applied.set(key, seq) }],
+    finish,
+  };
+}
+
+/**
+ * 这些素材云端有没有完整的一份（推上去过、之后本机没再改）：有的话本机这份可以清掉（图片缓存），用到时再下载。
+ * 没开同步、换了 Worker 还没对齐时一律算没有
+ */
+export async function cloudBackedAssets(keys: string[]): Promise<boolean[]> {
+  if (!keys.length) return [];
+  await loadMeta();
+  if (!meta.enabled || !meta.joined || !meta.hub || meta.hub !== hubUrl || !syncState.supported) return keys.map(() => false);
+  const [states, pend] = await Promise.all([
+    getMany<RecordState>('syncState', keys.map((k) => stateKey('assets', k))),
+    getMany<OutboxEntry>('syncOutbox', keys.map((k) => outboxKey('assets', k))),
+  ]);
+  return keys.map((_, i) => {
+    const st = states[i];
+    return !!st && st.s > 0 && st.h !== DELETED && !pend[i];
+  });
+}
+
+// —— 用到时再下载 ——
+
+const fetching = new Map<string, Promise<unknown>>();
+const notThere = new Map<string, number>();
+let downloads = 0;
+const waiters: (() => void)[] = [];
+
+/** 本机读不到的大文件（图片、模型、书的原文件）：在别的设备上同步过的话从云端取回来 */
+async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
+  if (!isLazy(store, key) || !api || !blobs || !meta.enabled || !meta.hub || meta.hub !== hubUrl) return undefined;
+  const id = `${store}\u0000${key}`;
+  const running = fetching.get(id);
+  if (running) return running;
+  if ((notThere.get(id) ?? 0) > Date.now()) return undefined;
+  const job = (async () => {
+    // 同时最多下载 3 个
+    if (downloads >= 3) await new Promise<void>((resolve) => waiters.push(resolve));
+    downloads++;
+    try {
+      const st = await getOne<RecordState>('syncState', stateKey(store, key), { local: true });
+      if (st?.h === DELETED) return undefined;
+      let ref = st?.lazy;
+      if (ref === undefined) {
+        // 记录还没拉到（别的设备先推了消息、后推的图）：单独问一下
+        const { record } = await api!.json<{ record: SyncRecord | null }>(`/v1/sync/record?kind=${encodeURIComponent(store)}&parent=&id=${encodeURIComponent(key)}`);
+        if (!record || record.deleted) {
+          notThere.set(id, Date.now() + 60_000);
+          return undefined;
+        }
+        ref = record.data;
+      }
+      const value = await decodeBinary(await expand(ref), blobs!);
+      await write(store, [{ key, value }], [], { sync: true });
+      if (st) await write('syncState', [{ key: stateKey(store, key), value: { s: st.s, h: st.h } }], [], { sync: true });
+      return value;
+    } catch (e) {
+      console.warn(`同步：取不回 ${store} ${key}`, e);
+      notThere.set(id, Date.now() + 60_000);
+      return undefined;
+    } finally {
+      downloads--;
+      waiters.shift()?.();
+    }
+  })().finally(() => fetching.delete(id));
+  fetching.set(id, job);
+  return job;
+}
+
