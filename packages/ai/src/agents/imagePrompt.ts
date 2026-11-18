@@ -219,7 +219,7 @@ function noHumans(lead: string): boolean {
   return tags.includes('no humans') && !tags.some((t) => /^\d|^multiple /.test(t));
 }
 
-/** 没有分配生图提示词智能体时的退路：外观 tags + 画面描述原文（V4 起能读懂一些自然语言） */
+/** 没有生图预设时直接使用外观 tags + 画面描述原文；有预设时由提示词智能体转译 */
 export function fallbackImagePrompt(input: ImagePromptInput): ImagePromptOutput {
   const lead = { scene: '', portrait: 'full body', face: 'close-up, portrait', background: '' }[input.mode ?? 'scene'];
   return { caption: input.caption.slice(0, 30), tags: joinTags(lead, input.caption), negative: '', size: input.size ?? (input.mode === 'background' ? 'landscape' : 'portrait') };

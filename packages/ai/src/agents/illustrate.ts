@@ -6,7 +6,8 @@ import { samplerRequest, type TaskPreset } from './taskPreset.ts';
 /**
  * 配图流水线（设计文档 §4.1：[cg:] → 生图提示词智能体 → 生图智能体 → 相册）。
  * 和 sleep-together 的生图轮次一样分阶段报告进度（写提示词 → 出图 → 完成），界面据此显示"正在构思""正在画"。
- * 生图提示词智能体没分配时，用外观 tags + 画面描述原文。
+ * 有生图预设时先调用提示词智能体；API 未接通或调用失败沿用调用层的错误，不跳过转译继续出图。
+ * 没有生图预设时才直接用外观 tags + 画面描述原文。
  */
 
 export type IllustrateStage = 'prompt' | 'image';
@@ -29,7 +30,7 @@ export async function illustrate(
   let prompt: ImagePromptOutput;
   let promptBy: IllustrateResult['promptBy'] = null;
   const preset = opts.preset;
-  if (system.isLive('imagePrompt') && preset) {
+  if (preset) {
     const { value, result } = await system.json('imagePrompt', { messages: buildImagePromptMessages(input, preset), ...samplerRequest(preset.sampler) }, parseImagePrompt, opts);
     prompt = value;
     promptBy = result;
