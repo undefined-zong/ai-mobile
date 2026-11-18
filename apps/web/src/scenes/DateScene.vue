@@ -21,7 +21,7 @@ import { uid } from '@/utils/id';
 
 /**
  * 约会（设计文档 §9.6）：从地图上点了地点就直接开始；没指定地点（比如从聊天进来）先从她小世界里能约会的地方选，她会按天气推荐。
- * 像视觉小说一样一段一段推进：她每段的话来自「陪伴 · 快速」+"约会"功能预设（开场 date-start、每一段 date-turn、结束 date-end），
+ * 像视觉小说一样一段一段推进：她每段的话来自「约会」API（API 设置里单独的一项）+"约会"功能预设（开场 date-start、每一段 date-turn、结束 date-end），
  * 边生成边按行翻页（（旁白）和「台词」各一拍，按标签的位置换表情）；每段结尾四个选项：顺着、逆着、皮一下、暧昧，都不满意可以自己说。
  * 想约多久约多久，点"结束约会"她说最后一段。画图用"生图 · 约会"：到达时画一张（今天同一个地方画过的直接用），
  * 她写了 [cg:] 的心动时刻画一张（隔几段才画），结束时画一张留念，也可以自己点"拍一张"；画好的铺满整屏。
@@ -192,6 +192,7 @@ async function ask(task: string, lines: string[], userText?: string): Promise<{ 
     userText,
     cue: ending.value ? '结束约会' : `第 ${turns.value + 1} 段`,
     sceneArt: true,
+    agent: 'date',
     onParsed: (p) => {
       visible.value = p.visible;
       tags.value = p.tags;
@@ -600,7 +601,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="notConnected" class="mini-notice" data-testid="date-not-connected">
             <span class="i-lucide-plug-zap shrink-0" /><span class="flex-1 min-w-0">{{ notConnected }}</span>
-            <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=companion')">去设置</button>
+            <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=date')">去设置</button>
           </div>
           <div v-if="artIssue" class="mini-notice" data-testid="date-art-issue">
             <span class="i-lucide-image-off shrink-0" /><span class="flex-1 min-w-0">{{ artIssue.text }}</span>
