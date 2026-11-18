@@ -317,8 +317,7 @@ function tagDesc(t: ControlTagKind, character: Character): string {
   return `约对方玩某一个游戏，显示成邀请卡片；游戏名只能是：${games.join('、')}`;
 }
 
-function tagsLine(scene: ReturnType<typeof getScene>, character: Character): string {
-  const allowed = sceneTags(scene, character);
+function tagsLine(scene: ReturnType<typeof getScene>, character: Character, allowed = sceneTags(scene, character)): string {
   const tags = allowed.map((t) => `- ${CONTROL_TAG_DOCS[t].syntax}：${tagDesc(t, character)}`);
   return `回复里可以夹带这些隐藏标签（对方看不到，程序会执行）：\n${tags.join('\n')}\n${expressionPromptLines(character.portraits, { poses: allowed.includes('pose') })}`;
 }
@@ -335,6 +334,7 @@ export function presetForTurn(chat: Chat, character: Character, agent?: AgentRol
   const lib = useLibraryStore();
   // 指定了用途（语音通话）：按那个用途选，不看场景
   if (use) return { preset: lib.presetForUse(use, character), use };
+  if (agent === 'secondary') return { preset: lib.presetForUse('secondary', character), use: 'secondary' };
   if (agent === 'proactive') return { preset: lib.presetForUse('proactive', character), use: 'proactive' };
   const scene = sceneUse(chat.currentScene);
   if (scene) return { preset: lib.presetForUse(scene, character), use: scene };
@@ -403,6 +403,10 @@ export interface ChatAssembleOptions {
   targetId?: string;
   /** 这一次另外打开的触发条件（心跳连着玩具、指令由她自己写时是 device-inline）：块写了它就发送 */
   flags?: string[];
+  /** 本轮实际执行的标签（副对话接管卡片时，主对话只保留实时表情等） */
+  allowedTags?: ControlTagKind[];
+  /** 已交给副对话的标签，让主对话知道这些动作由另一条请求决定 */
+  delegatedTags?: ControlTagKind[];
 }
 
 /**
@@ -424,6 +428,11 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const userText = lastUser ? messageToText(lastUser, character, persona.name) : '';
   const recall: RecallForTurn = proactive ? { lines: [], snapshot: undefined, added: 0, reused: false } : recallForTurn(chat, character, userText, opts.targetId);
   const app = appFills(chat, character, history, now, timeZone, recall, proactive);
+  if (opts.allowedTags) app.sceneRules = {
+    content: tagsLine(getScene(chat.currentScene ?? 'free'), character, opts.allowedTags),
+    source: '本轮实际可用的标签',
+  };
+  if (opts.delegatedTags?.length) app.sceneRules!.content += `\n本轮由并行的副对话负责这些标签：${opts.delegatedTags.join('、')}。主回复结束后程序会追加副对话结果。你只生成主对话正文和上面列出的标签，不重复发卡片或配图，也不要预先声称已调用这些功能。`;
   // 家务和健康：你人设里开着的系统今天的情况（都没开时没有这一块）
   const flags: string[] = [...lifeFlags(persona), ...(opts.flags ?? [])];
   const home = homeBlock(persona);

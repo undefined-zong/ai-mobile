@@ -81,4 +81,5 @@ Google 的 Gemini Enterprise Agent Platform（原 Vertex AI），math-reader 里
 - **AgentSystem**：`chat` / `json`（解析失败把原输出和提醒发回去再要一次）/ `speak` / `draw` / `embed`。功能设置里的参数只补请求没写的；每日 token 上限；语音只换同一种协议的备用 API（音色 id 只在同一家有效）；`onCall` 报告每次调用成功还是失败（App 在设置页显示最近一次失败的完整报错）。
 - **完整报错**（`core/errors.ts` 的 `errorReport`）：一句话的原因，加上 API 和模型、请求方法和地址（`key=` 换成 `***`）、状态码和说明、响应头、服务商返回的完整正文（JSON 排版）、底层错误和原因链；网络错误附上常见原因；备用 API 也失败时两边的报错都列出来。`request()` 记下每个响应是哪个请求发的，`httpError(…, res)` 据此带上地址和响应头。
 - **智能体**：番外（`sidestory.ts`，你不在时她那边发生的事，可以引出主动消息 `hook` 和配图 `cg`）、生图提示词（`imagePrompt.ts`，外观 tags 由程序放最前面）、总结 / 记忆（`summary.ts`，设计文档 §4.2 的 JSON，好感变化截到 ±3）、立绘（`sprite.ts`，按立绘预设写外观 tags、给新表情写 tags）。
+- **副对话**（`secondary.ts`）：读取并行请求的 `{append, image}` 决策，`append` 复用聊天标签，`image` 选择画面类型、生图用途、时刻和模型。网页端在主回复完成后合并内容并执行卡片；调用使用独立的 `secondary` 路由及预设，与主回复共享取消信号。配图流水线支持传入本轮的 `model`，备用 API 仍使用自己的模型。
 - **配图流水线**（`illustrate.ts`）：画面描述 → 生图提示词智能体 → 生图智能体，分阶段报告；没分配生图提示词智能体时用外观 tags + 原文。

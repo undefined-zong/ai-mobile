@@ -12,6 +12,7 @@ import type { AgentRoute } from '@app/shared';
 export function defaultRoutes(): AgentRoute[] {
   return [
     { role: 'main', api: null, backup: null, runsOn: 'device', params: { temperature: 0.9 } },
+    { role: 'secondary', follow: 'companion', api: null, backup: null, runsOn: 'device' },
     { role: 'companion', follow: 'main', api: null, backup: null, runsOn: 'device' },
     { role: 'decor', follow: 'companion', api: null, backup: null, runsOn: 'device' },
     { role: 'sidestory', follow: 'main', api: null, backup: null, runsOn: 'auto', params: { temperature: 1 }, dailyTokenBudget: 60_000 },

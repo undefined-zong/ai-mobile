@@ -126,6 +126,7 @@ export interface TtsTextOptions {
 /** 功能（智能体）。每个功能单独选渠道、填地址、Key 和模型 */
 export type AgentRole =
   | 'main'
+  | 'secondary'
   | 'companion'
   | 'decor'
   | 'sidestory'
@@ -203,6 +204,13 @@ export const AGENT_META: Record<
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-message-circle-heart',
+  },
+  secondary: {
+    label: '副对话',
+    desc: '与主对话同时生成，决定主动卡片、是否配图及生图模型和用途，并完成预设中的附加任务；结果在主回复结束后追加。默认跟随「陪伴 · 快速」，也可单独设置 API',
+    capability: 'chat',
+    runsOn: 'client',
+    icon: 'i-lucide-messages-square',
   },
   companion: {
     label: '陪伴 · 快速',
