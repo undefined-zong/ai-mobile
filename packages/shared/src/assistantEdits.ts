@@ -345,7 +345,7 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
         enabled: bool(f.enabled) ?? true,
         injection: { position: 'relative', depth: 4 },
       };
-      // App 自己的程序填充块（记忆、环境、场景规则……）默认和导入 ST 预设时补的一样放在历史前
+      // App 自己的程序填充块（记忆、环境、场景规则……）没写插在哪时，和导入 ST 预设时补的一样按深度插
       const app = [...appBlocks().before, ...appBlocks().after].find((x) => x.identifier === identifier);
       if (marker && app && f.position === undefined) block.injection = { ...app.injection };
       patchBlock(block, { ...f, name: undefined, role: undefined, enabled: undefined });
@@ -746,7 +746,7 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
           name: str(f.name)?.trim() || '助手写的世界书',
           description: str(f.description) ?? '',
           scanDepth: 4,
-          tokenBudget: 0,
+          tokenBudget: 2048,
           recursive: false,
           entries: [],
         };

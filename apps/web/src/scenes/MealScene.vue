@@ -426,7 +426,7 @@ async function reply(task: string, lines: string[], userText?: string, last = fa
   }
   // 碰杯、拍照这些是你刚做的事：她上一句还没说完就换成回这个
   if (!userText && chat.streams[chatId.value]) chat.stop(chatId.value);
-  const r = await chat.sceneReply(chatId.value, { task, input, userText, cue: cue.value });
+  const r = await chat.sceneReply(chatId.value, { task, input, userText, cue: cue.value, quick: true });
   if (!r.ok) {
     if (r.notConnected) notConnected.value = r.reason;
     else if (!/还在回上一句/.test(r.reason)) showToast(r.reason);

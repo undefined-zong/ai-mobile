@@ -23,7 +23,7 @@ import {
   type ParsedReply,
   type PresetUseId,
 } from '@app/shared';
-import { errorReport, errorText, fromOpenAIBody, isAbortError, SECONDARY_TAGS, type SecondaryReply } from '@app/ai';
+import { errorReport, errorText, isAbortError, samplerRequest } from '@app/ai';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { useAiStore } from './ai';
@@ -44,7 +44,6 @@ import { useMemoryStore } from './memory';
 import { useMessageSettingsStore } from './messageSettings';
 import { useToyStore } from './toys';
 import { ReplyTimeline, type TimedCommand } from '@/services/toyPlayer';
-import { secondaryChat } from '@/services/secondaryChat';
 import { uid } from '@/utils/id';
 
 /** 聊天里她打来的电话响多久（过了没接就成了未接来电） */
@@ -61,6 +60,10 @@ export interface GenerateOptions {
   allowedTags?: ControlTagKind[];
   /** 流式时每次给"到目前为止的正文"（已去掉标签）：通话、讲故事时边生成边分句合成语音 */
   onText?(visible: string): void;
+  /** 这一次回复上限至少这么多 token（讲故事这种长一点的，预设里给短句的上限不够） */
+  minTokens?: number;
+  /** 要快（通话、哄睡、看片时随口一句）：在认得思考参数的原生接口上把思考关到最少，见 quickReasoning */
+  quick?: boolean;
   /** 这一次另外打开的预设触发条件（心跳连着玩具、她自己写指令时是 device-inline） */
   flags?: string[];
   /** 流式时每次、写完时（done）给解析好的正文和标签（标签的位置是在正文里的下标）：心跳按位置执行 <device> 指令 */
@@ -82,6 +85,8 @@ export interface SceneReplyOptions {
   onText?(visible: string): void;
   /** 只执行这些标签；不给按场景 */
   allowedTags?: ControlTagKind[];
+  minTokens?: number;
+  quick?: boolean;
   /** 按哪个用途选预设（一起游戏里玩真心话大冒险时是 game-truthdare）；不给时用这个场景的功能预设 */
   use?: PresetUseId;
   /** 这一次另外打开的预设触发条件（真心话大冒险选的尺度 td-level:名字） */
@@ -93,6 +98,31 @@ export interface SceneReplyOptions {
 }
 
 export type SceneReplyResult = { ok: true; message: Message } | { ok: false; reason: string; notConnected?: boolean };
+
+/**
+ * 要快的回复（通话、哄睡、看片时随口一句）能不能把思考关到最少：只在认得思考参数的原生接口上做
+ * （Gemini / Vertex 设思考预算 0 或最低等级，DeepSeek 关掉思考，Claude 不开思考）。
+ * OpenAI 格式的中转不一定认 reasoning_effort（有的直接报错），不发；你在 API 设置里自己设了推理强度时照你的
+ */
+function quickReasoning(agent: AgentRole): boolean {
+  try {
+    const ai = useAiStore();
+    const set = ai.effectiveRoute(agent).params?.reasoningEffort;
+    if (set && set !== 'auto') return false;
+    const kind = ai.system.router.attempts(agent)[0]?.endpoint.kind;
+    return kind === 'gemini' || kind === 'vertex' || kind === 'deepseek' || kind === 'anthropic';
+  } catch {
+    return false;
+  }
+}
+
+/** 按这一次的要求调请求体（预设拼出来的 OpenAI 格式）：上限至少 minTokens；要快时推理强度设 none */
+function tuneRequest(body: Record<string, unknown>, agent: AgentRole, opts: { minTokens?: number; quick?: boolean }): Record<string, unknown> {
+  const out = { ...body };
+  if (opts.minTokens && !(typeof out.max_tokens === 'number' && out.max_tokens >= opts.minTokens)) out.max_tokens = opts.minTokens;
+  if (opts.quick && out.reasoning_effort === undefined && quickReasoning(agent)) out.reasoning_effort = 'none';
+  return out;
+}
 
 /** 正在生成的回复。只放内存，不进同步数据（math-reader 回滚提交的教训） */
 interface StreamState {
@@ -338,7 +368,6 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function removeChat(chatId: string) {
-    stop(chatId);
     chats.value = chats.value.filter((c) => c.id !== chatId);
     delete messages.value[chatId];
     delete earlierInDb[chatId];
@@ -427,27 +456,15 @@ export const useChatStore = defineStore('chat', () => {
     streams[chatId] = { messageId: id, thinking: true, reasoning: '', abort };
     const scene = getScene(chat.currentScene ?? 'free');
     const allowedTags = opts.allowedTags ?? sceneTags(scene, character);
-    const ai = useAiStore();
-    const withSecondary = agent === 'main' && ai.isLive('main') && ai.isLive('secondary');
-    const delegatedTags = withSecondary
-      ? allowedTags.filter((tag) => SECONDARY_TAGS.includes(tag) && !(tag === 'cg' && opts.sceneArt))
-      : [];
-    const mainTags = allowedTags.filter((tag) => !delegatedTags.includes(tag));
-    const now = new Date();
     let raw = '';
 
     try {
       // 拼提示词（真实发送：推进世界书粘性 / 冷却，保存 {{setvar}} 改过的变量）。
       // 预设按用途选：语音通话用"语音通话"的预设，在场景页里一起做某件事时用那件事的功能预设，聊天里用这个角色的对话预设；一个都选不到时报错
-      const turn = { now, type: target ? 'swipe' as const : 'normal' as const, task: opts.task, targetId: target, flags: opts.flags };
-      const prompt = assembleForChat(chat, character, history, { ...turn, agent, use: opts.use, allowedTags: mainTags, delegatedTags });
-      // 不 await：主、副请求一起开始，副对话提前完成时也只暂存结果，不执行任何卡片。
-      const secondary = withSecondary ? secondaryChat(chat, character, history, { ...turn, allowedTags: delegatedTags }, abort.signal).catch((e) => {
-        if (!isAbortError(e) && !abort.signal.aborted) ai.lastErrors.secondary = { at: Date.now(), summary: errorText(e), detail: errorReport(e) };
-        return null;
-      }) : null;
+      const prompt = assembleForChat(chat, character, history, { type: target ? 'swipe' : 'normal', agent, task: opts.task, use: opts.use, targetId: target, flags: opts.flags });
       // 记下这条回复用了哪些记忆（重新生成时沿用）；重新生成不重复记"想起过"
       noteRecallUsed(id, prompt.recall.lines, !prompt.recall.reused);
+      if (opts.minTokens || opts.quick) prompt.request = tuneRequest(prompt.request, agent, opts);
       chat.loreState = prompt.loreState;
       chat.vars = prompt.vars;
       lastPrompt[chatId] = { prompt, at: Date.now() };
@@ -478,7 +495,7 @@ export const useChatStore = defineStore('chat', () => {
             if (st && full) st.thinking = false;
             const msg = find(chatId, id);
             if (!msg) return;
-            const parsed = parseControlTags(full, mainTags);
+            const parsed = parseControlTags(full, allowedTags);
             msg.text = parsed.visible.trimStart();
             msg.parts = [{ type: 'text', text: msg.text }];
             opts.onParsed?.(parsed, false);
@@ -494,20 +511,16 @@ export const useChatStore = defineStore('chat', () => {
         },
       );
 
-      abort.signal.throwIfAborted();
-      let msg = find(chatId, id);
+      const msg = find(chatId, id);
       if (!msg) return;
       // 写完了：预设里改存下来的消息的正则（同 ST：流式时只改显示，写完才改存下来的）
       raw = storeRegex(chat, character, result.text || raw, 'assistant', { preset: prompt.preset });
-      let parsed = parseControlTags(raw, mainTags);
+      const parsed = parseControlTags(raw, allowedTags);
       msg.text = parsed.visible.trim();
-      // 主回复先显示完整正文；较慢的副对话只影响末尾追加，不阻塞主回复流式显示。
-      msg.parts = [{ type: 'text', text: msg.text }];
+      opts.onParsed?.(parsed, true);
       msg.meta.error = undefined;
       msg.meta.errorDetail = undefined;
       msg.meta.interrupted = undefined;
-      msg.meta.choices = undefined;
-      msg.meta.secondary = undefined;
       if (!result.demo) {
         msg.meta.model = result.model;
         msg.meta.agent = agent;
@@ -515,31 +528,6 @@ export const useChatStore = defineStore('chat', () => {
         msg.meta.tokens = result.tokens;
         msg.meta.fellBack = result.fellBack || undefined;
       }
-      const supplement = await secondary;
-      msg = find(chatId, id);
-      if (!msg) return;
-      let image: SecondaryReply['image'] = null;
-      if (supplement && !abort.signal.aborted) {
-        image = delegatedTags.includes('cg') ? supplement.value.image : null;
-        const extra = parseControlTags(
-          storeRegex(chat, character, supplement.value.append, 'assistant', { preset: supplement.preset }),
-          // 明确给了 image 对象时由它选择画法，不重复执行 append 中的 [cg:]。
-          image ? delegatedTags.filter((tag) => tag !== 'cg') : delegatedTags,
-        );
-        const separator = extra.visible || extra.tags.length ? '\n\n' : '';
-        const offset = parsed.visible.length + separator.length;
-        parsed = {
-          visible: parsed.visible + separator + extra.visible,
-          tags: [...parsed.tags, ...extra.tags.map(({ tag, at }) => ({ tag, at: at + offset }))],
-          pending: false,
-        };
-        const { result: r } = supplement;
-        msg.meta.secondary = { model: r.model, tokens: r.usage ? (r.usage.inputTokens ?? 0) + (r.usage.outputTokens ?? 0) : undefined, latencyMs: r.latencyMs, fellBack: r.fellBack };
-      }
-      msg.text = parsed.visible.trim();
-      msg.updatedAt = Date.now();
-      opts.onParsed?.(parsed, true);
-      opts.onText?.(msg.text);
       const parts: MessagePart[] = [{ type: 'text', text: msg.text }];
       const toySteps: TimedCommand[] = [];
       for (const { tag, at } of parsed.tags) {
@@ -574,9 +562,8 @@ export const useChatStore = defineStore('chat', () => {
           }, 900);
         }
       }
-      if (image) parts.push({ type: 'image', assetKey: null, caption: image.caption, mode: image.mode, use: image.use, moment: image.moment, requestedModel: image.model, generated: false });
       msg.parts = parts;
-      const swipe = { text: msg.text, parts, expression: msg.expression, choices: msg.meta.choices, secondary: msg.meta.secondary, createdAt: Date.now() };
+      const swipe = { text: msg.text, parts, expression: msg.expression, createdAt: Date.now() };
       if (target) {
         msg.swipes = [...(msg.swipes.length ? msg.swipes : []), swipe];
         msg.swipeIndex = msg.swipes.length - 1;
@@ -606,8 +593,6 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
     } finally {
-      // 主请求失败、消息被删或用户停止时，连同仍在运行的副请求一起取消。
-      abort.abort();
       delete streams[chatId];
     }
     return id;
@@ -631,6 +616,8 @@ export const useChatStore = defineStore('chat', () => {
       cue: opts.cue,
       onText: opts.onText,
       allowedTags: opts.allowedTags,
+      minTokens: opts.minTokens,
+      quick: opts.quick,
       use: opts.use,
       flags: opts.flags,
       onParsed: opts.onParsed,
@@ -654,7 +641,7 @@ export const useChatStore = defineStore('chat', () => {
     task: { name: string; input: string },
     parse: (value: unknown) => T | null,
     signal?: AbortSignal,
-    tune: { use?: PresetUseId; flags?: string[]; agent?: AgentRole } = {},
+    tune: { minTokens?: number; quick?: boolean; use?: PresetUseId; flags?: string[]; agent?: AgentRole } = {},
   ): Promise<{ ok: true; value: T } | { ok: false; reason: string; notConnected?: boolean }> {
     const chat = chatById(chatId);
     const character = useCharacterStore().byId(chat?.characterId);
@@ -666,9 +653,10 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const prompt = assembleForChat(chat, character, list(chatId), { agent, task, dryRun: true, use: tune.use, flags: tune.flags });
       lastPrompt[chatId] = { prompt, at: Date.now() };
-      const req = fromOpenAIBody(prompt.request);
-      req.names = { user: prompt.persona.name, char: character.name };
-      const { value } = await ai.system.json(agent, req, parse, { signal });
+      const req = { messages: toLLMMessages(prompt), ...samplerRequest(prompt.preset.sampler) };
+      if (tune.minTokens && (req.maxTokens ?? 0) < tune.minTokens) req.maxTokens = tune.minTokens;
+      const effort = tune.quick && quickReasoning(agent) ? { reasoningEffort: 'none' as const } : {};
+      const { value } = await ai.system.json(agent, { ...req, ...effort }, parse, { signal });
       return { ok: true, value };
     } catch (e) {
       return { ok: false, reason: errorText(e) };
@@ -797,30 +785,16 @@ export const useChatStore = defineStore('chat', () => {
     const chat = chatById(chatId);
     const chars = useCharacterStore();
     const character = chars.byId(chat?.characterId);
-    const swipeIndex = find(chatId, messageId)?.swipeIndex ?? 0;
     const findPart = () => {
-      const msg = find(chatId, messageId);
-      // 画图期间切换或重新生成回复：结果仍写回发起它的那个备选回复。
-      const parts = msg?.swipes[swipeIndex]?.parts ?? (msg?.swipeIndex === swipeIndex ? msg.parts : undefined);
-      const p = parts?.find((x) => x.type === 'image' && x.caption === caption);
+      const p = find(chatId, messageId)?.parts.find((x) => x.type === 'image' && x.caption === caption);
       return p?.type === 'image' ? p : undefined;
-    };
-    const updatePart = (patch: Partial<Extract<MessagePart, { type: 'image' }>>) => {
-      const part = findPart();
-      if (part) Object.assign(part, patch);
-      const msg = find(chatId, messageId);
-      // 从本机库或同步恢复后，正文和 swipe 中的 parts 是两份对象，一起更新。
-      if (msg?.swipeIndex === swipeIndex) {
-        const visible = msg.parts.find((p) => p.type === 'image' && p.caption === caption);
-        if (visible) Object.assign(visible, patch);
-      }
     };
     if (!chat || !character) return;
     const before = findPart();
     if (!before) return;
     if (!services.image.live) {
       const s = useAiStore().status('image');
-      updatePart({
+      Object.assign(before, {
         generated: false,
         error: '生图 API 还没接通',
         errorDetail: `${s.live ? '' : `${s.reason}\n\n`}在"我的 → API 设置 → 生图"里选渠道（NovelAI、硅基流动或自定义）、填地址和 Key，测试连接通过后，点这张图重新生成。`,
@@ -828,22 +802,22 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
     // 重画时旧图先留着（画失败了也还在），画好了再换
-    updatePart({ generated: false, error: undefined, errorDetail: undefined });
+    Object.assign(before, { generated: false, error: undefined, errorDetail: undefined });
     try {
       const out = await services.image.illustrate({
         characterId: character.id,
         caption,
         mode: before.mode,
-        use: before.use ?? 'image',
-        moment: before.moment,
-        model: before.requestedModel,
+        use: 'image',
         // 一起做事时按这件事该穿的那套告诉模型（运动服、睡衣……），平时按日常的；画面要换装时模型自己写
         sceneId: chat.currentScene,
         place: getLocation(chat.togetherAt ?? character.locationId)?.name,
         expression: chars.expression[character.id],
         recent: recentLines(chatId),
       });
-      updatePart({
+      const part = findPart();
+      if (!part) return;
+      Object.assign(part, {
         assetKey: out.assetKey ?? out.url ?? null,
         title: out.caption && out.caption !== caption ? out.caption : undefined,
         prompt: out.prompt,
@@ -855,7 +829,11 @@ export const useChatStore = defineStore('chat', () => {
         errorDetail: undefined,
       });
     } catch (e) {
-      updatePart({ error: errorText(e), errorDetail: errorReport(e) });
+      const part = findPart();
+      if (part) {
+        part.error = errorText(e);
+        part.errorDetail = errorReport(e);
+      }
     }
   }
 
@@ -982,8 +960,6 @@ export const useChatStore = defineStore('chat', () => {
     msg.text = s.text;
     msg.updatedAt = Date.now();
     msg.parts = s.parts ?? [{ type: 'text', text: s.text }];
-    msg.meta.choices = s.choices;
-    msg.meta.secondary = s.secondary;
     if (s.expression) msg.expression = s.expression;
   }
 

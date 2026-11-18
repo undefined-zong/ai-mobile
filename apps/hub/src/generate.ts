@@ -50,15 +50,21 @@ export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: n
         ? { content: context.memoryBlocks.memory, source: '记忆和关系' }
         : { content: context.memories.map((m) => `- ${m.content}`).join('\n') + `\n关系：${JSON.stringify(c.relationship)}`, source: '记忆和关系' },
       environment: { content: formatEnvironmentBlock({ now: date, timeZone, anniversaries: anniversaryLine(c.relationship.anniversaries, now, timeZone) }), source: `云端当前时间（${timeZone}）/ 纪念日` },
+      sceneRules: { content: FREE_SCENE.promptFragment, source: '日常聊天' },
       proactive: { content: quiet, source: '本次主动消息' },
       // 你开了家务、健康系统时，手机上传那一刻今天的情况
       ...(context.memoryBlocks?.home ? { home: { content: context.memoryBlocks.home, source: '家务和健康（手机同步）' } } : {}),
     },
-    // 调度器会合入手机上次同步以后产生的云端消息；它们也计入世界书计时。
-    chatLength: context.chatLength === undefined ? undefined
-      : context.chatLength + live.filter(({ m }) => m.createdAt > chat.lastMessageAt).length,
     type: 'quiet', now: date, timeZone, vars: chat.vars, loreState: chat.loreState, dryRun: true, model, flags: context.flags,
   });
+  // 预设里没有"家务和健康"这一块（导入的预设）：今天的情况接在最后
+  const home = context.memoryBlocks?.home;
+  if (home && !preset.blocks.some((b) => b.identifier === 'home')) {
+    result.messages.push({ role: 'system', content: home, source: 'home', label: '家务和健康（预设里没有这一块，接在最后）' });
+  }
+  if (!result.blocks.some((b) => b.identifier === 'proactive' && b.sent)) {
+    result.messages.push({ role: 'system', content: quiet, source: 'quiet', label: '本次主动消息' });
+  }
   return fromOpenAIBody(buildChatRequest(result, preset, model));
 }
 

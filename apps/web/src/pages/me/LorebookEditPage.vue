@@ -38,10 +38,10 @@ function addKey() {
     <div class="page-scroll pb-10">
       <van-cell-group inset class="!mt-3">
         <van-cell title="扫描深度" label="检查最近几条消息里的关键词" center>
-          <template #right-icon><van-stepper v-model="book.scanDepth" min="0" /></template>
+          <template #right-icon><van-stepper v-model="book.scanDepth" min="1" max="20" /></template>
         </van-cell>
-        <van-cell title="Token 预算" label="只限制本书；0 表示不额外限制" center>
-          <template #right-icon><van-stepper v-model="book.tokenBudget" min="0" step="100" /></template>
+        <van-cell title="Token 预算" label="世界书最多占多少 token" center>
+          <template #right-icon><van-stepper v-model="book.tokenBudget" min="100" max="8000" step="100" /></template>
         </van-cell>
         <van-cell title="递归扫描" label="条目内容里的关键词也能触发别的条目" center>
           <template #right-icon><van-switch v-model="book.recursive" size="22px" /></template>
@@ -95,8 +95,8 @@ function addKey() {
           <button v-for="(label, k) in POSITION" :key="k" class="opt" :class="{ on: editing.position === k }" @click="editing.position = k">{{ label }}</button>
         </div>
         <div class="grid grid-cols-2 gap-3 mt-3">
-          <div><label class="field-label !mt-0">顺序</label><van-stepper v-model="editing.order" :min="-Infinity" /></div>
-          <div><label class="field-label !mt-0">深度</label><van-stepper v-model="editing.depth" min="0" :disabled="editing.position !== 'at_depth'" /></div>
+          <div><label class="field-label !mt-0">顺序</label><van-stepper v-model="editing.order" min="0" max="999" /></div>
+          <div><label class="field-label !mt-0">深度</label><van-stepper v-model="editing.depth" min="0" max="20" :disabled="editing.position !== 'at_depth'" /></div>
         </div>
         <label class="field-label">触发概率 {{ editing.probability }}%</label>
         <van-slider v-model="editing.probability" bar-height="4px" button-size="18px" />

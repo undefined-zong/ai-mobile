@@ -19,6 +19,7 @@ const ROLES = ['system', 'user', 'assistant'] as const;
 /** ST 的世界书默认值（default/content/settings.json） */
 export const ST_WORLD_INFO_DEFAULTS = {
   scanDepth: 2,
+  budgetPercent: 25,
   recursive: true,
   caseSensitive: false,
   matchWholeWords: true,
@@ -72,7 +73,6 @@ function fromFlatEntry(e: Obj, fallbackUid: string): LoreEntry {
     comment: str(e.comment),
     keys: strList(e.key),
     secondaryKeys: strList(e.keysecondary),
-    selective: e.selective !== false,
     logic: LOGIC[num(e.selectiveLogic, 0)] ?? 'and_any',
     content: str(e.content),
     constant: e.constant === true,
@@ -118,7 +118,6 @@ function fromBookEntry(e: Obj, index: number): LoreEntry {
     comment: str(e.comment) || str(e.name),
     keys: strList(e.keys),
     secondaryKeys: strList(e.secondary_keys),
-    selective: e.selective !== false,
     logic: LOGIC[num(ext.selectiveLogic, 0)] ?? 'and_any',
     content: str(e.content),
     constant: e.constant === true,
@@ -152,42 +151,16 @@ export function looksLikeLorebook(json: unknown): boolean {
   return isObj(json) && (Array.isArray(json.entries) || isObj(json.entries)) && !('spec' in json) && !('prompts' in json);
 }
 
-const isFlatEntry = (e: Obj): boolean => 'key' in e || 'keysecondary' in e || 'disable' in e || 'uid' in e || 'order' in e || typeof e.position === 'number';
-
-/** 修复旧版把独立世界书的数组条目当成角色卡条目读入后，留在 extra 里的关键词和设置。 */
-export function repairFlatLoreEntries(book: Pick<Lorebook, 'entries'>): boolean {
-  let changed = false;
-  book.entries = book.entries.map((entry, i) => {
-    if (!entry.extra || !isFlatEntry(entry.extra)) return entry;
-    const raw = { ...entry.extra, comment: entry.comment, content: entry.content, constant: entry.constant };
-    const before = fromBookEntry(raw, i);
-    const repaired = fromFlatEntry(raw, entry.uid);
-    for (const key of Object.keys(entry) as (keyof LoreEntry)[]) {
-      if (key === 'extra' || key === 'uid' || key === 'position') continue;
-      // 导入后用户编辑过的字段继续使用用户值。
-      if (JSON.stringify(entry[key]) !== JSON.stringify(before[key])) Object.assign(repaired, { [key]: entry[key] });
-    }
-    repaired.uid = entry.uid;
-    repaired.position = entry.position;
-    changed = true;
-    return repaired;
-  });
-  return changed;
-}
-
 /**
- * 解析世界书。数组和对象容器都按条目的字段区分独立世界书与 character_book。
+ * 解析世界书。entries 是数组时按 character_book 读，是对象时按 ST 独立文件读。
  * name 为空时用 fallbackName（通常是文件名）。
  */
 export function parseLorebook(json: unknown, fallbackName = '世界书'): ParsedLorebook {
   if (!isObj(json)) throw new Error('世界书不是 JSON 对象');
   const raw = json.entries;
   let entries: LoreEntry[];
-  if (Array.isArray(raw)) entries = raw.filter(isObj).map((e, i) => isFlatEntry(e) ? fromFlatEntry(e, String(i)) : fromBookEntry(e, i));
-  else if (isObj(raw)) entries = Object.entries(raw).filter(([, v]) => isObj(v)).map(([k, v], i) => {
-    const e = v as Obj;
-    return !isFlatEntry(e) && ('keys' in e || 'extensions' in e || 'enabled' in e) ? fromBookEntry(e, i) : fromFlatEntry(e, k);
-  });
+  if (Array.isArray(raw)) entries = raw.filter(isObj).map(fromBookEntry);
+  else if (isObj(raw)) entries = Object.entries(raw).filter(([, v]) => isObj(v)).map(([k, v]) => fromFlatEntry(v as Obj, k));
   else throw new Error('世界书里没有 entries');
 
   // 按 ST 编辑器里的显示顺序排
@@ -203,7 +176,7 @@ export function parseLorebook(json: unknown, fallbackName = '世界书'): Parsed
     name: str(json.name) || fallbackName,
     description: str(json.description),
     scanDepth: num(json.scan_depth, ST_WORLD_INFO_DEFAULTS.scanDepth),
-    // 只读取文件明确设置的本书预算；未设置或为 0 时不额外限制。
+    // ST 按上下文的百分比算预算；这里存绝对值，0 表示"按预设的上下文 25%"
     tokenBudget: num(json.token_budget, 0),
     recursive: typeof json.recursive_scanning === 'boolean' ? json.recursive_scanning : ST_WORLD_INFO_DEFAULTS.recursive,
     entries,
@@ -228,7 +201,7 @@ export function toCharacterBook(book: Pick<Lorebook, 'name' | 'description' | 's
       comment: e.comment,
       content: e.content,
       constant: e.constant,
-      selective: e.selective ?? true,
+      selective: true,
       insertion_order: e.order,
       enabled: e.enabled,
       position: e.position === 'before_char' ? 'before_char' : 'after_char',
@@ -276,7 +249,7 @@ export function toWorldInfoFile(book: Pick<Lorebook, 'name' | 'entries'>): Obj {
       comment: e.comment,
       content: e.content,
       constant: e.constant,
-      selective: e.selective ?? true,
+      selective: true,
       selectiveLogic: LOGIC.indexOf(e.logic),
       order: e.order,
       position: POSITIONS.indexOf(e.position),

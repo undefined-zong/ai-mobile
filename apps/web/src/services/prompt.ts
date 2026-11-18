@@ -1,5 +1,4 @@
 import { characterPronoun } from '@app/shared';
-import { openaiReasoningEffort } from '@app/ai';
 import {
   allowedInviteGames,
   anniversaryLine,
@@ -39,6 +38,7 @@ import {
   type TruthDareTally,
 } from '@app/shared';
 import type { LLMChatMessage } from './types';
+import { mockToday, todayLine } from '@/mock/activity';
 import { useAiStore } from '@/stores/ai';
 import { usePersonaStore } from '@/stores/personas';
 import { useEnvironmentStore } from '@/stores/environment';
@@ -179,7 +179,7 @@ export function workoutText(p: Extract<MessagePart, { type: 'workout' }>): strin
 
 /** mapText：只改文字部分（正则只改你写的、她说的，不动卡片的描述） */
 export function messageToText(m: Message, character: Character, user = usePersonaStore().defaultPersona.name, mapText?: (text: string) => string): string {
-  return m.parts.map((p) => partToText(p, character, user, mapText)).filter(Boolean).join('\n').trim();
+  return m.parts.map((p) => partToText(p, character, user, mapText)).join(' ').trim();
 }
 
 export interface TurnOptions {
@@ -208,9 +208,7 @@ export function toTurns(history: Message[], character: Character, user: string, 
     // 正则把整条都删掉了：这一条不发（同空消息）
     if (!text) return;
     // 一起做事时说的话带上位置（第几个番茄、片内时间……），她知道是在哪一刻说的
-    // 通话状态由当前任务提供，历史通话的标签不再写进说话正文。
-    const cue = m.meta?.cue;
-    const content = cue && cue !== '语音通话' && cue !== '视频通话' ? `（${cue}）${text}` : text;
+    const content = m.meta?.cue ? `（${m.meta.cue}）${text}` : text;
     if (m.role === 'user') out.push({ role: 'user', name: user, content });
     else if (m.role === 'assistant') out.push({ role: 'assistant', name: character.name, content });
     else out.push({ role: 'system', name: '', content });
@@ -276,17 +274,18 @@ function appFills(chat: Chat, character: Character, history: Message[], now: Dat
         timeZone,
         weather,
         herWeather,
+        todayLine: todayLine(mockToday()),
         sinceLastChatMin,
         place,
         outfit: outfit ? `${character.name}今天穿${outfit.name}` : null,
         sceneName: scene.id === 'free' ? null : scene.name,
         anniversaries: anniversaryLine(character.relationship.anniversaries, now.getTime(), timeZone),
       }),
-      source: `时间 / 节气 / 纪念日 / 天气（${[weather ? `你那边 ${weather.city}` : '你那边没取到', herWeather ? `${character.name}那边 ${herWeather.city}` : ''].filter(Boolean).join('，')}）/ ${characterPronoun(character)}在哪 / ${characterPronoun(character)}今天穿什么`,
+      source: `时间 / 节气 / 纪念日 / 天气（${[weather ? `你那边 ${weather.city}` : '你那边没取到', herWeather ? `${character.name}那边 ${herWeather.city}` : ''].filter(Boolean).join('，')}）/ 今日活动 / ${characterPronoun(character)}在哪 / ${characterPronoun(character)}今天穿什么`,
     },
     sceneRules: {
-      content: tagsLine(scene, character),
-      source: `场景"${scene.name}"能用的标签和表情（场景规则由当前预设提供）`,
+      content: `${scene.promptFragment.replaceAll('{{char}}', character.name)}\n${tagsLine(scene, character)}`,
+      source: `场景"${scene.name}"`,
     },
   };
 }
@@ -317,12 +316,19 @@ function tagDesc(t: ControlTagKind, character: Character): string {
   return `约对方玩某一个游戏，显示成邀请卡片；游戏名只能是：${games.join('、')}`;
 }
 
-function tagsLine(scene: ReturnType<typeof getScene>, character: Character, allowed = sceneTags(scene, character)): string {
+function tagsLine(scene: ReturnType<typeof getScene>, character: Character): string {
+  const allowed = sceneTags(scene, character);
   const tags = allowed.map((t) => `- ${CONTROL_TAG_DOCS[t].syntax}：${tagDesc(t, character)}`);
   return `回复里可以夹带这些隐藏标签（对方看不到，程序会执行）：\n${tags.join('\n')}\n${expressionPromptLines(character.portraits, { poses: allowed.includes('pose') })}`;
 }
 
-/** 这个角色的对话预设；没选或失效时回退到日常对话。 */
+/** 功能预设自己写了场景规则时，程序那块只填这个场景能用的标签和表情 */
+function sceneTagsOnly(chat: Chat, character: Character): AppBlockFill {
+  const scene = getScene(chat.currentScene ?? 'free');
+  return { content: tagsLine(scene, character), source: `场景"${scene.name}"能用的标签和表情（场景规则写在预设里）` };
+}
+
+/** 这个角色的对话预设；没选、或选的那个被删了时用第一个对话预设；一个对话预设都没有时为空 */
 export function presetFor(character: Character | undefined): Preset | undefined {
   return useLibraryStore().chatPresetFor(character);
 }
@@ -334,7 +340,6 @@ export function presetForTurn(chat: Chat, character: Character, agent?: AgentRol
   const lib = useLibraryStore();
   // 指定了用途（语音通话）：按那个用途选，不看场景
   if (use) return { preset: lib.presetForUse(use, character), use };
-  if (agent === 'secondary') return { preset: lib.presetForUse('secondary', character), use: 'secondary' };
   if (agent === 'proactive') return { preset: lib.presetForUse('proactive', character), use: 'proactive' };
   const scene = sceneUse(chat.currentScene);
   if (scene) return { preset: lib.presetForUse(scene, character), use: scene };
@@ -387,14 +392,14 @@ export interface ChatAssembleOptions {
   type?: GenerationType;
   /**
    * 后台生成（主动消息）：这一次要她做的事（程序写的，只有时间和要做什么；怎么写由预设里的块说）。
-   * 预设里有"主动消息"这一块就填在那儿；没有或关着时也放在历史前，让模型知道这次是她先开口
+   * 预设里有"主动消息"这一块就填在那儿；没有或关着时接在最后（同 SillyTavern 的 quiet prompt），不然模型不知道这次是她先开口
    */
   quiet?: string;
   /** 哪个功能在调用：决定用哪个用途的预设、请求体里写谁的模型；默认主对话 */
   agent?: AgentRole;
   /**
    * 一起做事时这一次要做的事：name 是任务名（预设里触发条件写了它的块只在这时发送），
-   * input 是程序写的这一次的输入（只放数据，填进"场景任务"块；预设里没有这一块时也放在历史前）
+   * input 是程序写的这一次的输入（只放数据，填进"场景任务"块；预设里没有这一块时接在最后）
    */
   task?: { name: string; input: string };
   /** 指定按哪个用途选预设（语音通话用 call）；不给时按主动消息 / 场景 / 对话预设 */
@@ -403,10 +408,6 @@ export interface ChatAssembleOptions {
   targetId?: string;
   /** 这一次另外打开的触发条件（心跳连着玩具、指令由她自己写时是 device-inline）：块写了它就发送 */
   flags?: string[];
-  /** 本轮实际执行的标签（副对话接管卡片时，主对话只保留实时表情等） */
-  allowedTags?: ControlTagKind[];
-  /** 已交给副对话的标签，让主对话知道这些动作由另一条请求决定 */
-  delegatedTags?: ControlTagKind[];
 }
 
 /**
@@ -428,17 +429,15 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const userText = lastUser ? messageToText(lastUser, character, persona.name) : '';
   const recall: RecallForTurn = proactive ? { lines: [], snapshot: undefined, added: 0, reused: false } : recallForTurn(chat, character, userText, opts.targetId);
   const app = appFills(chat, character, history, now, timeZone, recall, proactive);
-  if (opts.allowedTags) app.sceneRules = {
-    content: tagsLine(getScene(chat.currentScene ?? 'free'), character, opts.allowedTags),
-    source: '本轮实际可用的标签',
-  };
-  if (opts.delegatedTags?.length) app.sceneRules!.content += `\n本轮由并行的副对话负责这些标签：${opts.delegatedTags.join('、')}。主回复结束后程序会追加副对话结果。你只生成主对话正文和上面列出的标签，不重复发卡片或配图，也不要预先声称已调用这些功能。`;
   // 家务和健康：你人设里开着的系统今天的情况（都没开时没有这一块）
   const flags: string[] = [...lifeFlags(persona), ...(opts.flags ?? [])];
-  const home = homeBlock(persona);
+  // 预设里没有"她怎么反应"那一块的，自带的规则接在今天的情况后面
+  const home = homeBlock(persona, { preset, characterName: character.name, pronoun: character.pronoun });
   if (home) app.home = home;
   if (opts.quiet) app.proactive = { content: opts.quiet, source: `主动消息：这一次要${characterPronoun(character)}做的事` };
   if (opts.task) app.sceneTask = { content: opts.task.input, source: `场景任务：${opts.task.name}` };
+  // 功能预设里写了自己的"场景规则"：程序那块只填能用的标签和表情，不再重复场景规则
+  if (preset.blocks.some((b) => b.identifier === 'sceneRule' && !b.marker && b.enabled) && app.sceneRules) app.sceneRules = sceneTagsOnly(chat, character);
   // 聊天记录：按消息设置的发送条数截取；预设中"仅格式提示词"的正则按深度执行（世界书扫描修改后的文本）
   // "已总结的消息不发送给 AI"：总结覆盖到的那条之前的不发（提示词里用时间线和取到的记忆代替）
   const msgSettings = useMessageSettingsStore();
@@ -446,15 +445,12 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const sendable = msgSettings.settings.dropSummarized ? afterSummarized(history, chat.summaryUntilMessageId) : history;
   const turnStats = { total: 0, dropped: 0, regexed: 0 };
   const turns = toTurns(sendable, character, persona.name, { last, regex: preset.regex, stats: turnStats });
-  const loreHistory = toTurns(history, character, persona.name, { regex: preset.regex });
   const result = assemblePrompt({
     preset,
     character,
     user: { name: persona.name, description: persona.description },
     lorebooks: books,
     history: turns,
-    loreHistory,
-    chatLength: history.filter((m) => !m.deleted && !m.meta.error && !m.meta.interrupted).length,
     app,
     type: opts.type,
     now,
@@ -467,11 +463,21 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
     task: opts.task?.name,
     flags,
   });
-  const request = buildChatRequest(result, preset, model);
-  // 和 AgentSystem 相同：API 页面明确选了强度就覆盖预设；自动时保留预设值。
-  const effort = openaiReasoningEffort(useAiStore().routeOf(opts.agent ?? 'main').params?.reasoningEffort);
-  if (effort) request.reasoning_effort = effort;
-  return { ...result, preset, use, persona, request, turnStats: { ...turnStats, last, summarized: history.length - sendable.length }, recall };
+  if (opts.quiet && !result.blocks.some((b) => b.identifier === 'proactive' && b.sent)) {
+    result.messages.push({ role: 'system', content: opts.quiet, source: 'quiet', label: `主动消息：这一次要${characterPronoun(character)}做的事（预设里没有这一块，接在最后）` });
+    result.tokens += estimateTokens(opts.quiet);
+  }
+  // 预设里没有"家务和健康"这一块（以前导入的 SillyTavern 预设、以前复制的）：今天的情况（和补上的规则）接在最后。
+  // 有这一块但你关掉了的不补
+  if (home && !preset.blocks.some((b) => b.identifier === 'home')) {
+    result.messages.push({ role: 'system', content: home.content, source: 'home', label: '家务和健康（预设里没有这一块，接在最后）' });
+    result.tokens += estimateTokens(home.content);
+  }
+  if (opts.task && opts.task.input.trim() && !result.blocks.some((b) => b.identifier === 'sceneTask' && b.sent)) {
+    result.messages.push({ role: 'system', content: opts.task.input, source: 'sceneTask', label: '场景任务：这一次的输入（预设里没有这一块，接在最后）' });
+    result.tokens += estimateTokens(opts.task.input);
+  }
+  return { ...result, preset, use, persona, request: buildChatRequest(result, preset, model), turnStats: { ...turnStats, last, summarized: history.length - sendable.length }, recall };
 }
 
 /** 发给模型的消息（去掉来源说明） */

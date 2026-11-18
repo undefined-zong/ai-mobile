@@ -302,6 +302,8 @@ export function useMicLink(opts: MicLinkOptions) {
       task: custom ?? { name: kind === 'whisper' ? (opts.tasks?.whisper ?? 'sleep-whisper') : (opts.tasks?.reply ?? 'sleep-call'), input: taskInput(kind) },
       cue: '连麦',
       allowedTags: opts.allowedTags?.() ?? ['expr'],
+      // 要快：认得思考参数的接口把思考关到最少
+      quick: true,
       ...(opts.use ? { use: opts.use } : {}),
       ...(opts.flags ? { flags: opts.flags() } : {}),
       ...(opts.onParsed ? { onParsed: opts.onParsed } : {}),

@@ -180,7 +180,7 @@ async function say(task: 'brawl-open' | 'brawl-end', input: string, id: string) 
   const response = await chat.sceneJson(targetChat, { name: task, input }, value => {
     const v = value as { line?: unknown } | null;
     return typeof v?.line === 'string' ? v.line.trim().slice(0, 160) : null;
-  }, controller.signal, { use: 'game-brawl' });
+  }, controller.signal, { use: 'game-brawl', quick: true });
   if (!alive || controller.signal.aborted || id !== roundId) return;
   if (response.ok) {
     line.value = response.value;

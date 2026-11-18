@@ -4,7 +4,7 @@ import { httpError } from '../core/errors.ts';
 import { request } from '../core/http.ts';
 import { claudeModelInfo } from './claude.ts';
 import { inlineNames, postProcessMessages, toClaude, toGemini, toOpenAIMessage } from './messages.ts';
-import { claudeThinking, deepseekThinking, geminiHasThinkingConfig, geminiThinking, openaiReasoningEffort } from './reasoning.ts';
+import { claudeHeadroom, claudeThinking, deepseekThinking, geminiHasThinkingConfig, geminiHeadroom, geminiThinking, openaiReasoningEffort, THINKING_HEADROOM, thinkingAlias, thinksByName } from './reasoning.ts';
 import { dropField, sendFixing, type RequestFix } from './retry.ts';
 import { readAIStream, readWhole } from './stream.ts';
 import type { ChatCallbacks, ChatRequest, ChatResult } from './types.ts';
@@ -12,7 +12,7 @@ import type { ChatCallbacks, ChatRequest, ChatResult } from './types.ts';
 /**
  * 三家对话协议。底子移植自 math-reader 的 doAIRequest / doClaudeRequest / doGeminiRequest，
  * 参数规则对照 SillyTavern 的 chat-completions 后端（推理强度、Claude 采样限制和预填、Gemini 安全设置、
- * 自定义来源的消息整理和请求体增删），备用 API 的"最简请求"参考 SleepTogether 的 api-manager。
+ * 自定义来源的消息整理和请求体增删），备用 API 的"最简请求"和模型名后缀思考参考 SleepTogether 的 api-manager。
  * 每个函数只负责"按这家的写法发一次请求、读出结果"；流式失败改普通请求、换备用 API 在 client.ts 和功能路由里做。
  */
 
@@ -33,8 +33,10 @@ export interface OpenAIDialect {
   model?: string;
   /** 请求和连接都没指定消息整理时用的方式（Vertex 的开源模型要求 user 开头、轮流发言） */
   processing?: PromptProcessing;
-  /** 在并入连接的额外字段之前转换该协议的请求字段。 */
-  tweak?: (body: Record<string, unknown>, messages: Record<string, unknown>[]) => void;
+  /** 不按模型名后缀开思考（DeepSeek 自己有思考开关） */
+  noAlias?: boolean;
+  /** 在并入连接的额外字段之前改请求体；返回 maxTokens 时改用这个输出上限 */
+  tweak?: (body: Record<string, unknown>, messages: Record<string, unknown>[]) => { maxTokens?: number } | void;
 }
 
 /**
@@ -65,7 +67,21 @@ export async function openaiCompatible(ep: Endpoint, req: ChatRequest, call: Pro
     const effort = openaiReasoningEffort(req.reasoningEffort);
     if (effort) body.reasoning_effort = effort;
   }
-  d.tweak?.(body, messages as Record<string, unknown>[]);
+  // 中转用模型名后缀开思考（…-thinking-high、reasoner）：temperature 只能是 1，不能带 top_p 和惩罚项，输出上限要大过思考预算
+  const alias = d.noAlias ? null : thinkingAlias(ep.model);
+  let maxTokens = req.maxTokens;
+  if (alias) {
+    body.temperature = 1;
+    delete body.top_p;
+    delete body.presence_penalty;
+    delete body.frequency_penalty;
+    if (maxTokens !== undefined) maxTokens = Math.max(maxTokens, alias.budget + 4096);
+  } else if (!d.noAlias && maxTokens !== undefined && thinksByName(ep.model)) {
+    // 名字看得出默认会思考（中转上的 Gemini 2.5、o 系列……）：上限之外留出思考的余量，不然短回复的预设会被思考吃光
+    maxTokens += req.reasoningEffort === 'none' || req.reasoningEffort === 'min' ? 2048 : THINKING_HEADROOM;
+  }
+  const tweaked = d.tweak?.(body, messages as Record<string, unknown>[]);
+  if (tweaked?.maxTokens !== undefined) maxTokens = tweaked.maxTokens;
   Object.assign(body, ep.includeBody ?? {});
   const excluded = new Set(ep.excludeBody ?? []);
   for (const k of excluded) delete body[k];
@@ -95,7 +111,7 @@ export async function openaiCompatible(ep: Endpoint, req: ChatRequest, call: Pro
     else body[tokenField] = max;
     return request(transportOf(ep), ep.name, url, { method: 'POST', headers: d.headers, body: JSON.stringify(body), signal: call.signal });
   };
-  const { response, errText } = await sendFixing(`${url}|${String(body.model)}`, req.maxTokens, call.onState, send, fixes);
+  const { response, errText } = await sendFixing(`${url}|${String(body.model)}`, maxTokens, call.onState, send, fixes);
   if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
   const textOf = (j: Json) => j.choices?.[0]?.message?.content ?? null;
   const opts = { onDelta: call.onDelta, onState: call.onState, signal: call.signal, textOf };
@@ -109,7 +125,7 @@ export const openaiChat: ChatProvider = (ep, req, call) => openaiCompatible(ep, 
 /**
  * DeepSeek：同 math-reader 的 deepseek 渠道，OpenAI 格式，模型名原样发（deepseek-chat / deepseek-reasoner…），
  * URL 写到 …/chat/completions 的原样用。
- * 只有请求设了推理强度时才发思考开关和 reasoning_effort；输出上限原样使用请求值。
+ * 只有在智能体里设了推理强度时才发思考开关和 reasoning_effort；开了思考时回复上限也算思考的 token，留出空间。
  * 预设里有助手预填时走官方的前缀续写（Beta）：地址换成 /beta，最后一条 assistant 带 prefix: true；被拒时自动按最简请求重发。
  */
 export const deepseekChat: ChatProvider = (ep, req, call) => {
@@ -121,11 +137,15 @@ export const deepseekChat: ChatProvider = (ep, req, call) => {
   return openaiCompatible(ep, req, call, {
     url,
     headers: bearerHeaders(ep),
+    noAlias: true,
     tweak: (body, messages) => {
       delete body.reasoning_effort;
       if (think.thinking) body.thinking = think.thinking;
       if (think.effort) body.reasoning_effort = think.effort;
       if (prefill) messages.push({ role: 'assistant', content: prefill, prefix: true });
+      if (think.thinking?.type === 'enabled') return { maxTokens: Math.max(req.maxTokens ?? 0, think.effort === 'max' ? 65536 : 16384) };
+      // 没设推理强度：现在的模型默认开着思考（旧名 deepseek-chat 除外），同样留出余量
+      if (!think.thinking && req.maxTokens !== undefined && !/deepseek-chat/i.test(ep.model)) return { maxTokens: req.maxTokens + THINKING_HEADROOM };
     },
   });
 };
@@ -173,7 +193,10 @@ export const anthropicChat: ChatProvider = async (ep, req, call) => {
     dropField(body, 'temperature', /temperature/i),
   ];
   const send = (max: number | undefined) => {
-    body.max_tokens = max ?? 4096;
+    // Claude 必须带 max_tokens；传统思考要求至少比 1024 多（同 SillyTavern）
+    let m = max ?? 4096;
+    if (think.budget && m <= 1024) m += 1024;
+    body.max_tokens = m;
     return request(transportOf(ep), ep.name, url, {
       method: 'POST',
       headers: {
@@ -187,7 +210,8 @@ export const anthropicChat: ChatProvider = async (ep, req, call) => {
       signal: call.signal,
     });
   };
-  const { response, errText } = await sendFixing(`${url}|${ep.model}`, requested, call.onState, send, fixes);
+  // 会思考时上限之外留出思考的余量（自适应思考、默认就思考的模型）
+  const { response, errText } = await sendFixing(`${url}|${ep.model}`, requested + claudeHeadroom(info, think), call.onState, send, fixes);
   if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
   const textOf = (d: Json) => (Array.isArray(d.content) ? d.content.filter((x: Json) => x.type === 'text').map((x: Json) => x.text).join('') : null);
   const opts = { onDelta: call.onDelta, onState: call.onState, signal: call.signal, textOf };
@@ -259,7 +283,9 @@ export async function geminiGenerate(ep: Endpoint, req: ChatRequest, call: Provi
       signal: call.signal,
     });
   };
-  const { response, errText } = await sendFixing(t.cacheKey, req.maxTokens, call.onState, send, fixes);
+  // maxOutputTokens 把思考也算在内：在预设的上限之外留出思考的余量（关掉思考时不留）
+  const headroom = geminiHeadroom(GEMINI_THINKS.test(model), effort);
+  const { response, errText } = await sendFixing(t.cacheKey, req.maxTokens === undefined ? undefined : req.maxTokens + headroom, call.onState, send, fixes);
   if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
   // 流式时每个事件也是这种结构，只含新增的一段正文。标着 thought 的片段是思考内容，不算正文
   const textOf = (j: Json) => {
