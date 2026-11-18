@@ -119,18 +119,6 @@
       "origin": "app"
     },
     {
-      "identifier": "chatHistory",
-      "name": "聊天历史",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "relative",
-        "depth": 4
-      }
-    },
-    {
       "identifier": "memory",
       "name": "长期记忆 + 关系状态",
       "role": "system",
@@ -138,7 +126,7 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "absolute",
+        "position": "relative",
         "depth": 4
       },
       "origin": "app"
@@ -151,7 +139,7 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "absolute",
+        "position": "relative",
         "depth": 2
       },
       "origin": "app"
@@ -164,11 +152,50 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "absolute",
+        "position": "relative",
         "depth": 2,
         "order": 110
       },
       "origin": "app"
+    },
+    {
+      "identifier": "sceneRules",
+      "name": "可用标签和表情（程序按场景填）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 1
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "sceneTask",
+      "name": "场景任务（程序填这一次的输入）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 0,
+        "order": 100
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "chatHistory",
+      "name": "聊天历史",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
     },
     {
       "identifier": "homeRules",
@@ -217,19 +244,6 @@
       "triggers": [
         "planner"
       ]
-    },
-    {
-      "identifier": "sceneRules",
-      "name": "可用标签和表情（程序按场景填）",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "absolute",
-        "depth": 1
-      },
-      "origin": "app"
     },
     {
       "identifier": "sceneRule",
@@ -322,20 +336,6 @@
       "triggers": [
         "ws-chat"
       ]
-    },
-    {
-      "identifier": "sceneTask",
-      "name": "场景任务（程序填这一次的输入）",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "absolute",
-        "depth": 0,
-        "order": 100
-      },
-      "origin": "app"
     },
     {
       "identifier": "tagDirective",

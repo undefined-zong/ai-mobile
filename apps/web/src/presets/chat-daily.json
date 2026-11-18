@@ -4,7 +4,7 @@
   "id": "preset-daily",
   "category": "chat",
   "name": "陪伴 · 日常",
-  "description": "默认的对话预设。稳定内容在前（便于命中前缀缓存），环境、记忆、场景这类经常变的内容按深度插进聊天记录末尾。",
+  "description": "默认的对话预设。角色和预设正文在前，环境、记忆、场景等程序上下文统一放在聊天记录之前。",
   "blocks": [
     {
       "identifier": "main",
@@ -116,18 +116,6 @@
       "origin": "app"
     },
     {
-      "identifier": "chatHistory",
-      "name": "聊天历史",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "relative",
-        "depth": 4
-      }
-    },
-    {
       "identifier": "memory",
       "name": "长期记忆 + 关系状态",
       "role": "system",
@@ -135,7 +123,7 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "absolute",
+        "position": "relative",
         "depth": 4
       },
       "origin": "app"
@@ -148,7 +136,7 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "absolute",
+        "position": "relative",
         "depth": 2
       },
       "origin": "app"
@@ -161,11 +149,36 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "absolute",
+        "position": "relative",
         "depth": 2,
         "order": 110
       },
       "origin": "app"
+    },
+    {
+      "identifier": "sceneRules",
+      "name": "当前场景规则 + 可用标签",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 1
+      },
+      "origin": "app"
+    },
+    {
+      "identifier": "chatHistory",
+      "name": "聊天历史",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
     },
     {
       "identifier": "homeRules",
@@ -214,19 +227,6 @@
       "triggers": [
         "planner"
       ]
-    },
-    {
-      "identifier": "sceneRules",
-      "name": "当前场景规则 + 可用标签",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "absolute",
-        "depth": 1
-      },
-      "origin": "app"
     },
     {
       "identifier": "tagDirective",

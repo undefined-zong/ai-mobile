@@ -82,7 +82,7 @@ function blockFrom(p: Obj | undefined, identifier: string, enabled: boolean): Pr
   };
 }
 
-/** App 自己的程序填充块：摘要放在聊天记录前，记忆 / 环境 / 场景规则按深度插进聊天记录末尾 */
+/** App 自己的程序填充块：统一放在聊天记录前。 */
 export function appBlocks(): { before: PromptBlock[]; after: PromptBlock[] } {
   const b = (identifier: (typeof APP_MARKERS)[number], injection: PromptBlock['injection']): PromptBlock => ({
     identifier,
@@ -95,15 +95,28 @@ export function appBlocks(): { before: PromptBlock[]; after: PromptBlock[] } {
     origin: 'app',
   });
   return {
-    before: [b('summary', { position: 'relative', depth: 4 })],
-    after: [
-      b('memory', { position: 'absolute', depth: 4, order: 100 }),
-      b('environment', { position: 'absolute', depth: 2, order: 100 }),
+    before: [
+      b('summary', { position: 'relative', depth: 4 }),
+      b('memory', { position: 'relative', depth: 4, order: 100 }),
+      b('environment', { position: 'relative', depth: 2, order: 100 }),
       // 你开了家务、健康系统时程序填今天的情况；没开时是空的、不发送
-      b('home', { position: 'absolute', depth: 2, order: 110 }),
-      b('sceneRules', { position: 'absolute', depth: 1, order: 100 }),
+      b('home', { position: 'relative', depth: 2, order: 110 }),
+      b('sceneRules', { position: 'relative', depth: 1, order: 100 }),
     ],
+    after: [],
   };
+}
+
+const APP_CONTEXT_MARKERS = new Set<string>([...APP_MARKERS, 'sceneTask', 'proactive']);
+
+/** 程序提供的上下文放在历史之前；保留预设正文、世界书和角色卡自己的插入位置。 */
+export function appContextBeforeHistory(blocks: PromptBlock[]): PromptBlock[] {
+  const isContext = (b: PromptBlock) => b.marker && APP_CONTEXT_MARKERS.has(b.identifier);
+  const context = blocks.filter(isContext).map((b) => ({ ...b, injection: { ...b.injection, position: 'relative' as const } }));
+  const rest = blocks.filter((b) => !isContext(b));
+  const history = rest.findIndex((b) => b.identifier === 'chatHistory');
+  rest.splice(history < 0 ? rest.length : history, 0, ...context);
+  return rest;
 }
 
 /** 预设里带的正则脚本（ST 的 extensions.regex_scripts），字段全部保留 */

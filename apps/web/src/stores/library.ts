@@ -1,5 +1,6 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import {
+  appContextBeforeHistory,
   parseLorebook,
   parsePresetFile,
   presetUse,
@@ -148,6 +149,14 @@ interface SeedUpgrade {
   maxTokens?: [number, number];
 }
 const SEED_UPGRADES: SeedUpgrade[] = [
+  {
+    id: 'chat-daily:context-before-history',
+    file: 'chat-daily.json',
+    renamed: { description: [
+      '默认的对话预设。稳定内容在前（便于命中前缀缓存），环境、记忆、场景这类经常变的内容按深度插进聊天记录末尾。',
+      '默认的对话预设。角色和预设正文在前，环境、记忆、场景等程序上下文统一放在聊天记录之前。',
+    ] },
+  },
   // 去掉凭空加的内容限制（尺度上限、玩具停下、不劝节食……）：本机那块还是旧的默认内容就跟上
   {
     id: 'restrictions:healthRules:0',
@@ -545,13 +554,24 @@ const SEED_UPGRADES: SeedUpgrade[] = [
   },
 ];
 
-/** 按 SEED_UPGRADES 更新本机的自带预设，返回改了的那些 */
+/** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */
 function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
   const changed = new Set<Preset>();
   for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);
+  }
+  // 已保存的自带、导入和复制预设也调整位置，保留内容、开关和预设正文。
+  const contextUpgrade = 'app-context:before-history';
+  if (!done.has(contextUpgrade)) {
+    done.add(contextUpgrade);
+    for (const p of list) {
+      const blocks = appContextBeforeHistory(p.blocks);
+      if (JSON.stringify(blocks) === JSON.stringify(p.blocks)) continue;
+      p.blocks = blocks;
+      changed.add(p);
+    }
   }
   for (const p of changed) p.updatedAt = Date.now();
   return [...changed];

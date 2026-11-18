@@ -41,6 +41,8 @@ export interface AssembleInput {
   lorebooks: Lorebook[];
   /** 聊天记录，从旧到新，最后一条通常是你刚发的 */
   history: ChatTurn[];
+  /** 裁剪发送记录之前的消息总数，供世界书延迟 / 粘性 / 冷却计时。 */
+  chatLength?: number;
   /** App 自己的程序填充块：memory / summary / environment / sceneRules */
   app?: Partial<Record<string, AppBlockFill>>;
   type?: GenerationType;
@@ -217,7 +219,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
     books: input.lorebooks,
     messages: history.map((t) => `${t.name}: ${t.content}`),
     maxContext: s.contextTokens,
-    chatLength: history.length,
+    chatLength: input.chatLength ?? history.length,
     state: input.loreState,
     dryRun: input.dryRun,
     trigger: type,
@@ -382,6 +384,25 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
     if (!hasHistory) r.note = '预设里没有聊天记录，按深度插入的块没有地方放';
   }
   const chatMsgs = nf.reverse();
+
+  // 旧预设没有这些程序块时，任务和生活数据仍在历史前发送，并参与预算与来源展示。
+  // 家务块的显式关闭保持生效；任务输入沿用 quiet / sceneTask 的兜底行为。
+  const fallbackSlots: Slot[] = [];
+  const fallbackReports: BlockReport[] = [];
+  for (const [identifier, name] of [['home', '家务和健康'], ['proactive', '主动消息'], ['sceneTask', '场景任务']] as const) {
+    const app = input.app?.[identifier];
+    const supplied = identifier === 'home'
+      ? preset.blocks.some((b) => b.identifier === identifier)
+      : reports.some((r) => r.identifier === identifier && r.sent);
+    if (supplied || !app?.content.trim()) continue;
+    fallbackSlots.push({ kind: 'messages', msgs: [{ role: 'system', content: app.content, source: identifier, label: name }] });
+    fallbackReports.push({ identifier, name, role: 'system', enabled: true, origin: 'app', marker: true,
+      placement: '聊天记录前', source: app.source, content: app.content, tokens: count(app.content), sent: true });
+  }
+  const historySlot = slots.findIndex((s) => s.kind === 'history');
+  slots.splice(historySlot < 0 ? slots.length : historySlot, 0, ...fallbackSlots);
+  const historyReport = reports.findIndex((r) => r.identifier === 'chatHistory');
+  reports.splice(historyReport < 0 ? reports.length : historyReport, 0, ...fallbackReports);
 
   // 预算
   const budget = Math.max(1, s.contextTokens - s.maxTokens);
