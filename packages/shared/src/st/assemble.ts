@@ -13,7 +13,7 @@ import { scanWorldInfo, type WorldInfoResult } from './worldinfo.ts';
  * - 聊天记录开头插 new_chat_prompt；每段示例对话前插 new_example_chat_prompt
  * - 按深度插入的内容（预设里的 in-chat 块、世界书 @深度、角色卡 depth_prompt、作者注位置的世界书）
  *   同深度同角色合成一条，插到聊天记录倒数第 N 条前
- * - token 预算 = 上下文 − 回复最长；先放必带的块，再从最新往旧放聊天记录，最后放示例对话
+ * - token 预算 = 上下文 − 回复最长；先放必带的块和已触发的世界书，再从最新往旧放聊天记录，最后放角色卡示例对话
  * - 空内容的消息不发
  * App 自己的块（记忆、摘要、环境、场景规则）由调用方填好内容传进来。
  */
@@ -134,8 +134,9 @@ function stringFormat(format: string, value: string): string {
 /**
  * 示例对话：按 <START> 分段，每段里"名字:"开头的行切成一条（同 ST 的 parseExampleIntoIndividual）。
  * 比 ST 多认一个全角冒号"名字："——中文卡常这么写，ST 会把这种行整段丢掉。
+ * 没有说话人前缀的段落保留为系统文本，避免示例位置的世界书正文被丢弃。
  */
-export function parseExamples(raw: string, userName: string, charName: string): { role: ChatRole; content: string; name: string }[][] {
+export function parseExamples(raw: string, userName: string, charName: string): { role: ChatRole; content: string; name?: string }[][] {
   if (!raw.trim()) return [];
   const text = /^\s*<START>/i.test(raw) ? raw : `<START>\n${raw}`;
   const blocks = text.split(/<START>/i).slice(1).map((b) => b.replace(/\r\n?/g, '\n').trim()).filter(Boolean);
@@ -164,7 +165,7 @@ export function parseExamples(raw: string, userName: string, charName: string): 
       lines.push(line);
     }
     flush();
-    return out;
+    return out.length ? out : [{ role: 'system' as const, content: block }];
   });
 }
 
@@ -230,9 +231,12 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
     countTokens: count,
   });
 
-  // 示例对话（世界书的"示例对话前 / 后"条目也算一段）
-  const exampleText = [...lore.emTop.map((x) => `<START>\n${x}`), ctx.mesExamples, ...lore.emBottom.map((x) => `<START>\n${x}`)].filter((x) => x.trim()).join('\n');
-  const examples = parseExamples(exampleText, input.user.name, character.name);
+  // 各条世界书和角色卡分别解析，卡片没写 <START> 时也不会接到上一条世界书里。
+  const examples = [
+    ...lore.emTop.map((content) => ({ content, lore: true, label: '世界书（示例前）' })),
+    { content: ctx.mesExamples ?? '', lore: false, label: '角色卡示例对话' },
+    ...lore.emBottom.map((content) => ({ content, lore: true, label: '世界书（示例后）' })),
+  ].flatMap(({ content, lore, label }) => parseExamples(content, input.user.name, character.name).map((messages) => ({ messages, lore, label })));
 
   const reports: BlockReport[] = [];
   const injections: Injection[] = [];
@@ -274,17 +278,23 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
 
   // 没有提供世界书位置的旧预设仍能使用角色绑定的世界书；显式关闭的块保持关闭。
   const blocks = [...preset.blocks];
-  const addLoreSlot = (identifier: string, name: string, needed: boolean, anchors: string[]) => {
-    if (!needed || blocks.some((b) => b.identifier === identifier)) return;
+  const before = (anchors: string[]) => {
     const at = blocks.findIndex((b) => anchors.includes(b.identifier));
-    blocks.splice(at < 0 ? blocks.length : at, 0, {
+    return at < 0 ? blocks.length : at;
+  };
+  const addLoreSlot = (identifier: string, name: string, needed: boolean, at: number) => {
+    if (!needed || blocks.some((b) => b.identifier === identifier)) return;
+    blocks.splice(at, 0, {
       identifier, name, marker: true, enabled: true, role: 'system', origin: 'app', content: '',
       injection: { position: 'relative', depth: 0 },
     });
   };
-  addLoreSlot('worldInfoBefore', '世界书（角色前）', !!lore.before, ['charDescription', 'charPersonality', 'scenario', 'worldInfoAfter', 'dialogueExamples', 'chatHistory']);
-  addLoreSlot('worldInfoAfter', '世界书（角色后）', !!lore.after, ['dialogueExamples', 'chatHistory']);
-  addLoreSlot('dialogueExamples', '示例对话', !!(lore.emTop.length || lore.emBottom.length), ['chatHistory']);
+  const characterSlots = ['charDescription', 'charPersonality', 'scenario'];
+  const firstCharacter = blocks.findIndex((b) => characterSlots.includes(b.identifier));
+  addLoreSlot('worldInfoBefore', '世界书（角色前）', !!lore.before, firstCharacter < 0 ? before(['worldInfoAfter', 'dialogueExamples', 'chatHistory']) : firstCharacter);
+  const lastCharacter = blocks.reduce((at, b, i) => characterSlots.includes(b.identifier) ? i : at, -1);
+  addLoreSlot('worldInfoAfter', '世界书（角色后）', !!lore.after, lastCharacter < 0 ? before(['dialogueExamples', 'chatHistory']) : lastCharacter + 1);
+  addLoreSlot('dialogueExamples', '示例对话', !!(lore.emTop.length || lore.emBottom.length), before(['chatHistory']));
 
   for (const b of blocks) {
     const report: BlockReport = {
@@ -424,8 +434,18 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const budget = Math.max(1, s.contextTokens - s.maxTokens);
   const fixed = slots.flatMap((x) => (x.kind === 'messages' ? x.msgs : []));
   const newChat = m(f.newChatPrompt);
+  const newExample = m(f.newExampleChatPrompt);
+  const exampleGroups = examples.map((ex, i) => ({
+    lore: ex.lore,
+    msgs: [
+      ...(newExample.trim() ? [{ role: 'system' as const, content: newExample, source: 'newExampleChat', label: '示例对话开头（new_example_chat_prompt）' }] : []),
+      ...ex.messages.map((x, j) => ({ ...x, source: `example-${i + 1}-${j + 1}`, label: `${ex.label} ${i + 1}${x.name ? ` · ${x.name === 'example_user' ? input.user.name : character.name}` : ''}` })),
+    ],
+  }));
+  const hasExamples = slots.some((x) => x.kind === 'examples');
   const injectionTokens = hasHistory ? chatMsgs.filter((m) => m.injected).reduce((n, m) => n + count(m.content), 0) : 0;
-  let used = fixed.reduce((n, x) => n + count(x.content), 0) + injectionTokens + (hasHistory ? count(newChat) : 0) + 3;
+  const loreExampleTokens = hasExamples ? exampleGroups.filter((ex) => ex.lore).reduce((n, ex) => n + ex.msgs.reduce((n, x) => n + count(x.content), 0), 0) : 0;
+  let used = fixed.reduce((n, x) => n + count(x.content), 0) + injectionTokens + loreExampleTokens + (hasHistory ? count(newChat) : 0) + 3;
   const overBudget = used > budget;
 
   const historyOut: PromptMessage[] = [];
@@ -459,17 +479,17 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   }
 
   const exampleOut: PromptMessage[] = [];
-  const newExample = m(f.newExampleChatPrompt);
-  examples.forEach((ex, i) => {
-    const msgs: PromptMessage[] = [
-      ...(newExample.trim() ? [{ role: 'system' as const, content: newExample, source: 'newExampleChat', label: '示例对话开头（new_example_chat_prompt）' }] : []),
-      ...ex.map((x, j) => ({ role: x.role, content: x.content, name: x.name, source: `example-${i + 1}-${j + 1}`, label: `示例对话 ${i + 1} · ${x.name === 'example_user' ? input.user.name : character.name}` })),
-    ];
-    const t = msgs.reduce((n, x) => n + count(x.content), 0);
-    if (used + t > budget) return;
-    used += t;
-    exampleOut.push(...msgs);
-  });
+  if (hasExamples) {
+    for (const ex of exampleGroups) {
+      // 已触发的世界书已预留预算；角色卡示例仍使用聊天记录之后的剩余预算。
+      if (!ex.lore) {
+        const t = ex.msgs.reduce((n, x) => n + count(x.content), 0);
+        if (used + t > budget) continue;
+        used += t;
+      }
+      exampleOut.push(...ex.msgs);
+    }
+  }
 
   let messages: PromptMessage[] = [];
   for (const slot of slots) {
@@ -486,7 +506,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
       slot.report.content = exampleOut.map((x) => `${x.name ?? x.role}: ${x.content}`).join('\n');
       slot.report.tokens = exampleOut.reduce((n, x) => n + count(x.content), 0);
       slot.report.sent = exampleOut.length > 0;
-      slot.report.source = `角色卡 mes_example · ${examples.length} 段`;
+      slot.report.source = `角色卡 mes_example · ${examples.filter((ex) => !ex.lore).length} 段 + 世界书示例位置 · ${examples.filter((ex) => ex.lore).length} 段`;
       if (!exampleOut.length) slot.report.note = examples.length ? '预算不够，示例对话没放进去' : '角色卡没有示例对话';
     }
   }
