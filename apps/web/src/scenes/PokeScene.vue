@@ -272,8 +272,6 @@ async function ask(req: { task: string; input: string; flags: string[] }) {
       use: USE,
       // 尺度在回应时才定：改了尺度，下一次回应就照新的
       flags: [...req.flags, ...(level.value ? [`${POKE_LEVEL}${level.value}`] : [])],
-      minTokens: 400,
-      quick: true,
       onText: (t) => {
         if (!alive) return;
         line.value = t;

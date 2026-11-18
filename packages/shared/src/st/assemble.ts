@@ -41,6 +41,8 @@ export interface AssembleInput {
   lorebooks: Lorebook[];
   /** 聊天记录，从旧到新，最后一条通常是你刚发的 */
   history: ChatTurn[];
+  /** 世界书扫描用的历史，不受发送条数 / 已总结消息裁剪影响。 */
+  loreHistory?: ChatTurn[];
   /** 裁剪发送记录之前的消息总数，供世界书延迟 / 粘性 / 冷却计时。 */
   chatLength?: number;
   /** App 自己的程序填充块：memory / summary / environment / sceneRules */
@@ -136,7 +138,7 @@ function stringFormat(format: string, value: string): string {
 export function parseExamples(raw: string, userName: string, charName: string): { role: ChatRole; content: string; name: string }[][] {
   if (!raw.trim()) return [];
   const text = /^\s*<START>/i.test(raw) ? raw : `<START>\n${raw}`;
-  const blocks = text.split(/<START>/i).slice(1).map((b) => b.replace(/\r/g, '').trim()).filter(Boolean);
+  const blocks = text.split(/<START>/i).slice(1).map((b) => b.replace(/\r\n?/g, '\n').trim()).filter(Boolean);
   return blocks.map((block) => {
     const out: { role: ChatRole; content: string; name: string }[] = [];
     let lines: string[] = [];
@@ -184,7 +186,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const type = input.type ?? 'normal';
   const count = input.countTokens ?? estimateTokens;
   const vars: Record<string, string> = { ...(input.vars ?? {}) };
-  const history = input.history.map((t) => ({ ...t, content: t.content.replace(/\r/g, '') }));
+  const history = input.history.map((t) => ({ ...t, content: t.content.replace(/\r\n?/g, '\n') }));
   const lastOf = (role: ChatRole) => [...history].reverse().find((t) => t.role === role)?.content ?? '';
 
   const ctx: MacroContext = {
@@ -206,8 +208,8 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   };
   const m = (text: string, extra?: Partial<MacroContext>) => substituteMacros(text, extra ? { ...ctx, ...extra } : ctx);
 
-  // 角色卡字段先替换宏，再去掉 \r（同 ST 的 baseChatReplace）
-  const field = (t: string) => m(t).replace(/\r/g, '');
+  // 角色卡字段先替换宏，再统一 CRLF / CR 换行
+  const field = (t: string) => m(t).replace(/\r\n?/g, '\n');
   ctx.description = field(card.description);
   ctx.personality = field(card.personality);
   ctx.scenario = field(card.scenario);
@@ -217,7 +219,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   // 世界书（扫描文本带名字，同 ST 默认的 world_info_include_names）
   const lore = scanWorldInfo({
     books: input.lorebooks,
-    messages: history.map((t) => `${t.name}: ${t.content}`),
+    messages: (input.loreHistory ?? history).map((t) => `${t.name}: ${t.content}`),
     maxContext: s.contextTokens,
     chatLength: input.chatLength ?? history.length,
     state: input.loreState,
@@ -270,7 +272,21 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
     return { content: original, source: '预设' };
   };
 
-  for (const b of preset.blocks) {
+  // 没有提供世界书位置的旧预设仍能使用角色绑定的世界书；显式关闭的块保持关闭。
+  const blocks = [...preset.blocks];
+  const addLoreSlot = (identifier: string, name: string, needed: boolean, anchors: string[]) => {
+    if (!needed || blocks.some((b) => b.identifier === identifier)) return;
+    const at = blocks.findIndex((b) => anchors.includes(b.identifier));
+    blocks.splice(at < 0 ? blocks.length : at, 0, {
+      identifier, name, marker: true, enabled: true, role: 'system', origin: 'app', content: '',
+      injection: { position: 'relative', depth: 0 },
+    });
+  };
+  addLoreSlot('worldInfoBefore', '世界书（角色前）', !!lore.before, ['charDescription', 'charPersonality', 'scenario', 'worldInfoAfter', 'dialogueExamples', 'chatHistory']);
+  addLoreSlot('worldInfoAfter', '世界书（角色后）', !!lore.after, ['dialogueExamples', 'chatHistory']);
+  addLoreSlot('dialogueExamples', '示例对话', !!(lore.emTop.length || lore.emBottom.length), ['chatHistory']);
+
+  for (const b of blocks) {
     const report: BlockReport = {
       identifier: b.identifier,
       name: b.name,
@@ -408,7 +424,8 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const budget = Math.max(1, s.contextTokens - s.maxTokens);
   const fixed = slots.flatMap((x) => (x.kind === 'messages' ? x.msgs : []));
   const newChat = m(f.newChatPrompt);
-  let used = fixed.reduce((n, x) => n + count(x.content), 0) + (hasHistory ? count(newChat) : 0) + 3;
+  const injectionTokens = hasHistory ? chatMsgs.filter((m) => m.injected).reduce((n, m) => n + count(m.content), 0) : 0;
+  let used = fixed.reduce((n, x) => n + count(x.content), 0) + injectionTokens + (hasHistory ? count(newChat) : 0) + 3;
   const overBudget = used > budget;
 
   const historyOut: PromptMessage[] = [];
@@ -421,13 +438,22 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
         used += count(extra.content);
       }
     }
+    let historyFull = false;
     for (let i = chatMsgs.length - 1; i >= 0; i--) {
       const msg = chatMsgs[i] as PromptMessage & { injected?: boolean };
+      // 世界书和预设的深度注入已预留预算；裁掉旧聊天时仍按原顺序保留。
+      if (msg.injected) {
+        historyOut.unshift(msg);
+        continue;
+      }
       const t = count(msg.content);
-      if (used + t > budget) break;
+      if (historyFull || used + t > budget) {
+        historyFull = true;
+        continue;
+      }
       used += t;
       historyOut.unshift(msg);
-      if (!msg.injected) historyIncluded++;
+      historyIncluded++;
     }
     if (newChat.trim()) historyOut.unshift({ role: 'system', content: newChat, source: 'newChat', label: '新聊天提示（new_chat_prompt）' });
   }

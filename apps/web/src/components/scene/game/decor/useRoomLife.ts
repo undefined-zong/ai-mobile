@@ -76,7 +76,7 @@ export function useRoomLife(options: LifeOptions) {
       const response = await chat.sceneJson(options.chatId(), {
         name: 'decor-act',
         input: `${options.context()}\n\n实时观察（you 是用户的小人，her 是你的小人）：\n${JSON.stringify(e.observe())}\n上次实际结果：${lastResult.value}\n这次：${userText ? `用户对你说：${userText}` : '观察此刻，自主决定一件事，也可以安静保持现状'}\n\n${LIFE_PROTOCOL}`,
-      }, parseLifeDecision, abort.signal, { agent: 'decor', use: 'decor-life', quick: true, minTokens: 500 });
+      }, parseLifeDecision, abort.signal, { agent: 'decor', use: 'decor-life' });
       clearTimeout(timeout);
       if (run !== sequence || abort.signal.aborted || roomId !== options.roomId()) return;
       if (!response.ok) { error.value = response.reason; return; }

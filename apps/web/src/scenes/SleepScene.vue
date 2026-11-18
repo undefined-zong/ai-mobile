@@ -165,13 +165,13 @@ async function stopWriting() {
 async function askHer(
   task: string,
   input: string,
-  opts: { userText?: string; cue?: string; minTokens?: number; onText(full: string): void },
+  opts: { userText?: string; cue?: string; onText(full: string): void },
 ): Promise<{ text: string; interrupted: boolean } | null> {
   if (!chatId.value) return null;
   voiceError.value = '';
   onActivity();
   writing.value = true;
-  const r = await chat.sceneReply(chatId.value, { task, input, userText: opts.userText, cue: opts.cue, allowedTags: ['expr'], onText: opts.onText, minTokens: opts.minTokens, quick: true });
+  const r = await chat.sceneReply(chatId.value, { task, input, userText: opts.userText, cue: opts.cue, allowedTags: ['expr'], onText: opts.onText });
   writing.value = false;
   if (r.ok) return { text: r.message.text, interrupted: !!r.message.meta.interrupted };
   // 没接通的原因在提示条里
@@ -277,8 +277,6 @@ async function newStory(want: { genre?: string; request?: string } = {}) {
   const r = await askHer('sleep-story', input, {
     cue: '睡前故事',
     userText: want.request,
-    // 300–500 字的故事：预设里给低语的上限（300）不够
-    minTokens: 1600,
     onText: (full) => {
       const parts = run === storyRun ? splitTitle(full) : null;
       if (!parts) return;

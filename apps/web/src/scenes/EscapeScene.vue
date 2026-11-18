@@ -156,7 +156,7 @@ async function remark() {
   const v = view.value;
   typing.value = true;
   failed.value = '';
-  const r = await chat.sceneReply(id, { task: 'escape-arrive', input: sceneInput(), cue: `${dest.value.name} · ${v.label}`, allowedTags: ['expr'], quick: true });
+  const r = await chat.sceneReply(id, { task: 'escape-arrive', input: sceneInput(), cue: `${dest.value.name} · ${v.label}`, allowedTags: ['expr'] });
   typing.value = false;
   if (!r.ok) {
     if (r.notConnected) notConnected.value = r.reason;
@@ -201,7 +201,6 @@ async function sendTalk() {
     userText: text,
     cue: `${dest.value.name} · ${view.value.label}`,
     allowedTags: ['expr'],
-    quick: true,
   });
   typing.value = false;
   if (!r.ok) {

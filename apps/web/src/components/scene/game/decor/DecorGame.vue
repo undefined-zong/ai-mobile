@@ -568,7 +568,7 @@ async function herPlan() {
       },
       parsePlan,
       abort.signal,
-      { use: USE, minTokens: 900 },
+      { use: USE },
     );
     if (!alive) return;
     if (!res.ok) return fail(res);

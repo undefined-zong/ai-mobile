@@ -30,8 +30,8 @@ src/connection.ts  拉取模型列表、测试连接（失败时给完整报错�
 ## 文本对话（参考 SillyTavern、SleepTogether）
 
 - **消息整理**（`llm/messages.ts` 的 `postProcessMessages`，ST 的 Prompt Post-Processing）：连接上选 原样 / 合并 / 半严格 / 严格 / 单条；严格模式下系统消息后第一条不是 user 时补 "Let's get started."。导入的 ST 预设里的 `custom_prompt_post_processing` 也认。
-- **推理强度**（`llm/reasoning.ts`）：自动 / 关闭 / 最低 / 低 / 中 / 高 / 最高，按各家换算：OpenAI `reasoning_effort`；Claude 新模型用 adaptive thinking + `output_config.effort`，老模型按回复上限算 `budget_tokens`；Gemini 2.5 用 `thinkingBudget`（2.5 Flash 能关到 0）、Gemini 3 用 `thinkingLevel`、Gemini 4 只认 `thinkingLevel` 且没有 MINIMAL（Vertex 官方文档）；DeepSeek 用思考开关。中转常用的 `-thinking` / `-high` 这类模型名后缀也能识别（同 SleepTogether），自动把温度设成 1、留够输出上限。
-- **思考的余量**：会思考的模型把思考也算在回复上限里，预设给短句的上限（100–300）会被思考吃光，回复是空的（MAX_TOKENS）或只剩半句。所以在请求的 `maxTokens` 之外再留出余量：Gemini 原生按思考预算 / 等级留（默认动态思考 8192，预算 0 不留），Claude 自适应思考和默认就思考的型号、DeepSeek 默认思考的模型、OpenAI 格式里名字看得出会思考的（Gemini 2.5 起、o 系列、GPT-5、DeepSeek R1、QwQ……）各留 8192（`THINKING_HEADROOM`）。
+- **推理强度**（`llm/reasoning.ts`）：自动 / 关闭 / 最低 / 低 / 中 / 高 / 最高，按各家换算：OpenAI `reasoning_effort`；Claude 新模型用 adaptive thinking + `output_config.effort`，老模型按回复上限算 `budget_tokens`；Gemini 2.5 用 `thinkingBudget`（2.5 Flash 能关到 0）、Gemini 3 用 `thinkingLevel`、Gemini 4 只认 `thinkingLevel` 且没有 MINIMAL（Vertex 官方文档）；DeepSeek 用思考开关。
+- **预设参数**：聊天和场景请求使用所选预设的采样参数；未设推理强度时不补入智能体的默认值。输出 token 上限是请求的总上限，不再按模型名、思考等级或场景自动增加。
 - **Claude 型号表**（`llm/claude.ts`）：哪些型号会思考、哪些不接受 temperature / top_p、哪些不能预填 assistant（预填改成 user 消息合并），同 ST 的规则；预设里的 `assistant_prefill` 会接上。
 - **Gemini**：同 math-reader 的 doGeminiRequest，不带安全设置；地址只填域名时只有官方域名补 `/v1beta`，自定义地址原样用；要思考过程时带 `includeThoughts`。
 - **额外请求参数**：连接上可以并入、去掉请求体的字段（ST 的 Include / Exclude Body Parameters），给只认某些字段的中转用。
@@ -42,7 +42,7 @@ src/connection.ts  拉取模型列表、测试连接（失败时给完整报错�
 ## DeepSeek（同 math-reader 的 deepseek 渠道）
 
 - 地址填 `https://api.deepseek.com/v1/chat/completions`（同 math-reader，原样使用）或 `https://api.deepseek.com`；模型名原样发（`deepseek-chat` / `deepseek-reasoner`，不改名）。
-- 只有在智能体里设了推理强度时才发 `thinking: {type}` 和 `reasoning_effort`；开了思考时回复上限也算思考的 token，自动留出空间。
+- 只有在请求中设了推理强度时才发 `thinking: {type}` 和 `reasoning_effort`；输出上限保持请求值。
 - 预设的助手预填走前缀续写（Beta）：地址换成 `/beta/chat/completions`，最后一条 assistant 带 `prefix: true`。
 - 选成"OpenAI 兼容"、地址是 `api.deepseek.com` 的连接也按这些规则发（math-reader 里 deepseek 渠道就是填这个地址）。
 
