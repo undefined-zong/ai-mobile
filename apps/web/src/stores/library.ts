@@ -1,9 +1,7 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import {
-  appContextBeforeHistory,
   parseLorebook,
   parsePresetFile,
-  repairFlatLoreEntries,
   presetUse,
   PRESET_CATEGORY_ORDER,
   PRESET_USES,
@@ -102,23 +100,6 @@ const BOOK_UPGRADES: { id: string; file: string; replaced: Record<string, string
 
 function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
   const changed = new Set<Lorebook>();
-  const budgetUpgrade = 'lorebook:undo-editor-min-budget';
-  if (!done.has(budgetUpgrade)) {
-    done.add(budgetUpgrade);
-    // 旧版步进器 min=100 会在打开编辑页时把 0（不限制）写成 100。
-    // 修正控件不会修复已保存的数据；把这个遗留下限恢复一次，之后用户重设 100 仍生效。
-    for (const book of list) {
-      if (book.tokenBudget !== 100) continue;
-      book.tokenBudget = 0;
-      book.updatedAt = Date.now();
-      changed.add(book);
-    }
-  }
-  const flatUpgrade = 'lorebook:flat-array-entries';
-  if (!done.has(flatUpgrade)) {
-    done.add(flatUpgrade);
-    for (const book of list) if (repairFlatLoreEntries(book)) changed.add(book);
-  }
   for (const u of BOOK_UPGRADES) {
     if (done.has(u.id)) continue;
     done.add(u.id);
@@ -167,14 +148,6 @@ interface SeedUpgrade {
   maxTokens?: [number, number];
 }
 const SEED_UPGRADES: SeedUpgrade[] = [
-  {
-    id: 'chat-daily:context-before-history',
-    file: 'chat-daily.json',
-    renamed: { description: [
-      '默认的对话预设。稳定内容在前（便于命中前缀缓存），环境、记忆、场景这类经常变的内容按深度插进聊天记录末尾。',
-      '默认的对话预设。角色和预设正文在前，环境、记忆、场景等程序上下文统一放在聊天记录之前。',
-    ] },
-  },
   // 去掉凭空加的内容限制（尺度上限、玩具停下、不劝节食……）：本机那块还是旧的默认内容就跟上
   {
     id: 'restrictions:healthRules:0',
@@ -572,47 +545,13 @@ const SEED_UPGRADES: SeedUpgrade[] = [
   },
 ];
 
-/** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */
+/** 按 SEED_UPGRADES 更新本机的自带预设，返回改了的那些 */
 function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
   const changed = new Set<Preset>();
-  const worldInfoUpgrade = 'preset:world-info-control';
-  if (!done.has(worldInfoUpgrade)) {
-    done.add(worldInfoUpgrade);
-    for (const p of list) {
-      const seed = SEEDS.find((s) => s.file === p.seedFile)?.preset;
-      if (p.worldInfoEnabled === undefined && seed?.worldInfoEnabled !== undefined) {
-        p.worldInfoEnabled = seed.worldInfoEnabled;
-        changed.add(p);
-      }
-    }
-  }
-  const callUpgrade = 'chat-call:tasks-only';
-  if (!done.has(callUpgrade)) {
-    done.add(callUpgrade);
-    const seed = SEEDS.find((s) => s.file === 'chat-call.json')?.preset.blocks.find((b) => b.identifier === 'jailbreak');
-    for (const p of list.filter((p) => p.seedFile === 'chat-call.json')) {
-      const block = p.blocks.find((b) => b.identifier === 'jailbreak');
-      if (block && seed && block.content === seed.content && !block.triggers?.length) {
-        block.triggers = [...(seed.triggers ?? [])];
-        changed.add(p);
-      }
-    }
-  }
   for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);
-  }
-  // 已保存的自带、导入和复制预设也调整位置，保留内容、开关和预设正文。
-  const contextUpgrade = 'app-context:before-history';
-  if (!done.has(contextUpgrade)) {
-    done.add(contextUpgrade);
-    for (const p of list) {
-      const blocks = appContextBeforeHistory(p.blocks);
-      if (JSON.stringify(blocks) === JSON.stringify(p.blocks)) continue;
-      p.blocks = blocks;
-      changed.add(p);
-    }
   }
   for (const p of changed) p.updatedAt = Date.now();
   return [...changed];
@@ -794,17 +733,15 @@ export const useLibraryStore = defineStore('library', () => {
     return presets.value.filter((p) => p.category === category);
   }
 
-  /** 角色没选有效预设时用日常；不把通话等专用预设按文件顺序当成普通聊天。 */
+  /** 这个角色的对话预设；没选、选的被删了或不是对话预设时用第一个对话预设（一个都没有时为空） */
   function chatPresetFor(character?: Pick<Character, 'presetId'> | null): Preset | undefined {
     const own = presetById(character?.presetId);
     if (own?.category === 'chat') return own;
-    const chats = presetsOf('chat');
-    return chats.find((p) => p.id === 'preset-daily')
-      ?? chats.find((p) => !SEEDS.some((s) => s.preset.id === p.id && s.defaultFor.length));
+    return presetsOf('chat')[0];
   }
 
   /**
-   * 这个用途选的预设 id；null = 跟随（对话预设 / 配图）；失效时只回退到该用途自己的默认预设。
+   * 这个用途选的预设 id；null = 跟随（对话预设 / 配图）；选的被删了时用这一类的第一个。
    * 一起做事时画的图没选过就跟随配图（自带了这个场景的生图预设的，预设文件里写了默认给它用）
    */
   function useChoice(use: PresetUseId): string | null | undefined {
@@ -813,10 +750,8 @@ export const useLibraryStore = defineStore('library', () => {
     if (meta?.follow && (v === null || (v === undefined && meta.follow === 'image'))) return null;
     const picked = presetById(v ?? undefined);
     if (picked && picked.category === meta?.category) return picked.id;
-    const seed = SEEDS.find((s) => s.defaultFor.includes(use));
-    const fallback = presetById(seed?.preset.id);
-    if (fallback?.category === meta?.category) return fallback?.id;
-    return meta?.follow ? null : undefined;
+    if (meta?.follow === 'image') return null;
+    return meta ? presetsOf(meta.category)[0]?.id : undefined;
   }
 
   /**

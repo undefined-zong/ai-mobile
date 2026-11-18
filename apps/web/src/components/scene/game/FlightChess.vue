@@ -178,7 +178,7 @@ function design(nums: number[]): Promise<void> {
         { name: 'fly-make', input: [`你们怎么在一起：${togetherLine.value}`, `棋盘一共 ${SIZE} 格；这一次设计：${which}`].join('\n') },
         parseCells(todo),
         signal,
-        { use: USE },
+        { use: USE, minTokens: 4096 },
       );
       if (!alive || signal.aborted) return;
       if (!res.ok) return void fail(res);

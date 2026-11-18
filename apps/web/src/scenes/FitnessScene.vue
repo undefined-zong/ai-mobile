@@ -271,7 +271,7 @@ async function reply(task: string, lines: string[], userText?: string) {
   // 连着麦：她在麦里说（用她的声音，和回你的话同一路）
   if (!userText && link.announce(task, input)) return;
   if (!userText && chat.streams[chatId.value]) chat.stop(chatId.value);
-  const r = await chat.sceneReply(chatId.value, { task, input, userText, cue: cue.value });
+  const r = await chat.sceneReply(chatId.value, { task, input, userText, cue: cue.value, quick: true });
   if (!r.ok) {
     if (r.notConnected) notConnected.value = r.reason;
     else if (!/还在回上一句/.test(r.reason)) showToast(r.reason);

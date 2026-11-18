@@ -126,7 +126,6 @@ export interface TtsTextOptions {
 /** 功能（智能体）。每个功能单独选渠道、填地址、Key 和模型 */
 export type AgentRole =
   | 'main'
-  | 'secondary'
   | 'companion'
   | 'decor'
   | 'sidestory'
@@ -169,7 +168,7 @@ export interface AgentRoute {
     temperature: number;
     maxTokens: number;
     topP: number;
-    /** 明确选择时覆盖预设的推理强度；auto / 未设置时使用预设，按各家协议映射 */
+    /** 推理强度，按各家映射（OpenAI reasoning_effort、Claude 思考预算、Gemini thinkingBudget / thinkingLevel） */
     reasoningEffort: ReasoningEffort;
     /** 要模型返回思考内容（同 SillyTavern 的 Show thoughts / Request model reasoning） */
     includeReasoning: boolean;
@@ -204,13 +203,6 @@ export const AGENT_META: Record<
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-message-circle-heart',
-  },
-  secondary: {
-    label: '副对话',
-    desc: '与主对话同时生成，决定主动卡片、是否配图及生图模型和用途，并完成预设中的附加任务；结果在主回复结束后追加。默认跟随「陪伴 · 快速」，也可单独设置 API',
-    capability: 'chat',
-    runsOn: 'client',
-    icon: 'i-lucide-messages-square',
   },
   companion: {
     label: '陪伴 · 快速',

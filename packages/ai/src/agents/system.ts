@@ -172,8 +172,7 @@ export class AgentSystem {
   }
 
   /**
-   * 文本智能体：temperature / maxTokens / topP 只在请求没写时补上（主对话以预设为准）。
-   * API 设置里明确选择的推理强度优先；自动 / 未设置时才使用请求（预设）的值。
+   * 文本智能体：分配里的 temperature / maxTokens / topP / 推理强度只在请求没写时补上（主对话以预设为准）。
    * 主连接失败换备用时发最简请求（只有模型、消息、temperature、输出上限），换取兼容性；
    * 流式的每一段和最后的结果都过一遍输出修剪
    */
@@ -189,7 +188,7 @@ export class AgentSystem {
       temperature: req.temperature ?? p.temperature,
       topP: req.topP ?? p.topP,
       maxTokens: req.maxTokens ?? p.maxTokens ?? DEFAULT_MAX_TOKENS[role],
-      reasoningEffort: p.reasoningEffort && p.reasoningEffort !== 'auto' ? p.reasoningEffort : req.reasoningEffort,
+      reasoningEffort: req.reasoningEffort ?? p.reasoningEffort,
       includeReasoning: req.includeReasoning ?? p.includeReasoning,
       extraBody: route?.extra ? { ...route.extra, ...(req.extraBody ?? {}) } : req.extraBody,
     };

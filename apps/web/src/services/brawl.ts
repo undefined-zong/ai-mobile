@@ -26,5 +26,5 @@ export async function generateBrawlFighter(chatId: string, base: BrawlFighter, w
   }, value => {
     if (!value || typeof value !== 'object' || !Array.isArray((value as { skills?: unknown }).skills)) return null;
     return { ...readBrawlFighter(value, base), source: 'ai' as const, updatedAt: Date.now() };
-  }, signal, { use: 'game-brawl' });
+  }, signal, { use: 'game-brawl', minTokens: 4096 });
 }

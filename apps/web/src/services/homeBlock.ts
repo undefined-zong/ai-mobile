@@ -1,7 +1,8 @@
-import { formatChoreBlock, MEAL_LABEL, plannerDayText, type AppBlockFill, type LifeFlag, type Persona } from '@app/shared';
+import { formatChoreBlock, MEAL_LABEL, plannerDayText, substituteMacros, type AppBlockFill, type LifeFlag, type Persona, type Preset } from '@app/shared';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useHealthStore, workoutLine } from '@/stores/health';
 import { useHomeStore } from '@/stores/home';
+import { seedBlockContent } from '@/stores/library';
 import { usePlannerStore } from '@/stores/planner';
 import { parallelLines } from './parallel';
 
@@ -35,6 +36,8 @@ export function plannerLines(persona: Persona): string {
   return `【今天的计划】${persona.name}今天的安排（日程系统按邮件和日程排的）：\n${plannerDayText(plan, usePlannerStore().doneOf(persona.id, plan.date))}`;
 }
 
+/** 每个系统"她怎么反应"那一块在自带预设里的名字 */
+const RULE_BLOCKS: Record<LifeFlag, string> = { housework: 'homeRules', health: 'healthRules', planner: 'plannerRules' };
 const FLAG_NAMES: Record<LifeFlag, string> = { housework: '家务', health: '健康', planner: '日程' };
 
 /** 现在几点；stepMin 给了就往前取整（上传云端的那份用半小时，免得每分钟都算"变了"） */
@@ -81,11 +84,22 @@ export function healthLines(persona: Persona): string {
 }
 
 /**
- * 这一块的内容；两套都没开时为 null（不发送）。
- * 只填实际数据；角色怎么反应由当前选中的预设决定。
- * opts.stepMin：时间往前取整（上传云端时用 30）。
+ * 预设里没有"她怎么反应"那一块的（导入的 SillyTavern 预设、以前复制的）：用自带预设文件里的，接在今天的情况后面。
+ * 预设里有（触发条件写着 housework / health 的块，开着关着都算你的选择）就不补
  */
-export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number } = {}): AppBlockFill | null {
+export function missingRules(persona: Persona, preset: Pick<Preset, 'blocks'> | undefined, names: { char: string; pronoun?: string }): string[] {
+  return lifeFlags(persona)
+    .filter((f) => !preset?.blocks.some((b) => b.triggers?.includes(f)))
+    .map((f) => seedBlockContent(RULE_BLOCKS[f]))
+    .filter((t): t is string => !!t)
+    .map((t) => substituteMacros(t, { char: names.char, pronoun: names.pronoun, user: persona.name }));
+}
+
+/**
+ * 这一块的内容；两套都没开时为 null（不发送）。
+ * opts.stepMin：时间往前取整（上传云端时用 30）；opts.preset：这一轮的预设，里面没有"她怎么反应"的块时把自带的接在后面
+ */
+export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number; preset?: Pick<Preset, 'blocks'>; characterName?: string; pronoun?: string } = {}): AppBlockFill | null {
   const flags = lifeFlags(persona);
   const parallel = persona ? parallelLines(persona) : '';
   if (!persona || (!flags.length && !parallel)) return null;
@@ -98,6 +112,7 @@ export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number
   if (flags.includes('health')) parts.push(healthLines(persona));
   if (flags.includes('planner')) parts.push(plannerLines(persona));
   if (parallel) parts.push(parallel);
+  if (opts.preset) parts.push(...missingRules(persona, opts.preset, { char: opts.characterName ?? '', pronoun: opts.pronoun }));
   const content = parts.filter(Boolean).join('\n');
   if (!content) return null;
   const names = [...flags.map((f) => FLAG_NAMES[f]), ...(parallel ? ['平行时空'] : [])];

@@ -61,12 +61,6 @@ const counts = computed(() => {
   return { system: m.filter((x) => x.role === 'system').length, user: m.filter((x) => x.role === 'user').length, assistant: m.filter((x) => x.role === 'assistant').length };
 });
 const json = computed(() => (p.value ? JSON.stringify(p.value.request, null, 2) : ''));
-const requestView = ref<'readable' | 'json'>('readable');
-const requestMessages = computed(() => (p.value?.request.messages ?? []) as { role: string; content: string; name?: string }[]);
-const requestParams = computed(() => {
-  const { messages, ...params } = p.value?.request ?? {};
-  return JSON.stringify(params, null, 2);
-});
 const loreHits = computed(() => p.value?.lore.log.filter((l) => l.activated).length ?? 0);
 /** 世界书条目的位置对应预设里哪一块 */
 const SLOT: Record<string, string> = {
@@ -187,7 +181,7 @@ function slotNote(position: string): string | null {
         </div>
         <p v-if="!p.lore.log.length" class="text-[13px] text-ink-3 text-center py-6 m-0">这个角色没有绑定世界书</p>
         <p v-else class="text-[12px] text-ink-3 m-0 leading-relaxed">
-          默认看最近 2 条消息，按世界书和条目的扫描深度设置调整；常驻条目总是触发，"延迟到递归"的条目只在递归扫描时参与。仅使用各本世界书明确设置的 token 预算，0 表示不额外限制。
+          扫描规则同 SillyTavern：默认看最近 2 条消息，常驻条目总是触发；"延迟到递归"的条目只在别的条目内容触发递归时才有机会。预算 {{ p.lore.budget.toLocaleString('zh-CN') }} tokens。
           触发了的条目还要看预设里对应的位置（例如"世界书（角色前）"）开没开，才会发出去。
         </p>
       </div>
@@ -216,27 +210,8 @@ function slotNote(position: string): string | null {
       </div>
 
       <div v-else class="px-4">
-        <div class="flex gap-1.5 mb-2.5" role="group" aria-label="请求体显示方式">
-          <button class="mini" :class="{ on: requestView === 'readable' }" :aria-pressed="requestView === 'readable'" @click="requestView = 'readable'">正文换行</button>
-          <button class="mini" :class="{ on: requestView === 'json' }" :aria-pressed="requestView === 'json'" @click="requestView = 'json'">原始 JSON</button>
-        </div>
-        <p class="text-[12px] text-ink-3 mt-0 mb-2 leading-relaxed">正文按原有换行显示；原始 JSON 中，换行写作 <code>\n</code>，空行写作 <code>\n\n</code>。</p>
-        <div v-if="requestView === 'readable'" class="request-readable grid gap-2">
-          <div v-for="(m, i) in requestMessages" :key="i" class="block" :data-role="m.role">
-            <div class="head">
-              <span class="idx num">{{ i + 1 }}</span>
-              <span class="role" :class="m.role">{{ ROLE[m.role] ?? m.role }} · {{ m.role }}</span>
-              <span v-if="m.name" class="text-[13px] text-ink-2">{{ m.name }}</span>
-            </div>
-            <pre class="content request-content">{{ m.content }}</pre>
-          </div>
-          <div>
-            <div class="text-[12.5px] text-ink-3 mb-2">请求参数</div>
-            <pre class="json">{{ requestParams }}</pre>
-          </div>
-        </div>
-        <pre v-else class="json" data-testid="inspect-request">{{ json }}</pre>
-        <p class="text-[12px] text-ink-3 mt-2 mb-0 leading-relaxed">OpenAI 兼容的 /v1/chat/completions 请求体。两种视图展示同一份内容，切换只改变显示方式。</p>
+        <pre class="json" data-testid="inspect-request">{{ json }}</pre>
+        <p class="text-[12px] text-ink-3 mt-2 mb-0 leading-relaxed">OpenAI 兼容的 /v1/chat/completions 请求体。接上真实 API 后就发这个；模型名来自"API 设置"里主对话的设置。</p>
       </div>
     </div>
   </div>
@@ -351,16 +326,6 @@ function slotNote(position: string): string | null {
 }
 .lore:not(.on) {
   opacity: 0.75;
-}
-.request-readable {
-  grid-auto-rows: max-content;
-  max-height: 70vh;
-  overflow: auto;
-}
-.request-content {
-  padding: 12px;
-  max-height: none;
-  overflow: visible;
 }
 .json {
   margin: 0;

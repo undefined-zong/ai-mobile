@@ -343,6 +343,8 @@ async function requestWindow(k: number) {
       ].join('\n'),
     },
     parseBatch(new Set(idx.map((x) => x.i))),
+    undefined,
+    { quick: true, minTokens: 1500 },
   );
   if (g !== generation) return;
   if (!r.ok) {
@@ -417,6 +419,7 @@ async function chatter() {
     input: [`片名：${title.value}`, ...linkLines(), whereLine(), herSaid.length ? `你刚才说过：${herSaid.slice(-5).join(' / ')}` : ''].filter(Boolean).join('\n'),
     cue: mediaClock(clockNow()),
     allowedTags: ['expr'],
+    quick: true,
   });
   chattering.value = false;
   if (!r.ok) {
@@ -518,6 +521,7 @@ async function send() {
   const recent = cues.value.filter((c) => c.start <= now && c.start >= now - 60).map((c) => `${mediaClock(c.start)} ${c.text}`);
   const r = await chat.sceneReply(chatId.value, {
     task: playing.value ? 'watch-chat' : 'watch-pause',
+    quick: true,
     input: [
       `片名：${title.value}`,
       ...linkLines(),
@@ -581,6 +585,7 @@ async function leaveTheater() {
   const minutes = Math.max(1, Math.round(watchedSec / 60));
   const r = await chat.sceneReply(chatId.value, {
     task: 'watch-end',
+    quick: true,
     input: [`片名：${title.value}`, ...linkLines(), `前情提要：${summary || '（没有）'}`, `一起看了 ${minutes} 分钟`].join('\n'),
     userText: yourScore.value ? `我打 ${yourScore.value}/5${yourWords.value.trim() ? `：${yourWords.value.trim()}` : ''}` : yourWords.value.trim() || '看完了',
     cue: '散场',

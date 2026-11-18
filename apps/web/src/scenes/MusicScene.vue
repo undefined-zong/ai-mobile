@@ -167,6 +167,8 @@ async function planReactions() {
         .join('\n'),
     },
     parseBatch(new Set(lines.map((l) => l.i))),
+    undefined,
+    { quick: true, minTokens: 1200 },
   );
   planning.value -= 1;
   if (song.value?.id !== s.id) return;
@@ -248,6 +250,7 @@ async function sendTalk() {
     userText: text,
     cue: s ? `《${s.title}》${clock(player.posMs / 1000)}` : undefined,
     allowedTags: ['expr', 'music'],
+    quick: true,
   });
   talking.value = false;
   if (!r.ok) {

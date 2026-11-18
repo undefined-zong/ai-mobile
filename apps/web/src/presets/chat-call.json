@@ -119,6 +119,18 @@
       "origin": "app"
     },
     {
+      "identifier": "chatHistory",
+      "name": "聊天历史",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      }
+    },
+    {
       "identifier": "memory",
       "name": "长期记忆 + 关系状态",
       "role": "system",
@@ -126,7 +138,7 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "relative",
+        "position": "absolute",
         "depth": 4
       },
       "origin": "app"
@@ -139,7 +151,7 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "relative",
+        "position": "absolute",
         "depth": 2
       },
       "origin": "app"
@@ -152,36 +164,11 @@
       "marker": true,
       "enabled": true,
       "injection": {
-        "position": "relative",
+        "position": "absolute",
         "depth": 2,
         "order": 110
       },
       "origin": "app"
-    },
-    {
-      "identifier": "sceneRules",
-      "name": "当前场景规则 + 可用标签",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "relative",
-        "depth": 1
-      },
-      "origin": "app"
-    },
-    {
-      "identifier": "chatHistory",
-      "name": "聊天历史",
-      "role": "system",
-      "content": "",
-      "marker": true,
-      "enabled": true,
-      "injection": {
-        "position": "relative",
-        "depth": 4
-      }
     },
     {
       "identifier": "homeRules",
@@ -232,6 +219,19 @@
       ]
     },
     {
+      "identifier": "sceneRules",
+      "name": "当前场景规则 + 可用标签",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "absolute",
+        "depth": 1
+      },
+      "origin": "app"
+    },
+    {
       "identifier": "tagDirective",
       "name": "控制标签说明",
       "role": "system",
@@ -248,7 +248,6 @@
       "name": "后置指令",
       "role": "system",
       "content": "这是语音通话。每次只说 1-2 个短句，不写括号里的动作，不用表情符号。",
-      "triggers": ["call", "call-open"],
       "marker": false,
       "enabled": true,
       "injection": {

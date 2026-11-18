@@ -23,7 +23,7 @@ export interface IllustrateResult {
 export async function illustrate(
   system: AgentSystem,
   input: ImagePromptInput,
-  opts: AgentCallOptions & { seed?: number; model?: string; onStage?(stage: IllustrateStage): void; /** 写 tags 用的"生图"预设；没有时直接用外观 tags + 画面描述 */ preset?: TaskPreset | null } = {},
+  opts: AgentCallOptions & { seed?: number; onStage?(stage: IllustrateStage): void; /** 写 tags 用的"生图"预设；没有时直接用外观 tags + 画面描述 */ preset?: TaskPreset | null } = {},
 ): Promise<IllustrateResult> {
   opts.onStage?.('prompt');
   let prompt: ImagePromptOutput;

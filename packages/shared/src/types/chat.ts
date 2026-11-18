@@ -6,7 +6,6 @@ import type { LoreTimedState } from './lorebook.ts';
 import type { ImageMode } from './preset.ts';
 import type { ChatBackground } from './settings.ts';
 import type { PokeHow } from './sprite.ts';
-import type { PresetUseId } from '../presetUses.ts';
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'narrator';
 
@@ -24,10 +23,6 @@ export type MessagePart =
       caption: string;
       /** 画什么（生图预设里"画什么"那几块按它只发一块）；不写 = 场景 */
       mode?: ImageMode;
-      /** 副对话选的生图用途、时刻与模型；重画时沿用 */
-      use?: PresetUseId;
-      moment?: string;
-      requestedModel?: string;
       /** 生图提示词智能体起的中文短标题，显示用 */
       title?: string;
       /** AI 生成的图带上提示词和种子，方便在相册里复现 */
@@ -310,8 +305,6 @@ export interface Swipe {
   text: string;
   parts?: MessagePart[];
   expression?: string | null;
-  choices?: string[];
-  secondary?: Message['meta']['secondary'];
   createdAt: number;
 }
 
@@ -333,8 +326,6 @@ export interface Message extends SyncMeta {
     agent?: string;
     tokens?: number;
     latencyMs?: number;
-    /** 副对话的调用信息，与主对话用量分开记录 */
-    secondary?: { model: string; tokens?: number; latencyMs: number; fellBack: boolean };
     /** 在一起做哪件事时说的（场景 id） */
     scene?: string;
     /** 在这件事里的位置："第 2 个番茄"、"00:41:08"、"第 12 页"、"第 7 问" */

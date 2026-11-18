@@ -289,9 +289,9 @@ export const useHubStore = defineStore('hub', () => {
     return [...keep.values()].slice(0, 120).map(({ id, content, dueAt, type }) => ({ id, content, ...(dueAt ? { dueAt } : {}), type }));
   }
 
-  /** 家务和健康：上传实际情况，时间按半小时取整，免得每分钟都要重新上传。 */
-  function homeSnapshot(persona: ReturnType<typeof personaOf>): { home?: string } {
-    const b = homeBlock(persona, { stepMin: 30 });
+  /** 家务和健康：上传云端的那份（时间按半小时取整，免得每分钟都要重新上传）；主动消息预设里没有"她怎么反应"的块时带上自带的 */
+  function homeSnapshot(persona: ReturnType<typeof personaOf>, character: Character): { home?: string } {
+    const b = homeBlock(persona, { stepMin: 30, preset: useLibraryStore().presetForUse('proactive', character), characterName: character.name, pronoun: character.pronoun });
     return b ? { home: b.content } : {};
   }
 
@@ -308,7 +308,6 @@ export const useHubStore = defineStore('hub', () => {
       return [{ character: { ...character, avatar: null }, chat, persona: { ...personaOf(chat), avatar: null },
         preset: lib.presetForUse('proactive', character) ?? null,
         lorebooks: character.lorebookIds.map((id) => lib.lorebookById(id)).filter((b) => !!b),
-        chatLength: chats.list(chat.id).filter((m) => !m.deleted && !m.meta.error && !m.meta.interrupted).length,
         // 消息设置 → 发送条数、已总结的消息不发送：云端主动消息的上下文同样截取
         history: lastN(
           (msgSettings.settings.dropSummarized ? afterSummarized(chats.list(chat.id), chat.summaryUntilMessageId) : chats.list(chat.id)).filter((m) => !m.meta.error && !m.meta.interrupted),
@@ -320,7 +319,7 @@ export const useHubStore = defineStore('hub', () => {
           summary: summaryBlock(chat, character, timeZone).content,
           memory: memoryBlock(character, [], Date.now(), timeZone, { proactive: true }).content,
           // 家务和健康：上传那一刻的（写着"截至几点"）；没开这两套系统时没有
-          ...homeSnapshot(personaOf(chat)),
+          ...homeSnapshot(personaOf(chat), character),
         },
         flags: lifeFlags(personaOf(chat)),
         environment: useEnvironmentStore().settings, rules: DEFAULT_PROACTIVE_RULES,
