@@ -1,4 +1,4 @@
-import { SYNC_BLOB_PART_CHARS, syncBlobParts, type SyncBlobCheck, type SyncBlobInfo, type SyncPushRecord, type SyncPushResult } from '@app/shared';
+import { SYNC_BLOB_PART_CHARS, SYNC_PUSH_MAX_BYTES, SYNC_PUSH_MAX_RECORDS, SYNC_RECORD_MAX_BYTES, syncBlobParts, type SyncBlobCheck, type SyncBlobInfo, type SyncPushRecord, type SyncPushResult } from '@app/shared';
 import type { Env } from './env.ts';
 import { assert, HttpError, json, readJson } from './http.ts';
 
@@ -16,18 +16,12 @@ import { assert, HttpError, json, readJson } from './http.ts';
 
 const KIND = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 const HASH = /^[0-9a-f]{64}$/;
-/** 一次推送最多几条、请求体多大（手机按这个分批） */
-const PUSH_MAX_RECORDS = 100;
-const PUSH_MAX_BYTES = 1_800_000;
-/** 一条记录的 JSON 最多多大（D1 一行最多 2 MB）：更大的手机先存成大文件，记录里只放引用 */
-const RECORD_MAX_CHARS = 1_000_000;
 /** 一次拉取最多几条、多少字节 */
 const PULL_MAX_RECORDS = 500;
 const PULL_MAX_CHARS = 2_000_000;
 /** 带 cut 拉取时一次最多往后扫多少个 seq（跳过的老消息多时分几次，免得一次查询扫完整张表） */
 const PULL_SCAN = 20_000;
-/** 大文件的上限：D1（base64 分块）和 R2 */
-const D1_BLOB_MAX = 24 * 1024 * 1024;
+/** R2 整个文件一次传；D1 按块传，每次只处理 SYNC_BLOB_PART_CHARS 个字符。 */
 const R2_BLOB_MAX = 90 * 1024 * 1024;
 /** 没绑 R2 时同步的大文件在 D1 里最多占多少字节：wrangler 配置的 SYNC_BLOB_QUOTA_MB（MB）；没配就不限 */
 function blobQuota(env: Env): number | null {
@@ -58,8 +52,8 @@ function rowJson(r: Row): string {
 }
 
 async function push(request: Request, env: Env, deviceId: string): Promise<Response> {
-  const { records } = await readJson<{ records: SyncPushRecord[] }>(request, PUSH_MAX_BYTES);
-  assert(Array.isArray(records) && records.length <= PUSH_MAX_RECORDS, `一次最多推 ${PUSH_MAX_RECORDS} 条`);
+  const { records } = await readJson<{ records: SyncPushRecord[] }>(request, SYNC_PUSH_MAX_BYTES);
+  assert(Array.isArray(records) && records.length <= SYNC_PUSH_MAX_RECORDS, `一次最多推 ${SYNC_PUSH_MAX_RECORDS} 条`);
   const seen = new Set<string>();
   const rows = records.map((r) => {
     assert(validRecord(r), '同步记录无效');
@@ -67,7 +61,7 @@ async function push(request: Request, env: Env, deviceId: string): Promise<Respo
     assert(!seen.has(key), '同一条记录推了两次');
     seen.add(key);
     const data = r.deleted ? null : JSON.stringify(r.data);
-    assert(data === null || data.length <= RECORD_MAX_CHARS, '同步记录太大（应先存成大文件）');
+    assert(data === null || new TextEncoder().encode(data).byteLength <= SYNC_RECORD_MAX_BYTES, '同步记录太大（应先存成大文件）');
     // 消息的时间（新设备只拉最近的、往上翻时按时间往前取）：data 里有就用，存成大文件的看手机带上的
     const at = r.kind === 'message' && !r.deleted ? Number((r.data as { createdAt?: unknown } | null)?.createdAt ?? r.createdAt) : NaN;
     return { ...r, data, createdAt: Number.isFinite(at) ? Math.round(at) : null };
@@ -229,7 +223,7 @@ async function putBlob(request: Request, env: Env, url: URL, hash: string): Prom
   const parts = Number(url.searchParams.get('parts'));
   const size = Number(url.searchParams.get('size'));
   assert(Number.isInteger(parts) && parts >= 1 && Number.isInteger(part) && part >= 0 && part < parts, '分块参数无效');
-  assert(Number.isInteger(size) && size >= 0 && size <= D1_BLOB_MAX, `文件太大（没绑 R2 时最多 ${D1_BLOB_MAX / 1024 / 1024} MB）`);
+  assert(Number.isSafeInteger(size) && size >= 0, '文件大小无效');
   assert(parts === syncBlobParts(size), '分块数和大小对不上');
   const text = await request.text();
   assert(text.length <= SYNC_BLOB_PART_CHARS && /^[A-Za-z0-9+/]*={0,2}$/.test(text), '分块不是 base64');

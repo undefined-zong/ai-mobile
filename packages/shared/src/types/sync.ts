@@ -63,6 +63,11 @@ export interface SyncBlobCheck {
 export const SYNC_BLOB_REF = '$blob';
 /** 记录里的二进制（图片、语音、模型文件）换成它：{ $bin: sha256, type, mime?, size } */
 export const SYNC_BIN_REF = '$bin';
+/** JSON 推送按 UTF-8 字节分批；计入 records 包装、记录字段和逗号。 */
+export const SYNC_PUSH_MAX_RECORDS = 100;
+export const SYNC_PUSH_MAX_BYTES = 1_800_000;
+/** D1 的行大小按字节计算；更大的记录由客户端压缩、分块上传后只推引用。 */
+export const SYNC_RECORD_MAX_BYTES = 1_000_000;
 /** 同步用的大文件 d1 每块最多多少个 base64 字符（D1 一行最多 2 MB） */
 export const SYNC_BLOB_PART_CHARS = 1_500_000;
 

@@ -22,8 +22,7 @@ export class BlobSkipped extends Error {}
 
 type Binary = Blob | ArrayBuffer | ArrayBufferView;
 const PART_BYTES = (SYNC_BLOB_PART_CHARS / 4) * 3;
-/** 没绑 R2 时一个文件最多多大（和 Worker 一致）；绑了 R2 时的上限 */
-const MAX_D1 = 24 * 1024 * 1024;
+/** R2 整个文件一次传的上限；D1 已按块上传，不限制整个文件的大小。 */
 const MAX_R2 = 90 * 1024 * 1024;
 
 export function isBinary(v: unknown): v is Binary {
@@ -107,8 +106,7 @@ export class BlobClient {
   }
 
   private async send(hash: string, bytes: Uint8Array<ArrayBuffer>, mime: string): Promise<void> {
-    const max = this.store === 'r2' ? MAX_R2 : MAX_D1;
-    if (bytes.byteLength > max) throw new BlobSkipped(`有个文件 ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB，超过云端单个文件的上限（${max / 1024 / 1024} MB），没有同步`);
+    if (this.store === 'r2' && bytes.byteLength > MAX_R2) throw new BlobSkipped(`有个文件 ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB，超过云端单个文件的上限（${MAX_R2 / 1024 / 1024} MB），没有同步`);
     const type = mime || 'application/octet-stream';
     const check = async (res: Response) => {
       if (res.ok) return;

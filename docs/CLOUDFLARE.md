@@ -163,7 +163,7 @@ D1 的 `(character_id, date, slot)` 唯一约束与单条租约处理重复/重�
 
 **冲突**：`POST /v1/sync/push` 的每条记录带上这台设备上一次见到的 seq（`base`）。云端那条已经被别的设备改过（seq 不同）就不写，把云端的那一份退回去。App 拿上次同步时的样子当底稿三方合并：对象按字段、带 id 的列表（留言、帖子、人设……）按 id、不重复的字符串列表（删掉的 id、放进来过的文件）按集合合并；同一处两边都改了以改得更晚的为准，一边删了、一边改了留改的。合并完再推。两台设备谁也不会悄悄盖掉谁。
 
-**图片和文件**：图片、语音、Live2D 模型、书的原文件和超过约 1 MB 的记录按 SHA-256 存一份，记录里只放引用；拉到记录时先不下载，别的设备用到（读不到本机的）时再取，下载后核对哈希。没绑 R2 时文件转成 base64 分块（每块 1.5 MB）存在 D1 的 `sync_blob_parts`，Worker 不用解码（几乎不占 CPU），最多占多少由 `apps/hub/wrangler.jsonc` 里 vars 的 `SYNC_BLOB_QUOTA_MB` 定（现在是 1024 MB；部署时可用环境变量 `HUB_BLOB_QUOTA_MB` 改，GitHub Actions 在仓库 Variables 里设；删掉这一项就不限），单个文件最多 24 MB。满了以后新的图片不再上传（「云端与同步」里提示），文字记录照常同步。图片多、有大的 Live2D 模型时绑一个 R2 桶（免费额度 10 GB），单个文件最多 90 MB：
+**图片和文件**：图片、语音、Live2D 模型、书的原文件和超过 900 KB（UTF-8 字节）的记录按 SHA-256 存一份，记录里只放引用；拉到记录时先不下载，别的设备用到（读不到本机的）时再取，下载后核对哈希。普通记录的每批请求按完整 JSON 的 UTF-8 字节数拆分，中文和 emoji 不会因字符数低估而超出请求大小。没绑 R2 时文件转成 base64 分块（每块 1.5 MB）存在 D1 的 `sync_blob_parts`，Worker 每次只处理一块，不需要把整个文件读进内存，单个文件不再受 24 MB 限制。最多占多少由 `apps/hub/wrangler.jsonc` 里 vars 的 `SYNC_BLOB_QUOTA_MB` 定（现在是 1024 MB；部署时可用环境变量 `HUB_BLOB_QUOTA_MB` 改，GitHub Actions 在仓库 Variables 里设；删掉这一项就不限）。满了以后新的图片不再上传（「云端与同步」里提示），文字记录照常同步。图片多、有大的 Live2D 模型时绑一个 R2 桶（免费额度 10 GB），单个文件最多 90 MB：
 
 ```sh
 pnpm --filter @app/hub exec wrangler r2 bucket create ai-mobile-sync
