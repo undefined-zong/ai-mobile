@@ -200,7 +200,7 @@ const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset
       </section>
 
       <p class="text-[12px] text-ink-3 leading-relaxed m-0">
-        导入内容保存在这台设备上，刷新后仍可查看。聊天记录的入口在“我的 → 角色卡 → 对应角色 → 导入聊天记录”；启用云端同步后会随聊天同步。
+        导入内容保存在这台设备上，刷新后仍可查看。聊天记录的入口在“我的 → 角色卡 → 对应角色 → 编辑 → 导入聊天记录”；启用云端同步后会随聊天同步。
       </p>
     </div>
   </div>
