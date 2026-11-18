@@ -1,7 +1,7 @@
 // 让浏览器认可"安装到主屏幕"，断网时也能打开。
 // 只处理本站的 GET 请求；发给 AI 服务商的请求（跨域）不经过这里，也不缓存。
 // 换版本号时，激活后删掉旧版本的缓存。
-const CACHE = 'ai-mobile-v4';
+const CACHE = 'ai-mobile-v5';
 const SHELL = ['./', './manifest.webmanifest', './icons/icon-192.png?v=little-world', './icons/icon-512.png?v=little-world'];
 
 self.addEventListener('install', (event) => {
@@ -65,9 +65,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (req.mode === 'navigate') {
-    // 页面先走网络（拿到新版本），断网时用缓存
+    // HTML 每次向服务器重新确认版本，避免部署后仍命中 GitHub Pages 的 HTTP 缓存；断网时用缓存。
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
