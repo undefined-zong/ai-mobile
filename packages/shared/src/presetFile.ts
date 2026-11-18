@@ -26,6 +26,7 @@ export interface PresetFile {
   name: string;
   description?: string;
   category: PresetCategory;
+  worldInfoEnabled?: boolean;
   /** 第一次放进预设库时给哪些用途用（那个用途还没选过的话） */
   defaultFor?: PresetUseId[];
   blocks: PromptBlock[];
@@ -104,6 +105,7 @@ export function parsePresetFile(json: unknown, fileName = ''): ParsedPresetFile 
     name,
     description: str(j.description),
     category,
+    ...(typeof j.worldInfoEnabled === 'boolean' ? { worldInfoEnabled: j.worldInfoEnabled } : {}),
     blocks,
     sampler,
     formats: { ...DEFAULT_PRESET_FORMATS, ...(isObj(j.formats) ? (j.formats as Partial<PresetFormats>) : {}) },
@@ -124,6 +126,7 @@ export function toPresetFile(p: Preset, defaultFor: PresetUseId[] = []): PresetF
     name: p.name,
     description: p.description,
     category: p.category,
+    ...(p.worldInfoEnabled !== undefined ? { worldInfoEnabled: p.worldInfoEnabled } : {}),
     ...(defaultFor.length ? { defaultFor } : {}),
     blocks: p.blocks,
     sampler: p.sampler,

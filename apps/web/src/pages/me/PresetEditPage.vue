@@ -315,6 +315,11 @@ const HINT: Record<PresetCategory, string> = {
       <Segmented ref="tabsEl" v-model="tab" sticky :options="tabs" />
 
       <div v-if="tab === 'blocks'" ref="listEl" class="px-4 grid gap-1.5" data-testid="preset-blocks">
+        <van-cell v-if="roleplay" title="使用世界书" label="控制角色绑定的全部世界书条目，包括按深度、示例前后和作者注位置。角色卡示例和预设正文按各自设置发送。" center class="!rounded-[14px]">
+          <template #right-icon>
+            <van-switch :model-value="preset.worldInfoEnabled !== false" size="22px" aria-label="使用世界书" @update:model-value="preset.worldInfoEnabled = $event; touch()" />
+          </template>
+        </van-cell>
         <div
           v-for="(b, i) in preset.blocks"
           :key="keyOf(b)"
