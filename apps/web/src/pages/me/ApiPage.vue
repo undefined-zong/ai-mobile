@@ -401,12 +401,10 @@ async function runReindex() {
         <template v-if="isText">
           <label class="field-label">推理强度（模型支持思考时）</label>
           <div class="flex flex-wrap gap-1.5">
-            <button v-for="e in EFFORTS" :key="e.value" type="button" class="opt" :class="{ on: effort === e.value }" @click="effort = e.value">{{ e.label }}</button>
+            <button v-for="e in EFFORTS" :key="e.value" type="button" class="opt" :class="{ on: effort === e.value }" :aria-pressed="effort === e.value" @click="effort = e.value">{{ e.label }}</button>
           </div>
           <p class="text-[12px] text-ink-3 mt-1.5 mb-0">
-            按各家换算：OpenAI 的 reasoning_effort、Claude 的思考预算、Gemini 的思考预算或等级、DeepSeek 的思考开关。"关闭"在 DeepSeek 上关掉思考模式（默认是开的），回复更快。{{
-              draft.role === 'main' ? '预设里设了推理强度时以预设为准。' : ''
-            }}
+            这里明确选择的强度优先于预设；“自动”使用预设值，预设也没设置时交给模型。按各家换算：OpenAI 的 reasoning_effort、Claude 的思考预算、Gemini 的思考预算或等级、DeepSeek 的思考开关。“关闭”在 DeepSeek 上关掉思考模式。
           </p>
           <div class="flex items-center justify-between gap-3 mt-3">
             <div>

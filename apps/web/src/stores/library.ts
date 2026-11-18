@@ -102,6 +102,18 @@ const BOOK_UPGRADES: { id: string; file: string; replaced: Record<string, string
 
 function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
   const changed = new Set<Lorebook>();
+  const budgetUpgrade = 'lorebook:undo-editor-min-budget';
+  if (!done.has(budgetUpgrade)) {
+    done.add(budgetUpgrade);
+    // 旧版步进器 min=100 会在打开编辑页时把 0（不限制）写成 100。
+    // 修正控件不会修复已保存的数据；把这个遗留下限恢复一次，之后用户重设 100 仍生效。
+    for (const book of list) {
+      if (book.tokenBudget !== 100) continue;
+      book.tokenBudget = 0;
+      book.updatedAt = Date.now();
+      changed.add(book);
+    }
+  }
   const flatUpgrade = 'lorebook:flat-array-entries';
   if (!done.has(flatUpgrade)) {
     done.add(flatUpgrade);

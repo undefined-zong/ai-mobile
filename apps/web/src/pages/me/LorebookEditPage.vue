@@ -95,8 +95,8 @@ function addKey() {
           <button v-for="(label, k) in POSITION" :key="k" class="opt" :class="{ on: editing.position === k }" @click="editing.position = k">{{ label }}</button>
         </div>
         <div class="grid grid-cols-2 gap-3 mt-3">
-          <div><label class="field-label !mt-0">顺序</label><van-stepper v-model="editing.order" min="0" max="999" /></div>
-          <div><label class="field-label !mt-0">深度</label><van-stepper v-model="editing.depth" min="0" max="20" :disabled="editing.position !== 'at_depth'" /></div>
+          <div><label class="field-label !mt-0">顺序</label><van-stepper v-model="editing.order" :min="-Infinity" /></div>
+          <div><label class="field-label !mt-0">深度</label><van-stepper v-model="editing.depth" min="0" :disabled="editing.position !== 'at_depth'" /></div>
         </div>
         <label class="field-label">触发概率 {{ editing.probability }}%</label>
         <van-slider v-model="editing.probability" bar-height="4px" button-size="18px" />

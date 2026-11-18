@@ -31,7 +31,7 @@ src/connection.ts  拉取模型列表、测试连接（失败时给完整报错�
 
 - **消息整理**（`llm/messages.ts` 的 `postProcessMessages`，ST 的 Prompt Post-Processing）：连接上选 原样 / 合并 / 半严格 / 严格 / 单条；严格模式下系统消息后第一条不是 user 时补 "Let's get started."。导入的 ST 预设里的 `custom_prompt_post_processing` 也认。
 - **推理强度**（`llm/reasoning.ts`）：自动 / 关闭 / 最低 / 低 / 中 / 高 / 最高，按各家换算：OpenAI `reasoning_effort`；Claude 新模型用 adaptive thinking + `output_config.effort`，老模型按回复上限算 `budget_tokens`；Gemini 2.5 用 `thinkingBudget`（2.5 Flash 能关到 0）、Gemini 3 用 `thinkingLevel`、Gemini 4 只认 `thinkingLevel` 且没有 MINIMAL（Vertex 官方文档）；DeepSeek 用思考开关。
-- **预设参数**：聊天和场景请求使用所选预设的采样参数；未设推理强度时不补入智能体的默认值。输出 token 上限是请求的总上限，不再按模型名、思考等级或场景自动增加。
+- **预设参数**：聊天和场景请求使用所选预设的采样参数。API 设置明确选择的推理强度覆盖预设；选择自动时使用预设值，两处都没设置时不额外发送推理强度。请求体预览同样使用这条优先级。输出 token 上限是请求的总上限，不再按模型名、思考等级或场景自动增加。
 - **Claude 型号表**（`llm/claude.ts`）：哪些型号会思考、哪些不接受 temperature / top_p、哪些不能预填 assistant（预填改成 user 消息合并），同 ST 的规则；预设里的 `assistant_prefill` 会接上。
 - **Gemini**：同 math-reader 的 doGeminiRequest，不带安全设置；地址只填域名时只有官方域名补 `/v1beta`，自定义地址原样用；要思考过程时带 `includeThoughts`。
 - **额外请求参数**：连接上可以并入、去掉请求体的字段（ST 的 Include / Exclude Body Parameters），给只认某些字段的中转用。
