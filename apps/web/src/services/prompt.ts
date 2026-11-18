@@ -148,12 +148,15 @@ function partToText(p: MessagePart, character: Character, user: string, mapText?
     case 'scene':
       return `（${p.title}${p.summary ? `：${p.summary}` : ''}）`;
     case 'invite': {
+      const activity = p.kind === 'sleep' ? '哄睡' : p.kind === 'exercise' ? '一起运动' : p.kind === 'parallel' ? '一起看平行时空' : '';
       const what =
         p.kind === 'study'
           ? `一起学习${p.task ? `：${p.task}` : ''}${p.minutes ? `（${p.minutes} 分钟）` : ''}`
           : p.kind === 'watch'
             ? `一起看${p.title ? `《${p.title}》` : '片'}`
-            : `一起玩${inviteGameLabel(p.game)}`;
+            : p.kind === 'game'
+              ? `一起玩${inviteGameLabel(p.game)}`
+              : activity;
       return `[邀请${what}${p.answer === 'yes' ? `；${user}答应了` : p.answer === 'no' ? `；${user}这次没答应` : ''}]`;
     }
     case 'toy':
@@ -295,7 +298,7 @@ const POSE_SCENES = new Set<string>(['free', 'poke']);
  * 表情只列她有图的（没有立绘时是占位小人会的那几种）；聊天里、戳戳乐里她有两个以上的动作时加上 [pose:] 和能用的动作
  */
 export function sceneTags(scene: ReturnType<typeof getScene>, character: Character): ControlTagKind[] {
-  // 日常聊天里能主动调用哪些模块（歌曲、电话、约学习 / 看片 / 游戏、玩具）：按她绑定的世界书里对应条目的开关
+  // 日常聊天里能主动调用哪些模块（歌曲、电话、学习 / 看片 / 游戏 / 哄睡 / 运动 / 平行时空邀请、玩具）：按她绑定的世界书里对应条目的开关
   const base = scene.id === 'free' ? applyModuleSwitches(scene.allowedTags, moduleSwitches(boundLoreEntries(character))) : scene.allowedTags;
   return POSE_SCENES.has(scene.id) ? portraitTags(base, character.portraits) : base;
 }

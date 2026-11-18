@@ -156,7 +156,7 @@ function callBack() {
   void router.push({ path: `/call/${props.character.id}`, query: props.part.type === 'call-log' && props.part.video ? { video: '1' } : {} });
 }
 
-// —— 邀请卡：好呀 → 去陪伴学习 / 一起观影 / 一起游戏里的那个游戏；下次吧 → 回她一句 ——
+// —— 邀请卡：接受 → 去对应的陪伴场景或平行时空；下次吧 → 回她一句 ——
 const invite = computed(() => {
   const p = props.part;
   if (p.type !== 'invite') return null;
@@ -165,6 +165,9 @@ const invite = computed(() => {
     const parsed = p.link ? parseVideoLink(p.link) : null;
     return { head: '一起观影邀请', title: p.title ? `《${p.title}》` : '一起看片', sub: parsed?.ok ? PLATFORM_LABEL[parsed.link.platform] : '点"一起看"去 B 站找片源', icon: 'i-lucide-clapperboard', tone: '#b9a3e6', yes: '一起看' };
   }
+  if (p.kind === 'sleep') return { head: '哄睡邀请', title: '陪你慢慢睡着', sub: '连麦、听故事，或去一个睡前场景', icon: 'i-lucide-moon-star', tone: '#9b8cf0', yes: '陪我睡' };
+  if (p.kind === 'exercise') return { head: '一起运动邀请', title: '一起动一动', sub: '照今天的计划练，或者随便动动', icon: 'i-lucide-dumbbell', tone: '#7fd1b1', yes: '一起练' };
+  if (p.kind === 'parallel') return { head: '平行时空邀请', title: '看看我们今天的安排', sub: '各自的一天，也能给彼此留句话', icon: 'i-lucide-orbit', tone: '#8fb3f0', yes: '去看看' };
   return { head: '一起游戏邀请', title: inviteGameLabel(p.game), sub: '去一起游戏里开一局', icon: 'i-lucide-gamepad-2', tone: '#e7b46a', yes: '来玩' };
 });
 function answerInvite(ok: boolean) {
@@ -180,7 +183,9 @@ function answerInvite(ok: boolean) {
   p.answer = 'yes';
   if (p.kind === 'study') void router.push({ path: '/scene/study', query: { ...(p.task ? { task: p.task } : {}), ...(p.minutes ? { min: String(p.minutes) } : {}) } });
   else if (p.kind === 'watch') void router.push({ path: '/scene/watch', query: { link: p.link, ...(p.title ? { title: p.title } : {}) } });
-  else void router.push({ path: '/scene/game', query: { g: p.game } });
+  else if (p.kind === 'game') void router.push({ path: '/scene/game', query: { g: p.game } });
+  else if (p.kind === 'parallel') void router.push(`/parallel/${encodeURIComponent(props.character.id)}`);
+  else void router.push(`/scene/${p.kind}`);
 }
 
 // 看片邀请只有片名：搜 B 站（连着 Hub 时真的搜，没连在每小时更新的片单里找）
@@ -293,7 +298,7 @@ async function connectToys() {
     <button v-else-if="part.missed && !mine && !part.answered" class="listen" @click="callBack"><span class="i-lucide-phone-outgoing" />回拨</button>
   </div>
 
-  <!-- 她发的邀请：一起学习 / 一起看片 / 一起玩某个游戏 -->
+  <!-- 她发的邀请：学习 / 观影 / 游戏 / 哄睡 / 运动 / 平行时空 -->
   <div v-else-if="part.type === 'invite' && invite" class="pcard" :style="{ '--tone': invite.tone }">
     <div class="flex items-center gap-2">
       <span class="icon-wrap" style="color: var(--tone)"><span :class="invite.icon" /></span>

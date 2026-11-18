@@ -78,15 +78,23 @@ export function seedBlockContent(identifier: string): string | undefined {
 const DEMO_BOOK_IDS = new Set(demoLorebooks.map((b) => b.id));
 
 /**
- * 自带的世界书文件改过以后，本机放进库里的那份怎么跟上（同预设的 replaced）：条目还是旧的默认内容（你没改过）就换成文件里现在的，
- * 每一条只做一次（settings 表的 lorebookUpgrades）
+ * 自带的世界书文件改过以后，本机放进库里的那份怎么跟上（同预设的 replaced / added）：
+ * 条目还是旧的默认内容（你没改过）就换成文件里现在的；新加的条目补进去，已有条目的内容和开关保留。
+ * 每一条只做一次（settings 表的 lorebookUpgrades），之后你删掉的条目不会再放回来。
  */
-const BOOK_UPGRADES: { id: string; file: string; replaced: Record<string, string[]> }[] = [
+const BOOK_UPGRADES: { id: string; file: string; replaced: Record<string, string[]>; added?: string[]; description?: string }[] = [
   {
     // 去掉凭空加的限制：玩具指令只在"明确愿意"时用、说停就停
     id: 'restrictions:chat-modules-toys',
     file: 'chat-modules.json',
     replaced: { '12': ["只在你们亲密、{{user}}明确愿意的时候用。{{user}}连着成人玩具时，在发生的那句话后面写控制指令，{{user}}读到那里时玩具就会照做：\n<device>\"VIBRATE\": 40</device>  震动 40%\n<device>\"VIBRATE\": {\"pattern\": [20, 60, 90], \"interval\": [800, 600, 400]}</device>  一档档变速（强度和每档多少毫秒）\n<device>\"OSCILLATE\": 50</device>、<device>\"ROTATE\": 50</device>  摆动、旋转，写法同震动\n<device>\"LINEAR\": {\"start_position\": 10, \"end_position\": 90, \"duration\": 800}</device>  伸缩：在两个位置之间来回，每下多少毫秒\n<device>\"STOP\": true</device>  全部停下\n- 强度 0–100，从轻的开始，跟着{{user}}的反应慢慢加；一次回复写 1–3 条就够。\n- {{user}}说停、不舒服、慢一点时，马上写 <device>\"STOP\": true</device> 并温柔地停下来。\n- 强度上限和多久没指令自动停由{{user}}在\"心跳\"里设置，程序会限制住。"] },
+  },
+  {
+    id: 'chat-modules:sleep-exercise-parallel',
+    file: 'chat-modules.json',
+    replaced: { '0': ["你可以像真人一样主动发起一些事：分享歌、打电话、约{{user}}一起学习、看片、玩游戏。做法是在你那句话后面夹带一个隐藏标签，程序会把它变成卡片，{{user}}点一下就能和你一起做。\n- 只在聊到相关的事、气氛合适时用；一次回复最多发一张卡，不要每条都发，也不要连着几条都约。\n- 先用你自己的话自然地说出来（例如\"要不要一起听这首？\"），标签跟在这句话后面。\n- 只能用下面几条里写到的标签；没写到的就是现在不能用。\n- {{user}}说下次、没空时别追着约，换个话题。"] },
+    added: ['13', '14', '15'],
+    description: "她在聊天里主动发卡片：一起听歌、打电话（没接可以回拨）、约学习、约看片、约某一个游戏、玩具指令。绑到角色卡上（我的 → 角色卡 → 世界书），每一条的开关就是那个功能的开关；玩具指令默认关着。",
   },
 ];
 
@@ -98,11 +106,22 @@ function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
     const seed = BOOK_SEEDS.find((s) => s.file === u.file)?.book;
     const mine = seed ? list.find((b) => b.id === seed.id) : undefined;
     if (!seed || !mine) continue;
+    if (u.description !== undefined && mine.description === u.description) {
+      mine.description = seed.description;
+      changed.add(mine);
+    }
     for (const [uid, olds] of Object.entries(u.replaced)) {
       const entry = mine.entries.find((e) => e.uid === uid);
       const now = seed.entries.find((e) => e.uid === uid);
       if (entry && now && entry.content !== now.content && olds.includes(entry.content.trim())) {
         entry.content = now.content;
+        changed.add(mine);
+      }
+    }
+    for (const uid of u.added ?? []) {
+      const entry = seed.entries.find((e) => e.uid === uid);
+      if (entry && !mine.entries.some((e) => e.uid === uid)) {
+        mine.entries.push(clone(entry));
         changed.add(mine);
       }
     }

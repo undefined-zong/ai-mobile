@@ -535,10 +535,11 @@ export const useChatStore = defineStore('chat', () => {
         if (tag.kind === 'music') parts.push({ type: 'music', songId: '', title: tag.title, artist: tag.artist });
         if (tag.kind === 'cg' && !opts.sceneArt) parts.push({ type: 'image', assetKey: null, caption: tag.value, generated: false });
         if (tag.kind === 'choice') msg.meta.choices = tag.options;
-        // 邀请卡片：点"好呀"去陪伴学习 / 一起观影 / 一起游戏里的那个游戏
+        // 邀请卡片：点接受去对应的陪伴场景或平行时空
         if (tag.kind === 'study') parts.push({ type: 'invite', kind: 'study', task: tag.task, minutes: tag.minutes });
         if (tag.kind === 'watch') parts.push({ type: 'invite', kind: 'watch', title: tag.title, link: tag.link });
         if (tag.kind === 'game' && allowedInviteGames(boundLoreEntries(character)).includes(tag.game)) parts.push({ type: 'invite', kind: 'game', game: tag.game });
+        if (tag.kind === 'sleep' || tag.kind === 'exercise' || tag.kind === 'parallel') parts.push({ type: 'invite', kind: tag.kind });
         // 聊天里的玩具指令（心跳里的由心跳自己按位置执行）：卡片 + 连着时读到那里自动执行
         if (tag.kind === 'device' && scene.id === 'free') {
           const command = parseDeviceBlock(tag.value);
