@@ -168,7 +168,7 @@ export interface AgentRoute {
     temperature: number;
     maxTokens: number;
     topP: number;
-    /** 推理强度，按各家映射（OpenAI reasoning_effort、Claude 思考预算、Gemini thinkingBudget / thinkingLevel） */
+    /** 明确选择时覆盖预设的推理强度；auto / 未设置时使用预设，按各家协议映射 */
     reasoningEffort: ReasoningEffort;
     /** 要模型返回思考内容（同 SillyTavern 的 Show thoughts / Request model reasoning） */
     includeReasoning: boolean;

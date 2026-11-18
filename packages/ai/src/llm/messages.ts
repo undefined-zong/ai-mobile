@@ -39,7 +39,7 @@ const ST_PROCESSING: Record<string, PromptProcessing> = {
  * 转成对应的字段，由各家协议决定怎么发
  */
 export function fromOpenAIBody(body: Record<string, unknown>): ChatRequest {
-  // 预设没有设置推理强度就是自动，不从 API 智能体配置补进 low 等值。
+  // 预设没有设置推理强度就是自动；API 页面明确选的强度由 AgentSystem 统一覆盖。
   const req: ChatRequest = { messages: [], reasoningEffort: 'auto' };
   const extra: Record<string, unknown> = {};
   const msgs = Array.isArray(body.messages) ? body.messages : [];

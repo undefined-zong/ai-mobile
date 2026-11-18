@@ -1,4 +1,5 @@
 import { characterPronoun } from '@app/shared';
+import { openaiReasoningEffort } from '@app/ai';
 import {
   allowedInviteGames,
   anniversaryLine,
@@ -457,7 +458,11 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
     task: opts.task?.name,
     flags,
   });
-  return { ...result, preset, use, persona, request: buildChatRequest(result, preset, model), turnStats: { ...turnStats, last, summarized: history.length - sendable.length }, recall };
+  const request = buildChatRequest(result, preset, model);
+  // 和 AgentSystem 相同：API 页面明确选了强度就覆盖预设；自动时保留预设值。
+  const effort = openaiReasoningEffort(useAiStore().routeOf(opts.agent ?? 'main').params?.reasoningEffort);
+  if (effort) request.reasoning_effort = effort;
+  return { ...result, preset, use, persona, request, turnStats: { ...turnStats, last, summarized: history.length - sendable.length }, recall };
 }
 
 /** 发给模型的消息（去掉来源说明） */
