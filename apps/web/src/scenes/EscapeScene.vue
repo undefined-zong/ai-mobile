@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { ESCAPE_DESTINATIONS, escapeDestination, escapePlaceId, escapeView, type Character, type EscapeView } from '@app/shared';
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -483,7 +484,7 @@ const timeText = computed(() => `${String(clock.value.getHours()).padStart(2, '0
     <van-popup v-model:show="inviteOpen" position="bottom" round teleport="body" :style="{ maxHeight: '70%' }">
       <div class="picker" data-testid="escape-invite-sheet">
         <div class="text-[15px] font-600">叫上谁一起</div>
-        <p class="text-[12.5px] text-ink-3 mt-1 mb-2">她会来到{{ dest.name }}，站在你旁边；这一段记进你们的聊天。</p>
+        <p class="text-[12.5px] text-ink-3 mt-1 mb-2">{{ characterPronoun(her) }}会来到{{ dest.name }}，站在你旁边；这一段记进你们的聊天。</p>
         <button v-for="c in chars.list" :key="c.id" type="button" class="who" :data-char="c.id" @click="invite(c)">
           <Avatar :character="c" :size="40" />
           <span class="flex-1 min-w-0 text-left">

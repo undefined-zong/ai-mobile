@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { RECALL_REASON_LABEL } from '@app/ai';
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
@@ -192,7 +193,7 @@ function slotNote(position: string): string | null {
             上一轮回复完成后（{{ hhmm(p.recall.snapshot.at) }}）用"{{ p.recall.snapshot.query.slice(0, 60) }}{{ p.recall.snapshot.query.length > 60 ? '…' : '' }}"搜的：
             {{ p.recall.snapshot.dense ? '按意思 + 按字面' : p.recall.snapshot.denseNote || '只按字面' }}<template v-if="p.recall.snapshot.time"> · 时间说法"{{ p.recall.snapshot.time }}"</template><template v-if="p.recall.snapshot.specials.length"> · 今天：{{ p.recall.snapshot.specials.join('、') }}</template><template v-if="p.recall.snapshot.states.length"> · 状态：{{ p.recall.snapshot.states.join('、') }}</template>。
           </template>
-          <template v-else>还没有搜过（她回复完一次以后才有）。</template>
+          <template v-else>还没有搜过（{{ characterPronoun(character) }}回复完一次以后才有）。</template>
           <template v-if="p.recall.added"> 发送时按本轮消息在本机补了 {{ p.recall.added }} 条。</template>
           每次都带的（置顶、到期的）和画像卡、时间线在"预设块"里的"长期记忆""过往摘要"。
         </div>

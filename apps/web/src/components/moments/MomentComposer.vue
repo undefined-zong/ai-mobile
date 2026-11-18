@@ -94,7 +94,7 @@ async function send() {
         <input type="file" accept="image/*" multiple class="sr-only" @change="pick" />
       </label>
     </div>
-    <p v-if="photos.length && !visionLive" class="note">「识图」还没接通：她们只知道你发了照片，看不到照片里有什么。</p>
+    <p v-if="photos.length && !visionLive" class="note">「识图」还没接通：Ta们只知道你发了照片，看不到照片里有什么。</p>
 
     <label class="field-label" for="moment-location">所在位置（可以不写）</label>
     <input id="moment-location" v-model="location" class="input" autocomplete="off" placeholder="例如：公司楼下的咖啡店" />
@@ -112,7 +112,7 @@ async function send() {
     </div>
     <p class="note">
       {{ audience.length ? '看得到的角色会各自点赞、评论，也会记住这条朋友圈。' : '只有自己看得到：谁也不会回应，也不会记住。' }}
-      <template v-if="audience.length && !status.ok">{{ status.reason }}，发出去以后她们暂时不会回应。</template>
+      <template v-if="audience.length && !status.ok">{{ status.reason }}，发出去以后Ta们暂时不会回应。</template>
     </p>
   </div>
 </template>

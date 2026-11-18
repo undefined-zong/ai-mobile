@@ -29,7 +29,7 @@ async function post(c: Character) {
 <template>
   <div class="sheet" data-sheet="community-members">
     <div class="sheet-title">邀请角色加入「{{ community.name }}」</div>
-    <p class="note">进来以后她在这个社群里和你互相关注：会自己发帖{{ store.settings.memberPerDay ? `（每天最多 ${store.settings.memberPerDay} 帖）` : '（现在设的是不自己发，只在你点的时候发）' }}、回应你发的帖。邀请这件事、她发的帖、你发的帖都会写进她的记忆，聊天时她知道你们一起在这个社群里。</p>
+    <p class="note">进来以后Ta在这个社群里和你互相关注：会自己发帖{{ store.settings.memberPerDay ? `（每天最多 ${store.settings.memberPerDay} 帖）` : '（现在设的是不自己发，只在你点的时候发）' }}、回应你发的帖。邀请这件事、Ta发的帖、你发的帖都会写进Ta的记忆，聊天时Ta知道你们一起在这个社群里。</p>
     <RouterLink v-if="!status.ok" to="/me/api?feature=social" class="warn-line">{{ status.reason }} →</RouterLink>
 
     <div class="grid gap-2 mt-3">

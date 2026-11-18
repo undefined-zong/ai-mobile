@@ -105,7 +105,7 @@ export async function healthFor(env: Env, row: ContextRow, credentials: Proactiv
     const nearby = (task: 'plan-week' | 'plan-day'): NearbyBlock => (found ? healthNearbyText(found, task, date) : { text: day?.nearby ?? '', food: [], stores: [], near: day?.near ?? '' });
     const shared: Partial<Record<HealthFill, string>> = { ...ctx.base, healthToday: day?.today ?? healthTodayText(date), healthRecent: day?.recent ?? '' };
     const ask = <T>(task: 'plan-week' | 'plan-day', fills: Partial<Record<HealthFill, string>>, parse: (v: unknown) => T | null) =>
-      system.json('health', { messages: buildHealthMessages({ task, userName: ctx.persona.name, characterName: ctx.characterName, fills }, preset), ...samplerRequest(preset.sampler) }, parse, { signal });
+      system.json('health', { messages: buildHealthMessages({ task, userName: ctx.persona.name, characterName: ctx.characterName, pronoun: ctx.pronoun, fills }, preset), ...samplerRequest(preset.sampler) }, parse, { signal });
     const weekStart = weekStartOf(date);
     let week = await weekOf(env, ctx, weekStart);
     let fresh: HealthWeekPlan | undefined;

@@ -305,7 +305,7 @@ export const useHealthStore = defineStore('health', () => {
     if (!preset) return { ok: false, reason: '没有健康预设：去"我的 → 预设 → 健康"导入或恢复一个' };
     try {
       const character = useCharacterStore().byId(useAppStore().activeCharacterId);
-      const messages = buildHealthMessages({ task, userName: persona.name, characterName: character?.name, fills }, preset);
+      const messages = buildHealthMessages({ task, userName: persona.name, characterName: character?.name, pronoun: character?.pronoun, fills }, preset);
       const { value, result } = await ai.system.json('health', { messages, ...samplerRequest(preset.sampler) }, parse);
       return { ok: true, value: { value, model: result.model } };
     } catch (e) {
@@ -414,7 +414,7 @@ export const useHealthStore = defineStore('health', () => {
     const character = useCharacterStore().byId(useAppStore().activeCharacterId);
     return {
       persona: { id: persona.id, name: persona.name },
-      ...(character ? { characterName: character.name } : {}),
+      ...(character ? { characterName: character.name, pronoun: character.pronoun } : {}),
       timezone: useEnvironmentStore().settings.timezone,
       runAt: h.runAt,
       preset,

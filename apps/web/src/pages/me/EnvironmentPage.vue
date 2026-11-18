@@ -104,7 +104,7 @@ function saveZone() {
 
 <template>
   <div class="page" data-page="environment">
-    <PageHeader title="环境与作息" subtitle="她知道现在几点、下不下雨、你吃没吃饭" fallback="/me" />
+    <PageHeader title="环境与作息" subtitle="Ta知道现在几点、下不下雨、你吃没吃饭" fallback="/me" />
     <div class="page-scroll pb-10">
       <div class="group-title">每轮对话会带上</div>
       <div class="px-4">
@@ -170,7 +170,7 @@ function saveZone() {
       </van-cell-group>
       <p class="note">查天气按这个顺序：打开了定位就按你此刻的位置，否则按家的地址（要 Google 地图的 Key），再否则按这里的城市。半小时更新一次；取不到时不写天气，不编。</p>
 
-      <div class="group-title">她们那边的天气</div>
+      <div class="group-title">Ta们那边的天气</div>
       <van-cell-group inset>
         <van-cell v-for="c in chars.list" :key="c.id" :to="`/me/characters/${c.id}#weather`" is-link center>
           <template #icon><Avatar :character="c" :size="28" class="mr-2.5" /></template>
@@ -186,7 +186,7 @@ function saveZone() {
           </template>
         </van-cell>
       </van-cell-group>
-      <p class="note">住在国内的角色，在角色设定 → 基本 → "住在哪座城市"里写城市（例如上海），就用中国的天气（填了和风天气时用和风）。她的作息还是和你用同一个时间。</p>
+      <p class="note">住在国内的角色，在角色设定 → 基本 → "住在哪座城市"里写城市（例如上海），就用中国的天气（填了和风天气时用和风）。Ta的作息还是和你用同一个时间。</p>
 
       <div class="group-title">你的真实世界</div>
       <van-cell-group inset>
@@ -208,7 +208,7 @@ function saveZone() {
         </van-cell>
         <van-cell v-if="env.useLocation" title="重新定位" is-link @click="real.locateNow()" />
       </van-cell-group>
-      <p class="note">家的地址只存在这台设备，用来在地图上标出你家、找附近的地方，不会发给对话模型；她只知道你在不在家、出门了多远。打开地图时坐标会发给 Google（用 Google 地图绕不开）。</p>
+      <p class="note">家的地址只存在这台设备，用来在地图上标出你家、找附近的地方，不会发给对话模型；Ta只知道你在不在家、出门了多远。打开地图时坐标会发给 Google（用 Google 地图绕不开）。</p>
 
       <div class="group-title">时区</div>
       <van-cell-group inset>
@@ -225,13 +225,13 @@ function saveZone() {
         <van-field v-model="env.wakeTime" label="起床" input-align="right" />
         <van-field v-model="env.sleepTime" label="睡觉" input-align="right" />
       </van-cell-group>
-      <p class="note">起床时间到了，她会打电话叫醒你；过了睡觉时间还在玩手机，她会来催。</p>
+      <p class="note">起床时间到了，Ta会打电话叫醒你；过了睡觉时间还在玩手机，Ta会来催。</p>
 
       <div class="group-title">三餐时间</div>
       <van-cell-group inset>
         <van-cell v-for="(label, k) in MEAL" :key="k" :title="label" :value="`${env.meals[k].start} - ${env.meals[k].end}`" is-link />
       </van-cell-group>
-      <p class="note">时间段内还没记录吃饭，她先暗示；过了时间再正式邀约。</p>
+      <p class="note">时间段内还没记录吃饭，Ta先暗示；过了时间再正式邀约。</p>
 
       <div class="group-title">今日活动从哪来</div>
       <van-cell-group inset>

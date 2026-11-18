@@ -274,7 +274,7 @@ const quality = computed({
         API Host 在和风天气控制台的"设置"里（每个账号一个，形如 xxx.qweatherapi.com；以前的 devapi.qweather.com 已经不能用了），Key 在"项目管理 → 凭据"里建，选"API KEY"。
         没填时国内的城市也能查（用 Open-Meteo），只是不如和风准。
       </p>
-      <p class="note">你在哪座城市、她们住在哪，在 <RouterLink to="/me/environment" class="text-accent-ink">环境与作息</RouterLink> 和角色设定里设。</p>
+      <p class="note">你在哪座城市、Ta们住在哪，在 <RouterLink to="/me/environment" class="text-accent-ink">环境与作息</RouterLink> 和角色设定里设。</p>
     </div>
   </div>
 </template>

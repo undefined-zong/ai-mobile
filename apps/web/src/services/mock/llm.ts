@@ -1,4 +1,5 @@
-import { estimateTokens } from '@app/shared';
+import { estimateTokens, pronounText } from '@app/shared';
+import { useCharacterStore } from '@/stores/characters';
 import type { LLMClient, LLMRequest, LLMResult, StreamState } from '../types';
 import { pick, sleep } from '@/utils/id';
 
@@ -40,7 +41,7 @@ const RULES: { test: RegExp; replies: string[] }[] = [
   },
   {
     test: /画|照片|自拍|样子|看看你/,
-    replies: ['[expr:shy]那……只给你一个人看哦。[cg:雨夜的窗边，她抱着靠垫回头看，台灯暖光]'],
+    replies: ['[expr:shy]那……只给你一个人看哦。[cg:雨夜的窗边，{{pronoun}}抱着靠垫回头看，台灯暖光]'],
   },
   {
     test: /约会|周六|水族馆|出去玩/,
@@ -66,7 +67,7 @@ const JIANGYU_RULES: { test: RegExp; replies: string[] }[] = [
   { test: /累|困|烦|焦虑|论文|难受/, replies: ['[expr:neutral]累就睡。明早的跑步，照常。', '[expr:neutral]……别硬撑。[expr:smile]明天少跑一圈，就一圈。'] },
   { test: /喜欢|爱你|想你/, replies: ['[expr:neutral]……知道了。', '[expr:smile]少说这些，明早六点别迟到。'] },
   { test: /歌|音乐|听/, replies: ['[expr:neutral]跑步不听歌。听自己的呼吸。'] },
-  { test: /画|照片|自拍|样子|看看你/, replies: ['[expr:neutral]拍什么。[cg:清晨的田径场，他把毛巾搭在肩上，侧过脸看镜头]'] },
+  { test: /画|照片|自拍|样子|看看你/, replies: ['[expr:neutral]拍什么。[cg:清晨的田径场，{{pronoun}}把毛巾搭在肩上，侧过脸看镜头]'] },
   { test: /约会|周六|水族馆|出去玩/, replies: ['[expr:neutral]周六上午训练，下午可以。[choice:去游泳馆|去江边跑步|随便走走]'] },
   { test: /晚安|睡了|睡觉/, replies: ['[expr:neutral]嗯。睡吧。', '[expr:smile]晚安。六点见。'] },
 ];
@@ -95,7 +96,7 @@ function choose(req: LLMRequest): string {
   if (!demo) return echo(req);
   const lastUser = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
   const rule = demo.rules.find((r) => r.test.test(lastUser));
-  return pick(rule ? rule.replies : demo.fallback);
+  return pronounText(pick(rule ? rule.replies : demo.fallback), useCharacterStore().byId(req.characterId));
 }
 
 export class MockLLM implements LLMClient {

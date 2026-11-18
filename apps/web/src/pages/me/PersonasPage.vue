@@ -65,7 +65,7 @@ async function removePersona(p: Persona) {
 
 <template>
   <div class="page" data-page="personas">
-    <PageHeader title="我的人设" subtitle="她眼中的你；家务、健康、日程三套系统可以分别打开" fallback="/me" />
+    <PageHeader title="我的人设" subtitle="Ta眼中的你；家务、健康、日程三套系统可以分别打开" fallback="/me" />
     <div class="page-scroll px-4 py-3 grid gap-3 content-start">
       <div v-for="p in store.list" :key="p.id" class="persona" :class="{ on: selected === p.id }" :data-persona="p.id" @click="selected = p.id">
         <div class="flex items-center gap-3">
@@ -79,7 +79,7 @@ async function removePersona(p: Persona) {
         </div>
         <template v-if="selected === p.id">
           <div class="flex items-center gap-2 mt-3">
-            <span class="text-[13px] text-ink-2 flex-1">头像（她在聊天里看到的你）</span>
+            <span class="text-[13px] text-ink-2 flex-1">头像（Ta在聊天里看到的你）</span>
             <button v-if="looks.avatarKey('persona', p.id)" class="text-[13px] text-ink-3" @click.stop="looks.resetAvatar('persona', p.id)">恢复</button>
             <ImagePick class="text-[13px] text-accent-ink" @click.stop @pick="(f) => pickAvatar(p.id, f)">上传头像</ImagePick>
           </div>
@@ -94,7 +94,7 @@ async function removePersona(p: Persona) {
               <span class="sys-icon"><span class="i-lucide-house-heart" /></span>
               <span class="flex-1 min-w-0">
                 <span class="block text-[14.5px] font-600">家务系统</span>
-                <span class="block text-[12px] text-ink-3 truncate">每天、每周要做的家务；"共同的家"里做完打勾，她会夸你，拖着不做她也有反应</span>
+                <span class="block text-[12px] text-ink-3 truncate">每天、每周要做的家务；"共同的家"里做完打勾，Ta会夸你，拖着不做Ta也有反应</span>
               </span>
               <span class="sys-val" :class="{ on: p.housework?.enabled }">{{ houseworkValue(p) }}</span>
               <span class="i-lucide-chevron-right text-ink-3 shrink-0" />

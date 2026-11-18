@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import { substituteMacros, type Character } from '@app/shared';
 import { useLibraryStore } from '@/stores/library';
 
@@ -7,9 +8,9 @@ import { useLibraryStore } from '@/stores/library';
 
 /** 名字、称呼、描述、性格、场景 */
 export function characterLines(c: Character, user: string): string {
-  const sub = (t: string) => substituteMacros(t, { char: c.name, user }).trim();
+  const sub = (t: string) => substituteMacros(t, { char: c.name, user, pronoun: c.pronoun }).trim();
   return [
-    `名字：${c.name}（界面里称呼"${c.pronoun}"）`,
+    `名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`,
     c.card.description ? `描述：${sub(c.card.description)}` : '',
     c.card.personality ? `性格：${sub(c.card.personality)}` : '',
     c.card.scenario ? `场景：${sub(c.card.scenario)}` : '',
@@ -30,7 +31,7 @@ export function sourceLines(c: Character, user: string, budget = 9000): string {
     for (const e of book.entries) {
       if (!e.enabled || !e.content.trim() || left <= 0) continue;
       const title = e.comment || e.keys.slice(0, 3).join('、');
-      const text = substituteMacros(e.content, { char: c.name, user }).trim().slice(0, Math.min(1200, left));
+      const text = substituteMacros(e.content, { char: c.name, user, pronoun: c.pronoun }).trim().slice(0, Math.min(1200, left));
       left -= text.length;
       parts.push(`【${title}】${text}`);
     }

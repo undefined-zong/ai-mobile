@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { hasOwnWorld, type Character, type LocationActivity, type MapLocation, type SceneId } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -243,7 +244,7 @@ async function openTogether() {
           <span v-if="othersUnread" class="who-dot" :aria-label="`别人那里有 ${othersUnread} 条没看`" />
         </button>
         <div class="place">
-          <RouterLink v-if="placeKnown" :to="mapLink" class="place-chip num" aria-label="在地图上看她在哪">{{ placeLine }}</RouterLink>
+          <RouterLink v-if="placeKnown" :to="mapLink" class="place-chip num" :aria-label="`在地图上看${characterPronoun(her)}在哪`">{{ placeLine }}</RouterLink>
           <span v-else class="place-chip num">{{ placeLine }}</span>
           <div v-if="cast.length > 1" class="dots" aria-hidden="true">
             <span v-for="c in cast" :key="c.id" :class="{ on: c.id === her.id }" />

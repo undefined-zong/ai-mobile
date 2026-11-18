@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import { assembleTaskPrompt } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -70,7 +71,7 @@ export function sidestoryFills(input: SidestoryInput): Record<string, string> {
   return {
     storyCharacter: `【角色】${c.name}\n${cut(c.description, 1200)}${c.personality ? `\n性格：${cut(c.personality, 300)}` : ''}${c.scenario ? `\n背景：${cut(c.scenario, 300)}` : ''}`,
     storyWorld: world
-      ? `【${c.pronoun}的世界】${world.name}${world.blurb ? `：${world.blurb}` : ''}${world.schedule?.length ? `\n作息：\n${world.schedule.join('\n')}` : ''}${world.studyTask ? `\n手头在忙：${world.studyTask}` : ''}${world.meals ? `\n三餐：${world.meals}` : ''}${world.people?.length ? `\n身边的人：${world.people.map((p) => `${p.name}（${p.relation}）`).join('、')}` : ''}`
+      ? `【${characterPronoun(c)}的世界】${world.name}${world.blurb ? `：${world.blurb}` : ''}${world.schedule?.length ? `\n作息：\n${world.schedule.join('\n')}` : ''}${world.studyTask ? `\n手头在忙：${world.studyTask}` : ''}${world.meals ? `\n三餐：${world.meals}` : ''}${world.people?.length ? `\n身边的人：${world.people.map((p) => `${p.name}（${p.relation}）`).join('、')}` : ''}`
       : '',
     storyNow: `【现在】${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${WEEKDAY[now.getDay()]} ${clock(now)}${current?.place ? `；${c.name}在${current.place}${current.status ? `（${current.status}）` : ''}` : ''}`,
     storyMemories: input.memories?.length ? `【${c.name}记得的关于${user.name}的事】\n${input.memories.slice(0, 8).map((m) => `- ${m}`).join('\n')}` : '',
@@ -81,7 +82,7 @@ export function sidestoryFills(input: SidestoryInput): Record<string, string> {
 
 /** 按"小剧场"预设拼番外的提示词 */
 export function buildSidestoryMessages(input: SidestoryInput, preset: TaskPreset): ChatMessage[] {
-  return assembleTaskPrompt({ preset, fills: sidestoryFills(input), macros: { char: input.character.name, user: input.user.name, now: input.now } }).messages;
+  return assembleTaskPrompt({ preset, fills: sidestoryFills(input), macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.user.name, now: input.now } }).messages;
 }
 
 function str(v: unknown): string {

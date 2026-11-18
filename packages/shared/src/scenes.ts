@@ -1,3 +1,4 @@
+import { pronounText } from './pronouns.ts';
 import type { Outfit, Pose } from './expressions.ts';
 import type { ControlTagKind } from './tags.ts';
 import type { ProactiveTriggerId } from './types/proactive.ts';
@@ -39,7 +40,7 @@ export const SCENES: SceneDef[] = [
     id: 'exercise',
     name: '健身',
     icon: 'i-lucide-dumbbell',
-    tagline: '照着今天的计划练，或者随便动动；她换上运动服陪你',
+    tagline: '照着今天的计划练，或者随便动动；{{pronoun}}换上运动服陪你',
     backdrop: 'gym',
     ambient: ['birds', 'wind'],
     outfit: 'sport',
@@ -55,7 +56,7 @@ export const SCENES: SceneDef[] = [
     id: 'meal',
     name: '一起吃饭',
     icon: 'i-lucide-utensils',
-    tagline: '她也在吃饭时一起吃，不在饭点就各吃各的、碰个杯',
+    tagline: '{{pronoun}}也在吃饭时一起吃，不在饭点就各吃各的、碰个杯',
     backdrop: 'dining',
     ambient: ['cafe'],
     outfit: 'daily',
@@ -65,13 +66,13 @@ export const SCENES: SceneDef[] = [
       '【场景：一起吃饭】{{user}}在吃饭，你陪着。共同吃饭时你也正好在吃饭，像坐在同一张桌子两边一起吃；各吃各的时你在自己那边做自己的事，隔着屏幕陪{{user}}吃，可以碰杯。聊吃的、聊今天；记住{{user}}的口味；{{user}}发来饭照时，先具体评价看到的食物。',
     allowedTags: ['expr', 'cg'],
     proactiveTriggers: ['breakfast', 'lunch', 'dinner'],
-    dataSources: ['三餐时间窗口（环境与作息里设置）', '她今天的作息和三餐（节律）', '健康计划里这顿怎么吃', '饭照（识图）'],
+    dataSources: ['三餐时间窗口（环境与作息里设置）', '{{pronoun}}今天的作息和三餐（节律）', '健康计划里这顿怎么吃', '饭照（识图）'],
   },
   {
     id: 'study',
     name: '陪伴学习',
     icon: 'i-lucide-book-open',
-    tagline: '番茄钟开着，她在旁边安静地陪你',
+    tagline: '番茄钟开着，{{pronoun}}在旁边安静地陪你',
     backdrop: 'library',
     ambient: ['rain', 'pages'],
     outfit: 'daily',
@@ -103,7 +104,7 @@ export const SCENES: SceneDef[] = [
     id: 'music',
     name: '一起听歌',
     icon: 'i-lucide-music-2',
-    tagline: '同一首歌，她会在喜欢的那句发弹幕',
+    tagline: '同一首歌，{{pronoun}}会在喜欢的那句发弹幕',
     backdrop: 'music',
     ambient: [],
     outfit: 'daily',
@@ -135,7 +136,7 @@ export const SCENES: SceneDef[] = [
     id: 'poke',
     name: '戳戳乐',
     icon: 'i-lucide-pointer',
-    tagline: '用手戳、亲一口、蹭一蹭，看她什么反应',
+    tagline: '用手戳、亲一口、蹭一蹭，看{{pronoun}}什么反应',
     backdrop: 'room',
     ambient: [],
     outfit: 'daily',
@@ -151,7 +152,7 @@ export const SCENES: SceneDef[] = [
     id: 'watch',
     name: '一起观影',
     icon: 'i-lucide-clapperboard',
-    tagline: '同一部片，她跟着字幕在对的那一秒说话',
+    tagline: '同一部片，{{pronoun}}跟着字幕在对的那一秒说话',
     backdrop: 'cinema',
     ambient: [],
     outfit: 'daily',
@@ -177,13 +178,13 @@ export const SCENES: SceneDef[] = [
     promptFragment: '',
     allowedTags: ['expr'],
     proactiveTriggers: [],
-    dataSources: ['海龟汤题库（src/soups/ 里的题库文件，可以增删改）', '现编的题', '真心话大冒险的题：她按预设里的尺度、你们的关系和记忆现出', '飞行棋的棋盘：开局时照选的棋盘预设现设计 128 格的任务'],
+    dataSources: ['海龟汤题库（src/soups/ 里的题库文件，可以增删改）', '现编的题', '真心话大冒险的题：{{pronoun}}按预设里的尺度、你们的关系和记忆现出', '飞行棋的棋盘：开局时照选的棋盘预设现设计 128 格的任务'],
   },
   {
     id: 'read',
     name: '一起看书',
     icon: 'i-lucide-book-open-text',
-    tagline: '同一本书，她提前读几页，在页边留批注',
+    tagline: '同一本书，{{pronoun}}提前读几页，在页边留批注',
     backdrop: 'library',
     ambient: ['pages'],
     outfit: 'daily',
@@ -199,7 +200,7 @@ export const SCENES: SceneDef[] = [
     id: 'home',
     name: '共同的家',
     icon: 'i-lucide-house-heart',
-    tagline: '今天的家务一件件做完，她在旁边陪你聊、给你放歌',
+    tagline: '今天的家务一件件做完，{{pronoun}}在旁边陪你聊、给你放歌',
     backdrop: 'living',
     ambient: [],
     outfit: 'daily',
@@ -215,7 +216,7 @@ export const SCENES: SceneDef[] = [
     id: 'heart',
     name: '心跳',
     icon: 'i-lucide-heart-pulse',
-    tagline: '只属于你们两个人的时间：打字或连麦，她的话通过 Intiface Central 传到你身上的玩具',
+    tagline: '只属于你们两个人的时间：打字或连麦，{{pronoun}}的话通过 Intiface Central 传到你身上的玩具',
     backdrop: 'bedroom',
     ambient: [],
     outfit: 'pajama',
@@ -226,13 +227,13 @@ export const SCENES: SceneDef[] = [
       '【场景：心跳】这是只属于你和{{user}}的亲密时间。说话贴近、带着情绪和呼吸感，节奏跟着{{user}}走：{{user}}想慢就慢，想要更多再给更多；{{user}}说停、说不舒服时立刻温柔地停下来。',
     allowedTags: ['expr'],
     proactiveTriggers: [],
-    dataSources: ['Intiface Central（Buttplug 协议，本机或局域网的 WebSocket）：连着的玩具和它们能做什么', '"控制指令"预设按她的话写的指令，或者她在回复里写的 <device>', 'NovelAI 画的背景（"生图 · 心跳"的几个预设）'],
+    dataSources: ['Intiface Central（Buttplug 协议，本机或局域网的 WebSocket）：连着的玩具和它们能做什么', '"控制指令"预设按{{pronoun}}的话写的指令，或者{{pronoun}}在回复里写的 <device>', 'NovelAI 画的背景（"生图 · 心跳"的几个预设）'],
   },
   {
     id: 'escape',
     name: '出逃',
     icon: 'i-lucide-plane-takeoff',
-    tagline: '去一个很远的地方待一会儿：火车上、海边、云上面……一个人去，或者带她一起',
+    tagline: '去一个很远的地方待一会儿：火车上、海边、云上面……一个人去，或者带{{pronoun}}一起',
     backdrop: 'seaside',
     ambient: ['waves', 'wind'],
     outfit: 'daily',
@@ -263,6 +264,7 @@ export const FREE_SCENE: SceneDef = {
   dataSources: [],
 };
 
-export function getScene(id: string): SceneDef {
-  return SCENES.find((s) => s.id === id) ?? FREE_SCENE;
+export function getScene(id: string, character?: { pronoun?: string } | null): SceneDef {
+  const scene = SCENES.find((s) => s.id === id) ?? FREE_SCENE;
+  return { ...scene, tagline: pronounText(scene.tagline, character), dataSources: scene.dataSources.map((text) => pronounText(text, character)) };
 }

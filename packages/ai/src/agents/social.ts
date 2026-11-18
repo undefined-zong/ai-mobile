@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import { assembleTaskPrompt, socialDayText, substituteMacros, type SocialContext, type SocialDay, type SocialTask } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -17,6 +18,7 @@ export type SocialFill = 'socialCharacter' | 'socialLife' | 'socialNow' | 'socia
 export interface SocialPromptInput {
   task: SocialTask;
   characterName: string;
+  pronoun?: string;
   userName: string;
   now?: Date;
   timeZone?: string;
@@ -26,7 +28,7 @@ export interface SocialPromptInput {
 export function buildSocialMessages(input: SocialPromptInput, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName, user: input.userName, now: input.now, timeZone: input.timeZone }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName, now: input.now, timeZone: input.timeZone }, type: input.task }).messages;
 }
 
 const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -38,9 +40,9 @@ function cut(text: string | undefined, max: number): string {
 
 /** 角色那一块：名字、描述、性格、场景（宏先替换好） */
 export function socialCharacterFill(c: SocialContext['character'], userName: string): string {
-  const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName }).trim();
+  const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName, pronoun: c.pronoun }).trim();
   return [
-    `名字：${c.name}（界面里称呼"${c.pronoun}"）`,
+    `名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`,
     c.card.description ? `描述：${cut(sub(c.card.description), 1500)}` : '',
     c.card.personality ? `性格：${cut(sub(c.card.personality), 400)}` : '',
     c.card.scenario ? `场景：${cut(sub(c.card.scenario), 400)}` : '',
@@ -64,7 +66,7 @@ export function socialPostInput(context: SocialContext, now: number, day: Social
   const { character: c, userName } = context;
   const at = socialNowFill(now, context.timezone);
   return {
-    task: 'post', characterName: c.name, userName, now: new Date(now), timeZone: context.timezone,
+    task: 'post', characterName: c.name, pronoun: c.pronoun, userName, now: new Date(now), timeZone: context.timezone,
     fills: {
       socialCharacter: socialCharacterFill(c, userName),
       socialLife: day ? socialDayText(day, at.minute) : '',

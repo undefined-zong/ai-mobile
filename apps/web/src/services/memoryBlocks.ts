@@ -1,4 +1,5 @@
 import { dayLabel, lineTime } from '@app/ai';
+import { pronounText } from '@app/shared';
 import type { AppBlockFill, Character, Chat, Memory } from '@app/shared';
 import { useMemoryStore } from '@/stores/memory';
 import type { RecallLine } from './recall';
@@ -19,7 +20,7 @@ const PROACTIVE_TOP = 30;
 
 /** 演示角色还没总结过时的梗概 */
 const DEMO_SUMMARIES: Record<string, string> = {
-  suwan: '上周两人一起看了电影；他最近在赶论文、经常熬夜，她很担心；约好周六去水族馆。',
+  suwan: '上周两人一起看了电影；你最近在赶论文、经常熬夜，{{pronoun}}很担心；约好周六去水族馆。',
   jiangyu: '他最近每天早上跟江屿在操场晨跑；昨天下雨跑了 3.1 公里，比第一天快了一分钟；约好每天六点见，迟到一分钟加一圈。',
 };
 
@@ -75,7 +76,7 @@ export function summaryBlock(chat: Chat, character: Character, timeZone: string)
   const segs = useMemoryStore().timelineOf(chat.id).length;
   if (!profile && !timeline) {
     const demo = DEMO_SUMMARIES[character.id];
-    return demo ? { content: demo, source: '演示梗概（这条聊天还没总结过）' } : { content: '', source: '这条聊天还没总结过' };
+    return demo ? { content: pronounText(demo, character), source: '演示梗概（这条聊天还没总结过）' } : { content: '', source: '这条聊天还没总结过' };
   }
   const parts = [profile ? `${character.name}知道的你：\n${profile}` : '', timeline ? `你们的时间线（越早越概括）：\n${timeline}` : ''].filter(Boolean);
   return { content: parts.join('\n\n'), source: `画像卡 ${useMemoryStore().profileOf(character.id)?.lines.length ?? 0} 行 + 时间线 ${segs} 段` };

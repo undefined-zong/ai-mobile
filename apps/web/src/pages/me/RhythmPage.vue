@@ -230,7 +230,7 @@ const sceneName = (sid: string) => SCENES.find((s) => s.id === sid)?.name ?? sid
 
 <template>
   <div class="page" data-page="rhythm">
-    <PageHeader title="节律" subtitle="她们每天的作息、三餐和穿着" fallback="/me" />
+    <PageHeader title="节律" subtitle="Ta们每天的作息、三餐和穿着" fallback="/me" />
     <div class="page-scroll pb-10">
       <PersonTabs v-model="pickedId" :characters="chars.list" label="看谁的节律" class="px-4 pt-3" />
 

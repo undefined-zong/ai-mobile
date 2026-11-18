@@ -36,6 +36,7 @@ export type ParallelFill = keyof (typeof TASK_MARKERS)['parallel'];
 export interface ParallelPromptInput {
   task: ParallelTask;
   characterName: string;
+  pronoun?: string;
   userName: string;
   now?: Date;
   timeZone?: string;
@@ -45,7 +46,7 @@ export interface ParallelPromptInput {
 export function buildParallelMessages(input: ParallelPromptInput, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName, user: input.userName, now: input.now, timeZone: input.timeZone }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName, now: input.now, timeZone: input.timeZone }, type: input.task }).messages;
 }
 
 /** 她今天的作息（地点是名字的那一份）→ 时间线，标出现在 */
@@ -77,7 +78,7 @@ export function parallelPostInput(context: ParallelContext, now: number, her: So
     mine: mine ?? [],
     input: {
       task: 'parallel-post',
-      characterName: c.name,
+      characterName: c.name, pronoun: c.pronoun,
       userName,
       now: new Date(now),
       timeZone: context.timezone,

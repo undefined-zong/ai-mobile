@@ -7,7 +7,7 @@
   "defaultFor": [
     "community-image"
   ],
-  "description": "社群里帖子的配图：把发帖时写下的画面翻成 NovelAI tags。网友的帖子像随手拍的照片（吃的、东西、场景），程序不加任何人的长相；她自己发的帖子画面里有她时，程序把她的长相加在最前面，只拍东西（no humans）时不加。两种各一块，按这一帖是谁发的只发一块；想换画风、换构图习惯就改规则。输出格式里的字段名别改，程序按它读。",
+  "description": "社群里帖子的配图：把发帖时写下的画面翻成 NovelAI tags。网友的帖子像随手拍的照片（吃的、东西、场景），程序不加任何人的长相；Ta自己发的帖子画面里有Ta时，程序把Ta的长相加在最前面，只拍东西（no humans）时不加。两种各一块，按这一帖是谁发的只发一块；想换画风、换构图习惯就改规则。输出格式里的字段名别改，程序按它读。",
   "blocks": [
     {
       "identifier": "main",
@@ -50,7 +50,7 @@
     },
     {
       "identifier": "communityMember",
-      "name": "她的帖子",
+      "name": "Ta的帖子",
       "role": "system",
       "content": "这一帖是{{char}}自己发的。先看\"要画的画面\"里有没有{{char}}本人：\n- 没写到{{char}}（只拍了吃的、东西、风景）：这是{{char}}用手机拍的照片，画面里没有人。tags 以 no humans 开头，negative 写 1girl, 1boy；这时程序不会加{{char}}的长相。不要因为是{{char}}发的帖就把{{char}}画进去。\n- 写到了{{char}}（自拍、别人帮拍、{{char}}在画面里吃东西）：{{char}}是画面的主角，长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写。tags 以 1girl 或 1boy（按{{char}}的性别）、solo 开头；自拍用 selfie，别人帮拍用 upper body 或 cowboy shot；{{char}}在画面中间、整张脸都在画面里，吃的、东西拿在手里或摆在面前，大小和人对得上；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。不要用 food focus、still life 这类以东西为主的镜头，否则{{char}}会被挤到画面边上、只露半张脸。",
       "marker": false,

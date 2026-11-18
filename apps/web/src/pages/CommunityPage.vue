@@ -94,7 +94,7 @@ function sendComment() {
 async function removePost(p: CommunityPost) {
   const known = !isNetizen(p.authorId);
   try {
-    await showConfirmDialog({ title: '删掉这一帖？', message: `连同下面的赞、顶和回复一起删掉。${known ? '她们已经记住的不会跟着忘，要忘掉去"回忆 → 记忆本"里删。' : ''}`, confirmButtonText: '删掉' });
+    await showConfirmDialog({ title: '删掉这一帖？', message: `连同下面的赞、顶和回复一起删掉。${known ? 'Ta们已经记住的不会跟着忘，要忘掉去"回忆 → 记忆本"里删。' : ''}`, confirmButtonText: '删掉' });
   } catch {
     return;
   }
@@ -116,7 +116,7 @@ async function onAction(a: { key: string }) {
   else if (a.key === 'leave') store.setJoined(c.id, false);
   else if (a.key === 'delete') {
     try {
-      await showConfirmDialog({ title: `删除「${c.name}」？`, message: `连同里面的 ${posts.value.length} 帖一起删掉。${c.seedFile ? '这是自带的社群，删了不会自己回来。' : ''}她们已经记住的不会跟着忘。`, confirmButtonText: '删除', confirmButtonColor: 'var(--bad)' });
+      await showConfirmDialog({ title: `删除「${c.name}」？`, message: `连同里面的 ${posts.value.length} 帖一起删掉。${c.seedFile ? '这是自带的社群，删了不会自己回来。' : ''}Ta们已经记住的不会跟着忘。`, confirmButtonText: '删除', confirmButtonColor: 'var(--bad)' });
     } catch {
       return;
     }

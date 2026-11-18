@@ -291,7 +291,7 @@ export const useHubStore = defineStore('hub', () => {
 
   /** 家务和健康：上传云端的那份（时间按半小时取整，免得每分钟都要重新上传）；主动消息预设里没有"她怎么反应"的块时带上自带的 */
   function homeSnapshot(persona: ReturnType<typeof personaOf>, character: Character): { home?: string } {
-    const b = homeBlock(persona, { stepMin: 30, preset: useLibraryStore().presetForUse('proactive', character), characterName: character.name });
+    const b = homeBlock(persona, { stepMin: 30, preset: useLibraryStore().presetForUse('proactive', character), characterName: character.name, pronoun: character.pronoun });
     return b ? { home: b.content } : {};
   }
 

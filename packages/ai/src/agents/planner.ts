@@ -40,10 +40,10 @@ import { samplerRequest, type TaskPreset } from './taskPreset.ts';
 
 export type PlannerFill = keyof (typeof TASK_MARKERS)['planner'];
 
-export function buildPlannerMessages(input: { task: PlannerTask; userName: string; characterName?: string; fills: Partial<Record<PlannerFill, string>> }, preset: TaskPreset): ChatMessage[] {
+export function buildPlannerMessages(input: { task: PlannerTask; userName: string; characterName?: string; pronoun?: string; fills: Partial<Record<PlannerFill, string>> }, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName ?? '', user: input.userName }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName ?? '', user: input.userName }, type: input.task }).messages;
 }
 
 /** 连好的一台服务器 */
@@ -110,7 +110,7 @@ export async function runPlanner(
   const sources: PlannerSource[] = [];
   const gathered: string[] = [];
   const req = (task: PlannerTask, fills: Partial<Record<PlannerFill, string>>) => ({
-    messages: buildPlannerMessages({ task, userName, characterName, fills }, preset),
+    messages: buildPlannerMessages({ task, userName, characterName, pronoun: ctx.character?.pronoun, fills }, preset),
     ...samplerRequest(preset.sampler),
   });
 

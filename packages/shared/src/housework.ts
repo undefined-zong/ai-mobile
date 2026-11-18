@@ -36,7 +36,7 @@ export const CHORE_EFFECTS: Record<ChoreEffect, { label: string; desc: string }>
   'miss-food': { label: '有点失落', desc: '说要是能吃到你亲手做的就好了' },
   nag: { label: '唠叨一句', desc: '轻轻提醒一下' },
   none: { label: '不在意', desc: '不提' },
-  custom: { label: '自己写', desc: '写她会怎样' },
+  custom: { label: '自己写', desc: '写Ta会怎样' },
 };
 
 export const WEEKDAY_LABEL = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];

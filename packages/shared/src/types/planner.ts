@@ -235,7 +235,7 @@ export interface PlannerRunResult {
 /** 上传云端的那份（Token 不在这里，单独加密上传） */
 export interface PlannerContext {
   persona: { id: string; name: string; description: string };
-  character: { name: string; description: string } | null;
+  character: { name: string; description: string; pronoun?: string } | null;
   timezone: string;
   /** 服务器去掉了工具清单（云端每次现列） */
   settings: PlannerSettings;

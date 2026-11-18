@@ -75,7 +75,7 @@ export interface PresetUse {
  */
 export const IMAGE_MOMENTS: Partial<Record<FeatureSceneId, Record<string, string>>> = {
   study: { seat: '入座', peek: '偷拍', reward: '奖励', mine: '你这边' },
-  meal: { table: '对面', side: '她那边', cheers: '碰杯' },
+  meal: { table: '对面', side: 'Ta那边', cheers: '碰杯' },
   date: { arrive: '到达', highlight: '关键时刻', keepsake: '留念' },
   sleep: { mic: '连麦', now: '这一刻' },
   heart: { open: '开场', now: '这一刻' },
@@ -144,23 +144,23 @@ export const isPokePreset = (p: Pick<Preset, 'blocks'> | undefined) => hasTasks(
 
 /** 一起做事的用途里名字、说明和场景名不一样的（一个场景分了好几个用途的） */
 const SCENE_USE_TEXT: Partial<Record<FeatureSceneId, { label?: string; desc: string }>> = {
-  heart: { desc: '心跳里打字聊天时她说的话' },
+  heart: { desc: '心跳里打字聊天时Ta说的话' },
   game: { label: '一起游戏 · 海龟汤', desc: '一起游戏里玩海龟汤时：主持、判定、当队友、猜你出的题' },
-  poke: { desc: '戳戳乐时她的反应：用手戳、用嘴亲、蹭一蹭各一块，尺度也在里面' },
+  poke: { desc: '戳戳乐时Ta的反应：用手戳、用嘴亲、蹭一蹭各一块，尺度也在里面' },
 };
 
 export const PRESET_USES: PresetUse[] = [
-  { id: 'call', category: 'chat', label: '语音通话', desc: '打电话时她说的话：短句、口语、不写动作，方便边生成边合成语音', icon: 'i-lucide-phone', follow: 'chat' },
+  { id: 'call', category: 'chat', label: '语音通话', desc: '打电话时Ta说的话：短句、口语、不写动作，方便边生成边合成语音', icon: 'i-lucide-phone', follow: 'chat' },
   ...SCENES.map((s): PresetUse => {
     const text = SCENE_USE_TEXT[s.id as FeatureSceneId];
     return { id: `scene:${s.id as FeatureSceneId}`, category: 'feature', label: text?.label ?? s.name, desc: text?.desc ?? `${s.name}时的对话`, icon: s.icon, follow: 'chat' };
   }),
-  { id: 'heart-voice', category: 'feature', label: '心跳 · 语音', desc: '心跳里连麦时她说的话：口语、短句、不写动作，边生成边合成语音', icon: 'i-lucide-audio-lines', follow: null },
+  { id: 'heart-voice', category: 'feature', label: '心跳 · 语音', desc: '心跳里连麦时Ta说的话：口语、短句、不写动作，边生成边合成语音', icon: 'i-lucide-audio-lines', follow: null },
   {
     id: 'sleep-scene',
     category: 'feature',
     label: '哄睡 · 场景',
-    desc: '哄睡的"场景"模式：挑一个睡前的地方（列车、温泉、飞机、林间小屋……），她像约会那样一段一段沉浸地陪你睡着',
+    desc: '哄睡的"场景"模式：挑一个睡前的地方（列车、温泉、飞机、林间小屋……），Ta像约会那样一段一段沉浸地陪你睡着',
     icon: 'i-lucide-tent-tree',
     follow: null,
   },
@@ -168,7 +168,7 @@ export const PRESET_USES: PresetUse[] = [
     id: 'game-truthdare',
     category: 'feature',
     label: '一起游戏 · 真心话大冒险',
-    desc: '一起游戏里玩真心话大冒险时：她给你出题、选真心话还是大冒险、回答和做挑战、帮你想题',
+    desc: '一起游戏里玩真心话大冒险时：Ta给你出题、选真心话还是大冒险、回答和做挑战、帮你想题',
     icon: 'i-lucide-bottle-wine',
     follow: null,
   },
@@ -176,7 +176,7 @@ export const PRESET_USES: PresetUse[] = [
     id: 'game-flight',
     category: 'feature',
     label: '一起游戏 · 飞行棋',
-    desc: '一起游戏里下双人飞行棋时用的棋盘：照它设计 128 格的任务，她走到的格子怎么做、你做完时她的反应',
+    desc: '一起游戏里下双人飞行棋时用的棋盘：照它设计 128 格的任务，Ta走到的格子怎么做、你做完时Ta的反应',
     icon: 'i-lucide-dice-5',
     follow: null,
   },
@@ -200,7 +200,7 @@ export const PRESET_USES: PresetUse[] = [
     id: 'game-decor',
     category: 'feature',
     label: '一起游戏 · 装修小屋',
-    desc: '一起游戏里装修小屋时：她看看屋子说想法、自己动手布置、给自己（或者给你）捏小人、边装边聊、收工时的话',
+    desc: '一起游戏里装修小屋时：Ta看看屋子说想法、自己动手布置、给自己（或者给你）捏小人、边装边聊、收工时的话',
     icon: 'i-lucide-sofa',
     follow: null,
   },
@@ -216,12 +216,12 @@ export const PRESET_USES: PresetUse[] = [
     id: 'game-workshop',
     category: 'feature',
     label: '一起游戏 · 创意工坊',
-    desc: '一起游戏里把你写的小说、画的画给她看：她读完捧场、吐槽、追问后续，或者陪你聊聊创作',
+    desc: '一起游戏里把你写的小说、画的画给Ta看：Ta读完捧场、吐槽、追问后续，或者陪你聊聊创作',
     icon: 'i-lucide-palette',
     follow: null,
   },
   { id: 'proactive', category: 'proactive', label: '主动消息', desc: '到点时角色先发来的那条', icon: 'i-lucide-bell-ring', follow: 'chat' },
-  { id: 'social', category: 'social', label: '朋友圈', desc: '她发朋友圈（云端每天随机时间发，或者在朋友圈页里让她现在发）、给你的朋友圈点赞评论、回你的评论', icon: 'i-lucide-aperture', follow: null },
+  { id: 'social', category: 'social', label: '朋友圈', desc: 'Ta发朋友圈（云端每天随机时间发，或者在朋友圈页里让Ta现在发）、给你的朋友圈点赞评论、回你的评论', icon: 'i-lucide-aperture', follow: null },
   {
     id: 'community',
     category: 'social',
@@ -250,7 +250,7 @@ export const PRESET_USES: PresetUse[] = [
     id: 'game-workshop-image',
     category: 'image',
     label: '创意工坊 · 画画',
-    desc: '创意工坊里你想画的东西（可以画她、画你小说里的一幕、画什么都行）：先写成 NovelAI tags 再调生图 API',
+    desc: '创意工坊里你想画的东西（可以画Ta、画你小说里的一幕、画什么都行）：先写成 NovelAI tags 再调生图 API',
     icon: 'i-lucide-paintbrush',
     follow: 'image',
   },
@@ -266,18 +266,18 @@ export const PRESET_USES: PresetUse[] = [
     id: 'community-image',
     category: 'image',
     label: '社群配图',
-    desc: '社群里帖子要配的图（网友随手拍的吃的、东西、场景，或者她自己发帖时配的图）：先写成 NovelAI tags 再调生图 API',
+    desc: '社群里帖子要配的图（网友随手拍的吃的、东西、场景，或者Ta自己发帖时配的图）：先写成 NovelAI tags 再调生图 API',
     icon: 'i-lucide-images',
     follow: 'image',
   },
-  { id: 'rhythm', category: 'rhythm', label: '节律', desc: '导入角色后建她的世界；每天排她的作息、三餐和穿着（"我的 → 节律"）', icon: 'i-lucide-calendar-clock', follow: null },
+  { id: 'rhythm', category: 'rhythm', label: '节律', desc: '导入角色后建Ta的世界；每天排Ta的作息、三餐和穿着（"我的 → 节律"）', icon: 'i-lucide-calendar-clock', follow: null },
   { id: 'health', category: 'health', label: '健康计划', desc: '按你人设里的健康设置排这周和今天的健身计划、饮食计划（"我的 → 健康计划"）', icon: 'i-lucide-heart-pulse', follow: null },
   { id: 'planner', category: 'planner', label: '日程计划', desc: '日程系统：每天到点看邮件、日程、家务和健康计划，排你这周和今天的计划（"我的 → 日程计划"）', icon: 'i-lucide-calendar-check', follow: null },
   {
     id: 'parallel',
     category: 'parallel',
     label: '平行时空',
-    desc: '平行时空里她给你留言（云端每天在随机的时间留）、回你的留言、你请她改今天的日程时决定答不答应（地图上她的世界"一起做点什么"里，紧挨着心跳）',
+    desc: '平行时空里Ta给你留言（云端每天在随机的时间留）、回你的留言、你请Ta改今天的日程时决定答不答应（地图上Ta的世界"一起做点什么"里，紧挨着心跳）',
     icon: 'i-lucide-orbit',
     follow: null,
   },
@@ -297,7 +297,7 @@ export const PRESET_USES: PresetUse[] = [
     icon: 'i-lucide-sparkles',
     follow: null,
   },
-  { id: 'device', category: 'device', label: '控制指令', desc: '心跳里按她说的话给连着的玩具写指令（震动、摆动、伸缩……），读到、念到那里时执行', icon: 'i-lucide-activity', follow: null },
+  { id: 'device', category: 'device', label: '控制指令', desc: '心跳里按Ta说的话给连着的玩具写指令（震动、摆动、伸缩……），读到、念到那里时执行', icon: 'i-lucide-activity', follow: null },
   {
     id: 'sprite',
     category: 'sprite',

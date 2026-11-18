@@ -170,7 +170,7 @@ export function checkSchedule(raw: RhythmSlot[], ctx: { template: RhythmTemplate
     if (!loc) {
       const t = templateSpans(ctx.template, a, a + 1)[0];
       loc = t?.locationId ?? ctx.template.schedule[0]?.locationId ?? '';
-      fixes.push(`"${s.locationId}"不在她的世界里，${s.from}–${s.to} 改在模板的地点`);
+      fixes.push(`"${s.locationId}"不在Ta的世界里，${s.from}–${s.to} 改在模板的地点`);
     }
     if (!loc) continue;
     spans.push({ from: a, to: b, locationId: loc, status: s.status.trim() || '自己的事' });

@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import {
   AGENT_META,
   allowedInviteGames,
@@ -570,7 +571,7 @@ export const useChatStore = defineStore('chat', () => {
     if (said) push(chatId, 'user', [{ type: 'text', text: said }], { meta: { scene: chat.currentScene ?? undefined, cue: opts.cue } });
     const status = useAiStore().status('companion');
     if (!status.live) return { ok: false, reason: `「陪伴 · 快速」还没接通：${status.reason}`, notConnected: true };
-    if (streams[chatId]) return { ok: false, reason: '她还在回上一句' };
+    if (streams[chatId]) return { ok: false, reason: `${characterPronoun(useCharacterStore().byId(chat.characterId))}还在回上一句` };
     const id = await generate(chatId, undefined, {
       agent: 'companion',
       task: { name: opts.task, input: opts.input },
@@ -734,7 +735,7 @@ export const useChatStore = defineStore('chat', () => {
     return list(chatId)
       .filter((m) => m.text && (m.role === 'user' || m.role === 'assistant'))
       .slice(-n)
-      .map((m) => `${m.role === 'user' ? user : (character?.name ?? '她')}: ${m.text}`);
+      .map((m) => `${m.role === 'user' ? user : (character?.name ?? 'Ta')}: ${m.text}`);
   }
 
   /**

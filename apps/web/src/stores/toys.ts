@@ -358,6 +358,7 @@ export const useToyStore = defineStore('toys', () => {
       {
         userName: opts.userName,
         characterName: opts.character.name,
+        pronoun: opts.character.pronoun,
         fills: {
           deviceToys: `连着的玩具：\n${toysLine()}`,
           deviceLimits: `强度上限和最快的速度：${limitsLine()}`,

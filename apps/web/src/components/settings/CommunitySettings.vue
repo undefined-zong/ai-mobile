@@ -30,8 +30,8 @@ const STEPPERS = [
   { key: 'batchSize', label: '每次网友发几帖', note: '一次更新里不同的网友各发一帖' },
   { key: 'memberPerDay', label: '角色每天最多发几帖', note: '你邀请进社群的角色，每天在每个社群里发 0 到这么多帖；0 = 不自己发，只在你点"发一帖"时发' },
   { key: 'contextPosts', label: '给模型看最近几帖', note: '网友发帖、回应你时，把这个社群最近这么多帖发给模型（不重复、能接着聊）；越多越费 token，0 = 不给' },
-  { key: 'chatPosts', label: '聊天时带最近几帖', note: '和她聊天时，她所在的每个社群带最近三天的这么多帖（你和她的优先）；0 = 只让她知道自己在哪些社群' },
-  { key: 'keep', label: '每个社群保留最近几帖', note: '更早的从本机删掉（她们记住的不会跟着忘）' },
+  { key: 'chatPosts', label: '聊天时带最近几帖', note: '和Ta聊天时，Ta所在的每个社群带最近三天的这么多帖（你和Ta的优先）；0 = 只让Ta知道自己在哪些社群' },
+  { key: 'keep', label: '每个社群保留最近几帖', note: '更早的从本机删掉（Ta们记住的不会跟着忘）' },
 ] as const;
 
 // 调小"保留几帖"以后马上删掉超出的
@@ -61,7 +61,7 @@ watch(() => store.settings.keep, () => store.trim());
       <div class="row">
         <div class="flex-1 min-w-0">
           <div class="text-[14px] font-600">有新帖时通知</div>
-          <div class="text-[12px] text-ink-3 mt-0.5 leading-relaxed">云端替网友、替她们发了帖就推一条通知（要在"主动消息"里订阅过通知通道）。</div>
+          <div class="text-[12px] text-ink-3 mt-0.5 leading-relaxed">云端替网友、替Ta们发了帖就推一条通知（要在"主动消息"里订阅过通知通道）。</div>
         </div>
         <van-switch v-model="store.settings.notify" size="22" aria-label="有新帖时通知" />
       </div>

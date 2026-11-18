@@ -1,3 +1,4 @@
+import { characterPronoun } from './pronouns.ts';
 import type { Character } from './types/character.ts';
 import type { Lorebook } from './types/lorebook.ts';
 import { IMAGE_MODES, LIFE_FLAGS, PROMPT_MARKERS, TASK_MARKERS, isRoleplayCategory, markerName, type Preset, type PresetCategory, type PromptBlock } from './types/preset.ts';
@@ -39,9 +40,10 @@ export interface FormatIssue {
 /** App 在 SillyTavern 的宏之外认的宏 */
 export const APP_MACROS: { name: string; desc: string }[] = [
   { name: '{{char}} {{user}}', desc: '角色名、你的名字；SillyTavern 常用的宏都认（{{time}} {{date}} {{random::a::b}} {{setvar}} {{getvar}}……）' },
+  { name: '{{pronoun}} {{char_pronoun}}', desc: '当前角色选择的人称（他 / 她 / Ta）；未绑定角色时为 Ta' },
   { name: '{{weather}}', desc: '天气一句话' },
-  { name: '{{char_appearance}}', desc: '生图预设：她的长相（原创是外观 tags；同人是角色 tag + 作品 tag）' },
-  { name: '{{char_outfit}}', desc: '生图预设：节律里她今天这个场景穿的那套' },
+  { name: '{{char_appearance}}', desc: '生图预设：Ta的长相（原创是外观 tags；同人是角色 tag + 作品 tag）' },
+  { name: '{{char_outfit}}', desc: '生图预设：节律里Ta今天这个场景穿的那套' },
   { name: '{{user_appearance}}', desc: '生图预设：你的长相' },
   { name: '{{framing}} {{expression}} {{pose}}', desc: '立绘预设的画法块：这次画的构图、表情、动作' },
   { name: '{{community}}', desc: '社群预设：这个社群的名字' },
@@ -101,7 +103,7 @@ export const FOREIGN_FORMATS: ForeignFormat[] = [
     label: '另一套表情写法',
     re: /[[【](?:表情|expression|emotion|sprite|立绘)\s*[:：]|<(?:expression|emotion|表情|立绘)\b/i,
     app: '[expr:表情]',
-    advice: '换立绘表情是 [expr:表情]，能用的表情由程序按她的立绘列在"当前场景规则 + 可用标签"里',
+    advice: '换立绘表情是 [expr:表情]，能用的表情由程序按Ta的立绘列在"当前场景规则 + 可用标签"里',
   },
   {
     id: 'music',
@@ -227,14 +229,14 @@ const KEY_TASK_MARKERS = new Set([
 
 /** 角色扮演类预设的程序填充块：缺了会怎样 */
 const ROLEPLAY_MARKERS: { id: string; level: FormatLevel; why: string; categories?: PresetCategory[] }[] = [
-  { id: 'chatHistory', level: 'error', why: '聊天记录不会发，她不知道你们刚才说了什么' },
+  { id: 'chatHistory', level: 'error', why: '聊天记录不会发，Ta不知道你们刚才说了什么' },
   { id: 'charDescription', level: 'error', why: '角色卡的描述不会发' },
   { id: 'sceneRules', level: 'warn', why: '能用的隐藏标签（[expr:] [cg:] [music:]……）和场景规则不会发：表情不会换、不会配图' },
-  { id: 'sceneTask', level: 'error', why: '程序给这件事的输入（这一步要她做什么）不会发', categories: ['feature'] },
+  { id: 'sceneTask', level: 'error', why: '程序给这件事的输入（这一步要Ta做什么）不会发', categories: ['feature'] },
   { id: 'proactive', level: 'error', why: '这次为什么来找你、现在几点不会发', categories: ['proactive'] },
   { id: 'memory', level: 'warn', why: '长期记忆和关系状态不会发' },
   { id: 'summary', level: 'warn', why: '过往摘要不会发' },
-  { id: 'environment', level: 'warn', why: '现在几点、天气、她在哪不会发' },
+  { id: 'environment', level: 'warn', why: '现在几点、天气、Ta在哪不会发' },
   { id: 'personaDescription', level: 'warn', why: '你的人设不会发' },
   { id: 'home', level: 'info', why: '开了家务 / 健康系统时，你今天的情况不会发' },
   { id: 'charPersonality', level: 'info', why: '角色卡的性格不会发' },
@@ -372,14 +374,13 @@ export function checkCharacter(c: Pick<Character, 'name' | 'pronoun' | 'card' | 
   const issues: FormatIssue[] = [];
   const card = c.card;
   const add = (level: FormatLevel, code: string, where: string, whereLabel: string, message: string) => issues.push({ level, code, where, whereLabel, message });
-  if (!card.description.trim()) add('warn', 'card-empty', 'description', '描述', '没有角色描述：她是谁、什么样、什么经历都没写');
+  if (!card.description.trim()) add('warn', 'card-empty', 'description', '描述', `没有角色描述：${characterPronoun(c)}是谁、什么样、什么经历都没写`);
   else if ([...card.description].length < 80 && !card.personality.trim()) add('info', 'card-thin', 'description', '描述', '描述很短、性格也没写：可以让助手补全设定');
   if (!card.personality.trim() && card.description.trim()) add('info', 'card-empty', 'personality', '性格', '没写性格（写在描述里也行）');
   if (!card.scenario.trim()) add('info', 'card-empty', 'scenario', '场景', '没写场景：你们是什么关系、现在在什么情况下');
   if (!card.firstMes.trim()) add('info', 'card-empty', 'firstMes', '开场白', '没有开场白');
   if (!card.mesExample.trim()) add('info', 'card-empty', 'mesExample', '示例对话', '没有示例对话：说话的口气靠描述猜');
   if (!c.appearanceTags.trim() && !c.fandom?.enabled) add('info', 'card-look', 'appearanceTags', '外观 tags', '没有外观 tags：配图、AI 画立绘前要先写（同人角色打上"同人"标记、填角色 tag 也行）');
-  if (c.pronoun === 'TA') add('info', 'card-pronoun', 'pronoun', '称呼', '界面里还叫"TA"：她 / 他没设');
   const regex = card.extensions?.regex_scripts;
   if (Array.isArray(regex) && regex.length) {
     add('warn', 'card-regex', 'extensions.regex_scripts', '角色卡的正则', `角色卡带了 ${regex.length} 条正则脚本：App 只执行预设里的正则（在对话预设的"正则"里从角色卡导入，或者让助手搬进预设）`);
@@ -454,7 +455,7 @@ export function formatGuide(opts: { categories: PresetCategory[]; lorebook?: boo
   }
   if (opts.character) {
     parts.push(
-      '【角色卡】SillyTavern V2/V3 的字段：name、description（描述）、personality（性格）、scenario（场景）、firstMes（开场白）、alternateGreetings（备选开场白）、mesExample（示例对话，用 <START> 分段，{{char}}: / {{user}}: 开头）、systemPrompt、postHistoryInstructions、creatorNotes、tags。App 自己的：pronoun（她 / 他 / TA）、appearanceTags（NovelAI 外观 tags，英文逗号分隔：发色、发型、眼睛、体型、常见特征，不写衣服、表情、动作）、negativeTags。',
+      '【角色卡】SillyTavern V2/V3 的字段：name、description（描述）、personality（性格）、scenario（场景）、firstMes（开场白）、alternateGreetings（备选开场白）、mesExample（示例对话，用 <START> 分段，{{char}}: / {{user}}: 开头）、systemPrompt、postHistoryInstructions、creatorNotes、tags。App 自己的：pronoun（他 / 她 / Ta）、appearanceTags（NovelAI 外观 tags，英文逗号分隔：发色、发型、眼睛、体型、常见特征，不写衣服、表情、动作）、negativeTags。',
     );
   }
   return parts.join('\n\n');

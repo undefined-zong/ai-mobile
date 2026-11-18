@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { assetCache } from '@/services/assetCache';
 import { AGENT_META, type AgentRole } from '@app/shared';
 import { closeToast, showLoadingToast, showToast } from 'vant';
@@ -80,9 +81,9 @@ const backfillOpen = ref(false);
 // —— 主题：首页长什么样（经典 / 像素小镇 / 聚焦），和昼 / 夜配色分开 ——
 const themeOpen = ref(false);
 const HOME_THEMES: { key: HomeTheme; desc: string }[] = [
-  { key: 'classic', desc: '消息是首页，在「地图」页签里看她的世界、选活动' },
-  { key: 'pixel', desc: '「地图」是首页：上面是她的像素小镇，下面一键直达要一起做的事' },
-  { key: 'focus', desc: '打开就是她：她此刻在的地方、刚说的话，直接回她；上滑看完整对话，「一起」就地开始，别的页面收在两侧' },
+  { key: 'classic', desc: '消息是首页，在「地图」页签里看Ta的世界、选活动' },
+  { key: 'pixel', desc: '「地图」是首页：上面是Ta的像素小镇，下面一键直达要一起做的事' },
+  { key: 'focus', desc: '打开就是Ta：Ta此刻在的地方、刚说的话，直接回Ta；上滑看完整对话，「一起」就地开始，别的页面收在两侧' },
 ];
 function pickHomeTheme(t: HomeTheme) {
   app.setHomeTheme(t);
@@ -365,7 +366,7 @@ function drawStory() {
         <div class="text-[11.5px] text-ink-3">{{ story.demo ? '演示故事' : `番外智能体 · ${story.model}${story.presetName ? ` · 预设「${story.presetName}」` : ''}` }}</div>
         <div class="flex gap-2.5 mt-4">
           <van-button v-if="story.cg" round block @click="drawStory">画这一幕</van-button>
-          <van-button v-if="story.hook" round block type="primary" @click="sendHook">让她发来："{{ story.hook }}"</van-button>
+          <van-button v-if="story.hook" round block type="primary" @click="sendHook">让{{ characterPronoun(chars.byId(story.characterId)) }}发来："{{ story.hook }}"</van-button>
         </div>
       </div>
     </van-popup>

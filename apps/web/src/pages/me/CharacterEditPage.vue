@@ -169,13 +169,13 @@ const PERSONALITY = { clingy: '粘人', balanced: '适中', independent: '独立
           <div class="px-4">
             <label class="field-label" for="ce-name">名字</label>
             <input id="ce-name" v-model="character.name" class="input" />
-            <label class="field-label">界面里怎么称呼（导入的角色卡没有这一项，要自己选）</label>
+            <label class="field-label">角色人称（界面和提示词跟随选择，默认 Ta）</label>
             <Segmented
               v-model="character.pronoun"
               :options="[
-                { value: '她', label: '她' },
                 { value: '他', label: '他' },
-                { value: 'TA', label: 'TA' },
+                { value: '她', label: '她' },
+                { value: 'Ta', label: 'Ta' },
               ]"
             />
             <label class="field-label" for="ce-weather">住在哪座城市（{{ character.pronoun }}那边的天气）</label>

@@ -1,5 +1,6 @@
 import { formatDuration } from '../environment.ts';
 import { calendarParts } from '../timezone.ts';
+import { characterPronoun } from '../pronouns.ts';
 
 /**
  * SillyTavern 宏（常用的一部分）。名字不区分大小写；不认识的宏原样保留。
@@ -8,6 +9,8 @@ import { calendarParts } from '../timezone.ts';
 export interface MacroContext {
   char: string;
   user: string;
+  /** {{pronoun}} / {{char_pronoun}}：当前角色的人称，未绑定角色时为 Ta。 */
+  pronoun?: string;
   /** {{original}}：被角色卡覆盖前的主提示 / 后置指令 */
   original?: string;
   description?: string;
@@ -74,6 +77,9 @@ function one(raw: string, ctx: MacroContext): string | null {
       return ctx.char;
     case 'user':
       return ctx.user;
+    case 'pronoun':
+    case 'char_pronoun':
+      return characterPronoun(ctx);
     case 'original':
       return ctx.original ?? '';
     case 'description':

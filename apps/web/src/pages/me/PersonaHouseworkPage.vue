@@ -105,8 +105,8 @@ const FREQ = [
 ];
 const noteLabel = computed(() => {
   const e = draft.value?.effect;
-  if (e === 'miss-food') return '她最想吃你做的（可以不填，例如：番茄牛腩）';
-  if (e === 'custom') return '她会怎样（例如：不理你，直到你洗完）';
+  if (e === 'miss-food') return 'Ta最想吃你做的（可以不填，例如：番茄牛腩）';
+  if (e === 'custom') return 'Ta会怎样（例如：不理你，直到你洗完）';
   return '补一句（可以不填）';
 });
 function save() {
@@ -118,7 +118,7 @@ function save() {
     return;
   }
   if (d.effect === 'custom' && !d.effectNote.trim()) {
-    showToast('写一下她会怎样');
+    showToast('写一下Ta会怎样');
     return;
   }
   if (d.freq === 'weekly') d.slots = d.slots.slice(0, 1);
@@ -148,7 +148,7 @@ function remove() {
         <span class="big-icon"><span class="i-lucide-house-heart" /></span>
         <div class="flex-1 min-w-0">
           <div class="text-[15px] font-600">打开家务系统</div>
-          <div class="text-[12px] text-ink-3 leading-relaxed">"共同的家"按下面的清单列出今天要做的；做没做、拖了几次会写进她看到的提示词，影响她怎么跟你说话，也会记进记忆</div>
+          <div class="text-[12px] text-ink-3 leading-relaxed">"共同的家"按下面的清单列出今天要做的；做没做、拖了几次会写进Ta看到的提示词，影响Ta怎么跟你说话，也会记进记忆</div>
         </div>
         <van-switch v-model="hw.enabled" size="22px" data-testid="housework-switch" @change="touch" />
       </div>
@@ -188,7 +188,7 @@ function remove() {
           </button>
         </div>
       </template>
-      <p class="note">家务日和她的节律一样从凌晨 4 点算起：熬夜到一点刷牙，还算前一天的"睡前"。早上的过了 11 点、中午的过了 14 点、晚上的过了 22 点、睡前的过了你的睡觉时间（<RouterLink to="/me/environment" class="text-accent-ink">环境与作息</RouterLink>）还没勾，就算"过了时间没做"。</p>
+      <p class="note">家务日和Ta的节律一样从凌晨 4 点算起：熬夜到一点刷牙，还算前一天的"睡前"。早上的过了 11 点、中午的过了 14 点、晚上的过了 22 点、睡前的过了你的睡觉时间（<RouterLink to="/me/environment" class="text-accent-ink">环境与作息</RouterLink>）还没勾，就算"过了时间没做"。</p>
     </div>
 
     <van-popup v-model:show="editOpen" position="bottom" round :style="{ maxHeight: '88%' }">
@@ -228,11 +228,11 @@ function remove() {
           <van-stepper v-model="draft.minutes" :min="1" :max="240" :step="5" integer button-size="26px" input-width="44px" />
           <span class="text-[13px] text-ink-2">分钟</span>
         </div>
-        <div class="field-label">没做的时候她会</div>
+        <div class="field-label">没做的时候Ta会</div>
         <div class="flex flex-wrap gap-1.5">
           <button v-for="(e, id) in CHORE_EFFECTS" :key="id" type="button" class="opt" :class="{ on: draft.effect === id }" @click="draft.effect = id as ChoreEffect">{{ e.label }}</button>
         </div>
-        <p class="text-[12px] text-ink-3 mt-1.5 mb-0">{{ CHORE_EFFECTS[draft.effect].desc }}；具体怎么说按她的性格（对话预设里"家务：你怎么反应"那一块，能改）</p>
+        <p class="text-[12px] text-ink-3 mt-1.5 mb-0">{{ CHORE_EFFECTS[draft.effect].desc }}；具体怎么说按Ta的性格（对话预设里"家务：你怎么反应"那一块，能改）</p>
         <label class="field-label" for="chore-note">{{ noteLabel }}</label>
         <input id="chore-note" v-model="draft.effectNote" class="input" maxlength="80" />
         <div class="flex gap-2.5 mt-5">

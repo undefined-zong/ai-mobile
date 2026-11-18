@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import { buildCommunityMessages, communityFeedInput, communityMemberPostInput, communityMembersFill, errorText, isAbortError, samplerRequest, socialCharacterFill, socialNowFill, type CommunityPromptInput } from '@app/ai';
 import {
   commentsFromDrafts, COMMUNITY_CATCH_UP_MS, communityFromDraft, communityInfoText, communityJobs, communityPostMemory, communityPostText, isCommunityPreset, isNetizen, MOMENT_USER, netizenName,
@@ -244,7 +245,7 @@ export function memberPost(communityId: string, characterId: string, opts: { id?
     const store = useCommunityStore();
     const c = store.byId(communityId);
     const ch = useCharacterStore().byId(characterId);
-    if (!c || !ch || !c.members.includes(characterId)) return { ok: false, reason: '她不在这个社群里' };
+    if (!c || !ch || !c.members.includes(characterId)) return { ok: false, reason: `${characterPronoun(ch)}不在这个社群里` };
     const status = communityStatus();
     if (!status.ok) return status;
     const preset = communityPreset()!;
@@ -256,7 +257,7 @@ export function memberPost(communityId: string, characterId: string, opts: { id?
     if (!post) return { ok: false, reason: '模型没有写出能用的帖子，再试一次' };
     afterAdded([post]);
     return { ok: true, post };
-  }, '她正在发');
+  }, `${characterPronoun(useCharacterStore().byId(characterId))}正在发`);
 }
 
 /**
@@ -435,7 +436,7 @@ export function memberReact(postId: string, characterId: string, kind: 'new' | '
     const mine = p.authorId === characterId;
     const said = [...p.comments].reverse().find((x) => x.authorId === MOMENT_USER)?.text ?? '';
     const { value } = await ask({
-      task: 'community-member-react', characterName: ch.name, userName, communityName: c.name, now: new Date(), timeZone,
+      task: 'community-member-react', characterName: ch.name, pronoun: ch.pronoun, userName, communityName: c.name, now: new Date(), timeZone,
       fills: {
         ...reactFills(c, p, userName, characterId),
         socialCharacter: socialCharacterFill({ id: ch.id, name: ch.name, pronoun: ch.pronoun, card: ch.card }, userName),
@@ -458,7 +459,7 @@ export function memberReact(postId: string, characterId: string, kind: 'new' | '
     if (now && value.comment) now.unread = true;
     rememberPost(postId, characterId);
     return { ok: true };
-  }, `${useCharacterStore().byId(characterId)?.name ?? '她'}正在看`);
+  }, `${useCharacterStore().byId(characterId)?.name ?? 'Ta'}正在看`);
 }
 
 // —— 写进记忆 ——

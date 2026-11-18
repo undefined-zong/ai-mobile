@@ -401,7 +401,7 @@ export async function askAssistant(opts: AskOptions): Promise<string> {
       assistantAsk: askText(opts.ask, opts.mode, subjects),
     },
     // 预设里的示例照 SillyTavern 写 {{char}} {{user}}，原样留给助手（不换成名字）
-    macros: { char: '{{char}}', user: '{{user}}' },
+    macros: { char: '{{char}}', user: '{{user}}', pronoun: subjects.length === 1 && subjects[0]?.kind === 'character' ? subjects[0].obj.pronoun : undefined },
     type: opts.mode,
   });
   const stream = preset.sampler.stream !== false && !!opts.onText;

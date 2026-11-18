@@ -135,7 +135,7 @@ export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPr
   return assembleTaskPrompt({
     preset,
     fills: imagePromptFills(input),
-    macros: { char: input.character.name, user: input.withUser?.name ?? input.companionName ?? '', extra: imagePromptMacros(input) },
+    macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.withUser?.name ?? input.companionName ?? '', extra: imagePromptMacros(input) },
     type: imagePromptTypes(input),
   }).messages;
 }

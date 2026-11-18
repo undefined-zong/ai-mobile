@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun, type Character } from '@app/shared';
 import { nextTick, ref } from 'vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import { splitActions } from '@/utils/messagePreview';
@@ -7,6 +8,7 @@ import { splitActions } from '@/utils/messagePreview';
 const props = withDefaults(
   defineProps<{
     name: string;
+    character?: Character;
     text: string;
     streaming?: boolean;
     thinking?: boolean;
@@ -69,7 +71,7 @@ function submit() {
           ref="input"
           v-model="draft"
           class="reply-input"
-          placeholder="回她一句…"
+          :placeholder="`回${characterPronoun(character)}一句…`"
           enterkeyhint="send"
           aria-label="回复"
           @keydown.enter.prevent="submit"

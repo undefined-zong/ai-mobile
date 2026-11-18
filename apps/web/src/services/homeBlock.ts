@@ -87,19 +87,19 @@ export function healthLines(persona: Persona): string {
  * 预设里没有"她怎么反应"那一块的（导入的 SillyTavern 预设、以前复制的）：用自带预设文件里的，接在今天的情况后面。
  * 预设里有（触发条件写着 housework / health 的块，开着关着都算你的选择）就不补
  */
-export function missingRules(persona: Persona, preset: Pick<Preset, 'blocks'> | undefined, names: { char: string }): string[] {
+export function missingRules(persona: Persona, preset: Pick<Preset, 'blocks'> | undefined, names: { char: string; pronoun?: string }): string[] {
   return lifeFlags(persona)
     .filter((f) => !preset?.blocks.some((b) => b.triggers?.includes(f)))
     .map((f) => seedBlockContent(RULE_BLOCKS[f]))
     .filter((t): t is string => !!t)
-    .map((t) => substituteMacros(t, { char: names.char, user: persona.name }));
+    .map((t) => substituteMacros(t, { char: names.char, pronoun: names.pronoun, user: persona.name }));
 }
 
 /**
  * 这一块的内容；两套都没开时为 null（不发送）。
  * opts.stepMin：时间往前取整（上传云端时用 30）；opts.preset：这一轮的预设，里面没有"她怎么反应"的块时把自带的接在后面
  */
-export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number; preset?: Pick<Preset, 'blocks'>; characterName?: string } = {}): AppBlockFill | null {
+export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number; preset?: Pick<Preset, 'blocks'>; characterName?: string; pronoun?: string } = {}): AppBlockFill | null {
   const flags = lifeFlags(persona);
   const parallel = persona ? parallelLines(persona) : '';
   if (!persona || (!flags.length && !parallel)) return null;
@@ -112,7 +112,7 @@ export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number
   if (flags.includes('health')) parts.push(healthLines(persona));
   if (flags.includes('planner')) parts.push(plannerLines(persona));
   if (parallel) parts.push(parallel);
-  if (opts.preset) parts.push(...missingRules(persona, opts.preset, { char: opts.characterName ?? '' }));
+  if (opts.preset) parts.push(...missingRules(persona, opts.preset, { char: opts.characterName ?? '', pronoun: opts.pronoun }));
   const content = parts.filter(Boolean).join('\n');
   if (!content) return null;
   const names = [...flags.map((f) => FLAG_NAMES[f]), ...(parallel ? ['平行时空'] : [])];

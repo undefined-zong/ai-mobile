@@ -50,7 +50,7 @@ const today = computed(() => {
 
     <div class="page-scroll">
       <!-- 她们在哪：每人一行（各自小世界里的位置），点开进地图 -->
-      <RouterLink to="/map" class="where-card press" aria-label="打开地图，看她们在哪">
+      <RouterLink to="/map" class="where-card press" aria-label="打开地图，看Ta们在哪">
         <span class="thumb"><span class="i-lucide-map" /></span>
         <div class="flex-1 min-w-0 grid gap-1.5">
           <div v-for="c in shown" :key="c.id" class="flex items-center gap-1.5 min-w-0 text-[13px] leading-tight">

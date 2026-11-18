@@ -141,8 +141,8 @@ export function characterFromCard(
     createdAt: opts.now,
     updatedAt: opts.now,
     name: parsed.name,
-    // 卡里没有性别信息，先用"TA"，在角色页里可以改
-    pronoun: 'TA',
+    // 卡里没有人称信息，先用 Ta，在角色页里可以改
+    pronoun: 'Ta',
     avatar: null,
     accent,
     hairColor: '#3b2a35',
