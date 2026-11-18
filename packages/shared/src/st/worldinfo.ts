@@ -27,7 +27,7 @@ export interface WorldInfoInput {
   /** 聊天里有多少条消息（粘性 / 冷却 / 延迟按它算） */
   chatLength: number;
   state?: LoreTimedState;
-  /** 只是预览（查看提示词）：不推进粘性 / 冷却，和 ST 的 dry run 一样 */
+  /** 只是预览（查看提示词）：读取现有粘性 / 冷却，但不保存计时变化。 */
   dryRun?: boolean;
   random?: () => number;
   /** 宏替换（关键词和内容都会先替换） */
@@ -132,36 +132,34 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
     if (!reasons.has(it.key) || !activated.has(it.key)) reasons.set(it.key, r);
   };
 
-  // 计时效果：粘性 / 冷却（预览时不推进）、延迟
+  // 在副本上计算本轮计时效果，预览也使用同样的粘性 / 冷却；只有真实发送才返回更新后的状态。
   const stickyNow = new Set<string>();
   const cooldownNow = new Set<string>();
-  if (!input.dryRun) {
-    for (const type of ['sticky', 'cooldown'] as const) {
-      for (const [key, v] of Object.entries(state[type])) {
-        const it = byKey.get(key);
-        if (len <= v.start && !v.protected) {
-          delete state[type][key];
-          continue;
-        }
-        if (!it) {
-          if (len >= v.end) delete state[type][key];
-          continue;
-        }
-        if (!it.e[type]) {
-          delete state[type][key];
-          continue;
-        }
-        if (len >= v.end) {
-          delete state[type][key];
-          // 粘性结束后进入冷却
-          if (type === 'sticky' && it.e.cooldown) {
-            state.cooldown[key] = { start: len, end: len + it.e.cooldown, protected: true };
-            cooldownNow.add(key);
-          }
-          continue;
-        }
-        (type === 'sticky' ? stickyNow : cooldownNow).add(key);
+  for (const type of ['sticky', 'cooldown'] as const) {
+    for (const [key, v] of Object.entries(state[type])) {
+      const it = byKey.get(key);
+      if (len <= v.start && !v.protected) {
+        delete state[type][key];
+        continue;
       }
+      if (!it) {
+        if (len >= v.end) delete state[type][key];
+        continue;
+      }
+      if (!it.e[type]) {
+        delete state[type][key];
+        continue;
+      }
+      if (len >= v.end) {
+        delete state[type][key];
+        // 粘性结束后进入冷却
+        if (type === 'sticky' && it.e.cooldown) {
+          state.cooldown[key] = { start: len, end: len + it.e.cooldown, protected: true };
+          cooldownNow.add(key);
+        }
+        continue;
+      }
+      (type === 'sticky' ? stickyNow : cooldownNow).add(key);
     }
   }
 
@@ -253,7 +251,7 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
         note(it, '最近的聊天里没有出现关键词');
         continue;
       }
-      const sec = e.secondaryKeys.filter((k) => macro(k).trim());
+      const sec = e.selective === false ? [] : e.secondaryKeys.filter((k) => macro(k).trim());
       if (!sec.length) {
         now.set(it, `关键词"${hit}"${scanState === RECURSION ? '（递归）' : ''}`);
         continue;
@@ -317,7 +315,7 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
         break;
       }
       if (it.e.useProbability && it.e.probability < 100 && !stickyNow.has(it.key)) {
-        if (rnd() * 100 > it.e.probability) {
+        if (rnd() * 100 >= it.e.probability) {
           failedProbability.add(it.key);
           note(it, `概率 ${it.e.probability}% 没抽中`);
           continue;
@@ -331,10 +329,11 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
         continue;
       }
       activated.set(it.key, { ...it, reason: now.get(it) ?? '' });
+      allActivatedText += `${it.content}\n`;
       reasons.set(it.key, now.get(it) ?? '');
     }
 
-    const successful = fresh.filter((it) => !failedProbability.has(it.key));
+    const successful = fresh.filter((it) => activated.has(it.key));
     const forRecursion = successful.filter((it) => !it.e.preventRecursion);
     if (recursive && !overflowed && forRecursion.length) next = RECURSION;
     if (!next && levels.length) {
@@ -346,7 +345,6 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
       const text = forRecursion.map((it) => it.content).join('\n');
       if (text) {
         recurse.push(text);
-        allActivatedText = `${text}\n${allActivatedText}`;
       }
     }
   }
@@ -420,7 +418,9 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
       activated: activated.has(it.key) && !!activated.get(it.key)?.content,
       reason: reasons.get(it.key) ?? '没有检查到',
     })),
-    state,
+    state: input.dryRun
+      ? { sticky: { ...(input.state?.sticky ?? {}) }, cooldown: { ...(input.state?.cooldown ?? {}) } }
+      : state,
     budget,
     overflowed,
   };

@@ -34,6 +34,8 @@ export interface ProactiveContext {
   preset: Preset | null;
   lorebooks: Lorebook[];
   history: Message[];
+  /** 截取上传历史之前的有效消息总数，供世界书计时。旧客户端未提供时用 history.length。 */
+  chatLength?: number;
   /** 待跟进（排期用）、置顶的和最重要的几十条；不传全部记忆 */
   memories: { id: string; content: string; dueAt?: number; type: string }[];
   /**

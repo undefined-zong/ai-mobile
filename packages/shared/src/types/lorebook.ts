@@ -22,6 +22,8 @@ export interface LoreEntry {
   comment: string;
   keys: string[];
   secondaryKeys: string[];
+  /** 是否启用次关键词；旧数据未保存时按启用处理。 */
+  selective?: boolean;
   logic: LoreLogic;
   content: string;
   /** 常驻：不需要关键词也总是插入 */
