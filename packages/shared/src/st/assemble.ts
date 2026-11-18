@@ -221,7 +221,6 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const lore = scanWorldInfo({
     books: input.lorebooks,
     messages: (input.loreHistory ?? history).map((t) => `${t.name}: ${t.content}`),
-    maxContext: s.contextTokens,
     chatLength: input.chatLength ?? history.length,
     state: input.loreState,
     dryRun: input.dryRun,

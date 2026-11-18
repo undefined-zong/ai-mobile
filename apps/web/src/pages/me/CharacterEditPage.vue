@@ -50,6 +50,11 @@ function pickPreset(id: string | null) {
   chars.setPreset(character.value.id, id);
   showToast(`换成「${lib.presetById(id)?.name ?? ''}」了`);
 }
+function bindLorebook(id: string, enabled: boolean) {
+  const c = character.value;
+  c.lorebookIds = enabled ? [...c.lorebookIds, id] : c.lorebookIds.filter((x) => x !== id);
+  c.updatedAt = Date.now();
+}
 // —— 生图：同人还是原创（设计文档 §10.4）——
 /** 同人标记：打开时第一次补上空的角色 tag、作品 tag */
 const fandomOn = computed({
@@ -287,15 +292,14 @@ const PERSONALITY = { clingy: '粘人', balanced: '适中', independent: '独立
         </van-tab>
         <van-tab title="世界书" name="lore">
           <div class="px-4 pt-3 grid gap-2">
-            <label v-for="b in lib.lorebooks" :key="b.id" class="pick">
-              <van-checkbox :model-value="character.lorebookIds.includes(b.id)" icon-size="18px" @update:model-value="(v: boolean) => (character.lorebookIds = v ? [...character.lorebookIds, b.id] : character.lorebookIds.filter((x) => x !== b.id))" />
-              <div class="flex-1 min-w-0">
+            <div v-for="b in lib.lorebooks" :key="b.id" class="pick">
+              <van-checkbox :model-value="character.lorebookIds.includes(b.id)" icon-size="18px" class="flex-1 min-w-0" @update:model-value="(v: boolean) => bindLorebook(b.id, v)">
                 <div class="text-[14.5px]">{{ b.name }}</div>
                 <div class="text-[12px] text-ink-3">{{ b.entries.length }} 条 · {{ b.description }}</div>
-              </div>
+              </van-checkbox>
               <RouterLink :to="`/me/lorebooks/${b.id}`" class="text-accent-ink text-[13px]">编辑</RouterLink>
-            </label>
-            <p class="text-[12px] text-ink-3 m-0">导入角色卡时，卡里内嵌的 character_book 会拆成一本独立的世界书并自动绑定。</p>
+            </div>
+            <p class="text-[12px] text-ink-3 m-0">可以同时勾选多本世界书，之后导入的也能在这里绑定，下一条回复起按各自的触发条件和插入位置生效。角色卡内嵌的世界书导入时自动勾选。</p>
           </div>
         </van-tab>
         <van-tab title="预设" name="preset">

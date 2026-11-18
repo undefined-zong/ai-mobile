@@ -484,7 +484,7 @@ const moreActions = computed(() => [
   { name: '角色设定', subname: character.value?.name, key: 'character' },
   { name: '导入聊天记录', subname: `SillyTavern .jsonl · 已导入 ${chat.value?.imports?.length ?? 0} 份，点此查看`, key: 'import' },
   { name: '记忆本', subname: `${characterPronoun(character.value)}记得的事，可以改`, key: 'memory' },
-  { name: '世界书', key: 'lore' },
+  { name: '世界书', subname: `已绑定 ${character.value?.lorebookIds.length ?? 0} 本 · 添加或更换`, key: 'lore' },
   { name: '预设', subname: presetLine.value, key: 'preset' },
   {
     name: '整理这段聊天',
@@ -501,7 +501,7 @@ function onMore(a: { key: string }) {
     character: `/me/characters/${c?.id}`,
     import: `/import?character=${c?.id}`,
     memory: '/memories?tab=book',
-    lore: `/me/lorebooks/${c?.lorebookIds[0] ?? ''}`,
+    lore: `/me/characters/${c?.id}?tab=lore`,
   };
   if (a.key === 'background') wallOpen.value = true;
   else if (a.key === 'preset') presetOpen.value = true;

@@ -5,7 +5,7 @@ import { estimateTokens } from './tokens.ts';
 /**
  * 世界书扫描，按 SillyTavern 的 checkWorldInfo（public/scripts/world-info.js）一步步来：
  * 1. 条目按 order 从大到小排；逐条检查：关闭 / 生成类型 / 延迟 / 冷却 / 延迟到递归 / 排除递归 → 常驻 → 粘性 → 关键词 + 次关键词逻辑
- * 2. 同组只留一条（优先 groupOverride，否则按权重随机），再抽概率、按 token 预算截断
+ * 2. 同组只留一条（优先 groupOverride，否则按权重随机），再抽概率；只有书内明确设置的 token 预算才限制本书
  * 3. 新触发的条目（没勾"不递归"的）内容加进递归缓冲区，再扫一轮；"延迟到递归"的条目只在递归轮里才有机会
  * 4. 按 order 从小到大拼进各个位置
  * 每条都记下触发或没触发的原因，"查看提示词"里能看到。
@@ -15,9 +15,6 @@ export interface WorldInfoInput {
   books: Lorebook[];
   /** 用来扫描的聊天记录，从旧到新，每条已带名字（"小克: 你好"） */
   messages: string[];
-  /** 上下文 token 预算（世界书最多占 budgetPercent%） */
-  maxContext: number;
-  budgetPercent?: number;
   /** 默认扫描深度（条目和世界书都没写时用） */
   scanDepth?: number;
   caseSensitive?: boolean;
@@ -68,7 +65,6 @@ export interface WorldInfoResult {
   activated: ActivatedLore[];
   log: LoreLogItem[];
   state: LoreTimedState;
-  budget: number;
   overflowed: boolean;
 }
 
@@ -115,11 +111,6 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
     cooldown: { ...(input.state?.cooldown ?? {}) },
   };
   const len = input.chatLength;
-
-  // ST 的预算：上下文的 25%；世界书自己写了预算的取最小的当上限
-  let budget = Math.round(((input.budgetPercent ?? ST_WORLD_INFO_DEFAULTS.budgetPercent) * input.maxContext) / 100) || 1;
-  const caps = input.books.map((b) => b.tokenBudget).filter((n) => n > 0);
-  if (caps.length) budget = Math.min(budget, ...caps);
 
   const items: Item[] = input.books
     .flatMap((book) => book.entries.map((e) => ({ key: `${book.id}.${e.uid}`, book, e, content: e.content })))
@@ -190,7 +181,8 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
 
   const activated = new Map<string, Item & { reason: string }>();
   const failedProbability = new Set<string>();
-  let allActivatedText = '';
+  // 每本书独立累计；0 表示没有设置上限，不额外按上下文比例截断世界书。
+  const bookText = new Map<string, string>();
   let overflowed = false;
   let scanState = INITIAL;
   let loops = 0;
@@ -304,16 +296,7 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
     fresh = fresh.filter((it) => !losers.has(it));
 
     // 概率 + 预算
-    let newContent = '';
-    const baseTokens = count(allActivatedText);
-    let ignoresLeft = fresh.filter((it) => it.e.ignoreBudget).length;
     for (const it of fresh) {
-      if (it.e.ignoreBudget) ignoresLeft--;
-      if (overflowed && !it.e.ignoreBudget) {
-        note(it, '超出世界书 token 预算');
-        if (ignoresLeft > 0) continue;
-        break;
-      }
       if (it.e.useProbability && it.e.probability < 100 && !stickyNow.has(it.key)) {
         if (rnd() * 100 >= it.e.probability) {
           failedProbability.add(it.key);
@@ -322,20 +305,20 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
         }
       }
       it.content = macro(it.e.content);
-      newContent += `${it.content}\n`;
-      if (!it.e.ignoreBudget && baseTokens + count(newContent) >= budget) {
+      const nextBookText = (bookText.get(it.book.id) ?? '') + `${it.content}\n`;
+      if (!it.e.ignoreBudget && it.book.tokenBudget > 0 && count(nextBookText) > it.book.tokenBudget) {
         overflowed = true;
-        note(it, '超出世界书 token 预算');
+        note(it, `超出「${it.book.name}」的 token 预算（${it.book.tokenBudget}）`);
         continue;
       }
       activated.set(it.key, { ...it, reason: now.get(it) ?? '' });
-      allActivatedText += `${it.content}\n`;
+      bookText.set(it.book.id, nextBookText);
       reasons.set(it.key, now.get(it) ?? '');
     }
 
     const successful = fresh.filter((it) => activated.has(it.key));
     const forRecursion = successful.filter((it) => !it.e.preventRecursion);
-    if (recursive && !overflowed && forRecursion.length) next = RECURSION;
+    if (recursive && forRecursion.length) next = RECURSION;
     if (!next && levels.length) {
       next = RECURSION;
       level = levels.shift() as number;
@@ -421,7 +404,6 @@ export function scanWorldInfo(input: WorldInfoInput): WorldInfoResult {
     state: input.dryRun
       ? { sticky: { ...(input.state?.sticky ?? {}) }, cooldown: { ...(input.state?.cooldown ?? {}) } }
       : state,
-    budget,
     overflowed,
   };
 }
