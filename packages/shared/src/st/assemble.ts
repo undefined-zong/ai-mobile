@@ -185,6 +185,12 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const f = preset.formats;
   const s = preset.sampler;
   const type = input.type ?? 'normal';
+  const matchesTriggers = (b: PromptBlock) => !b.triggers?.length
+    || b.triggers.includes(type)
+    || !!(input.task && b.triggers.includes(input.task))
+    || !!input.flags?.some((flag) => b.triggers!.includes(flag));
+  const worldInfoEnabled = preset.blocks.some((b) => b.enabled && matchesTriggers(b)
+    && (b.identifier === 'worldInfoBefore' || b.identifier === 'worldInfoAfter'));
   const count = input.countTokens ?? estimateTokens;
   const vars: Record<string, string> = { ...(input.vars ?? {}) };
   const history = input.history.map((t) => ({ ...t, content: t.content.replace(/\r\n?/g, '\n') }));
@@ -217,13 +223,14 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   ctx.persona = field(input.user.description);
   ctx.mesExamples = field(card.mesExample);
 
-  // 世界书（扫描文本带名字，同 ST 默认的 world_info_include_names）
+  // 当前预设没开启世界书时，所有位置都不扫描、不注入，也不推进粘性 / 冷却。
+  // 扫描文本带名字，同 ST 默认的 world_info_include_names。
   const lore = scanWorldInfo({
-    books: input.lorebooks,
+    books: worldInfoEnabled ? input.lorebooks : [],
     messages: (input.loreHistory ?? history).map((t) => `${t.name}: ${t.content}`),
     chatLength: input.chatLength ?? history.length,
     state: input.loreState,
-    dryRun: input.dryRun,
+    dryRun: input.dryRun || !worldInfoEnabled,
     trigger: type,
     random: input.random,
     macro: (t) => m(t),
@@ -275,27 +282,8 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
     return { content: original, source: '预设' };
   };
 
-  // 没有提供世界书位置的旧预设仍能使用角色绑定的世界书；显式关闭的块保持关闭。
-  const blocks = [...preset.blocks];
-  const before = (anchors: string[]) => {
-    const at = blocks.findIndex((b) => anchors.includes(b.identifier));
-    return at < 0 ? blocks.length : at;
-  };
-  const addLoreSlot = (identifier: string, name: string, needed: boolean, at: number) => {
-    if (!needed || blocks.some((b) => b.identifier === identifier)) return;
-    blocks.splice(at, 0, {
-      identifier, name, marker: true, enabled: true, role: 'system', origin: 'app', content: '',
-      injection: { position: 'relative', depth: 0 },
-    });
-  };
-  const characterSlots = ['charDescription', 'charPersonality', 'scenario'];
-  const firstCharacter = blocks.findIndex((b) => characterSlots.includes(b.identifier));
-  addLoreSlot('worldInfoBefore', '世界书（角色前）', !!lore.before, firstCharacter < 0 ? before(['worldInfoAfter', 'dialogueExamples', 'chatHistory']) : firstCharacter);
-  const lastCharacter = blocks.reduce((at, b, i) => characterSlots.includes(b.identifier) ? i : at, -1);
-  addLoreSlot('worldInfoAfter', '世界书（角色后）', !!lore.after, lastCharacter < 0 ? before(['dialogueExamples', 'chatHistory']) : lastCharacter + 1);
-  addLoreSlot('dialogueExamples', '示例对话', !!(lore.emTop.length || lore.emBottom.length), before(['chatHistory']));
-
-  for (const b of blocks) {
+  // 只使用当前预设里保留的块；删除的位置不在组装时自动补回。
+  for (const b of preset.blocks) {
     const report: BlockReport = {
       identifier: b.identifier,
       name: b.name,
@@ -322,8 +310,8 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
       }
       continue;
     }
-    if (b.triggers?.length && !b.triggers.includes(type) && !(input.task && b.triggers.includes(input.task)) && !input.flags?.some((f) => b.triggers!.includes(f))) {
-      report.note = `只在 ${b.triggers.map((t) => TYPE_LABEL[t] ?? t).join(' / ')} 时发送`;
+    if (!matchesTriggers(b)) {
+      report.note = `只在 ${b.triggers!.map((t) => TYPE_LABEL[t] ?? t).join(' / ')} 时发送`;
       continue;
     }
     if (b.identifier === 'chatHistory') {
