@@ -805,20 +805,18 @@ export const useLibraryStore = defineStore('library', () => {
     const seed = SEEDS.find((s) => s.defaultFor.includes(use));
     const fallback = presetById(seed?.preset.id);
     if (fallback?.category === meta?.category) return fallback?.id;
-    return meta?.follow ? null : undefined;
+    return meta?.follow === 'image' ? null : undefined;
   }
 
   /**
-   * 这个用途这次用哪个预设。跟随时用对话预设 / 配图的预设；
-   * 这一类一个都没有时：能跟随对话的用对话预设，其余为空（调用方说清楚缺什么）
+   * 这个用途这次用哪个预设。只有明确选了跟随对话才用角色的对话预设；
+   * 场景预设缺失时返回空（调用方说清楚缺什么），配图仍可跟随通用配图。
    */
   function presetForUse(use: PresetUseId, character?: Pick<Character, 'presetId'> | null): Preset | undefined {
     const meta = presetUse(use);
     const choice = useChoice(use);
     if (choice === null) return meta?.follow === 'image' ? presetForUse('image', character) : chatPresetFor(character);
-    const p = presetById(choice);
-    if (p) return p;
-    return meta?.follow === 'chat' ? chatPresetFor(character) : undefined;
+    return presetById(choice);
   }
 
   function setUse(use: PresetUseId, id: string | null) {
