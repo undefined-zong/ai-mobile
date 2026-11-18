@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { saveFiles } from '@/services/download';
 import type { ImageMode, MessagePart } from '@app/shared';
 import { closeToast, showConfirmDialog, showLoadingToast, showToast } from 'vant';
@@ -340,7 +341,7 @@ async function sendPicked(text: string) {
   closeToast();
   void scrollToBottom(true);
   const r = await chatStore.sendPhotos(target, photos, text);
-  if (r.notConnected) showToast({ message: `识图还没接通，${character.value?.name ?? '她'}看不到照片内容：${r.notConnected}`, duration: 3500 });
+  if (r.notConnected) showToast({ message: `识图还没接通，${character.value?.name ?? 'Ta'}看不到照片内容：${r.notConnected}`, duration: 3500 });
 }
 /** 照片查看器里"重新识图" */
 function relook() {
@@ -457,7 +458,7 @@ const moreActions = computed(() => [
   { name: '聊天背景', subname: looks.hasOwnBackground(chatId.value) ? '这个聊天单独设置了' : '跟随外观里的通用背景', key: 'background' },
   { name: '查看提示词', subname: '按预设组装后的完整提示（含世界书、记忆、环境）', key: 'inspect' },
   { name: '角色设定', subname: character.value?.name, key: 'character' },
-  { name: '记忆本', subname: '她记得的事，可以改', key: 'memory' },
+  { name: '记忆本', subname: `${characterPronoun(character.value)}记得的事，可以改`, key: 'memory' },
   { name: '世界书', key: 'lore' },
   { name: '预设', subname: presetLine.value, key: 'preset' },
   {
@@ -568,7 +569,7 @@ const timeChip = computed(() => [hhmm(Date.now()), stageWeather.value ? weatherS
                 <span v-if="!placeKnown" class="where">
                   <span class="truncate">{{ stream ? '对方正在输入…' : character.status || '在线' }}{{ herWeatherText ? ` · ${herWeatherText}` : '' }}</span>
                 </span>
-                <RouterLink v-else :to="mapLink" class="where" aria-label="在地图上看她在哪">
+                <RouterLink v-else :to="mapLink" class="where" :aria-label="`在地图上看${characterPronoun(character)}在哪`">
                   <span class="i-lucide-map-pin text-accent-ink shrink-0" />
                   <span class="truncate">{{ stageLoc.name }} · {{ stream ? '对方正在输入…' : character.status }}{{ herWeatherText ? ` · ${herWeatherText}` : '' }}</span>
                 </RouterLink>
@@ -659,13 +660,14 @@ const timeChip = computed(() => [hhmm(Date.now()), stageWeather.value ? weatherS
         <RouterLink :to="`/call/${character.id}?video=1`" class="chip-btn" aria-label="视频通话"><span class="i-lucide-video text-[18px]" /></RouterLink>
         <RouterLink :to="`/call/${character.id}`" class="chip-btn" aria-label="语音通话"><span class="i-lucide-phone text-[18px]" /></RouterLink>
       </div>
-      <div v-if="firstPoke" class="hint">点她的头、脸、肩膀试试 · 长按是摸头</div>
+      <div v-if="firstPoke" class="hint">点{{ characterPronoun(character) }}的头、脸、肩膀试试 · 长按是摸头</div>
       <Transition name="pop">
         <div v-if="bubble" :key="bubble.id" class="poke-bubble">{{ bubble.text }}</div>
       </Transition>
       <div v-if="combo > 1" class="combo num">连击 ×{{ combo }}</div>
       <DialogBox
         :name="character.name"
+        :character="character"
         :text="stageText"
         :streaming="!!stream"
         :thinking="!!stream?.thinking"

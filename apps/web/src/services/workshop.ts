@@ -20,7 +20,7 @@ export const NOTE_MARK = '【记进设定】';
 
 export interface NovelCallOptions {
   /** 她的名字（预设里的 {{char}}）和你的名字（{{user}}） */
-  character?: Pick<Character, 'name' | 'presetId'> | null;
+  character?: Pick<Character, 'name' | 'pronoun' | 'presetId'> | null;
   userName: string;
   signal?: AbortSignal;
   onText?(text: string): void;
@@ -123,7 +123,7 @@ async function run(novel: Novel, task: NovelTask, ask: string, opts: NovelCallOp
       novelChat: talkText(novel, opts.userName),
       novelAsk: ask,
     },
-    macros: { char: opts.character?.name ?? '', user: opts.userName },
+    macros: { pronoun: opts.character?.pronoun, char: opts.character?.name ?? '', user: opts.userName },
     type: task,
   });
   const stream = preset.sampler.stream !== false && !!opts.onText;

@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import {
   characterFromCard,
   detectStFile,
@@ -205,7 +206,7 @@ export async function commitImport(p: PendingImport, opts: { presetId?: string |
       // 生图：出自已有作品的角色打上"同人"、填角色 tag，先试画一张看 NovelAI 认不认得（设计文档 §10.4）
       { label: '生图：同人 / 原创', to: `/me/characters/${character.id}?tab=look` },
       // 节律：从角色卡和世界书里建她的小世界（地点、作息、衣柜），之后每天排她的作息和穿着
-      { label: '建她的小世界', to: `/me/rhythm?char=${character.id}` },
+      { label: `建${characterPronoun(character)}的小世界`, to: `/me/rhythm?char=${character.id}` },
       // 立绘：卡里没带立绘时，让 AI 写外观 tags、用 NovelAI 画透明底的立绘和各个表情（设计文档 §10.4）
       { label: 'AI 画立绘', to: `/me/characters/${character.id}?tab=sprite` },
       // 助手：检测卡里、世界书里的写法和 App 的合不合，补全缺的设定

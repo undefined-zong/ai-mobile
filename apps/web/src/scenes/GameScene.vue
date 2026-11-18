@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -33,15 +34,15 @@ interface GameInfo {
   /** 打开后面板占满（装修要大画面，小人在屋子里；创意工坊要写字、看图），不画立绘 */
   fill?: boolean;
 }
-const GAMES: GameInfo[] = [
+const GAMES = computed<GameInfo[]>(() => [
   { id: 'kingdom', label: '王国模拟', desc: '十八岁登基，经营王朝、群臣后宫与十二州天下', icon: 'i-lucide-crown', tone: '#d9b979', busy: ['playing'], fill: true },
-  { id: 'brawl', label: '大乱斗', desc: '给角色配专属招式，和 TA 来一场横版格斗', icon: 'i-lucide-swords', tone: '#d9a75d', busy: ['playing', 'paused'], fill: true },
-  { id: 'soup', label: '海龟汤', desc: '她出题你猜、一起猜，或者你出题她猜', icon: 'i-lucide-puzzle', tone: '#8fb3f0', busy: ['playing'] },
+  { id: 'brawl', label: '大乱斗', desc: `给角色配专属招式，和${characterPronoun(her.value)}来一场横版格斗`, icon: 'i-lucide-swords', tone: '#d9a75d', busy: ['playing', 'paused'], fill: true },
+  { id: 'soup', label: '海龟汤', desc: `${characterPronoun(her.value)}出题你猜、一起猜，或者你出题${characterPronoun(her.value)}猜`, icon: 'i-lucide-puzzle', tone: '#8fb3f0', busy: ['playing'] },
   { id: 'truthdare', label: '真心话大冒险', desc: '转瓶子定谁先，轮流问、轮流做', icon: 'i-lucide-bottle-wine', tone: '#e88fa6', busy: ['spin', 'playing'] },
   { id: 'flight', label: '飞行棋', desc: '双人 128 格，走到哪一格做哪一格', icon: 'i-lucide-dice-5', tone: '#b9a3e6', busy: ['playing'] },
   { id: 'decor', label: '装修小屋', desc: '捏你们俩的小人，一起布置一间 3D 小屋', icon: 'i-lucide-sofa', tone: '#e7b46a', busy: ['playing'], fill: true },
-  { id: 'workshop', label: '创意工坊', desc: '和 AI 写小说、画画，拿给她看听她捧场或吐槽', icon: 'i-lucide-palette', tone: '#7fc8a9', busy: ['novel', 'draw'], fill: true },
-];
+  { id: 'workshop', label: '创意工坊', desc: `和 AI 写小说、画画，拿给${characterPronoun(her.value)}看听${characterPronoun(her.value)}捧场或吐槽`, icon: 'i-lucide-palette', tone: '#7fc8a9', busy: ['novel', 'draw'], fill: true },
+]);
 const COMPONENTS: Record<Game, Component> = {
   kingdom: defineAsyncComponent(() => import('@/components/scene/game/kingdom/KingdomGame.vue')),
   brawl: defineAsyncComponent(() => import('@/components/scene/game/brawl/BrawlGame.vue')),
@@ -63,7 +64,7 @@ const her = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
 const chatId = computed(() => chat.chatOfCharacter(her.value?.id)?.id ?? '');
 const replying = computed(() => !!chat.streams[chatId.value]);
 
-const game = computed<GameInfo | null>(() => GAMES.find((g) => g.id === route.query.g) ?? null);
+const game = computed<GameInfo | null>(() => GAMES.value.find((g) => g.id === route.query.g) ?? null);
 /** 每个游戏自己的那句话和阶段（回列表再回来还在） */
 const lines = reactive<Record<Game, string>>({ soup: '', truthdare: '', flight: '', decor: '', workshop: '', brawl: '', kingdom: '' });
 const phases = reactive<Record<Game, string>>({ soup: 'menu', truthdare: 'menu', flight: 'menu', decor: 'menu', workshop: 'menu', brawl: 'menu', kingdom: 'menu' });

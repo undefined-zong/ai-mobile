@@ -236,7 +236,7 @@ function stepper(key: 'maxRounds' | 'maxCalls' | 'resultChars') {
         <span class="big-icon"><span class="i-lucide-calendar-check" /></span>
         <div class="flex-1 min-w-0">
           <div class="text-[15px] font-600">打开日程系统</div>
-          <div class="text-[12px] text-ink-3 leading-relaxed">每天到点（默认凌晨 4 点）看一遍新邮件、日程软件里的安排、家务和健康计划，排出这周和今天的计划；她也会知道你今天要忙什么</div>
+          <div class="text-[12px] text-ink-3 leading-relaxed">每天到点（默认凌晨 4 点）看一遍新邮件、日程软件里的安排、家务和健康计划，排出这周和今天的计划；Ta也会知道你今天要忙什么</div>
         </div>
         <van-switch v-model="s.enabled" size="22px" data-testid="planner-switch" @change="touch" />
       </div>
@@ -392,7 +392,7 @@ function stepper(key: 'maxRounds' | 'maxCalls' | 'resultChars') {
         <label class="field-label !mt-0" for="pl-note">你的情况（作息、上班上课时间、这阵子的目标、排计划的偏好）</label>
         <textarea id="pl-note" v-model="s.note" class="textarea !min-h-[90px]" placeholder="例如：工作日 9:30–18:30 上班，通勤 40 分钟；这个月在准备雅思；晚上 10 点以后不排事" @change="touch" />
 
-        <div class="field-label">谁帮你排（计划里那句提醒用她的口吻；可以不选）</div>
+        <div class="field-label">谁帮你排（计划里那句提醒用Ta的口吻；可以不选）</div>
         <div class="flex flex-wrap gap-1.5">
           <button type="button" class="opt" :class="{ on: !s.characterId }" @click="(s.characterId = null), touch()">不选</button>
           <button v-for="c in chars.list" :key="c.id" type="button" class="opt" :class="{ on: s.characterId === c.id }" @click="(s.characterId = c.id), touch()">{{ c.name }}</button>
@@ -417,7 +417,7 @@ function stepper(key: 'maxRounds' | 'maxCalls' | 'resultChars') {
         <div class="flex items-center gap-3 mt-3.5">
           <div class="flex-1 min-w-0">
             <div class="text-[14px]">写进聊天</div>
-            <div class="text-[12px] text-ink-3 leading-relaxed">聊天、通话、一起做事、主动消息里她知道你今天的安排（预设里"日程：你怎么反应"那一块决定她怎么说）</div>
+            <div class="text-[12px] text-ink-3 leading-relaxed">聊天、通话、一起做事、主动消息里Ta知道你今天的安排（预设里"日程：你怎么反应"那一块决定Ta怎么说）</div>
           </div>
           <van-switch v-model="s.inChat" size="20px" @change="touch" />
         </div>

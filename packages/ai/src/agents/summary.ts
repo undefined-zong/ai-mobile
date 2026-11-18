@@ -94,7 +94,7 @@ export function summaryFills(input: SummaryInput): Record<string, string> {
 
 /** 按"总结"预设拼提示词 */
 export function buildSummaryMessages(input: SummaryInput, preset: TaskPreset): ChatMessage[] {
-  return assembleTaskPrompt({ preset, fills: summaryFills(input), macros: { char: input.character.name, user: input.user.name, now: input.now } }).messages;
+  return assembleTaskPrompt({ preset, fills: summaryFills(input), macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.user.name, now: input.now } }).messages;
 }
 
 const strings = (v: unknown, max: number): string[] =>

@@ -25,7 +25,7 @@ export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: n
   if (!preset) throw new Error('没有主动消息预设，请在 App 的预设页选择后同步');
   const date = new Date(now);
   const timeZone = context.environment.timezone;
-  const macros = { char: c.name, user: persona.name, now: date, timeZone };
+  const macros = { char: c.name, pronoun: c.pronoun, user: persona.name, now: date, timeZone };
   const hint = substituteMacros(t.hint, macros);
   const time = substituteMacros('{{isodate}} {{time}}', macros);
   const quiet = `【主动消息】现在是 ${time}（${timeZone}），${persona.name}还没有来找你，由${c.name}先开口。这一次要做的事：${hint}。`;

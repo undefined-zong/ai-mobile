@@ -112,7 +112,7 @@ const placeholder = computed(() =>
   mode.value === 'card'
     ? hasCharacter.value
       ? '要补哪些（不写就补空着的）'
-      : '说说她是谁：名字、性格、你们的关系、世界观……'
+      : '说说Ta是谁：名字、性格、你们的关系、世界观……'
     : targetRows.value.length
       ? store.targets.some(t => t.kind === 'fighter') ? '例如：提高血量，把技能二改成突进上挑，降低奥义耗蓝' : '要怎么改：把生图写法换成 [cg:]、补上输出格式……'
       : '说点什么，或者先在上面选要看的预设、世界书、角色卡',

@@ -1,3 +1,4 @@
+import pronounUpgrades from '@/migrations/presetPronouns.json';
 import {
   parseLorebook,
   parsePresetFile,
@@ -123,7 +124,7 @@ interface SeedUpgrade {
   replaced?: Record<string, string[]>;
   added?: string[];
   /** 改名：预设的名字、块的名字还是旧的默认名时换成新的 */
-  renamed?: { preset?: [string, string]; blocks?: Record<string, [string, string]> };
+  renamed?: { preset?: [string, string]; description?: [string, string]; blocks?: Record<string, [string, string]> };
   /** 回复长度：还是旧的默认值时换成新的 [旧, 新] */
   maxTokens?: [number, number];
 }
@@ -528,7 +529,7 @@ const SEED_UPGRADES: SeedUpgrade[] = [
 /** 按 SEED_UPGRADES 更新本机的自带预设，返回改了的那些 */
 function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
   const changed = new Set<Preset>();
-  for (const u of SEED_UPGRADES) {
+  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);
@@ -547,6 +548,11 @@ function upgradeFile(list: Preset[], u: SeedUpgrade, file: string, changed: Set<
     if (fromName && toName && p.name === fromName) {
       p.name = toName;
       if (seed.description) p.description = seed.description;
+      changed.add(p);
+    }
+    const description = u.renamed?.description;
+    if (description && p.description === description[0]) {
+      p.description = description[1];
       changed.add(p);
     }
     if (u.maxTokens && p.sampler.maxTokens === u.maxTokens[0]) {

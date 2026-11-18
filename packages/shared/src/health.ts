@@ -230,6 +230,7 @@ export interface HealthPlanContext {
   persona: { id: string; name: string };
   /** 陪你的角色（预设里的 {{char}}），没有为空 */
   characterName?: string;
+  pronoun?: string;
   timezone: string;
   runAt: HHMM;
   preset: Preset | null;

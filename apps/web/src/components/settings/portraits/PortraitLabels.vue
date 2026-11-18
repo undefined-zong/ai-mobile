@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { autoExpressionForMood, EXPRESSION_LABELS, EXPRESSIONS, expressionLabel, OUTFIT_KINDS, POSES, type Character, type Expression, type OutfitKind, type Pose, type PortraitPose } from '@app/shared';
 import { showConfirmDialog } from 'vant';
 import { computed } from 'vue';
@@ -117,7 +118,7 @@ const unlabeled = computed(() => count('expression', ''));
 
     <section>
       <div class="lb-title"><span>动作</span><button type="button" class="lb-add" @click="add('pose')"><span class="i-lucide-plus" />新动作</button></div>
-      <p v-if="!set.poses.length" class="lb-note">没分动作。托腮、抱臂这样的不同动作分开标上，聊天里她能自己换（[pose:动作]），一起做事时按"适合"挑。</p>
+      <p v-if="!set.poses.length" class="lb-note">没分动作。托腮、抱臂这样的不同动作分开标上，聊天里{{ characterPronoun(character) }}能自己换（[pose:动作]），一起做事时按"适合"挑。</p>
       <div v-for="p in set.poses" :key="p.id" class="lb-card">
         <div class="lb-row">
           <input :value="p.label" class="input lb-name" aria-label="动作名字" maxlength="16" @change="rename('pose', p.id, $event)" />

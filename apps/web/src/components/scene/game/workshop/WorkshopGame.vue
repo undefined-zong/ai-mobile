@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { isWorkshopPreset, type MessagePart, type PresetUseId } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
@@ -322,7 +323,7 @@ async function talk() {
         <div class="moods">
           <button v-for="m in MOODS" :key="m.value" type="button" class="mood press" :class="{ on: mood === m.value }" @click="mood = m.value"><span :class="m.icon" />{{ m.label }}</button>
         </div>
-        <input v-model="note" class="field mt-3" :placeholder="`想对${her.pronoun}说的（可以不写）`" aria-label="想对她说的" />
+        <input v-model="note" class="field mt-3" :placeholder="`想对${her.pronoun}说的（可以不写）`" :aria-label="`想对${characterPronoun(her)}说的`" />
         <van-button type="primary" round block class="!mt-3" :disabled="busy" @click="sendShow">给{{ her.pronoun }}看</van-button>
       </div>
     </van-popup>

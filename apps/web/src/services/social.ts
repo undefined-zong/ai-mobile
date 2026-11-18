@@ -388,7 +388,7 @@ export async function reactToMoment(momentId: string, characterId: string, kind:
       'social',
       {
         messages: buildSocialMessages({
-          task: 'react', characterName: c.name, userName, now: new Date(), timeZone,
+          task: 'react', characterName: c.name, pronoun: c.pronoun, userName, now: new Date(), timeZone,
           fills: {
             socialCharacter: socialCharacterFill({ id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, userName),
             socialLife: day ? socialDayText(day, at.minute) : '',

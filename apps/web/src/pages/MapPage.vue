@@ -458,7 +458,7 @@ watch(
             <span class="i-lucide-chevron-right text-ink-3" />
           </button>
         </div>
-        <p class="note">她们平时在自己的小世界里。你出门时带上谁，谁就"来你这边"陪你；离开后回到自己的世界。</p>
+        <p class="note">Ta们平时在自己的小世界里。你出门时带上谁，谁就"来你这边"陪你；离开后回到自己的世界。</p>
 
         <div class="group-title">我们的足迹</div>
         <div v-if="chat.footprints.length" class="px-4 grid gap-2">
@@ -473,7 +473,7 @@ watch(
             </div>
           </button>
         </div>
-        <p v-else class="note">还没有足迹。和她们连线一起做事、或者带她们出门之后，你这边的地点会记在这里。</p>
+        <p v-else class="note">还没有足迹。和Ta们连线一起做事、或者带Ta们出门之后，你这边的地点会记在这里。</p>
 
         <div class="group-title">今天的你</div>
         <div class="grid grid-cols-4 gap-2 px-4">
@@ -492,7 +492,7 @@ watch(
           <span class="act-icon"><span :class="selectedScene.icon" /></span>
           <div class="flex-1 min-w-0">
             <div class="sheet-title">和{{ owner.name }} · {{ selectedScene.name }}</div>
-            <div class="text-[12.5px] text-ink-3">{{ selectedScene.tagline }}</div>
+            <div class="text-[12.5px] text-ink-3">{{ getScene(selectedScene.id, owner).tagline }}</div>
           </div>
         </div>
         <label class="field-label">在{{ owner.name }}的世界里去哪儿</label>

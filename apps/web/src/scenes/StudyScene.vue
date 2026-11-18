@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
 import { errorText } from '@app/ai';
@@ -1303,7 +1304,7 @@ const herPct = computed(() => Math.round(herProgress.value));
           <!-- 右下：你的任务与进度（有的话），"我卡住了"是它上面的气泡 -->
           <div class="me-col">
             <StudyBubble v-if="shownMine" side="me" :text="shownMine" label="你刚说的" />
-            <StudyBubble v-else-if="phase === 'focus'" side="me" label="我卡住了：问问她" data-testid="stuck-bubble" @click="stuckOpen = true">
+            <StudyBubble v-else-if="phase === 'focus'" side="me" :label="`我卡住了：问问${characterPronoun(her)}`" data-testid="stuck-bubble" @click="stuckOpen = true">
               <span class="inline-flex items-center gap-1.5"><span class="i-lucide-message-circle-question text-accent-ink" />我卡住了</span>
             </StudyBubble>
             <button v-if="tasks.length" type="button" class="my-card" data-testid="my-card" aria-label="你的任务：点开勾掉、加新的" @click="tasksOpen = true">

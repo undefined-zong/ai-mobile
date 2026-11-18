@@ -162,7 +162,7 @@ async function callSprite<T>(c: Character, task: SpriteTask, ask: string, parse:
   if (!status.live) throw new AiError('no_route', `「生图提示词」还没接通：${status.reason}`);
   const preset = spritePresetFor(c);
   if (!preset) throw new AiError('no_route', '没有立绘预设：去"我的 → 预设 → 立绘"导入或恢复一个');
-  const messages = buildSpriteMessages({ task, characterName: c.name, userName: userName(c), fills: { ...lookFills(c), spriteAsk: ask } }, preset);
+  const messages = buildSpriteMessages({ task, characterName: c.name, pronoun: c.pronoun, userName: userName(c), fills: { ...lookFills(c), spriteAsk: ask } }, preset);
   const { value, result } = await ai.system.json('imagePrompt', { messages, ...samplerRequest(preset.sampler) }, parse, { signal });
   return { value, model: result.model };
 }

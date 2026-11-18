@@ -1,3 +1,4 @@
+import { pronounText } from '@app/shared';
 import type { BackdropKey, BuiltLocationSpec, BuiltWorldSpec, Character, OutfitItem, RhythmSlot, SceneId } from '@app/shared';
 
 /**
@@ -104,7 +105,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     name: () => '青崖宗',
     blurb: '山门里的竹舍、修习的地方，和山下常去的去处',
     areas: { home: '竹林', campus: '宗门', city: '后山与山下' },
-    home: [s('bamboo', '竹舍', 'bedroom', true, '推窗就是竹林', [['sleep', '哄睡'], ['music', '听她抚琴'], ['poke', '戳戳乐']])],
+    home: [s('bamboo', '竹舍', 'bedroom', true, '推窗就是竹林', [['sleep', '哄睡'], ['music', '听{{pronoun}}抚琴'], ['poke', '戳戳乐']])],
     campus: [
       s('scripture', '藏经阁', 'library', true, '最高一层的经卷不许外借', [['study', '一起修习'], ['read', '一起看书']]),
       s('hall', '膳堂', 'dining', true, '灵谷饭管饱', [['meal', '一起用膳']]),
@@ -140,7 +141,7 @@ const POOLS: Record<StarterSetting, Pool> = {
       s('ramen', '拉面摊', 'night-market', false, '下雨天也开到凌晨', [['meal', '一起吃饭'], ['date', '约会']]),
       s('roof', '天台', 'park', false, '能看见整座城的霓虹', [['music', '一起听歌'], ['date', '约会']]),
       s('holo', '全息影院', 'cinema', true, '老电影修复版', [['watch', '一起观影'], ['date', '约会']]),
-      s('arcade', '街机厅', 'amusement', true, '最高分还是她的', [['game', '一起游戏']]),
+      s('arcade', '街机厅', 'amusement', true, '最高分还是{{pronoun}}的', [['game', '一起游戏']]),
       s('cafe', '赛博咖啡', 'cafe', true, '咖啡是合成的，但很香', [['study', '一起自习'], ['date', '约会']]),
     ],
     workStatus: '跑数据',
@@ -252,8 +253,8 @@ export function starterWorldSpec(c: Character, setting = detectSetting(c)): Buil
     area,
     indoor: sp.indoor,
     backdrop: sp.backdrop,
-    blurb: sp.blurb,
-    activities: sp.acts.map(([sceneId, label]) => ({ sceneId, label })),
+    blurb: pronounText(sp.blurb, c),
+    activities: sp.acts.map(([sceneId, label]) => ({ sceneId, label: pronounText(label, c) })),
   });
   const locations = [toLoc(home, 'home'), ...campus.map((sp) => toLoc(sp, 'campus')), ...city.map((sp) => toLoc(sp, 'city'))];
 

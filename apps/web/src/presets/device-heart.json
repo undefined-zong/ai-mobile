@@ -7,7 +7,7 @@
   "defaultFor": [
     "device"
   ],
-  "description": "心跳里她每说完一句，按这句话给连着的玩具写指令（键的写法沿用 SillyTavern 的 Intiface 插件：VIBRATE、OSCILLATE、LINEAR……），读到、念到她原话里 at 写的那几个字时执行。轻重怎么对应剧情写在\"规则\"里，可以改；强度上限和最快速度由程序按你的设置填。",
+  "description": "心跳里Ta每说完一句，按这句话给连着的玩具写指令（键的写法沿用 SillyTavern 的 Intiface 插件：VIBRATE、OSCILLATE、LINEAR……），读到、念到Ta原话里 at 写的那几个字时执行。轻重怎么对应剧情写在\"规则\"里，可以改；强度上限和最快速度由程序按你的设置填。",
   "blocks": [
     {
       "identifier": "main",
@@ -95,7 +95,7 @@
     },
     {
       "identifier": "deviceLine",
-      "name": "她这一句（要配指令的话）",
+      "name": "Ta这一句（要配指令的话）",
       "role": "user",
       "content": "",
       "marker": true,

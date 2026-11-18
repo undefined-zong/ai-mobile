@@ -185,7 +185,7 @@ const SUBSTITUTE: { value: 0 | 1 | 2; label: string }[] = [
 
 // —— 测试：只运行这一条（不判断作用范围、格式选项和深度） ——
 const sample = ref('');
-const testNames = computed(() => ({ char: chars.list[0]?.name ?? '她', user: personaOf(undefined).name }));
+const testNames = computed(() => ({ char: chars.list[0]?.name ?? 'Ta', user: personaOf(undefined).name }));
 const sampleOut = computed(() => {
   const r = editing.value;
   if (!r || !sample.value) return '';

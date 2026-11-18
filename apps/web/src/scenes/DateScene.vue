@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImages } from '@/services/redraw';
 import { DATE_CHOICE_KINDS, isRainy, parseDateChoices, worldOf, type DateChoice, type DateChoiceKind, type MapLocation, type MessagePart, type ParsedReply } from '@app/shared';
@@ -648,7 +649,7 @@ onBeforeUnmount(() => {
                 :style="{ '--tone': c.kind ? KIND[c.kind].tone : 'var(--accent)' }"
                 @click="pick(c)"
               >
-                <span class="kind"><span :class="c.kind ? KIND[c.kind].icon : 'i-lucide-message-circle'" />{{ c.kind ?? '回她' }}</span>
+                <span class="kind"><span :class="c.kind ? KIND[c.kind].icon : 'i-lucide-message-circle'" />{{ c.kind ?? `回${characterPronoun(her)}` }}</span>
                 <span class="choice-text">{{ c.text }}</span>
               </button>
               <p v-if="!choices.length" class="no-choice">{{ her.pronoun }}这段没给选项，自己说一句吧</p>

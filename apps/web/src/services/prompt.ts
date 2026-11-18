@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import {
   allowedInviteGames,
   anniversaryLine,
@@ -132,7 +133,7 @@ function partToText(p: MessagePart, character: Character, user: string, mapText?
         return `[一起装修小屋「${p.room}」：现在摆了 ${p.items} 件，这一次添了 ${p.added} 件${her}]`;
       }
       if (p.game === 'workshop') {
-        const mood = p.verdict === 'cheer' ? '，想听她捧场' : p.verdict === 'roast' ? '，想听她吐槽' : '';
+        const mood = p.verdict === 'cheer' ? `，想听${characterPronoun(character)}捧场` : p.verdict === 'roast' ? `，想听${characterPronoun(character)}吐槽` : '';
         if (p.kind === 'image') return `[${user}在创意工坊画了一张画「${p.title}」拿给${character.name}看${mood}]`;
         const head = p.excerpt ? `，开头是：${p.excerpt}` : '';
         return `[${user}在创意工坊写的小说《${p.title}》${p.chapter ? `的「${p.chapter}」` : ''}拿给${character.name}看${mood}${head}]`;
@@ -277,7 +278,7 @@ function appFills(chat: Chat, character: Character, history: Message[], now: Dat
         sceneName: scene.id === 'free' ? null : scene.name,
         anniversaries: anniversaryLine(character.relationship.anniversaries, now.getTime(), timeZone),
       }),
-      source: `时间 / 节气 / 纪念日 / 天气（${[weather ? `你那边 ${weather.city}` : '你那边没取到', herWeather ? `${character.name}那边 ${herWeather.city}` : ''].filter(Boolean).join('，')}）/ 今日活动 / 她在哪 / 她今天穿什么`,
+      source: `时间 / 节气 / 纪念日 / 天气（${[weather ? `你那边 ${weather.city}` : '你那边没取到', herWeather ? `${character.name}那边 ${herWeather.city}` : ''].filter(Boolean).join('，')}）/ 今日活动 / ${characterPronoun(character)}在哪 / ${characterPronoun(character)}今天穿什么`,
     },
     sceneRules: {
       content: `${scene.promptFragment.replaceAll('{{char}}', character.name)}\n${tagsLine(scene, character)}`,
@@ -428,9 +429,9 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   // 家务和健康：你人设里开着的系统今天的情况（都没开时没有这一块）
   const flags: string[] = [...lifeFlags(persona), ...(opts.flags ?? [])];
   // 预设里没有"她怎么反应"那一块的，自带的规则接在今天的情况后面
-  const home = homeBlock(persona, { preset, characterName: character.name });
+  const home = homeBlock(persona, { preset, characterName: character.name, pronoun: character.pronoun });
   if (home) app.home = home;
-  if (opts.quiet) app.proactive = { content: opts.quiet, source: '主动消息：这一次要她做的事' };
+  if (opts.quiet) app.proactive = { content: opts.quiet, source: `主动消息：这一次要${characterPronoun(character)}做的事` };
   if (opts.task) app.sceneTask = { content: opts.task.input, source: `场景任务：${opts.task.name}` };
   // 功能预设里写了自己的"场景规则"：程序那块只填能用的标签和表情，不再重复场景规则
   if (preset.blocks.some((b) => b.identifier === 'sceneRule' && !b.marker && b.enabled) && app.sceneRules) app.sceneRules = sceneTagsOnly(chat, character);
@@ -460,7 +461,7 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
     flags,
   });
   if (opts.quiet && !result.blocks.some((b) => b.identifier === 'proactive' && b.sent)) {
-    result.messages.push({ role: 'system', content: opts.quiet, source: 'quiet', label: '主动消息：这一次要她做的事（预设里没有这一块，接在最后）' });
+    result.messages.push({ role: 'system', content: opts.quiet, source: 'quiet', label: `主动消息：这一次要${characterPronoun(character)}做的事（预设里没有这一块，接在最后）` });
     result.tokens += estimateTokens(opts.quiet);
   }
   // 预设里没有"家务和健康"这一块（以前导入的 SillyTavern 预设、以前复制的）：今天的情况（和补上的规则）接在最后。

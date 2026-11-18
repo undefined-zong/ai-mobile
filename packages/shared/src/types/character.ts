@@ -112,8 +112,8 @@ export interface CharacterWeather {
 export interface Character extends SyncMeta {
   live2d?: import('./live2d.ts').CharacterLive2D;
   name: string;
-  /** 界面里怎么称呼：她 / 他 / TA（"她叫你…""去找他"） */
-  pronoun: '她' | '他' | 'TA';
+  /** 界面和提示词里的人称；没有选择时用 Ta。 */
+  pronoun: '他' | '她' | 'Ta';
   /** 资源 key（R2 内容哈希）；为空时用占位头像 */
   avatar: string | null;
   /** 角色主题色，界面点缀色跟随它 */

@@ -17,11 +17,12 @@ export interface DevicePromptInput {
   userName: string;
   /** 她的名字（预设里的 {{char}}） */
   characterName: string;
+  pronoun?: string;
   fills: Partial<Record<DeviceFill, string>>;
 }
 
 export function buildDeviceMessages(input: DevicePromptInput, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName, user: input.userName } }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName } }).messages;
 }

@@ -449,7 +449,7 @@ function placementNames(v: unknown): RegexScript['placement'] {
   return placementCodes(v).map((c) => names.find(([, n]) => n === c)?.[0]).filter((x): x is RegexScript['placement'][number] => !!x);
 }
 function regexTarget(s: RegexScript): string {
-  const where = s.placement.map((p) => (p === 'ai_output' ? '她的回复' : p === 'user_input' ? '你发的' : p)).join('、');
+  const where = s.placement.map((p) => (p === 'ai_output' ? 'Ta的回复' : p === 'user_input' ? '你发的' : p)).join('、');
   const how = s.markdownOnly && s.promptOnly ? '只改显示和发给 AI 的' : s.markdownOnly ? '只改显示' : s.promptOnly ? '只改发给 AI 的' : '改存下来的消息';
   return `（${where}，${how}）`;
 }
@@ -647,9 +647,10 @@ function patchCharacter(c: Character, f: Obj): { field: string; before: string; 
         done.push({ field: key, before: c[key], after: text });
         c[key] = text;
       }
-    } else if (k === 'pronoun' && (v === '她' || v === '他' || v === 'TA') && c.pronoun !== v) {
-      done.push({ field: 'pronoun', before: c.pronoun, after: v });
-      c.pronoun = v;
+    } else if (k === 'pronoun' && (v === '她' || v === '他' || v === 'Ta' || v === 'TA') && c.pronoun !== (v === 'TA' ? 'Ta' : v)) {
+      const pronoun = v === 'TA' ? 'Ta' : v;
+      done.push({ field: 'pronoun', before: c.pronoun, after: pronoun });
+      c.pronoun = pronoun;
     }
   }
   return done;

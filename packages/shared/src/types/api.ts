@@ -219,8 +219,8 @@ export const AGENT_META: Record<
     icon: 'i-lucide-house-heart',
   },
   sidestory: {
-    label: '番外 · 她的生活',
-    desc: '你不在的时候她那边发生了什么：按她的作息、地点和身边的人写一小段故事，可以引出主动消息或配图',
+    label: '番外 · Ta的生活',
+    desc: '你不在的时候Ta那边发生了什么：按Ta的作息、地点和身边的人写一小段故事，可以引出主动消息或配图',
     capability: 'chat',
     runsOn: 'both',
     icon: 'i-lucide-book-heart',
@@ -269,7 +269,7 @@ export const AGENT_META: Record<
   },
   rhythm: {
     label: '节律',
-    desc: '导入角色时建她的世界；每天排她的作息、三餐和穿着（穿着用于生图）',
+    desc: '导入角色时建Ta的世界；每天排Ta的作息、三餐和穿着（穿着用于生图）',
     capability: 'chat',
     runsOn: 'both',
     icon: 'i-lucide-calendar-clock',
@@ -290,14 +290,14 @@ export const AGENT_META: Record<
   },
   parallel: {
     label: '平行时空',
-    desc: '平行时空：她看着你们俩今天的安排给你留言（云端每天在随机的时间留，App 关着也留）、回你的留言；你请她改今天的日程时，她决定答不答应、改成什么样',
+    desc: '平行时空：Ta看着你们俩今天的安排给你留言（云端每天在随机的时间留，App 关着也留）、回你的留言；你请Ta改今天的日程时，Ta决定答不答应、改成什么样',
     capability: 'chat',
     runsOn: 'both',
     icon: 'i-lucide-orbit',
   },
   device: {
     label: '控制指令',
-    desc: '心跳里按她说的话给连着的玩具写指令（Intiface Central）：什么时候震动多强、怎么变速。默认跟随「陪伴 · 快速」，想用别的模型就单独设置',
+    desc: '心跳里按Ta说的话给连着的玩具写指令（Intiface Central）：什么时候震动多强、怎么变速。默认跟随「陪伴 · 快速」，想用别的模型就单独设置',
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-activity',
@@ -311,7 +311,7 @@ export const AGENT_META: Record<
   },
   social: {
     label: '社媒',
-    desc: '朋友圈：她们发朋友圈（云端每天在随机的时间发，按节律和最近的聊天）、给你的朋友圈点赞评论、回你的评论。社群：按关键字建社群，网友每天发帖、回应你的帖子，加入社群的角色发帖、回应你。要配图时调"生图"',
+    desc: '朋友圈：Ta们发朋友圈（云端每天在随机的时间发，按节律和最近的聊天）、给你的朋友圈点赞评论、回你的评论。社群：按关键字建社群，网友每天发帖、回应你的帖子，加入社群的角色发帖、回应你。要配图时调"生图"',
     capability: 'chat',
     runsOn: 'both',
     icon: 'i-lucide-aperture',
@@ -332,7 +332,7 @@ export const AGENT_META: Record<
   },
   tts: {
     label: '语音合成',
-    desc: '她说话的声音（音色在"我的 → 语音"里按角色设置）',
+    desc: 'Ta说话的声音（音色在"我的 → 语音"里按角色设置）',
     capability: 'tts',
     runsOn: 'client',
     icon: 'i-lucide-audio-lines',

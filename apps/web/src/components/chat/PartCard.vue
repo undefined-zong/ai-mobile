@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImages } from '@/services/redraw';
 import { inviteGameLabel, pokeHow, pokeLine, type Character, type MessagePart, type VideoHit } from '@app/shared';
@@ -338,7 +339,7 @@ async function connectToys() {
       <span class="icon-wrap" style="color: var(--tone)"><span class="i-lucide-heart-pulse" /></span>
       <div class="flex-1 min-w-0">
         <div class="text-[14.5px]">{{ part.text }}</div>
-        <div class="text-[12px] text-ink-3">{{ toys.ready ? '连着玩具 · 她的指令读到这里时执行' : toys.live ? '模拟模式 · 没有真的玩具' : '玩具没连上，没有执行' }}</div>
+        <div class="text-[12px] text-ink-3">{{ toys.ready ? `连着玩具 · ${characterPronoun(character)}的指令读到这里时执行` : toys.live ? '模拟模式 · 没有真的玩具' : '玩具没连上，没有执行' }}</div>
       </div>
     </div>
     <div class="flex gap-2 mt-2.5">
@@ -537,10 +538,10 @@ async function connectToys() {
       </div>
     </div>
     <div v-if="part.status === 'invite' && !mine" class="flex gap-2 mt-2.5">
-      <button class="flex-1 h-9 rounded-full bg-accent text-[var(--on-accent)] text-[13.5px] font-600 press" @click="emit('answer-date', true)">答应她</button>
+      <button class="flex-1 h-9 rounded-full bg-accent text-[var(--on-accent)] text-[13.5px] font-600 press" @click="emit('answer-date', true)">答应{{ characterPronoun(character) }}</button>
       <button class="flex-1 h-9 rounded-full bg-panel text-[13.5px] press" @click="emit('answer-date', false)">再想想</button>
     </div>
-    <div v-else class="text-[12.5px] text-ink-3 mt-2">{{ part.status === 'accepted' ? '已答应 · 到时候她会提醒你' : part.status === 'memory' ? '已存进回忆' : '' }}</div>
+    <div v-else class="text-[12.5px] text-ink-3 mt-2">{{ part.status === 'accepted' ? `已答应 · 到时候${characterPronoun(character)}会提醒你` : part.status === 'memory' ? '已存进回忆' : '' }}</div>
   </div>
 
   <!-- 场景分段：和她一起去了某个地点 / 离开 -->

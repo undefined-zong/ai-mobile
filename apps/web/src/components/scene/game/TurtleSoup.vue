@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { expressionField, presetLevels, SOUP_LEVEL, worldOf, type MessagePart } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, ref } from 'vue';
@@ -25,11 +26,11 @@ export type SoupPhase = 'menu' | 'playing' | 'reveal';
 /** 上次选的海龟汤尺度（只记在这台设备上） */
 const SOUP_LEVEL_KEY = 'ai-mobile:soup-level';
 type Mode = 'host' | 'coop' | 'guest';
-const MODES: { id: Mode; label: string; desc: string }[] = [
-  { id: 'host', label: '她出题', desc: '你问是非题，她答' },
-  { id: 'coop', label: '一起猜', desc: '主持人判定，她和你一起想' },
-  { id: 'guest', label: '你出题', desc: '你写汤面，她来猜' },
-];
+const MODES = computed<{ id: Mode; label: string; desc: string }[]>(() => [
+  { id: 'host', label: `${characterPronoun(her.value)}出题`, desc: `你问是非题，${characterPronoun(her.value)}答` },
+  { id: 'coop', label: '一起猜', desc: `主持人判定，${characterPronoun(her.value)}和你一起想` },
+  { id: 'guest', label: '你出题', desc: `你写汤面，${characterPronoun(her.value)}来猜` },
+]);
 const ANSWERS = ['是', '不是', '无关', '是也不是'] as const;
 type Answer = (typeof ANSWERS)[number];
 
@@ -150,7 +151,7 @@ function begin(s: Soup) {
   herLine.value = '';
   herIdea.value = '';
   phase.value = 'playing';
-  chat.push(chatId.value, 'narrator', [{ type: 'text', text: `海龟汤《${s.title}》（${MODES.find((m) => m.id === mode.value)?.label}）：${s.surface}` }], { meta: { scene: 'game', cue: '开局' } });
+  chat.push(chatId.value, 'narrator', [{ type: 'text', text: `海龟汤《${s.title}》（${MODES.value.find((m) => m.id === mode.value)?.label}）：${s.surface}` }], { meta: { scene: 'game', cue: '开局' } });
   if (mode.value === 'guest') void herTurn();
 }
 function beginMine() {

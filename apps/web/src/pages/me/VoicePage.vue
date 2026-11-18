@@ -147,7 +147,7 @@ function saveVoice() {
   <div class="page" data-page="voice">
     <PageHeader title="语音" subtitle="语音合成、语音识别、通话" fallback="/me" />
     <div class="page-scroll pb-10">
-      <div class="group-title">她们的声音（语音合成）</div>
+      <div class="group-title">Ta们的声音（语音合成）</div>
       <div class="px-4 grid gap-2.5">
         <div v-for="c in chars.list" :key="c.id" class="voice">
           <div class="flex items-center gap-3">
@@ -167,7 +167,7 @@ function saveVoice() {
           </div>
         </div>
       </div>
-      <p class="note">支持 OpenAI 兼容 /audio/speech（硅基流动 CosyVoice、各家中转）、MiniMax、火山引擎豆包语音（可以复刻声音）、Fish Audio、自建 GPT-SoVITS。按她当时的表情加情绪，同一句话的音频会复用。</p>
+      <p class="note">支持 OpenAI 兼容 /audio/speech（硅基流动 CosyVoice、各家中转）、MiniMax、火山引擎豆包语音（可以复刻声音）、Fish Audio、自建 GPT-SoVITS。按Ta当时的表情加情绪，同一句话的音频会复用。</p>
 
       <div class="group-title">朗读哪些字</div>
       <van-cell-group inset>
@@ -203,7 +203,7 @@ function saveVoice() {
       </div>
       <p class="note">表情符号、链接、Markdown 记号总是不读；消息开头的"名字："也会去掉。</p>
 
-      <div class="group-title">自动朗读她的消息</div>
+      <div class="group-title">自动朗读Ta的消息</div>
       <div class="px-4">
         <Segmented
           v-model="autoRead"
@@ -237,7 +237,7 @@ function saveVoice() {
         <van-cell :title="`停顿 ${endSilenceSec.toFixed(1)} 秒算说完`" label="说话慢、爱停顿就调长一点">
           <template #label><van-slider v-model="endSilenceSec" :min="0.4" :max="2" :step="0.1" class="!mt-3" bar-height="4px" button-size="16px" /></template>
         </van-cell>
-        <van-cell title="允许打断她" label="你一开口，她就停下来听（聊天里只留下她说出口的部分）" center>
+        <van-cell title="允许打断Ta" label="你一开口，Ta就停下来听（聊天里只留下Ta说出口的部分）" center>
           <template #right-icon><van-switch v-model="voice.call.bargeIn" size="22px" /></template>
         </van-cell>
         <van-cell title="通话用的预设" :value="lib.presetForUse('call')?.name ?? '没有对话预设'" is-link to="/me/presets?cat=chat" />

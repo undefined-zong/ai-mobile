@@ -365,7 +365,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
     const preset = useLibraryStore().presetForUse('rhythm', c);
     if (!preset) return { ok: false, reason: '没有节律预设：去"我的 → 预设 → 节律"导入或恢复一个' };
     try {
-      const messages = buildRhythmMessages({ task, outfitMode, characterName: c.name, userName: userName(characterId), fills }, preset);
+      const messages = buildRhythmMessages({ task, outfitMode, characterName: c.name, pronoun: c.pronoun, userName: userName(characterId), fills }, preset);
       const { value, result } = await ai.system.json('rhythm', { messages, ...samplerRequest(preset.sampler) }, parse);
       return { ok: true, value: { value, model: result.model } };
     } catch (e) {

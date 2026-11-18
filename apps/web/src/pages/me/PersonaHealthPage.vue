@@ -115,7 +115,7 @@ function setSex(s: HealthSettings['sex']) {
         <span class="big-icon"><span class="i-lucide-heart-pulse" /></span>
         <div class="flex-1 min-w-0">
           <div class="text-[15px] font-600">打开健康系统</div>
-          <div class="text-[12px] text-ink-3 leading-relaxed">「健康计划」按下面的设置排这周和今天的健身、饮食计划；"健身"里可以照着练；她也会知道你的目标和今天练没练</div>
+          <div class="text-[12px] text-ink-3 leading-relaxed">「健康计划」按下面的设置排这周和今天的健身、饮食计划；"健身"里可以照着练；Ta也会知道你的目标和今天练没练</div>
         </div>
         <van-switch v-model="h.enabled" size="22px" data-testid="health-switch" @change="touch" />
       </div>

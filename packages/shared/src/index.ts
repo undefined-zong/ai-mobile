@@ -18,6 +18,7 @@ export * from './types/social.ts';
 export * from './types/community.ts';
 export * from './types/sync.ts';
 export * from './timezone.ts';
+export * from './pronouns.ts';
 export * from './timeQuery.ts';
 export * from './anniversary.ts';
 export * from './tags.ts';

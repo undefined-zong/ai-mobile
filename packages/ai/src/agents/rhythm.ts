@@ -1,3 +1,4 @@
+import { characterPronoun } from '@app/shared';
 import { assembleTaskPrompt, backgroundLibraryPrompt, OUTFIT_KINDS, solarTermNote, substituteMacros, type RhythmContext, type RhythmDay, type RhythmSlot, type RhythmTask } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -27,6 +28,7 @@ export interface RhythmPromptInput {
   /** 排今天、穿着每天变化时：从衣柜里挑（outfit-pick）还是每天新编（outfit-new） */
   outfitMode?: 'pick' | 'new' | null;
   characterName: string;
+  pronoun?: string;
   userName?: string;
   fills: Partial<Record<RhythmFill, string>>;
 }
@@ -40,23 +42,23 @@ export function buildRhythmMessages(input: RhythmPromptInput, preset: TaskPreset
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
   if (input.task === 'build-world') fills.rhythmAsk = [fills.rhythmAsk, backgroundLibraryPrompt()].filter(Boolean).join('\n\n');
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName, user: input.userName ?? '' }, type: rhythmTypes(input) }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName ?? '' }, type: rhythmTypes(input) }).messages;
 }
 
 /** Rebuilt at execution time: cloud dates and recent days never depend on an open PWA. */
 export function planDayInput(context: RhythmContext, date: string, recent: RhythmDay[]): RhythmPromptInput {
   const { character: c, userName, settings, template: t, world: w, people } = context;
   const vary = settings.mode === 'daily' ? settings.vary : { schedule: false, meals: false, outfits: false };
-  const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName }).trim();
+  const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName, pronoun: c.pronoun }).trim();
   const schedule = (slots: RhythmSlot[]) => slots.map((s) => `- ${s.from}–${s.to} ${w.locations.find((l) => l.id === s.locationId)?.name ?? s.locationId}（${s.locationId}）${s.status}${s.fixed ? '（固定，不能挪）' : ''}`).join('\n');
   const d = new Date(`${date}T12:00:00`);
   const term = solarTermNote(d);
   const weekday = d.getDay();
   const asks = [vary.schedule ? '作息' : '', vary.meals ? '三餐' : '', vary.outfits ? '穿着' : '', '手头的事', '一两件小事'].filter(Boolean);
   return {
-    task: 'plan-day', outfitMode: vary.outfits ? settings.outfitMode : null, characterName: c.name, userName,
+    task: 'plan-day', outfitMode: vary.outfits ? settings.outfitMode : null, characterName: c.name, pronoun: c.pronoun, userName,
     fills: {
-      rhythmCharacter: [`名字：${c.name}（界面里称呼"${c.pronoun}"）`, c.card.description ? `描述：${sub(c.card.description)}` : '',
+      rhythmCharacter: [`名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`, c.card.description ? `描述：${sub(c.card.description)}` : '',
         c.card.personality ? `性格：${sub(c.card.personality)}` : '', c.card.scenario ? `场景：${sub(c.card.scenario)}` : ''].filter(Boolean).join('\n'),
       rhythmWorld: [`${w.name}：${w.blurb}`, '地点（id：名字 · 室内或室外 · 能一起做的事 · 一句话）：',
         ...w.locations.map((l) => `- ${l.id}：${l.name} · ${l.indoor ? '室内' : '室外'} · ${l.activities.map((a) => a.label).join('、') || '—'}${l.blurb ? ` · ${l.blurb}` : ''}`),

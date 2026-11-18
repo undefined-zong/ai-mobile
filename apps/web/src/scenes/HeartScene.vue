@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
 import { errorText } from '@app/ai';
@@ -491,11 +492,11 @@ const PRESET_TABS: { value: PresetTab; label: string }[] = [
   { value: 'voice', label: '连麦' },
   { value: 'device', label: '控制指令' },
 ];
-const PRESET_HINT: Record<PresetTab, string> = {
-  text: '打字聊天时她怎么说（主对话的模型）。自带"心跳 · 文字"；也可以跟随这个角色自己的对话预设。',
-  voice: '连麦时她怎么说（「陪伴 · 快速」的模型，边写边念）。自带"心跳 · 语音"：短句、口语、不写动作。',
+const PRESET_HINT = computed<Record<PresetTab, string>>(() => ({
+  text: `打字聊天时${characterPronoun(her.value)}怎么说（主对话的模型）。自带"心跳 · 文字"；也可以跟随这个角色自己的对话预设。`,
+  voice: `连麦时${characterPronoun(her.value)}怎么说（「陪伴 · 快速」的模型，边写边念）。自带"心跳 · 语音"：短句、口语、不写动作。`,
   device: '玩具的指令怎么写（"单独生成"时用，「控制指令」的模型）：轻重怎么对应剧情、变速怎么写。',
-};
+}));
 const settingsOpen = ref(false);
 const tab = ref<Tab>(toys.status === 'connected' ? 'art' : 'toys');
 const presetTab = ref<PresetTab>('text');
@@ -638,13 +639,13 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
         </div>
 
         <!-- 最下面：打字 / 连麦 -->
-        <nav class="bottom-bar" aria-label="和她说话" data-testid="heart-bar">
+        <nav class="bottom-bar" :aria-label="`和${characterPronoun(her)}说话`" data-testid="heart-bar">
           <button type="button" class="pill icon" :aria-label="inputMode === 'type' ? '换成连麦' : '换成打字'" data-testid="heart-input-mode" @click="switchInput">
             <span :class="inputMode === 'type' ? 'i-lucide-audio-lines' : 'i-lucide-keyboard'" />
           </button>
           <form v-if="inputMode === 'type'" class="chat-form" @submit.prevent="sendText">
-            <input v-model="text" class="chat-input" :placeholder="`和${her.pronoun}说点什么`" aria-label="打字和她说" enterkeyhint="send" />
-            <button v-if="stream" type="button" class="pill icon" aria-label="让她停下" @click="chat.stop(chatId)"><span class="i-lucide-square" /></button>
+            <input v-model="text" class="chat-input" :placeholder="`和${her.pronoun}说点什么`" :aria-label="`打字和${characterPronoun(her)}说`" enterkeyhint="send" />
+            <button v-if="stream" type="button" class="pill icon" :aria-label="`让${characterPronoun(her)}停下`" @click="chat.stop(chatId)"><span class="i-lucide-square" /></button>
             <button v-else type="submit" class="pill icon send" :disabled="!text.trim()" aria-label="发送"><span class="i-lucide-send" /></button>
           </form>
           <template v-else>
@@ -675,7 +676,7 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
           <div class="sheet" data-testid="heart-sheet">
             <Segmented v-model="tab" :options="TABS" />
             <div class="sheet-body">
-              <ToyPanel v-if="tab === 'toys'" />
+              <ToyPanel v-if="tab === 'toys'" :character="her" />
 
               <template v-else-if="tab === 'art'">
                 <div class="flex items-center gap-3">

@@ -7,7 +7,7 @@
   "defaultFor": [
     "proactive"
   ],
-  "description": "到点时她先开口：带上最近一段聊天（省 token），最后告诉她这一次要做什么。",
+  "description": "到点时Ta先开口：带上最近一段聊天（省 token），最后告诉Ta这一次要做什么。",
   "blocks": [
     {
       "identifier": "main",
@@ -233,7 +233,7 @@
     },
     {
       "identifier": "proactive",
-      "name": "主动消息：这一次要她做的事",
+      "name": "主动消息：这一次要Ta做的事",
       "role": "system",
       "content": "",
       "marker": true,

@@ -148,7 +148,7 @@ export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: st
   theater: { label: '小剧场', desc: '番外：你不在的时候，角色那边发生的一小段故事', icon: 'i-lucide-book-heart' },
   summary: { label: '总结', desc: '整理聊天：写过往摘要、记下以后用得上的事、更新关系', icon: 'i-lucide-notebook-pen' },
   image: { label: '生图', desc: '生图提示词：把要画的画面写成 NovelAI tags。聊天配图一个，一起做事的每件事也各选一个（可以跟随配图）', icon: 'i-lucide-wand-sparkles' },
-  rhythm: { label: '节律', desc: '她每天的作息、三餐和穿着：导入角色后"建世界"一次，之后每天"排今天"（每个角色在"我的 → 节律"里选固定还是每天变化）', icon: 'i-lucide-calendar-clock' },
+  rhythm: { label: '节律', desc: 'Ta每天的作息、三餐和穿着：导入角色后"建世界"一次，之后每天"排今天"（每个角色在"我的 → 节律"里选固定还是每天变化）', icon: 'i-lucide-calendar-clock' },
   health: { label: '健康', desc: '你的健身计划和饮食计划：按人设里的身高体重、目标、能练的方式和时间、食材、做饭时间和厨具，排这周和今天的（"我的 → 健康计划"）', icon: 'i-lucide-heart-pulse' },
   planner: {
     label: '计划',
@@ -157,12 +157,12 @@ export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: st
   },
   parallel: {
     label: '平行时空',
-    desc: '平行时空里她和你的今天一左一右排在一起：她看着两边的安排给你留言（云端每天在随机的时间留）、回你的留言；你请她改今天的日程时，她按自己的性格和安排决定答不答应、怎么改。留言写什么、多久留一次之外的规矩、改日程的分寸都在这里改',
+    desc: '平行时空里Ta和你的今天一左一右排在一起：Ta看着两边的安排给你留言（云端每天在随机的时间留）、回你的留言；你请Ta改今天的日程时，Ta按自己的性格和安排决定答不答应、怎么改。留言写什么、多久留一次之外的规矩、改日程的分寸都在这里改',
     icon: 'i-lucide-orbit',
   },
   device: {
     label: '控制指令',
-    desc: '心跳里玩具的控制指令：按她刚说的话、连着的玩具能做什么、你设的强度上限，写什么时候震动多强、怎么变速、伸缩多快（通过 Intiface Central 执行）',
+    desc: '心跳里玩具的控制指令：按Ta刚说的话、连着的玩具能做什么、你设的强度上限，写什么时候震动多强、怎么变速、伸缩多快（通过 Intiface Central 执行）',
     icon: 'i-lucide-activity',
   },
   novel: {
@@ -177,7 +177,7 @@ export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: st
   },
   social: {
     label: '社媒',
-    desc: '朋友圈和社群，各选一个预设。朋友圈：她按今天的节律和最近的聊天发朋友圈（正文、要配的图、缴费单 / 小票之类的一小页 HTML），给你的朋友圈点赞评论、回你的评论。社群：搜不到时按关键字建一个社群，网友每天发帖、回应你的帖子，加入社群的角色发帖、回应你（都用"社媒"的 API）',
+    desc: '朋友圈和社群，各选一个预设。朋友圈：Ta按今天的节律和最近的聊天发朋友圈（正文、要配的图、缴费单 / 小票之类的一小页 HTML），给你的朋友圈点赞评论、回你的评论。社群：搜不到时按关键字建一个社群，网友每天发帖、回应你的帖子，加入社群的角色发帖、回应你（都用"社媒"的 API）',
     icon: 'i-lucide-aperture',
   },
   assistant: {
@@ -228,7 +228,7 @@ export const PROMPT_MARKERS = {
   environment: '当前环境',
   sceneRules: '当前场景规则 + 可用标签',
   chatHistory: '聊天历史',
-  proactive: '主动消息：这一次要她做的事',
+  proactive: '主动消息：这一次要Ta做的事',
   sceneTask: '场景任务：这一次的输入',
   home: '家务和健康：你今天的情况',
 } as const;
@@ -250,9 +250,9 @@ export type LifeFlag = keyof typeof LIFE_FLAGS;
 export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | 'health' | 'planner' | 'parallel' | 'device' | 'novel' | 'sprite' | 'social' | 'assistant', Record<string, string>> = {
   theater: {
     storyCharacter: '角色',
-    storyWorld: '她的世界（作息、手头的事、身边的人）',
-    storyNow: '现在（时间、她在哪）',
-    storyMemories: '她记得的关于你的事',
+    storyWorld: 'Ta的世界（作息、手头的事、身边的人）',
+    storyNow: '现在（时间、Ta在哪）',
+    storyMemories: 'Ta记得的关于你的事',
     storyRecent: '最近的聊天',
     storyPrevious: '最近写过的番外（避免重复）',
   },
@@ -272,7 +272,7 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
   rhythm: {
     rhythmCharacter: '角色（名字、描述、性格、场景）',
     rhythmSource: '建世界的材料（角色卡的世界观、世界书）',
-    rhythmWorld: '她的世界（地点、身边的人）',
+    rhythmWorld: 'Ta的世界（地点、身边的人）',
     rhythmTemplate: '作息模板（固定的事不能挪）和三餐习惯',
     rhythmWardrobe: '衣柜',
     rhythmToday: '今天（日期、星期、节气、天气）',
@@ -303,13 +303,13 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
   parallel: {
     parallelCharacter: '角色（名字、描述、性格、场景）',
     parallelNow: '现在（日期、星期、时间）',
-    parallelHer: '她今天的节律（作息、现在在做什么、三餐、穿着、手头的事）',
-    parallelWorld: '她世界里的地点（改日程时能去的地方）',
+    parallelHer: 'Ta今天的节律（作息、现在在做什么、三餐、穿着、手头的事）',
+    parallelWorld: 'Ta世界里的地点（改日程时能去的地方）',
     parallelMine: '你今天的安排（日程计划、家务、健康、你自己记的，做完了哪些）',
     parallelSources: '你这一天几份计划里的事（日程计划、家务、健康计划，带编号；整理你的一天时）',
     parallelSchedule: '你这几天的安排（带编号、能不能挪，Google 日历里已有的；AI 记一件事时）',
     parallelInput: '你随口说的（AI 记一件事时）',
-    parallelMemories: '她记得的关于你的事',
+    parallelMemories: 'Ta记得的关于你的事',
     parallelRecent: '最近的聊天',
     parallelNotes: '平行时空里最近的留言',
     parallelThread: '这一条留言和下面的回复（回你时）',
@@ -320,7 +320,7 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
     deviceLimits: '强度上限和最快的速度',
     deviceNow: '玩具现在在做什么',
     deviceRecent: '最近的对话',
-    deviceLine: '她这一句（要配指令的话）',
+    deviceLine: 'Ta这一句（要配指令的话）',
   },
   novel: {
     novelInfo: '作品（书名、类型、设定、大纲、文风）',
@@ -336,11 +336,11 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
   },
   social: {
     socialCharacter: '角色（名字、描述、性格、场景）',
-    socialLife: '她今天的节律（作息、现在在做什么、三餐、穿着、手头的事）',
+    socialLife: 'Ta今天的节律（作息、现在在做什么、三餐、穿着、手头的事）',
     socialNow: '现在（日期、星期、时间）',
-    socialMemories: '她记得的关于你的事',
+    socialMemories: 'Ta记得的关于你的事',
     socialRecent: '最近的聊天',
-    socialFeed: '最近的朋友圈（她发过的、你发的）',
+    socialFeed: '最近的朋友圈（Ta发过的、你发的）',
     socialPost: '这条朋友圈和下面的评论（回应时）',
     socialAsk: '这一次要做的',
     communityInfo: '社群（名字、简介、风气、标签、成员数）',
@@ -391,9 +391,9 @@ export type PlannerTask = keyof typeof PLANNER_TASKS;
  * - parallel-capture AI 记一件事：你随口说一句，整理成要做的事，避开这几天已有的安排排进去（"平行时空 · AI 记一件事"预设）。
  */
 export const PARALLEL_TASKS = {
-  'parallel-post': '她给你留言',
+  'parallel-post': 'Ta给你留言',
   'parallel-reply': '回你的留言',
-  'parallel-request': '你请她改日程',
+  'parallel-request': '你请Ta改日程',
   'parallel-plan': '整理你的一天',
   'parallel-capture': 'AI 记一件事',
 } as const;

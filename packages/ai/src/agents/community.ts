@@ -21,6 +21,7 @@ export interface CommunityPromptInput {
   task: CommunityTask;
   /** 角色发帖、回应时是她的名字；网友的任务为空 */
   characterName: string;
+  pronoun?: string;
   userName: string;
   /** {{community}}：社群的名字（建社群时还没有，为空） */
   communityName: string;
@@ -34,7 +35,7 @@ export function buildCommunityMessages(input: CommunityPromptInput, preset: Task
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
   return assembleTaskPrompt({
     preset, fills, type: input.task,
-    macros: { char: input.characterName, user: input.userName, now: input.now, timeZone: input.timeZone, extra: { community: input.communityName } },
+    macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName, now: input.now, timeZone: input.timeZone, extra: { community: input.communityName } },
   }).messages;
 }
 
@@ -72,7 +73,7 @@ export function communityMemberPostInput(context: CommunityContext, member: Soci
   const userName = member.userName || context.userName;
   const at = socialNowFill(now, context.timezone);
   return {
-    task: 'community-member-post', characterName: c.name, userName, communityName: context.community.name, now: new Date(now), timeZone: context.timezone,
+    task: 'community-member-post', characterName: c.name, pronoun: c.pronoun, userName, communityName: context.community.name, now: new Date(now), timeZone: context.timezone,
     fills: {
       socialCharacter: socialCharacterFill(c, userName),
       socialLife: day ? socialDayText(day, at.minute) : '',

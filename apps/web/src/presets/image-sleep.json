@@ -7,7 +7,7 @@
   "defaultFor": [
     "image:sleep"
   ],
-  "description": "哄睡连麦时画的图：连麦（刚连上，她躺在床上、戴着耳机小声和你说话）、这一刻（你点相机时她此刻的样子，画面按她刚说的话）；每块按触发条件只发这次画的那一块。长相（同人是角色 tag + 作品 tag）和今天的睡衣由程序按角色加在最前面；都是竖图，铺满整屏当连麦的画面。预设只管构图、光线和这一刻在做什么。",
+  "description": "哄睡连麦时画的图：连麦（刚连上，Ta躺在床上、戴着耳机小声和你说话）、这一刻（你点相机时Ta此刻的样子，画面按Ta刚说的话）；每块按触发条件只发这次画的那一块。长相（同人是角色 tag + 作品 tag）和今天的睡衣由程序按角色加在最前面；都是竖图，铺满整屏当连麦的画面。预设只管构图、光线和这一刻在做什么。",
   "blocks": [
     {
       "identifier": "main",
@@ -64,7 +64,7 @@
       "identifier": "momentNow",
       "name": "时刻 · 这一刻",
       "role": "system",
-      "content": "这一刻：连麦中{{user}}想看看{{char}}现在的样子，画面按\"要画的画面\"和\"最近的对话\"画——在小声说话、打哈欠（yawning）、眼睛快闭上了（closed eyes, drowsy）、抱着枕头或被子（hugging pillow）、已经睡着了（sleeping）……表情和动作要对上她刚说的话。竖图，上半身或近景，第一视角（pov）。",
+      "content": "这一刻：连麦中{{user}}想看看{{char}}现在的样子，画面按\"要画的画面\"和\"最近的对话\"画——在小声说话、打哈欠（yawning）、眼睛快闭上了（closed eyes, drowsy）、抱着枕头或被子（hugging pillow）、已经睡着了（sleeping）……表情和动作要对上{{pronoun}}刚说的话。竖图，上半身或近景，第一视角（pov）。",
       "marker": false,
       "enabled": true,
       "injection": {

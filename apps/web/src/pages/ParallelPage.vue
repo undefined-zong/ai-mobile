@@ -63,7 +63,7 @@ const hub = useHubStore();
 
 const character = computed(() => chars.byId(route.params.charId as string) ?? chars.byId(app.activeCharacterId) ?? chars.list[0] ?? null);
 const persona = computed(() => personaFor(character.value?.id ?? ''));
-const pronoun = computed(() => character.value?.pronoun ?? '她');
+const pronoun = computed(() => character.value?.pronoun ?? 'Ta');
 const today = computed(() => parallelToday());
 const status = computed(() => parallelStatus(character.value ?? undefined));
 const cloud = computed(() => hub.connected && hub.supportsParallel);

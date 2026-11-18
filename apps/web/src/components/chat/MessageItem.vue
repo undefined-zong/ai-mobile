@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { applyRegexScripts, hasMath, type Character, type Message, type MessagePart, type RegexNames, type RegexScript } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, ref } from 'vue';
@@ -219,7 +220,7 @@ const wide = computed(() => blocks.value.some((b) => b.kind === 'frame'));
           </div>
         </Transition>
         <span v-if="message.proactive" class="proactive">
-          <span class="i-lucide-bell-ring text-[11px]" />她主动找你
+          <span class="i-lucide-bell-ring text-[11px]" />{{ characterPronoun(character) }}主动找你
         </span>
         <div v-if="streaming && thinking && !message.text" class="bubble ai">
           <span class="typing-dot" /> <span class="typing-dot" /> <span class="typing-dot" />

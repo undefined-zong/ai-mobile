@@ -1,4 +1,5 @@
 import type { Sidestory } from '@app/ai';
+import { characterPronoun, type Character } from '@app/shared';
 
 /** 番外智能体还没有可用连接时的演示故事（给两个演示角色写的） */
 export const DEMO_SIDESTORIES: Record<string, Sidestory> = {
@@ -27,10 +28,11 @@ export const DEMO_SIDESTORIES: Record<string, Sidestory> = {
 };
 
 /** 导入的角色：没有演示故事，给一段说明 */
-export function genericSidestory(name: string): Sidestory {
+export function genericSidestory(character: Pick<Character, 'name' | 'pronoun'>): Sidestory {
+  const { name } = character;
   return {
-    title: '（演示）她的一天',
-    story: `这里会是${name}在自己的世界里、你不在场时发生的一小段故事。在"我的 → API 设置"里设置好主对话（番外默认跟随它），或者给"番外 · 她的生活"单独选渠道、填好 Key，就会按${name}的角色卡、作息和你们最近聊过的事来写。`,
+    title: `（演示）${characterPronoun(character)}的一天`,
+    story: `这里会是${name}在自己的世界里、你不在场时发生的一小段故事。在"我的 → API 设置"里设置好主对话（番外默认跟随它），或者给"番外 · Ta的生活"单独选渠道、填好 Key，就会按${name}的角色卡、作息和你们最近聊过的事来写。`,
     time: '',
     place: '',
     mood: '',

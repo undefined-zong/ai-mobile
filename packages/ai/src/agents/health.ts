@@ -17,11 +17,12 @@ export interface HealthPromptInput {
   userName: string;
   /** 陪你的那个角色（预设里的 {{char}}，可以不给） */
   characterName?: string;
+  pronoun?: string;
   fills: Partial<Record<HealthFill, string>>;
 }
 
 export function buildHealthMessages(input: HealthPromptInput, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName ?? '', user: input.userName }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName ?? '', user: input.userName }, type: input.task }).messages;
 }

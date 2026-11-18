@@ -7,7 +7,7 @@
   "defaultFor": [
     "game-decor"
   ],
-  "description": "一起装修小屋时用：她看看屋子说想法、动手布置（按格式写要添、要挪的家具）、给自己或者给你捏小人、边装边聊、收工时的话，每一步一块，只在做那件事时发送，都可以改。",
+  "description": "一起装修小屋时用：Ta看看屋子说想法、动手布置（按格式写要添、要挪的家具）、给自己或者给你捏小人、边装边聊、收工时的话，每一步一块，只在做那件事时发送，都可以改。",
   "blocks": [
     {
       "identifier": "main",
@@ -245,7 +245,7 @@
     },
     {
       "identifier": "decorLook",
-      "name": "她看看屋子",
+      "name": "Ta看看屋子",
       "role": "system",
       "marker": false,
       "enabled": true,
@@ -261,7 +261,7 @@
     },
     {
       "identifier": "decorPlan",
-      "name": "她动手布置",
+      "name": "Ta动手布置",
       "role": "system",
       "marker": false,
       "enabled": true,
@@ -277,7 +277,7 @@
     },
     {
       "identifier": "decorAvatar",
-      "name": "她捏小人",
+      "name": "Ta捏小人",
       "role": "system",
       "marker": false,
       "enabled": true,

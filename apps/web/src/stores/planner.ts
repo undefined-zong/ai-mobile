@@ -199,7 +199,7 @@ export const usePlannerStore = defineStore('planner', () => {
     const c = useCharacterStore().byId(s.characterId);
     return {
       persona: { id: p.id, name: p.name, description: p.description },
-      character: c ? { name: c.name, description: (c.card?.description ?? '').slice(0, 300) } : null,
+      character: c ? { name: c.name, pronoun: c.pronoun, description: (c.card?.description ?? '').slice(0, 300) } : null,
       timezone: useEnvironmentStore().settings.timezone,
       // 工具清单云端每次现列，不上传
       settings: { ...s, servers: s.servers.map((x) => ({ ...x, tools: [] })) },

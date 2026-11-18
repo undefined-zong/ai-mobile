@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun } from '@app/shared';
 import { expressionField, lrcIndexAt, type MessagePart } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -253,7 +254,7 @@ async function sendTalk() {
   });
   talking.value = false;
   if (!r.ok) {
-    showToast(r.notConnected ? `${r.reason}（她要接通「陪伴 · 快速」才能回你）` : `${her.value.name}没回上：${r.reason}`);
+    showToast(r.notConnected ? `${r.reason}（${characterPronoun(her.value)}要接通「陪伴 · 快速」才能回你）` : `${her.value.name}没回上：${r.reason}`);
     return;
   }
   say(r.message.text || '……', r.message.expression ?? undefined, true);

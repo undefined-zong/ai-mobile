@@ -58,7 +58,7 @@
     },
     {
       "identifier": "wsHer",
-      "name": "画她（只在画{{char}}时发）",
+      "name": "画Ta（只在画{{char}}时发）",
       "role": "system",
       "content": "这一次画的是{{char}}：{{char}}的长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。画面里没提到别人就只画{{char}}一个人（1girl 或 1boy 按{{char}}的性别）。",
       "marker": false,

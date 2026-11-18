@@ -337,7 +337,7 @@ export async function writeSidestory(characterId: string, opts: { recentChat?: s
   if (!c) throw new AiError('no_route', '找不到这个角色');
   if (!ai.isLive('sidestory')) {
     await sleep(500, signal);
-    return { ...(DEMO_SIDESTORIES[c.id] ?? genericSidestory(c.name)), characterId, demo: true, model: null, presetName: null, at: Date.now() };
+    return { ...(DEMO_SIDESTORIES[c.id] ?? genericSidestory(c)), characterId, demo: true, model: null, presetName: null, at: Date.now() };
   }
   // 番外用"小剧场"预设（预设页里"番外"选的那个）：提示词和温度、长度都按它
   const preset = useLibraryStore().presetForUse('theater', c);

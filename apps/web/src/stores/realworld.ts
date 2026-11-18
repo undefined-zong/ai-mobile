@@ -140,7 +140,7 @@ export const useRealWorldStore = defineStore('realworld', () => {
     id: 'world-real',
     characterId: '',
     name: '我的世界',
-    blurb: '真实世界：家、你在哪、附近可以带她去的地方',
+    blurb: '真实世界：家、你在哪、附近可以带Ta去的地方',
     homeId: REAL_HOME_ID,
     areaLabels: { home: '家', campus: '附近', city: '附近' },
     labels: [],

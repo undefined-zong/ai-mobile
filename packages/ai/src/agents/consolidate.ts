@@ -85,7 +85,7 @@ export function consolidateFills(ctx: ConsolidateContext, input: ConsolidateInpu
 
 /** 按"整理"预设拼提示词：块的触发条件写任务类型，只发这次的那几块 */
 export function buildConsolidateMessages(ctx: ConsolidateContext, input: ConsolidateInput, preset: TaskPreset): ChatMessage[] {
-  return assembleTaskPrompt({ preset, fills: consolidateFills(ctx, input), macros: { char: ctx.character.name, user: ctx.user.name, now: ctx.now }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills: consolidateFills(ctx, input), macros: { char: ctx.character.name, pronoun: ctx.character.pronoun, user: ctx.user.name, now: ctx.now }, type: input.task }).messages;
 }
 
 const TYPES = new Set<MemoryType>(['fact', 'preference', 'event', 'promise', 'followup', 'emotion', 'relationship']);

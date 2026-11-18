@@ -56,7 +56,7 @@ export const routes: RouteRecordRaw[] = [
     redirect: () => useAppStore().homePath,
     children: [
       { path: 'world', component: WorldPage, meta: { title: '地图' } },
-      { path: 'focus', component: FocusPage, meta: { title: '她' } },
+      { path: 'focus', component: FocusPage, meta: { title: 'Ta' } },
       { path: 'chats', component: ChatsPage, meta: { title: '消息' } },
       {
         path: 'social',

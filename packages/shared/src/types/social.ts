@@ -87,7 +87,7 @@ export const SOCIAL_PER_DAY_MAX = 4;
 
 /** 社媒预设里朋友圈的任务（块的触发条件写这几个名字）；社群的任务见 COMMUNITY_TASKS */
 export const SOCIAL_TASKS = {
-  post: '她发一条朋友圈',
+  post: 'Ta发一条朋友圈',
   react: '回应你的朋友圈、回你的评论',
 } as const;
 

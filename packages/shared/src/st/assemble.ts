@@ -1,4 +1,5 @@
 import type { Character } from '../types/character.ts';
+import { characterPronoun } from '../pronouns.ts';
 import type { LoreTimedState, Lorebook } from '../types/lorebook.ts';
 import type { Preset, PromptBlock } from '../types/preset.ts';
 import { substituteMacros, type MacroContext } from './macros.ts';
@@ -35,7 +36,7 @@ export type GenerationType = 'normal' | 'continue' | 'impersonate' | 'swipe' | '
 
 export interface AssembleInput {
   preset: Preset;
-  character: Pick<Character, 'name' | 'card'>;
+  character: Pick<Character, 'name' | 'card'> & { pronoun?: string };
   user: { name: string; description: string };
   lorebooks: Lorebook[];
   /** 聊天记录，从旧到新，最后一条通常是你刚发的 */
@@ -186,6 +187,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
 
   const ctx: MacroContext = {
     char: character.name,
+    pronoun: characterPronoun(character),
     user: input.user.name,
     now: input.now,
     timeZone: input.timeZone,
@@ -392,7 +394,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   let historyIncluded = 0;
   if (hasHistory) {
     if (chatMsgs.at(-1)?.role === 'assistant' && f.sendIfEmpty.trim()) {
-      const extra = { role: 'user' as const, content: m(f.sendIfEmpty), source: 'sendIfEmpty', label: '最后一条是她的，补一条你的（send_if_empty）' };
+      const extra = { role: 'user' as const, content: m(f.sendIfEmpty), source: 'sendIfEmpty', label: `最后一条是${characterPronoun(character)}的，补一条你的（send_if_empty）` };
       if (used + count(extra.content) <= budget) {
         historyOut.push(extra);
         used += count(extra.content);

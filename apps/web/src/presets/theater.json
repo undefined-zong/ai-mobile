@@ -7,7 +7,7 @@
   "defaultFor": [
     "theater"
   ],
-  "description": "你不在的时候她那边发生的一小段日常：第三人称、150–250 字，附带一句可能发给你的话和适合配图的一幕。",
+  "description": "你不在的时候Ta那边发生的一小段日常：第三人称、150–250 字，附带一句可能发给你的话和适合配图的一幕。",
   "blocks": [
     {
       "identifier": "main",
@@ -59,7 +59,7 @@
     },
     {
       "identifier": "storyWorld",
-      "name": "她的世界（作息、手头的事、身边的人）",
+      "name": "Ta的世界（作息、手头的事、身边的人）",
       "role": "user",
       "content": "",
       "marker": true,
@@ -71,7 +71,7 @@
     },
     {
       "identifier": "storyNow",
-      "name": "现在（时间、她在哪）",
+      "name": "现在（时间、Ta在哪）",
       "role": "user",
       "content": "",
       "marker": true,
@@ -83,7 +83,7 @@
     },
     {
       "identifier": "storyMemories",
-      "name": "她记得的关于你的事",
+      "name": "Ta记得的关于你的事",
       "role": "user",
       "content": "",
       "marker": true,

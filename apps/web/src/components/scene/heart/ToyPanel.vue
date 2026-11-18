@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { characterPronoun, type Character } from '@app/shared';
 import { SCALAR_KINDS, TOY_KIND_LABEL, type ScalarKind, type ToyKind } from '@app/shared';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -11,21 +12,22 @@ import { useToyStore, type CommandSource } from '@/stores/toys';
  * 心跳设置里"玩具"那一页：连 Intiface Central、连着的玩具（能做什么、电量、试一下）、指令从哪来、强度上限、安全。
  * 设置存在本机（stores/toys.ts）；连接留着，点"断开"才断。
  */
+const props = defineProps<{ character?: Character }>();
 const toys = useToyStore();
 const ai = useAiStore();
 const router = useRouter();
 const s = toys.settings;
 
-const SOURCES: { value: CommandSource; label: string }[] = [
+const SOURCES = computed<{ value: CommandSource; label: string }[]>(() => [
   { value: 'separate', label: '单独生成' },
-  { value: 'inline', label: '她自己写' },
+  { value: 'inline', label: `${characterPronoun(props.character)}自己写` },
   { value: 'off', label: '不控制' },
-];
-const SOURCE_HINT: Record<CommandSource, string> = {
-  separate: '她每说完一句，"控制指令"预设按这句话另写一份指令（「控制指令」的 API，默认跟随「陪伴 · 快速」），读到、念到那几个字时执行。多一次调用，指令更稳。',
-  inline: '她在回复里自己写 <device>…</device>（心跳功能预设里"她自己写指令"那一块），写到哪执行到哪，不多花一次调用；模型不听话时可能漏写。',
-  off: '她的话不控制玩具；还能在这里"试一下"。',
-};
+]);
+const SOURCE_HINT = computed<Record<CommandSource, string>>(() => ({
+  separate: `${characterPronoun(props.character)}每说完一句，"控制指令"预设按这句话另写一份指令（「控制指令」的 API，默认跟随「陪伴 · 快速」），读到、念到那几个字时执行。多一次调用，指令更稳。`,
+  inline: `${characterPronoun(props.character)}在回复里自己写 <device>…</device>（心跳功能预设里"${characterPronoun(props.character)}自己写指令"那一块），写到哪执行到哪，不多花一次调用；模型不听话时可能漏写。`,
+  off: `${characterPronoun(props.character)}的话不控制玩具；还能在这里"试一下"。`,
+}));
 const SAFETY = [
   { v: 3, label: '3 分钟' },
   { v: 5, label: '5 分钟' },
@@ -105,7 +107,7 @@ async function toggleConnect() {
       「控制指令」还没接通：{{ deviceStatus.reason }}<button type="button" class="text-accent-ink ml-2" @click="router.push('/me/api?feature=device')">去设置</button>
     </p>
 
-    <div class="label">强度上限（她写得再重也不超过）</div>
+    <div class="label">强度上限（{{ characterPronoun(character) }}写得再重也不超过）</div>
     <div v-for="k in capKinds" :key="k" class="slide">
       <span class="w-10 shrink-0 text-[13px] text-ink-2">{{ TOY_KIND_LABEL[k] }}</span>
       <van-slider v-model="s.caps[k]" class="flex-1" :min="0" :max="100" bar-height="4px" button-size="16px" :aria-label="`${TOY_KIND_LABEL[k]}上限`" />
@@ -143,14 +145,14 @@ async function toggleConnect() {
     </label>
     <div class="slide mt-2">
       <span class="shrink-0 text-[13px] text-ink-2">打字时读多快</span>
-      <van-slider v-model="s.readCps" class="flex-1" :min="3" :max="20" bar-height="4px" button-size="16px" aria-label="打字时她的话按每秒几个字读" />
+      <van-slider v-model="s.readCps" class="flex-1" :min="3" :max="20" bar-height="4px" button-size="16px" :aria-label="`打字时${characterPronoun(character)}的话按每秒几个字读`" />
       <span class="num w-14 shrink-0 text-right text-[12px] text-ink-2">{{ s.readCps }} 字/秒</span>
     </div>
 
     <template v-if="toys.lastWritten">
       <div class="label">上一次写的指令</div>
       <div class="last">
-        <div class="text-[12px] text-ink-3 line-clamp-2">她说：{{ toys.lastWritten.line }}</div>
+        <div class="text-[12px] text-ink-3 line-clamp-2">{{ characterPronoun(character) }}说：{{ toys.lastWritten.line }}</div>
         <div v-if="toys.lastWritten.error" class="text-[12.5px] text-bad mt-1">{{ toys.lastWritten.error }}</div>
         <div v-else-if="!toys.lastWritten.steps.length" class="text-[12.5px] text-ink-2 mt-1">这句不用变</div>
         <div v-for="(st, i) in toys.lastWritten.steps" :key="i" class="text-[12.5px] text-ink-2 mt-1">{{ st }}</div>

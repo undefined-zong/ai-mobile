@@ -151,7 +151,7 @@ export type CommunityTask = keyof typeof COMMUNITY_TASKS;
  * 社群配图的生图预设里按"谁发的"发送的块（块的触发条件写这两个名字）：
  * 网友的帖子程序不加任何人的长相；角色的帖子程序会把她的长相加在最前面
  */
-export const COMMUNITY_IMAGE_MOMENTS = { 'community-netizen': '网友的帖子', 'community-member': '她的帖子' } as const;
+export const COMMUNITY_IMAGE_MOMENTS = { 'community-netizen': '网友的帖子', 'community-member': 'Ta的帖子' } as const;
 export type CommunityImageMoment = keyof typeof COMMUNITY_IMAGE_MOMENTS;
 
 /**

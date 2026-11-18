@@ -1,4 +1,4 @@
-import { normalizeAnniversaries, normalizeExpression, slotAt, worldOf, type Anniversary, type Character } from '@app/shared';
+import { characterPronoun, normalizeAnniversaries, normalizeExpression, slotAt, worldOf, type Anniversary, type Character } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
 import { autoSave, getAll, write } from '@/db/idb';
@@ -26,6 +26,7 @@ export const useCharacterStore = defineStore('characters', () => {
 
   /** 读库时、别的设备同步过来时一样的整理 */
   function normalize(c: Character): Character {
+    c.pronoun = characterPronoun(c);
     // 以前的纪念日是一句文字（"3 月 14 日""下周三"）：认得出的改成真的日子，认不出的去掉
     if (c.relationship) c.relationship.anniversaries = normalizeAnniversaries(c.relationship.anniversaries);
     return c;
@@ -60,7 +61,7 @@ export const useCharacterStore = defineStore('characters', () => {
   }
 
   function add(c: Character) {
-    list.value.push(c);
+    list.value.push(normalize(c));
     return list.value.at(-1) as Character;
   }
 

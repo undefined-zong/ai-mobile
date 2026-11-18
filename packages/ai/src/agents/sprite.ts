@@ -16,6 +16,7 @@ export type SpriteFill = 'spriteCharacter' | 'spriteSource' | 'spriteLooks' | 's
 export interface SpritePromptInput {
   task: SpriteTask;
   characterName: string;
+  pronoun?: string;
   userName?: string;
   fills: Partial<Record<SpriteFill, string>>;
 }
@@ -23,7 +24,7 @@ export interface SpritePromptInput {
 export function buildSpriteMessages(input: SpritePromptInput, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  return assembleTaskPrompt({ preset, fills, macros: { char: input.characterName, user: input.userName ?? '' }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName ?? '' }, type: input.task }).messages;
 }
 
 /** 英文 tags：去掉中文、质量词、换行（模型偶尔会多写） */

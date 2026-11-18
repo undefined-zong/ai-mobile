@@ -673,7 +673,7 @@ export async function replyTo(noteId: string): Promise<void> {
       'parallel',
       {
         messages: buildParallelMessages({
-          task: 'parallel-reply', characterName: c.name, userName: persona.name, now: new Date(), timeZone,
+          task: 'parallel-reply', characterName: c.name, pronoun: c.pronoun, userName: persona.name, now: new Date(), timeZone,
           fills: { ...fills, parallelThread: `这一条留言和下面的回复：\n${parallelNoteText(n, names, timeZone, { replies: 12 })}`, parallelAsk: ask },
         }, preset),
         ...samplerRequest(preset.sampler),
@@ -738,7 +738,7 @@ export async function decideRequest(noteId: string): Promise<void> {
       'parallel',
       {
         messages: buildParallelMessages({
-          task: 'parallel-request', characterName: c.name, userName: persona.name, now: new Date(), timeZone,
+          task: 'parallel-request', characterName: c.name, pronoun: c.pronoun, userName: persona.name, now: new Date(), timeZone,
           fills: {
             ...fills,
             parallelWorld: `${world.name}里的地点（地点 id：名字 · 室内或室外 · 一句话）：\n${world.locations.map((l) => `- ${l.id}：${l.name} · ${l.indoor ? '室内' : '室外'}${l.blurb ? ` · ${l.blurb}` : ''}`).join('\n')}`,

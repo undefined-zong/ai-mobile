@@ -29,11 +29,11 @@ onBeforeUnmount(() => social.markAllRead());
 watch(() => social.unread, (n) => n && social.markAllRead());
 
 const cloudNote = computed(() => {
-  if (!hub.connected) return '云端还没接通：她们只在你点"让她发一条"时发。在"我的 → 云端与同步"接通自己的 Worker 后，App 关着她们也会每天在随机的时间发。';
-  if (!hub.supportsSocial) return '云端的 Worker 是旧版，还不会发朋友圈：部署最新的 Worker 和数据库迁移后，App 关着她们也会每天发。';
+  if (!hub.connected) return '云端还没接通：Ta们只在你点"让Ta发一条"时发。在"我的 → 云端与同步"接通自己的 Worker 后，App 关着Ta们也会每天在随机的时间发。';
+  if (!hub.supportsSocial) return '云端的 Worker 是旧版，还不会发朋友圈：部署最新的 Worker 和数据库迁移后，App 关着Ta们也会每天发。';
   const failed = hub.socialErrors[0];
   if (failed) return `云端有一条没发出来：${failed.reason}`;
-  return '云端已接通：App 关着她们也会每天在随机的时间发（谁发、每天最多几条在"我的 → 社媒"里改）。';
+  return '云端已接通：App 关着Ta们也会每天在随机的时间发（谁发、每天最多几条在"我的 → 社媒"里改）。';
 });
 
 // —— 让她发一条 ——
@@ -69,7 +69,7 @@ function sendComment() {
 // —— 删除 ——
 async function more(m: Moment) {
   try {
-    await showConfirmDialog({ title: '删掉这条朋友圈？', message: '连同下面的点赞和评论一起删掉。她们已经记住的不会跟着忘，要忘掉去"回忆 → 记忆本"里删。', confirmButtonText: '删掉' });
+    await showConfirmDialog({ title: '删掉这条朋友圈？', message: '连同下面的点赞和评论一起删掉。Ta们已经记住的不会跟着忘，要忘掉去"回忆 → 记忆本"里删。', confirmButtonText: '删掉' });
   } catch {
     return;
   }
@@ -79,7 +79,7 @@ async function more(m: Moment) {
 
 <template>
   <Teleport defer to="#social-actions">
-    <button class="icon-btn" aria-label="让她发一条" data-testid="moment-ask" @click="asking = true"><span class="i-lucide-sparkles text-[20px]" /></button>
+    <button class="icon-btn" aria-label="让Ta发一条" data-testid="moment-ask" @click="asking = true"><span class="i-lucide-sparkles text-[20px]" /></button>
     <button class="icon-btn" aria-label="发朋友圈" data-testid="moment-compose" @click="composing = true"><span class="i-lucide-camera text-[20px]" /></button>
   </Teleport>
 
@@ -87,7 +87,7 @@ async function more(m: Moment) {
     <!-- 没接通时只在这里说一次：她们不会自己发、也不会回应（演示角色用占位台词） -->
     <RouterLink v-if="!status.ok" to="/me/api?feature=social" class="hint">
       <span class="i-lucide-plug-zap shrink-0" />
-      <span class="flex-1 min-w-0">{{ status.reason }}。接通后她们才会自己发朋友圈、回应你发的。</span>
+      <span class="flex-1 min-w-0">{{ status.reason }}。接通后Ta们才会自己发朋友圈、回应你发的。</span>
       <span class="i-lucide-chevron-right shrink-0" />
     </RouterLink>
     <MomentCard v-for="m in social.feed" :key="m.id" :moment="m" @comment="(replyTo) => openComment(m, replyTo)" @more="more(m)" />
@@ -95,9 +95,9 @@ async function more(m: Moment) {
     <div v-if="!social.feed.length" class="empty">
       <span class="i-lucide-aperture text-[40px] text-ink-3" />
       <div class="text-[15px] font-600 mt-3">还没有朋友圈</div>
-      <p class="text-[13px] text-ink-3 leading-relaxed mt-1 mb-0">让她发一条看看她此刻在做什么，或者自己先发一条。</p>
+      <p class="text-[13px] text-ink-3 leading-relaxed mt-1 mb-0">让Ta发一条看看Ta此刻在做什么，或者自己先发一条。</p>
       <div class="flex gap-2.5 mt-4">
-        <van-button round size="small" @click="asking = true">让她发一条</van-button>
+        <van-button round size="small" @click="asking = true">让Ta发一条</van-button>
         <van-button round size="small" type="primary" @click="composing = true">发朋友圈</van-button>
       </div>
     </div>
@@ -111,8 +111,8 @@ async function more(m: Moment) {
   <!-- 让她发一条 -->
   <van-popup v-model:show="asking" position="bottom" round teleport="body" :style="{ maxHeight: '80%' }">
     <div class="sheet" data-sheet="moment-ask">
-      <div class="sheet-title">让她发一条</div>
-      <p class="note">按她今天的节律（此刻在哪、在做什么）、记得的事和最近跟你聊的写；要配图时交给生图画。</p>
+      <div class="sheet-title">让Ta发一条</div>
+      <p class="note">按Ta今天的节律（此刻在哪、在做什么）、记得的事和最近跟你聊的写；要配图时交给生图画。</p>
       <RouterLink v-if="!status.ok" to="/me/api?feature=social" class="warn-line">{{ status.reason }} →</RouterLink>
       <div class="grid gap-2 mt-3">
         <div v-for="c in chars.list" :key="c.id" class="who">
