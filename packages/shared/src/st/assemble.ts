@@ -217,13 +217,15 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   ctx.persona = field(input.user.description);
   ctx.mesExamples = field(card.mesExample);
 
-  // 世界书（扫描文本带名字，同 ST 默认的 world_info_include_names）
+  // 世界书总开关独立于各位置的 marker，也不控制角色卡示例、depth_prompt 或预设正文。
+  // 关闭时不扫描条目、不执行其中的宏，也不推进世界书计时状态。
+  const worldInfoEnabled = preset.worldInfoEnabled !== false;
   const lore = scanWorldInfo({
-    books: input.lorebooks,
+    books: worldInfoEnabled ? input.lorebooks : [],
     messages: (input.loreHistory ?? history).map((t) => `${t.name}: ${t.content}`),
     chatLength: input.chatLength ?? history.length,
     state: input.loreState,
-    dryRun: input.dryRun,
+    dryRun: input.dryRun || !worldInfoEnabled,
     trigger: type,
     random: input.random,
     macro: (t) => m(t),

@@ -575,6 +575,17 @@ const SEED_UPGRADES: SeedUpgrade[] = [
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */
 function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
   const changed = new Set<Preset>();
+  const worldInfoUpgrade = 'preset:world-info-control';
+  if (!done.has(worldInfoUpgrade)) {
+    done.add(worldInfoUpgrade);
+    for (const p of list) {
+      const seed = SEEDS.find((s) => s.file === p.seedFile)?.preset;
+      if (p.worldInfoEnabled === undefined && seed?.worldInfoEnabled !== undefined) {
+        p.worldInfoEnabled = seed.worldInfoEnabled;
+        changed.add(p);
+      }
+    }
+  }
   const callUpgrade = 'chat-call:tasks-only';
   if (!done.has(callUpgrade)) {
     done.add(callUpgrade);

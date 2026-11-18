@@ -201,6 +201,8 @@ export interface Preset extends SyncMeta {
   description: string;
   /** 分类；以前存的和从 SillyTavern 导入的都是对话预设 */
   category: PresetCategory;
+  /** 是否使用角色绑定的世界书（所有插入位置）；旧预设未设置时沿用开启。角色卡字段和预设正文另行控制。 */
+  worldInfoEnabled?: boolean;
   /** 顺序即拼装顺序 */
   blocks: PromptBlock[];
   sampler: SamplerParams;
