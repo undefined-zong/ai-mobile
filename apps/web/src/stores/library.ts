@@ -3,6 +3,7 @@ import {
   appContextBeforeHistory,
   parseLorebook,
   parsePresetFile,
+  repairFlatLoreEntries,
   presetUse,
   PRESET_CATEGORY_ORDER,
   PRESET_USES,
@@ -101,6 +102,11 @@ const BOOK_UPGRADES: { id: string; file: string; replaced: Record<string, string
 
 function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
   const changed = new Set<Lorebook>();
+  const flatUpgrade = 'lorebook:flat-array-entries';
+  if (!done.has(flatUpgrade)) {
+    done.add(flatUpgrade);
+    for (const book of list) if (repairFlatLoreEntries(book)) changed.add(book);
+  }
   for (const u of BOOK_UPGRADES) {
     if (done.has(u.id)) continue;
     done.add(u.id);
@@ -557,6 +563,18 @@ const SEED_UPGRADES: SeedUpgrade[] = [
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */
 function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
   const changed = new Set<Preset>();
+  const callUpgrade = 'chat-call:tasks-only';
+  if (!done.has(callUpgrade)) {
+    done.add(callUpgrade);
+    const seed = SEEDS.find((s) => s.file === 'chat-call.json')?.preset.blocks.find((b) => b.identifier === 'jailbreak');
+    for (const p of list.filter((p) => p.seedFile === 'chat-call.json')) {
+      const block = p.blocks.find((b) => b.identifier === 'jailbreak');
+      if (block && seed && block.content === seed.content && !block.triggers?.length) {
+        block.triggers = [...(seed.triggers ?? [])];
+        changed.add(p);
+      }
+    }
+  }
   for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
@@ -753,15 +771,17 @@ export const useLibraryStore = defineStore('library', () => {
     return presets.value.filter((p) => p.category === category);
   }
 
-  /** 这个角色的对话预设；没选、选的被删了或不是对话预设时用第一个对话预设（一个都没有时为空） */
+  /** 角色没选有效预设时用日常；不把通话等专用预设按文件顺序当成普通聊天。 */
   function chatPresetFor(character?: Pick<Character, 'presetId'> | null): Preset | undefined {
     const own = presetById(character?.presetId);
     if (own?.category === 'chat') return own;
-    return presetsOf('chat')[0];
+    const chats = presetsOf('chat');
+    return chats.find((p) => p.id === 'preset-daily')
+      ?? chats.find((p) => !SEEDS.some((s) => s.preset.id === p.id && s.defaultFor.length));
   }
 
   /**
-   * 这个用途选的预设 id；null = 跟随（对话预设 / 配图）；选的被删了时用这一类的第一个。
+   * 这个用途选的预设 id；null = 跟随（对话预设 / 配图）；失效时只回退到该用途自己的默认预设。
    * 一起做事时画的图没选过就跟随配图（自带了这个场景的生图预设的，预设文件里写了默认给它用）
    */
   function useChoice(use: PresetUseId): string | null | undefined {
@@ -770,8 +790,10 @@ export const useLibraryStore = defineStore('library', () => {
     if (meta?.follow && (v === null || (v === undefined && meta.follow === 'image'))) return null;
     const picked = presetById(v ?? undefined);
     if (picked && picked.category === meta?.category) return picked.id;
-    if (meta?.follow === 'image') return null;
-    return meta ? presetsOf(meta.category)[0]?.id : undefined;
+    const seed = SEEDS.find((s) => s.defaultFor.includes(use));
+    const fallback = presetById(seed?.preset.id);
+    if (fallback?.category === meta?.category) return fallback?.id;
+    return meta?.follow ? null : undefined;
   }
 
   /**

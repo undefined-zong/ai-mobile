@@ -23,7 +23,7 @@ import {
   type ParsedReply,
   type PresetUseId,
 } from '@app/shared';
-import { errorReport, errorText, isAbortError, samplerRequest } from '@app/ai';
+import { errorReport, errorText, fromOpenAIBody, isAbortError } from '@app/ai';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { useAiStore } from './ai';
@@ -60,10 +60,6 @@ export interface GenerateOptions {
   allowedTags?: ControlTagKind[];
   /** 流式时每次给"到目前为止的正文"（已去掉标签）：通话、讲故事时边生成边分句合成语音 */
   onText?(visible: string): void;
-  /** 这一次回复上限至少这么多 token（讲故事这种长一点的，预设里给短句的上限不够） */
-  minTokens?: number;
-  /** 要快（通话、哄睡、看片时随口一句）：在认得思考参数的原生接口上把思考关到最少，见 quickReasoning */
-  quick?: boolean;
   /** 这一次另外打开的预设触发条件（心跳连着玩具、她自己写指令时是 device-inline） */
   flags?: string[];
   /** 流式时每次、写完时（done）给解析好的正文和标签（标签的位置是在正文里的下标）：心跳按位置执行 <device> 指令 */
@@ -85,8 +81,6 @@ export interface SceneReplyOptions {
   onText?(visible: string): void;
   /** 只执行这些标签；不给按场景 */
   allowedTags?: ControlTagKind[];
-  minTokens?: number;
-  quick?: boolean;
   /** 按哪个用途选预设（一起游戏里玩真心话大冒险时是 game-truthdare）；不给时用这个场景的功能预设 */
   use?: PresetUseId;
   /** 这一次另外打开的预设触发条件（真心话大冒险选的尺度 td-level:名字） */
@@ -98,31 +92,6 @@ export interface SceneReplyOptions {
 }
 
 export type SceneReplyResult = { ok: true; message: Message } | { ok: false; reason: string; notConnected?: boolean };
-
-/**
- * 要快的回复（通话、哄睡、看片时随口一句）能不能把思考关到最少：只在认得思考参数的原生接口上做
- * （Gemini / Vertex 设思考预算 0 或最低等级，DeepSeek 关掉思考，Claude 不开思考）。
- * OpenAI 格式的中转不一定认 reasoning_effort（有的直接报错），不发；你在 API 设置里自己设了推理强度时照你的
- */
-function quickReasoning(agent: AgentRole): boolean {
-  try {
-    const ai = useAiStore();
-    const set = ai.effectiveRoute(agent).params?.reasoningEffort;
-    if (set && set !== 'auto') return false;
-    const kind = ai.system.router.attempts(agent)[0]?.endpoint.kind;
-    return kind === 'gemini' || kind === 'vertex' || kind === 'deepseek' || kind === 'anthropic';
-  } catch {
-    return false;
-  }
-}
-
-/** 按这一次的要求调请求体（预设拼出来的 OpenAI 格式）：上限至少 minTokens；要快时推理强度设 none */
-function tuneRequest(body: Record<string, unknown>, agent: AgentRole, opts: { minTokens?: number; quick?: boolean }): Record<string, unknown> {
-  const out = { ...body };
-  if (opts.minTokens && !(typeof out.max_tokens === 'number' && out.max_tokens >= opts.minTokens)) out.max_tokens = opts.minTokens;
-  if (opts.quick && out.reasoning_effort === undefined && quickReasoning(agent)) out.reasoning_effort = 'none';
-  return out;
-}
 
 /** 正在生成的回复。只放内存，不进同步数据（math-reader 回滚提交的教训） */
 interface StreamState {
@@ -464,7 +433,6 @@ export const useChatStore = defineStore('chat', () => {
       const prompt = assembleForChat(chat, character, history, { type: target ? 'swipe' : 'normal', agent, task: opts.task, use: opts.use, targetId: target, flags: opts.flags });
       // 记下这条回复用了哪些记忆（重新生成时沿用）；重新生成不重复记"想起过"
       noteRecallUsed(id, prompt.recall.lines, !prompt.recall.reused);
-      if (opts.minTokens || opts.quick) prompt.request = tuneRequest(prompt.request, agent, opts);
       chat.loreState = prompt.loreState;
       chat.vars = prompt.vars;
       lastPrompt[chatId] = { prompt, at: Date.now() };
@@ -616,8 +584,6 @@ export const useChatStore = defineStore('chat', () => {
       cue: opts.cue,
       onText: opts.onText,
       allowedTags: opts.allowedTags,
-      minTokens: opts.minTokens,
-      quick: opts.quick,
       use: opts.use,
       flags: opts.flags,
       onParsed: opts.onParsed,
@@ -641,7 +607,7 @@ export const useChatStore = defineStore('chat', () => {
     task: { name: string; input: string },
     parse: (value: unknown) => T | null,
     signal?: AbortSignal,
-    tune: { minTokens?: number; quick?: boolean; use?: PresetUseId; flags?: string[]; agent?: AgentRole } = {},
+    tune: { use?: PresetUseId; flags?: string[]; agent?: AgentRole } = {},
   ): Promise<{ ok: true; value: T } | { ok: false; reason: string; notConnected?: boolean }> {
     const chat = chatById(chatId);
     const character = useCharacterStore().byId(chat?.characterId);
@@ -653,10 +619,9 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const prompt = assembleForChat(chat, character, list(chatId), { agent, task, dryRun: true, use: tune.use, flags: tune.flags });
       lastPrompt[chatId] = { prompt, at: Date.now() };
-      const req = { messages: toLLMMessages(prompt), ...samplerRequest(prompt.preset.sampler) };
-      if (tune.minTokens && (req.maxTokens ?? 0) < tune.minTokens) req.maxTokens = tune.minTokens;
-      const effort = tune.quick && quickReasoning(agent) ? { reasoningEffort: 'none' as const } : {};
-      const { value } = await ai.system.json(agent, { ...req, ...effort }, parse, { signal });
+      const req = fromOpenAIBody(prompt.request);
+      req.names = { user: prompt.persona.name, char: character.name };
+      const { value } = await ai.system.json(agent, req, parse, { signal });
       return { ok: true, value };
     } catch (e) {
       return { ok: false, reason: errorText(e) };

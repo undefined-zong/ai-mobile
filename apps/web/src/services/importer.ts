@@ -152,12 +152,12 @@ export async function readImport(file: File): Promise<PendingImport> {
   throw new Error('认不出这个文件：不是角色卡、世界书、预设或 .jsonl 聊天记录');
 }
 
-/** 导入角色时默认用哪个对话预设：你最近导入的对话预设，没有就用预设库里的第一个对话预设 */
+/** 导入角色时默认用最近导入的对话预设，没有就用日常对话的默认值。 */
 export function defaultPresetId(): string | null {
   const lib = useLibraryStore();
   const chats = lib.presetsOf('chat');
   const imported = chats.filter((p) => !p.seedFile).sort((a, b) => b.createdAt - a.createdAt)[0];
-  return imported?.id ?? chats[0]?.id ?? null;
+  return imported?.id ?? lib.chatPresetFor()?.id ?? null;
 }
 
 export async function commitImport(p: PendingImport, opts: { presetId?: string | null; category?: PresetCategory; characterId?: string } = {}): Promise<ImportDone> {

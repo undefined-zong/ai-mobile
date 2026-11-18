@@ -178,7 +178,7 @@ export function workoutText(p: Extract<MessagePart, { type: 'workout' }>): strin
 
 /** mapText：只改文字部分（正则只改你写的、她说的，不动卡片的描述） */
 export function messageToText(m: Message, character: Character, user = usePersonaStore().defaultPersona.name, mapText?: (text: string) => string): string {
-  return m.parts.map((p) => partToText(p, character, user, mapText)).join(' ').trim();
+  return m.parts.map((p) => partToText(p, character, user, mapText)).filter(Boolean).join('\n').trim();
 }
 
 export interface TurnOptions {
@@ -207,7 +207,9 @@ export function toTurns(history: Message[], character: Character, user: string, 
     // 正则把整条都删掉了：这一条不发（同空消息）
     if (!text) return;
     // 一起做事时说的话带上位置（第几个番茄、片内时间……），她知道是在哪一刻说的
-    const content = m.meta?.cue ? `（${m.meta.cue}）${text}` : text;
+    // 通话状态由当前任务提供，历史通话的标签不再写进说话正文。
+    const cue = m.meta?.cue;
+    const content = cue && cue !== '语音通话' && cue !== '视频通话' ? `（${cue}）${text}` : text;
     if (m.role === 'user') out.push({ role: 'user', name: user, content });
     else if (m.role === 'assistant') out.push({ role: 'assistant', name: character.name, content });
     else out.push({ role: 'system', name: '', content });
@@ -320,7 +322,7 @@ function tagsLine(scene: ReturnType<typeof getScene>, character: Character): str
   return `回复里可以夹带这些隐藏标签（对方看不到，程序会执行）：\n${tags.join('\n')}\n${expressionPromptLines(character.portraits, { poses: allowed.includes('pose') })}`;
 }
 
-/** 这个角色的对话预设；没选、或选的那个被删了时用第一个对话预设；一个对话预设都没有时为空 */
+/** 这个角色的对话预设；没选或失效时回退到日常对话。 */
 export function presetFor(character: Character | undefined): Preset | undefined {
   return useLibraryStore().chatPresetFor(character);
 }
@@ -434,12 +436,14 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const sendable = msgSettings.settings.dropSummarized ? afterSummarized(history, chat.summaryUntilMessageId) : history;
   const turnStats = { total: 0, dropped: 0, regexed: 0 };
   const turns = toTurns(sendable, character, persona.name, { last, regex: preset.regex, stats: turnStats });
+  const loreHistory = toTurns(history, character, persona.name, { regex: preset.regex });
   const result = assemblePrompt({
     preset,
     character,
     user: { name: persona.name, description: persona.description },
     lorebooks: books,
     history: turns,
+    loreHistory,
     chatLength: history.filter((m) => !m.deleted && !m.meta.error && !m.meta.interrupted).length,
     app,
     type: opts.type,

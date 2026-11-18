@@ -258,8 +258,6 @@ export function useVoiceCall(characterId: Ref<string>, opts: { incoming: boolean
           state.poseTurn++;
         }
       },
-      // 通话要快：认得思考参数的接口把思考关到最少（会思考的模型另外留了思考的余量，不会再回空话）
-      quick: true,
       onText: (full) => {
         if (!q.stopped) q.pushAll(stream.feed(full));
       },

@@ -39,7 +39,8 @@ const ST_PROCESSING: Record<string, PromptProcessing> = {
  * 转成对应的字段，由各家协议决定怎么发
  */
 export function fromOpenAIBody(body: Record<string, unknown>): ChatRequest {
-  const req: ChatRequest = { messages: [] };
+  // 预设没有设置推理强度就是自动，不从 API 智能体配置补进 low 等值。
+  const req: ChatRequest = { messages: [], reasoningEffort: 'auto' };
   const extra: Record<string, unknown> = {};
   const msgs = Array.isArray(body.messages) ? body.messages : [];
   req.messages = msgs.map((m) => {
@@ -55,6 +56,8 @@ export function fromOpenAIBody(body: Record<string, unknown>): ChatRequest {
     if (field) (req as unknown as Record<string, unknown>)[field] = k === 'stop' && typeof v === 'string' ? [v] : v;
     else if (k === 'reasoning_effort') {
       if (EFFORTS.has(v as ReasoningEffort)) req.reasoningEffort = v as ReasoningEffort;
+      else if (v === 'minimal') req.reasoningEffort = 'min';
+      else extra[k] = v;
     } else if (k === 'include_reasoning' || k === 'show_thoughts') req.includeReasoning = v === true;
     else if (k === 'assistant_prefill') {
       if (typeof v === 'string' && v.trim()) req.prefill = v;

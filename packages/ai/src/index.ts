@@ -21,7 +21,7 @@ export { chatOnce, canChat } from './llm/client.ts';
 export { readAIStream } from './llm/stream.ts';
 export { fromOpenAIBody, normalizeTurns, postProcessMessages, START_PLACEHOLDER, toClaude, toGemini } from './llm/messages.ts';
 export { claudeModelInfo, type ClaudeModelInfo } from './llm/claude.ts';
-export { claudeThinking, deepseekThinking, geminiThinking, openaiReasoningEffort, thinkingAlias } from './llm/reasoning.ts';
+export { claudeThinking, deepseekThinking, geminiThinking, openaiReasoningEffort } from './llm/reasoning.ts';
 export { isVertexOpenModel, parseServiceAccount, vertexOpenModelId, type ServiceAccount } from './llm/vertex.ts';
 export { applyFilters, compileFilter, compileFilters, DEFAULT_OUTPUT_FILTERS } from './llm/filter.ts';
 export { outputTokenCaps } from './llm/retry.ts';

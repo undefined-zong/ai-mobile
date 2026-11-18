@@ -153,16 +153,42 @@ export function looksLikeLorebook(json: unknown): boolean {
   return isObj(json) && (Array.isArray(json.entries) || isObj(json.entries)) && !('spec' in json) && !('prompts' in json);
 }
 
+const isFlatEntry = (e: Obj): boolean => 'key' in e || 'keysecondary' in e || 'disable' in e || 'uid' in e || 'order' in e || typeof e.position === 'number';
+
+/** 修复旧版把独立世界书的数组条目当成角色卡条目读入后，留在 extra 里的关键词和设置。 */
+export function repairFlatLoreEntries(book: Pick<Lorebook, 'entries'>): boolean {
+  let changed = false;
+  book.entries = book.entries.map((entry, i) => {
+    if (!entry.extra || !isFlatEntry(entry.extra)) return entry;
+    const raw = { ...entry.extra, comment: entry.comment, content: entry.content, constant: entry.constant };
+    const before = fromBookEntry(raw, i);
+    const repaired = fromFlatEntry(raw, entry.uid);
+    for (const key of Object.keys(entry) as (keyof LoreEntry)[]) {
+      if (key === 'extra' || key === 'uid' || key === 'position') continue;
+      // 导入后用户编辑过的字段继续使用用户值。
+      if (JSON.stringify(entry[key]) !== JSON.stringify(before[key])) Object.assign(repaired, { [key]: entry[key] });
+    }
+    repaired.uid = entry.uid;
+    repaired.position = entry.position;
+    changed = true;
+    return repaired;
+  });
+  return changed;
+}
+
 /**
- * 解析世界书。entries 是数组时按 character_book 读，是对象时按 ST 独立文件读。
+ * 解析世界书。数组和对象容器都按条目的字段区分独立世界书与 character_book。
  * name 为空时用 fallbackName（通常是文件名）。
  */
 export function parseLorebook(json: unknown, fallbackName = '世界书'): ParsedLorebook {
   if (!isObj(json)) throw new Error('世界书不是 JSON 对象');
   const raw = json.entries;
   let entries: LoreEntry[];
-  if (Array.isArray(raw)) entries = raw.filter(isObj).map(fromBookEntry);
-  else if (isObj(raw)) entries = Object.entries(raw).filter(([, v]) => isObj(v)).map(([k, v]) => fromFlatEntry(v as Obj, k));
+  if (Array.isArray(raw)) entries = raw.filter(isObj).map((e, i) => isFlatEntry(e) ? fromFlatEntry(e, String(i)) : fromBookEntry(e, i));
+  else if (isObj(raw)) entries = Object.entries(raw).filter(([, v]) => isObj(v)).map(([k, v], i) => {
+    const e = v as Obj;
+    return !isFlatEntry(e) && ('keys' in e || 'extensions' in e || 'enabled' in e) ? fromBookEntry(e, i) : fromFlatEntry(e, k);
+  });
   else throw new Error('世界书里没有 entries');
 
   // 按 ST 编辑器里的显示顺序排

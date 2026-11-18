@@ -248,6 +248,7 @@
       "name": "后置指令",
       "role": "system",
       "content": "这是语音通话。每次只说 1-2 个短句，不写括号里的动作，不用表情符号。",
+      "triggers": ["call", "call-open"],
       "marker": false,
       "enabled": true,
       "injection": {

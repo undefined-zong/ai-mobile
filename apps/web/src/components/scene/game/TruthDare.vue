@@ -347,7 +347,7 @@ async function herPick() {
       { name: 'td-pick', input: tdInput(['这一轮：轮到你', `你这一局选过：真心话 ${t.truth} 次、大冒险 ${t.dare} 次`]) },
       parsePick,
       abort.signal,
-      { use: USE, flags: levelFlags.value, quick: true },
+      { use: USE, flags: levelFlags.value },
     );
     if (!alive) return;
     if (!res.ok) return fail(res);
@@ -370,7 +370,7 @@ async function suggest() {
       { name: 'td-suggest', input: tdInput([`这一轮：${her.value.name}选了${r.choice}`]) },
       parseOptions,
       abort.signal,
-      { use: USE, flags: levelFlags.value, quick: true },
+      { use: USE, flags: levelFlags.value },
     );
     if (!alive) return;
     if (!res.ok) return fail(res);
