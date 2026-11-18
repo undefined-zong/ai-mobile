@@ -1,7 +1,7 @@
 import type { ControlTagKind } from './tags.ts';
 
 /**
- * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、玩具指令 <device>。
+ * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、哄睡 [sleep]、一起运动 [exercise]、平行时空 [parallel]、玩具指令 <device>。
  *
  * 开不开由她绑定的世界书决定（自带的"聊天 · 主动卡片"世界书每个模块一条，开关那一条就开关那个模块）：
  * - 有一条开着的条目教了这个写法（内容里写了 [watch:…]）→ 开；
@@ -66,7 +66,7 @@ export function parseWatchInvite(value: string): { kind: 'watch'; title: string;
 }
 
 /** 世界书能开关的模块（都是聊天里的标签） */
-export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'device'] as const satisfies readonly ControlTagKind[];
+export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'device'] as const satisfies readonly ControlTagKind[];
 export type ModuleTag = (typeof MODULE_TAGS)[number];
 
 /** 条目内容里写了哪个写法，就算教了哪个模块 */
@@ -76,6 +76,9 @@ const TEACHES: Record<ModuleTag, RegExp> = {
   study: /[[【]study[:：\]】]/i,
   watch: /[[【]watch[:：]/i,
   game: /[[【]game[:：]/i,
+  sleep: /[[【]sleep[\]】]/i,
+  exercise: /[[【]exercise[\]】]/i,
+  parallel: /[[【]parallel[\]】]/i,
   device: /<device\s*>/i,
 };
 

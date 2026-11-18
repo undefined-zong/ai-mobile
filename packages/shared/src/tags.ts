@@ -16,12 +16,15 @@ import { INVITE_GAMES, inviteGame, parseStudyInvite, parseWatchInvite, type Invi
  *   [study:任务|分钟]      约你一起学习（陪伴学习的邀请卡片；两项都可以不写）
  *   [watch:片名|链接]      约你一起看（一起观影的邀请卡片；没给链接时点开去 B 站搜真的视频）
  *   [game:海龟汤]          约你玩某一个游戏（一起游戏的邀请卡片，见 chatModules.ts 的 INVITE_GAMES）
+ *   [sleep]               邀请你去哄睡（进入后选连麦、故事或睡前场景）
+ *   [exercise]            约你一起运动（进入健身，照计划练或随便动动）
+ *   [parallel]            邀请你看平行时空（你们俩今天的安排和留言）
  *   <device>"VIBRATE": 40</device>   玩具的控制指令（尖括号写法，可以跨行；内容见 device.ts）
  *
  * 聊天里哪些能用由她绑定的世界书决定（chatModules.ts 的 moduleSwitches）。
  * 兼容全角写法【expr：smile】。不认识的方括号（例如"[笑]"）原样保留为正文。
  */
-export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game'] as const;
+export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel'] as const;
 
 /** 尖括号写法、成对的标签：<device>…</device>（同 SillyTavern 的 Intiface 插件） */
 export const BLOCK_TAG_KINDS = ['device'] as const;
@@ -35,7 +38,10 @@ export type ControlTag =
   | { kind: 'choice'; options: string[] }
   | { kind: 'study'; task: string; minutes: number | null }
   | { kind: 'watch'; title: string; link: string }
-  | { kind: 'game'; game: InviteGameId };
+  | { kind: 'game'; game: InviteGameId }
+  | { kind: 'sleep' }
+  | { kind: 'exercise' }
+  | { kind: 'parallel' };
 
 export type TagStreamEvent = { type: 'text'; text: string } | { type: 'tag'; tag: ControlTag };
 
@@ -59,6 +65,9 @@ export const CONTROL_TAG_DOCS: Record<ControlTagKind, { syntax: string; desc: st
   study: { syntax: '[study:要做的事|分钟]', desc: '约对方一起学习 / 专注，显示成陪伴学习的邀请卡片；两项都可以不写（不写分钟用番茄钟）' },
   watch: { syntax: '[watch:片名|链接]', desc: '约对方一起看片，显示成一起观影的邀请卡片；知道 B 站 / YouTube 的真实链接才写链接，不知道只写片名，程序会去搜' },
   game: { syntax: '[game:游戏名]', desc: `约对方玩某一个游戏，显示成邀请卡片；游戏名只能是：${INVITE_GAMES.map((g) => g.label).join('、')}` },
+  sleep: { syntax: '[sleep]', desc: '想陪对方入睡时用，显示成哄睡邀请卡片；对方接受后去选连麦、故事或睡前场景' },
+  exercise: { syntax: '[exercise]', desc: '约对方一起运动，显示成邀请卡片；对方接受后进入健身，照今天的计划练或随便动动' },
+  parallel: { syntax: '[parallel]', desc: '邀对方一起看你们今天的安排或留言，显示成平行时空邀请卡片；对方接受后打开你们的平行时空' },
   device: {
     syntax: '<device>"VIBRATE": 强度</device>',
     desc: '对方连着成人玩具时，在发生的那句话后面写控制指令：VIBRATE / OSCILLATE / ROTATE（0–100 或 {"pattern": [..], "interval": [..]}）、LINEAR（{"start_position", "end_position", "duration"}）、"STOP": true',
@@ -76,7 +85,10 @@ function parseTag(kind: ControlTagKind, raw: string | undefined): ControlTag | n
   const value = (raw ?? '').trim();
   switch (kind) {
     case 'call':
-      return { kind: 'call' };
+    case 'sleep':
+    case 'exercise':
+    case 'parallel':
+      return { kind };
     case 'choice': {
       const options = value
         .split(/[|｜]/)
