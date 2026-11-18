@@ -156,6 +156,7 @@ const displayRegex = computed(() => (preset.value?.regex ?? []).filter((r) => r.
 const regexNames = computed(() => ({ char: character.value?.name ?? '', user: personaOf(chat.value).name }));
 
 const scroller = ref<HTMLElement | null>(null);
+const focusingMessage = ref(false);
 async function scrollToBottom(smooth = false) {
   await nextTick();
   const el = scroller.value;
@@ -168,16 +169,38 @@ onMounted(() => {
   else void scrollToBottom();
 });
 
-/** 从记忆本"回到原话"：展开到那条消息、滚过去、闪一下 */
+/** 从记忆本或导入目录定位：先读旧消息，再展开、滚过去；期间不自动滚回底部。 */
 async function focusMessage(id: string) {
-  const idx = messages.value.findIndex((m) => m.id === id);
-  if (idx < 0) return void scrollToBottom();
+  focusingMessage.value = true;
+  let idx = messages.value.findIndex((m) => m.id === id);
+  if (idx < 0) {
+    loadingOlder.value = true;
+    try {
+      await chatStore.loadEarlier(chatId.value, 0, { until: (m) => m.id === id, cap: Infinity });
+      idx = messages.value.findIndex((m) => m.id === id);
+      while (idx < 0 && syncState.older[chatId.value]) {
+        const loaded = await loadOlder(chatId.value);
+        idx = messages.value.findIndex((m) => m.id === id);
+        if (!loaded) break;
+      }
+    } catch (e) {
+      showToast(`读取记录失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      loadingOlder.value = false;
+    }
+  }
+  if (idx < 0) {
+    focusingMessage.value = false;
+    showToast('这条记录已不在当前聊天中');
+    return void scrollToBottom();
+  }
   if (idx < shownFrom.value) earlier.value += shownFrom.value - idx + 3;
   await nextTick();
   setTimeout(() => {
     const el = scroller.value?.querySelector<HTMLElement>(`[data-mid="${CSS.escape(id)}"]`);
+    focusingMessage.value = false;
     if (!el) return;
-    el.scrollIntoView({ block: 'center' });
+    el.scrollIntoView({ block: 'center', behavior: 'instant' });
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1700);
   }, 60);
@@ -210,6 +233,7 @@ watch(
   () => [messages.value.length, messages.value.at(-1)?.text, messages.value.at(-1)?.meta.error, messages.value.at(-1)?.parts.map((p) => (p.type === 'image' ? p.assetKey : '')).join()],
   () => {
     chatStore.markRead(chatId.value);
+    if (focusingMessage.value) return;
     const el = scroller.value;
     if (!el || el.scrollHeight - el.scrollTop - el.clientHeight < 240) void scrollToBottom(true);
   },
@@ -458,6 +482,7 @@ const moreActions = computed(() => [
   { name: '聊天背景', subname: looks.hasOwnBackground(chatId.value) ? '这个聊天单独设置了' : '跟随外观里的通用背景', key: 'background' },
   { name: '查看提示词', subname: '按预设组装后的完整提示（含世界书、记忆、环境）', key: 'inspect' },
   { name: '角色设定', subname: character.value?.name, key: 'character' },
+  { name: '导入聊天记录', subname: `SillyTavern .jsonl · 已导入 ${chat.value?.imports?.length ?? 0} 份，点此查看`, key: 'import' },
   { name: '记忆本', subname: `${characterPronoun(character.value)}记得的事，可以改`, key: 'memory' },
   { name: '世界书', key: 'lore' },
   { name: '预设', subname: presetLine.value, key: 'preset' },
@@ -474,6 +499,7 @@ function onMore(a: { key: string }) {
   const target: Record<string, string> = {
     inspect: `/chat/${chatId.value}/inspect`,
     character: `/me/characters/${c?.id}`,
+    import: `/import?character=${c?.id}`,
     memory: '/memories?tab=book',
     lore: `/me/lorebooks/${c?.lorebookIds[0] ?? ''}`,
   };

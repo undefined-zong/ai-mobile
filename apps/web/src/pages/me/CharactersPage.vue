@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { isFandom, substituteMacros, type Character } from '@app/shared';
+import { useRouter } from 'vue-router';
 import Avatar from '@/components/common/Avatar.vue';
 import PageHeader from '@/layouts/PageHeader.vue';
 import { useCharacterStore } from '@/stores/characters';
@@ -7,6 +8,8 @@ import { useChatStore } from '@/stores/chat';
 
 const chars = useCharacterStore();
 const chat = useChatStore();
+const router = useRouter();
+const openChat = (c: Character) => router.push(`/chat/${chat.startChat(c).id}`);
 /** 列表里把 {{user}} 换成"你"再显示 */
 const describe = (text: string, c: Character) => substituteMacros(text, { char: c.name, user: '你', pronoun: c.pronoun });
 </script>
@@ -32,7 +35,8 @@ const describe = (text: string, c: Character) => substituteMacros(text, { char: 
         </div>
         <p class="text-[13px] text-ink-2 leading-relaxed mt-2.5 mb-0 line-clamp-2">{{ describe(c.card.description, c) }}</p>
         <div class="flex gap-2 mt-3">
-          <RouterLink :to="`/chat/${chat.chatOfCharacter(c.id)?.id}`" class="btn">聊天</RouterLink>
+          <button type="button" class="btn" @click="openChat(c)">聊天</button>
+          <RouterLink :to="{ path: '/import', query: { character: c.id } }" class="btn">导入聊天记录</RouterLink>
           <RouterLink :to="`/me/characters/${c.id}`" class="btn primary">编辑</RouterLink>
         </div>
       </div>

@@ -5,6 +5,8 @@ import {
   looksLikePresetFile,
   looksLikeRegexFile,
   parseCardFile,
+  parseChat,
+  utf8Decode,
   parseLorebook,
   parsePreset,
   parsePresetFile,
@@ -12,6 +14,7 @@ import {
   PROMPT_MARKERS,
   type Lorebook,
   type ParsedCard,
+  type ParsedChat,
   type ParsedLorebook,
   type ParsedPreset,
   type Preset,
@@ -43,7 +46,8 @@ export type PendingImport =
       lines: string[];
       warnings: string[];
     }
-  | { kind: 'lorebook'; fileName: string; parsed: ParsedLorebook; lines: string[]; warnings: string[] };
+  | { kind: 'lorebook'; fileName: string; parsed: ParsedLorebook; lines: string[]; warnings: string[] }
+  | { kind: 'chat'; fileName: string; parsed: ParsedChat; lines: string[]; warnings: string[] };
 
 export interface ImportDone {
   message: string;
@@ -131,10 +135,21 @@ export async function readImport(file: File): Promise<PendingImport> {
     return { kind: 'lorebook', fileName: file.name, parsed, lines: [`世界书「${parsed.name}」· ${bookLine(parsed)}`], warnings: [] };
   }
 
-  if (kind === 'chat') throw new Error('聊天记录（.jsonl）的导入还没做，下一步加');
+  if (kind === 'chat') {
+    const parsed = parseChat(utf8Decode(bytes));
+    const swipes = parsed.messages.reduce((n, m) => n + Math.max(0, m.swipes.length - 1), 0);
+    return {
+      kind: 'chat', fileName: file.name, parsed, warnings: [],
+      lines: [
+        `SillyTavern 聊天记录 · ${parsed.messages.length} 条消息${swipes ? ` · ${swipes} 条备选回复` : ''}`,
+        `文件中的角色：${parsed.characterName || '未注明'} · 用户：${parsed.userName || '未注明'}`,
+        '保留消息时间和备选回复，按时间归入所选角色的聊天，已有消息会保留。',
+      ],
+    };
+  }
   // 正则脚本属于预设：在预设编辑页导入
   if (looksLikeRegexFile(json)) throw new Error('这是 SillyTavern 正则脚本，请在「我的 → 预设 → 正则」中导入');
-  throw new Error('认不出这个文件：不是角色卡、世界书或 Chat Completion 预设');
+  throw new Error('认不出这个文件：不是角色卡、世界书、预设或 .jsonl 聊天记录');
 }
 
 /** 导入角色时默认用哪个对话预设：你最近导入的对话预设，没有就用预设库里的第一个对话预设 */
@@ -145,9 +160,23 @@ export function defaultPresetId(): string | null {
   return imported?.id ?? chats[0]?.id ?? null;
 }
 
-export async function commitImport(p: PendingImport, opts: { presetId?: string | null; category?: PresetCategory } = {}): Promise<ImportDone> {
+export async function commitImport(p: PendingImport, opts: { presetId?: string | null; category?: PresetCategory; characterId?: string } = {}): Promise<ImportDone> {
   const lib = useLibraryStore();
   const now = Date.now();
+
+  if (p.kind === 'chat') {
+    const character = useCharacterStore().byId(opts.characterId);
+    if (!character) throw new Error('请选择这段聊天所属的角色');
+    const { chat, record } = await useChatStore().importHistory(character, p.parsed, p.fileName);
+    return {
+      message: `${record.messageCount} 条聊天记录已存入「${character.name}」的聊天`,
+      links: [
+        { label: '打开导入记录', to: `/chat/${chat.id}?mode=im&at=${record.lastMessageId}` },
+        { label: '查看该角色的导入记录', to: `/import?character=${character.id}` },
+        { label: '回消息列表', to: '/chats' },
+      ],
+    };
+  }
 
   if (p.kind === 'preset') {
     const { warnings: _w, id: fileId, defaultFor: _d, ...data } = p.parsed;

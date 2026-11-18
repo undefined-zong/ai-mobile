@@ -8,6 +8,7 @@ import { looksLikePreset } from './preset.ts';
 export * from './bytes.ts';
 export * from './png.ts';
 export * from './card.ts';
+export * from './chat.ts';
 export * from './lorebook.ts';
 export * from './preset.ts';
 export * from './macros.ts';

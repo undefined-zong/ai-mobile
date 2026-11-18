@@ -336,6 +336,23 @@ export async function write(store: StoreName, puts: { key: string; value: unknow
   }
 }
 
+/** 导入的聊天和消息一起提交，保存失败时整批回滚；同步也使用同一份发件箱。 */
+export async function writeTogether(rows: { store: StoreName; key: string; value: unknown }[]): Promise<void> {
+  if (frozen) throw new Error('正在恢复备份，请重新打开 App 后导入');
+  const db = await open();
+  const tracked = rows.filter((r) => tracker?.(r.store, r.key));
+  const stores = [...new Set<StoreName>([...rows.map((r) => r.store), ...(tracked.length ? ['syncOutbox' as const] : [])])];
+  const tx = db.transaction(stores, 'readwrite');
+  for (const r of rows) tx.objectStore(r.store).put(r.value, r.key);
+  if (tracked.length) {
+    const outbox = tx.objectStore('syncOutbox');
+    const at = Date.now();
+    for (const { store, key } of tracked) outbox.put({ store, key, at, n: ++writeCount } satisfies OutboxEntry, outboxKey(store, key));
+  }
+  await done(tx);
+  if (tracked.length) onTracked?.();
+}
+
 /** 从发件箱拿掉这些（推上去了、合并完了）：拿之前这条记录又被改过（at / n 变了）就留着 */
 export async function removeOutbox(entries: OutboxEntry[]): Promise<void> {
   if (!entries.length) return;
