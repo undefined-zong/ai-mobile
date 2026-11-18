@@ -746,7 +746,7 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
           name: str(f.name)?.trim() || '助手写的世界书',
           description: str(f.description) ?? '',
           scanDepth: 4,
-          tokenBudget: 2048,
+          tokenBudget: 0,
           recursive: false,
           entries: [],
         };

@@ -181,7 +181,7 @@ function slotNote(position: string): string | null {
         </div>
         <p v-if="!p.lore.log.length" class="text-[13px] text-ink-3 text-center py-6 m-0">这个角色没有绑定世界书</p>
         <p v-else class="text-[12px] text-ink-3 m-0 leading-relaxed">
-          扫描规则同 SillyTavern：默认看最近 2 条消息，常驻条目总是触发；"延迟到递归"的条目只在别的条目内容触发递归时才有机会。预算 {{ p.lore.budget.toLocaleString('zh-CN') }} tokens。
+          默认看最近 2 条消息，按世界书和条目的扫描深度设置调整；常驻条目总是触发，"延迟到递归"的条目只在递归扫描时参与。仅使用各本世界书明确设置的 token 预算，0 表示不额外限制。
           触发了的条目还要看预设里对应的位置（例如"世界书（角色前）"）开没开，才会发出去。
         </p>
       </div>

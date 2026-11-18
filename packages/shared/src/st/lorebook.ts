@@ -19,7 +19,6 @@ const ROLES = ['system', 'user', 'assistant'] as const;
 /** ST 的世界书默认值（default/content/settings.json） */
 export const ST_WORLD_INFO_DEFAULTS = {
   scanDepth: 2,
-  budgetPercent: 25,
   recursive: true,
   caseSensitive: false,
   matchWholeWords: true,
@@ -204,7 +203,7 @@ export function parseLorebook(json: unknown, fallbackName = '世界书'): Parsed
     name: str(json.name) || fallbackName,
     description: str(json.description),
     scanDepth: num(json.scan_depth, ST_WORLD_INFO_DEFAULTS.scanDepth),
-    // ST 按上下文的百分比算预算；这里存绝对值，0 表示"按预设的上下文 25%"
+    // 只读取文件明确设置的本书预算；未设置或为 0 时不额外限制。
     tokenBudget: num(json.token_budget, 0),
     recursive: typeof json.recursive_scanning === 'boolean' ? json.recursive_scanning : ST_WORLD_INFO_DEFAULTS.recursive,
     entries,
