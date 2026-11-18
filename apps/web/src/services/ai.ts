@@ -293,7 +293,7 @@ export class RoutedImage implements ImageClient {
     };
     // 写 tags 用这个用途的生图预设：配图（默认），一起做事时用这个场景的（没单独选时跟随配图）；一个生图预设都没有时直接用外观 tags + 画面描述
     const preset = useLibraryStore().presetForUse(req.use ?? 'image', c) ?? null;
-    const r = await illustrate(useAiStore().system, input, { signal: opts.signal, onStage: opts.onStage, seed: req.seed, preset });
+    const r = await illustrate(useAiStore().system, input, { signal: opts.signal, onStage: opts.onStage, seed: req.seed, model: req.model, preset });
     const img = r.image.images[0];
     const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;
     if (!assetKey && !img?.url) throw new AiError('empty', '生图接口返回了，但里面没有图片', { detail: JSON.stringify(r.image).slice(0, 4000) });

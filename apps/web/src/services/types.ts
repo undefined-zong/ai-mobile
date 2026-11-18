@@ -83,6 +83,8 @@ export interface EmbeddingClient {
 
 export interface IllustrateRequest {
   characterId: string;
+  /** 这一次使用生图 API 上的哪个模型；不写沿用 API 设置 */
+  model?: string;
   /** 要画的画面（[cg:] 标签里的描述、"生成配图"里写的、场景里这一刻的状态） */
   caption: string;
   /** 画什么：场景（默认）/ 全身像 / 脸部特写 / 只画背景 */

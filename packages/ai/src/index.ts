@@ -69,6 +69,7 @@ export * from './agents/system.ts';
 export * from './agents/taskPreset.ts';
 export * from './agents/imagePrompt.ts';
 export * from './agents/sidestory.ts';
+export * from './agents/secondary.ts';
 export * from './agents/summary.ts';
 export * from './agents/retrieval.ts';
 export * from './agents/recall.ts';
