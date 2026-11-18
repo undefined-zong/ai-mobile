@@ -19,6 +19,7 @@ import { useAppStore } from '@/stores/app';
 import ScenePage from '@/pages/ScenePage.vue';
 import ApiPage from '@/pages/me/ApiPage.vue';
 import AppearancePage from '@/pages/me/AppearancePage.vue';
+import AssistantPage from '@/pages/me/AssistantPage.vue';
 import CharacterEditPage from '@/pages/me/CharacterEditPage.vue';
 import CharactersPage from '@/pages/me/CharactersPage.vue';
 import EnvironmentPage from '@/pages/me/EnvironmentPage.vue';
@@ -107,8 +108,8 @@ export const routes: RouteRecordRaw[] = [
   { path: '/me/cache', component: CachePage, meta: { title: '图片缓存' } },
   { path: '/me/install', component: InstallPage, meta: { title: '装成 App' } },
   { path: '/me/appearance', component: AppearancePage, meta: { title: '外观' } },
-  // 助手：检测、修改预设和世界书的格式，做角色卡（不常用，用到时再加载）
-  { path: '/me/assistant', component: () => import('@/pages/me/AssistantPage.vue'), meta: { title: '助手' } },
+  // 随主程序加载，避免发布后旧页面请求已被替换的助手分块而打不开。
+  { path: '/me/assistant', component: AssistantPage, meta: { title: '助手' } },
   { path: '/me/backgrounds', component: () => import('@/pages/me/BackgroundLibraryPage.vue'), meta: { title: '场景素材库' } },
   { path: '/import', component: ImportPage, meta: { title: '导入' } },
   { path: '/:pathMatch(.*)*', redirect: () => useAppStore().homePath },
