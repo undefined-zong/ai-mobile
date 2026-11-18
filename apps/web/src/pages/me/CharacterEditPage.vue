@@ -21,6 +21,7 @@ import { useAiStore } from '@/stores/ai';
 import { useLibraryStore } from '@/stores/library';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useCharacterStore } from '@/stores/characters';
+import { useChatStore } from '@/stores/chat';
 import { useRhythmStore } from '@/stores/rhythm';
 import { useServicesStore } from '@/stores/services';
 import { useWeatherStore } from '@/stores/weather';
@@ -31,6 +32,7 @@ const router = useRouter();
 const ai = useAiStore();
 const rhythm = useRhythmStore();
 const chars = useCharacterStore();
+const chats = useChatStore();
 const lib = useLibraryStore();
 const looks = useAppearanceStore();
 async function pickAvatar(file: File) {
@@ -163,6 +165,15 @@ const PERSONALITY = { clingy: '粘人', balanced: '适中', independent: '独立
           </div>
         </div>
       </div>
+
+      <RouterLink :to="{ path: '/import', query: { character: character.id } }" class="link-row press mx-4">
+        <span class="i-lucide-messages-square text-accent-ink" />
+        <span class="flex-1 min-w-0">
+          <span class="block text-[14px]">导入聊天记录</span>
+          <span class="block text-[12px] text-ink-3">SillyTavern .jsonl · 已导入 {{ chats.chatOfCharacter(character.id)?.imports?.length ?? 0 }} 份，点此查看</span>
+        </span>
+        <span class="i-lucide-chevron-right text-ink-3" />
+      </RouterLink>
 
       <van-tabs v-model:active="tab" class="mt-2" shrink swipeable :line-width="20">
         <van-tab title="基本" name="basic">

@@ -204,7 +204,7 @@ const wide = computed(() => blocks.value.some((b) => b.kind === 'frame'));
       <div class="col" :class="{ editing, wide: wide && !editing }" @click="onColClick">
         <Transition name="tools">
           <div v-if="open" class="tools" role="toolbar" aria-label="消息操作" @click.stop>
-            <template v-if="canRetry && !mine && message.swipes.length > 1">
+            <template v-if="!mine && message.swipes.length > 1">
               <button type="button" class="tool" aria-label="上一个回复" :disabled="streaming" @click="emit('swipe', -1)"><span class="i-lucide-chevron-left" /></button>
               <span class="num count">{{ message.swipeIndex + 1 }}/{{ message.swipes.length }}</span>
               <button type="button" class="tool" aria-label="下一个回复" :disabled="streaming" @click="emit('swipe', 1)"><span class="i-lucide-chevron-right" /></button>

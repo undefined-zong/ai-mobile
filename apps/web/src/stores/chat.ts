@@ -11,6 +11,8 @@ import {
   substituteMacros,
   type Character,
   type Chat,
+  type ChatImport,
+  type ParsedChat,
   type ImageMode,
   type Message,
   type MessagePart,
@@ -28,7 +30,7 @@ import { useAiStore } from './ai';
 import { useAppStore } from './app';
 import { useCharacterStore } from './characters';
 import { useRealWorldStore } from './realworld';
-import { autoSave, chatMessageKeys, getAll, msgKey, recentMessages, splitMsgKey, write, type RemoteChange } from '@/db/idb';
+import { autoSave, chatMessageKeys, getAll, msgKey, recentMessages, splitMsgKey, write, writeTogether, type RemoteChange } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
 import { buildChats, buildMessages } from '@/mock/chats';
 import { services } from '@/services';
@@ -293,7 +295,7 @@ export const useChatStore = defineStore('chat', () => {
    * 给新角色开一条聊天：第一条是角色卡的开场白（宏替换后），备选开场白可以左右切换（同 ST）。
    * 已经有聊天就直接返回那条（消息按人分）。
    */
-  function startChat(character: Character): Chat {
+  function startChat(character: Character, opts: { greeting?: boolean } = {}): Chat {
     const existing = chatOfCharacter(character.id);
     if (existing) return existing;
     const now = Date.now();
@@ -318,9 +320,9 @@ export const useChatStore = defineStore('chat', () => {
     chats.value.push(chat);
     messages.value[chat.id] = [];
     const user = personaOf(chat).name;
-    const greet = (t: string) => substituteMacros(t, { char: character.name, user }).replace(/\r/g, '');
+    const greet = (t: string) => substituteMacros(t, { char: character.name, user, pronoun: characterPronoun(character) }).replace(/\r/g, '');
     const greetings = [character.card.firstMes, ...character.card.alternateGreetings].filter((t) => t.trim()).map(greet);
-    if (greetings.length) {
+    if (greetings.length && opts.greeting !== false) {
       push(chat.id, 'assistant', [{ type: 'text', text: greetings[0] as string }], {
         read: false,
         swipes: greetings.map((text, i) => ({ text, createdAt: now + i })),
@@ -328,6 +330,41 @@ export const useChatStore = defineStore('chat', () => {
       });
     }
     return chatById(chat.id) as Chat;
+  }
+
+  /** 导入到角色已有的聊天，保留原有消息；正文先落库，完成页才显示成功。 */
+  async function importHistory(character: Character, parsed: ParsedChat, fileName: string) {
+    const chat = startChat(character, { greeting: false });
+    const now = Date.now();
+    const importId = uid('import');
+    const added: Message[] = parsed.messages.map((m, i) => ({
+      ...m, id: `${importId}_${String(i).padStart(10, '0')}`, chatId: chat.id,
+    })).sort((a, b) => a.createdAt - b.createdAt);
+    const record: ChatImport = {
+      id: importId, fileName, importedAt: now, messageCount: added.length,
+      firstMessageId: added[0]!.id, lastMessageId: added.at(-1)!.id,
+    };
+    await messageSaver.flush();
+    await chatSaver.flush();
+    const imported = {
+      ...chat, imports: [...(chat.imports ?? []), record], updatedAt: now,
+      lastMessageAt: Math.max(now, chat.lastMessageAt, added.at(-1)!.createdAt),
+    };
+    await writeTogether([
+      ...added.map((m) => ({ store: 'chatMessages' as const, key: msgKey(chat.id, m.id), value: JSON.parse(JSON.stringify(m)) })),
+      { store: 'chats', key: chat.id, value: JSON.parse(JSON.stringify(imported)) },
+    ]);
+    const current = list(chat.id);
+    // 内存里的消息必须保持连续，避免把早期导入记录放进来后跳过中间尚未加载的消息。
+    const from = earlierInDb[chat.id] ? (current[0]?.createdAt ?? Infinity) : -Infinity;
+    const visible = added.filter((m) => m.createdAt >= from);
+    messages.value[chat.id] = [...current, ...visible].sort((a, b) => a.createdAt - b.createdAt);
+    messageSaver.settle(visible.map((m) => msgKey(chat.id, m.id)));
+    if (visible.length < added.length) earlierInDb[chat.id] = true;
+    Object.assign(chat, imported);
+    chatSaver.settle([chat.id]);
+    await trimWindow(chat.id);
+    return { chat, record };
   }
 
   function removeChat(chatId: string) {
@@ -915,10 +952,12 @@ export const useChatStore = defineStore('chat', () => {
   function swipe(chatId: string, messageId: string, dir: 1 | -1) {
     const msg = find(chatId, messageId);
     if (!msg || msg.swipes.length < 2) return;
+    sourceChanged(chatId, [messageId]);
     msg.swipeIndex = (msg.swipeIndex + dir + msg.swipes.length) % msg.swipes.length;
     const s = msg.swipes[msg.swipeIndex];
     if (!s) return;
     msg.text = s.text;
+    msg.updatedAt = Date.now();
     msg.parts = s.parts ?? [{ type: 'text', text: s.text }];
     if (s.expression) msg.expression = s.expression;
   }
@@ -1208,6 +1247,7 @@ export const useChatStore = defineStore('chat', () => {
     lastPrompt,
     hydrate,
     startChat,
+    importHistory,
     removeChat,
     sortedChats,
     totalUnread,

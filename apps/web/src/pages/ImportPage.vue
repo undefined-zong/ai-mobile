@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { PRESET_CATEGORIES, ROLEPLAY_CATEGORIES, type PresetCategory } from '@app/shared';
 import { showToast } from 'vant';
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import PageHeader from '@/layouts/PageHeader.vue';
 import { commitImport, defaultPresetId, readImport, type ImportDone, type PendingImport } from '@/services/importer';
 import { useLibraryStore } from '@/stores/library';
+import { useCharacterStore } from '@/stores/characters';
+import { useChatStore } from '@/stores/chat';
 
 /**
  * 导入 SillyTavern 文件。选了文件先显示识别结果，确认后才真正导入。
@@ -22,10 +25,25 @@ const KINDS = [
     hint: '.json',
     desc: 'SillyTavern 的 Chat Completion 预设（用 ST 实际生效的那套顺序，自动补上记忆 / 环境 / 场景块），或 App 自己的预设文件（任何一类：对话、功能、主动消息、小剧场、总结、生图）。',
   },
-  { id: 'chat', icon: 'i-lucide-messages-square', title: '聊天记录', accept: '.jsonl', hint: '.jsonl', desc: 'SillyTavern 的 .jsonl 聊天记录，含 swipe。（下一步做）' },
+  { id: 'chat', icon: 'i-lucide-messages-square', title: '聊天记录', accept: '.jsonl', hint: '.jsonl', desc: 'SillyTavern 聊天记录。保留原始时间、备选回复，存入对应角色的聊天。' },
 ];
 
+const route = useRoute();
+const chars = useCharacterStore();
+const chatStore = useChatStore();
 const lib = useLibraryStore();
+const characterId = ref(typeof route.query.character === 'string' ? route.query.character : '');
+const character = computed(() => chars.byId(characterId.value));
+const chatOnly = computed(() => typeof route.query.character === 'string' || route.query.kind === 'chat');
+const kinds = computed(() => chatOnly.value ? KINDS.filter((k) => k.id === 'chat') : KINDS);
+const history = computed(() => chatStore.chats
+  .filter((c) => !characterId.value || c.characterId === characterId.value)
+  .flatMap((c) => (c.imports ?? []).map((item) => ({
+    ...item, characterName: chars.byId(c.characterId)?.name ?? c.title,
+    to: `/chat/${c.id}?mode=im&at=${item.lastMessageId}`,
+  })))
+  .sort((a, b) => b.importedAt - a.importedAt));
+const importedTime = (at: number) => new Date(at).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
 const pending = ref<PendingImport | null>(null);
 const done = ref<ImportDone | null>(null);
 const error = ref('');
@@ -34,6 +52,12 @@ const presetId = ref<string | null>(null);
 /** SillyTavern 预设当哪一类用（它本来是对话预设，也能当功能或主动消息） */
 const category = ref<PresetCategory>('chat');
 const resultEl = ref<HTMLElement | null>(null);
+watch(() => route.query.character, (id) => {
+  characterId.value = typeof id === 'string' ? id : '';
+  pending.value = null;
+  done.value = null;
+  error.value = '';
+});
 
 /** 结果卡片在四个入口下面，手机上一屏放不下：出来以后滚过去 */
 async function reveal() {
@@ -51,6 +75,11 @@ async function picked(e: Event) {
   pending.value = null;
   try {
     pending.value = await readImport(file);
+    if (pending.value.kind === 'chat' && !characterId.value) {
+      const name = pending.value.parsed.characterName;
+      const matches = chars.list.filter((c) => c.name === name);
+      characterId.value = matches.length === 1 ? matches[0]!.id : '';
+    }
     presetId.value = defaultPresetId();
     category.value = 'chat';
   } catch (err) {
@@ -63,7 +92,7 @@ async function confirm() {
   if (!pending.value || busy.value) return;
   busy.value = true;
   try {
-    done.value = await commitImport(pending.value, { presetId: presetId.value, category: category.value });
+    done.value = await commitImport(pending.value, { presetId: presetId.value, category: category.value, characterId: characterId.value });
     pending.value = null;
     void reveal();
   } catch (err) {
@@ -73,20 +102,32 @@ async function confirm() {
   }
 }
 
-const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset: '预设', lorebook: '世界书' };
+const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset: '预设', lorebook: '世界书', chat: '聊天记录' };
 </script>
 
 <template>
   <div class="page" data-page="import">
-    <PageHeader title="导入" subtitle="SillyTavern 的角色卡、世界书、预设、聊天记录" fallback="/me" />
+    <PageHeader
+      :title="chatOnly ? '导入聊天记录' : '导入'"
+      :subtitle="chatOnly ? (character ? `保存到「${character.name}」的聊天` : '选择聊天记录所属的角色') : 'SillyTavern 的角色卡、世界书、预设、聊天记录'"
+      :fallback="chatOnly && character ? `/me/characters/${character.id}` : '/me'"
+    />
     <div class="page-scroll px-4 py-3 grid gap-3 content-start">
-      <label v-for="k in KINDS" :key="k.id" class="drop press" :data-kind="k.id">
+      <div v-if="chatOnly" class="result">
+        <label for="import-character" class="block text-[13px] font-600 mb-2">保存到角色</label>
+        <select id="import-character" v-model="characterId" class="character-select" :disabled="busy">
+          <option disabled value="">选择角色</option>
+          <option v-for="c in chars.list" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+        <p class="text-[12.5px] text-ink-2 leading-relaxed mt-2 mb-0">导入后可从本页“已导入的聊天记录”打开，也能在消息页进入这个角色，按原时间向上翻看。</p>
+      </div>
+      <label v-for="k in kinds" :key="k.id" class="drop press" :data-kind="k.id">
         <span class="drop-icon"><span :class="k.icon" /></span>
         <div class="flex-1 min-w-0">
           <div class="text-[15.5px] font-600">{{ k.title }} <span class="text-[12px] text-ink-3 font-400">{{ k.hint }}</span></div>
           <div class="text-[12.5px] text-ink-2 leading-relaxed mt-0.5">{{ k.desc }}</div>
         </div>
-        <input type="file" :accept="k.accept" class="sr-only" :aria-label="`选择${k.title}文件`" @change="picked" />
+        <input type="file" :accept="k.accept" class="sr-only" :disabled="busy" :aria-label="`选择${k.title}文件`" @change="picked" />
         <span class="pick-btn">选择</span>
       </label>
 
@@ -107,6 +148,16 @@ const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset
         <ul v-if="pending.warnings.length" class="warn mt-2 mb-0 pl-5 text-[13px] leading-relaxed">
           <li v-for="w in pending.warnings" :key="w">{{ w }}</li>
         </ul>
+        <template v-if="pending.kind === 'chat'">
+          <template v-if="!chatOnly">
+            <label for="import-chat-character" class="block text-[13px] font-600 mt-3 mb-2">保存到角色</label>
+            <select id="import-chat-character" v-model="characterId" class="character-select" :disabled="busy">
+              <option disabled value="">选择角色</option>
+              <option v-for="c in chars.list" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </template>
+          <p class="text-[13px] text-accent-ink mt-3 mb-0">{{ character ? `导入到「${character.name}」；完成后可直接打开这段记录。` : '选择角色后即可导入。' }}</p>
+        </template>
         <template v-if="pending.kind === 'card'">
           <div class="text-[12.5px] text-ink-3 mt-3 mb-1.5">聊天用哪个对话预设（之后在聊天右上角 ⋯ → 预设，或角色设定 → 预设 里都能换）</div>
           <div class="flex flex-wrap gap-1.5">
@@ -125,7 +176,7 @@ const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset
           </div>
           <p class="text-[12px] text-ink-3 mt-2 mb-0 leading-relaxed">{{ PRESET_CATEGORIES[category].desc }}</p>
         </template>
-        <van-button type="primary" round block class="!mt-3" :loading="busy" @click="confirm">导入</van-button>
+        <van-button type="primary" round block class="!mt-3" :loading="busy" :disabled="pending.kind === 'chat' && !character" @click="confirm">{{ pending.kind === 'chat' && character ? `导入到「${character.name}」` : '导入' }}</van-button>
       </div>
 
       <div v-if="done" class="result ok" data-testid="import-done">
@@ -135,14 +186,46 @@ const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset
         </div>
       </div>
 
+      <section v-if="history.length || chatOnly" class="result" aria-label="已导入的聊天记录">
+        <div class="text-[14px] font-600">已导入的聊天记录 <span class="text-ink-3 font-400">{{ history.length }} 份</span></div>
+        <p v-if="!history.length" class="text-[12.5px] text-ink-3 mt-2 mb-0">{{ character ? `「${character.name}」还没有导入记录。` : '还没有导入聊天记录。' }}选择上方的 .jsonl 文件即可添加。</p>
+        <RouterLink v-for="item in history" :key="item.id" :to="item.to" class="history-row press">
+          <span class="i-lucide-messages-square text-accent-ink shrink-0" />
+          <span class="flex-1 min-w-0">
+            <span class="block text-[13.5px] break-all">{{ item.fileName }}</span>
+            <span class="block text-[12px] text-ink-3 mt-0.5">{{ item.characterName }} · {{ item.messageCount }} 条 · {{ importedTime(item.importedAt) }} 导入</span>
+          </span>
+          <span class="text-[12px] text-accent-ink shrink-0">打开</span>
+        </RouterLink>
+      </section>
+
       <p class="text-[12px] text-ink-3 leading-relaxed m-0">
-        导入的角色卡、世界书、预设和聊天存在这台设备上，刷新后还在。导出成 SillyTavern 能读的文件（PNG 里同时写 chara 和 ccv3）已经能做，按钮下一步加。
+        导入内容保存在这台设备上，刷新后仍可查看。聊天记录的入口在“我的 → 角色卡 → 对应角色 → 导入聊天记录”；启用云端同步后会随聊天同步。
       </p>
     </div>
   </div>
 </template>
 
 <style scoped>
+.character-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  text-decoration: none;
+}
+.history-row:last-child { border-bottom: 0; padding-bottom: 0; }
 .drop {
   position: relative;
   display: flex;

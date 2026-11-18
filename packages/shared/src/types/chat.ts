@@ -343,7 +343,7 @@ export interface Message extends SyncMeta {
 /**
  * 一个角色只有一条聊天（消息按人分）。IM 和剧场只是同一条聊天的两种看法；
  * 约会、学习等场景是这条聊天里的一段，用 scene 分隔提示标出进出。
- * 导入的 SillyTavern 聊天记录作为这个角色的"存档"，不在消息列表里单独出现。
+ * 导入的 SillyTavern 聊天记录归入这个角色的聊天，imports 保留各次导入的入口。
  * 用哪个预设看角色（Character.presetId），聊天上不另存。
  */
 export interface Chat extends SyncMeta {
@@ -370,4 +370,15 @@ export interface Chat extends SyncMeta {
   loreState?: LoreTimedState;
   /** 聊天变量：{{setvar::x::v}} / {{getvar::x}} */
   vars?: Record<string, string>;
+  /** 每次导入的来源和定位入口，跟随聊天保存、同步。 */
+  imports?: ChatImport[];
+}
+
+export interface ChatImport {
+  id: string;
+  fileName: string;
+  importedAt: number;
+  messageCount: number;
+  firstMessageId: string;
+  lastMessageId: string;
 }
