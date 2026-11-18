@@ -36,7 +36,6 @@ const describe = (text: string, c: Character) => substituteMacros(text, { char: 
         <p class="text-[13px] text-ink-2 leading-relaxed mt-2.5 mb-0 line-clamp-2">{{ describe(c.card.description, c) }}</p>
         <div class="flex gap-2 mt-3">
           <button type="button" class="btn" @click="openChat(c)">聊天</button>
-          <RouterLink :to="{ path: '/import', query: { character: c.id } }" class="btn">导入聊天记录</RouterLink>
           <RouterLink :to="`/me/characters/${c.id}`" class="btn primary">编辑</RouterLink>
         </div>
       </div>
