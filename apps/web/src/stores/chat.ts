@@ -90,6 +90,8 @@ export interface SceneReplyOptions {
   onParsed?(parsed: ParsedReply, done: boolean): void;
   /** [cg:] 由场景自己画，不往消息里放配图卡 */
   sceneArt?: boolean;
+  /** 用哪个功能的 API（约会用「约会」）；不给时用「陪伴 · 快速」 */
+  agent?: AgentRole;
 }
 
 export type SceneReplyResult = { ok: true; message: Message } | { ok: false; reason: string; notConnected?: boolean };
@@ -615,18 +617,19 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * 一起做事时让她回一句（回纸条、休息时聊天、讲题……）：你说的话和她的回复都存进这条聊天，带上场景和位置。
-   * 用「陪伴 · 快速」，提示词是这个场景的功能预设 + 这一次的场景任务。没接通时不出演示台词，告诉界面原因
+   * 默认用「陪伴 · 快速」（opts.agent 可以换成别的功能，如约会），提示词是这个场景的功能预设 + 这一次的场景任务。没接通时不出演示台词，告诉界面原因
    */
   async function sceneReply(chatId: string, opts: SceneReplyOptions): Promise<SceneReplyResult> {
     const chat = chatById(chatId);
     if (!chat) return { ok: false, reason: '找不到这条聊天' };
     const said = opts.userText?.trim();
     if (said) push(chatId, 'user', [{ type: 'text', text: said }], { meta: { scene: chat.currentScene ?? undefined, cue: opts.cue } });
-    const status = useAiStore().status('companion');
-    if (!status.live) return { ok: false, reason: `「陪伴 · 快速」还没接通：${status.reason}`, notConnected: true };
+    const agent = opts.agent ?? 'companion';
+    const status = useAiStore().status(agent);
+    if (!status.live) return { ok: false, reason: `「${AGENT_META[agent].label}」还没接通：${status.reason}`, notConnected: true };
     if (streams[chatId]) return { ok: false, reason: `${characterPronoun(useCharacterStore().byId(chat.characterId))}还在回上一句` };
     const id = await generate(chatId, undefined, {
-      agent: 'companion',
+      agent,
       task: { name: opts.task, input: opts.input },
       cue: opts.cue,
       onText: opts.onText,

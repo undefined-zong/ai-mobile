@@ -129,6 +129,7 @@ export type AgentRole =
   | 'secondary'
   | 'companion'
   | 'decor'
+  | 'date'
   | 'sidestory'
   | 'novel'
   | 'summary'
@@ -225,6 +226,13 @@ export const AGENT_META: Record<
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-house-heart',
+  },
+  date: {
+    label: '约会',
+    desc: '约会里Ta每一段的话和你的四个回法（开场、每一段、结束时的话）。默认跟随「陪伴 · 快速」，改成单独设置后只给约会用、不和它共用；提示词在"功能 → 约会"预设里调',
+    capability: 'chat',
+    runsOn: 'client',
+    icon: 'i-lucide-heart-handshake',
   },
   sidestory: {
     label: '番外 · Ta的生活',
