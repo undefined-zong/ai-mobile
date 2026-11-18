@@ -1,4 +1,4 @@
-import type { SyncPullResult, SyncPushRecord, SyncPushResult, SyncRecord } from '@app/shared';
+import { SYNC_PUSH_MAX_BYTES, SYNC_PUSH_MAX_RECORDS, type SyncPullResult, type SyncPushRecord, type SyncPushResult, type SyncRecord } from '@app/shared';
 import { reactive } from 'vue';
 import {
   applyRemote, clearStore, databaseState, flushAll, getAll, getChatMessages, getEntries, getKeys, getMany, getOne, hasKeys, msgKey, outboxKey, removeOutbox, setSyncHooks, splitMsgKey, STORES, write,
@@ -43,11 +43,11 @@ const SOFT: Partial<Record<StoreName, { fields: string[]; reset?: Record<string,
   chats: { fields: ['currentScene', 'togetherAt', 'togetherMode'], reset: { currentScene: null, togetherAt: null, togetherMode: null } },
   characters: { fields: ['locationId', 'status'] },
 };
-/** 一条记录的 JSON 超过这么大就存成大文件；小于这么大才留底稿（合并用） */
-const PACK_CHARS = 900_000;
+/** 一条记录的 JSON 超过这些 UTF-8 字节就存成大文件；底稿仍按本机字符串长度保留（合并用） */
+const PACK_BYTES = 900_000;
 const BASE_CHARS = 200_000;
-const PUSH_RECORDS = 100;
-const PUSH_CHARS = 400_000;
+const encoder = new TextEncoder();
+const PUSH_ENVELOPE_BYTES = encoder.encode('{"records":[]}').byteLength;
 /** 新设备第一次同步时每个聊天先拉最近几条（更早的用到时再取） */
 const RECENT = 500;
 const OLDER_PAGE = 200;
@@ -616,7 +616,6 @@ async function scanAll(join: boolean) {
 
 interface Out {
   rec: SyncPushRecord;
-  size: number;
   item: Item;
   applied(seq: number): void;
 }
@@ -634,7 +633,7 @@ async function pushAll(): Promise<boolean> {
   // 文字先推，大文件（要先传文件）最后
   entries.sort((a, b) => Number(isLazy(a.store, a.key)) - Number(isLazy(b.store, b.key)) || a.at - b.at);
   let queue: Out[] = [];
-  let chars = 0;
+  let bytes = PUSH_ENVELOPE_BYTES;
   let conflicts: SyncRecord[] = [];
   const open: Item[] = [];
   const drop: OutboxEntry[] = [];
@@ -643,7 +642,7 @@ async function pushAll(): Promise<boolean> {
     if (!queue.length) return;
     const batch = queue;
     queue = [];
-    chars = 0;
+    bytes = PUSH_ENVELOPE_BYTES;
     const result = await api!.json<SyncPushResult>('/v1/sync/push', { method: 'POST', body: { records: batch.map((o) => o.rec) }, timeout: 60_000 });
     const applied = new Map(result.applied.map((a) => [`${a.kind}\n${a.parent}\n${a.id}`, a.seq]));
     for (const o of batch) {
@@ -695,9 +694,10 @@ async function pushAll(): Promise<boolean> {
     const item: Item = { entry, waiting: outs.length, conflicted: false, finish: () => finish(item, applied) };
     open.push(item);
     for (const o of outs) {
+      const size = encoder.encode(JSON.stringify(o.rec)).byteLength;
+      if (queue.length && (queue.length >= SYNC_PUSH_MAX_RECORDS || bytes + 1 + size > SYNC_PUSH_MAX_BYTES)) await send();
+      bytes += size + (queue.length ? 1 : 0);
       queue.push({ ...o, item });
-      chars += o.size;
-      if (queue.length >= PUSH_RECORDS || chars >= PUSH_CHARS) await send();
     }
   }
   await send();
@@ -725,19 +725,19 @@ async function recordOuts(entry: OutboxEntry, applied: Map<string, number>): Pro
   if (raw === undefined) {
     if (!st || st.h === DELETED) return { outs: null, finish };
     next = { s: 0, h: DELETED };
-    return { outs: [{ rec: { ...wire(store, key), updatedAt: entry.at, deleted: true, data: null, base: st.s }, size: 100, applied: (seq) => applied.set(key, seq) }], finish };
+    return { outs: [{ rec: { ...wire(store, key), updatedAt: entry.at, deleted: true, data: null, base: st.s }, applied: (seq) => applied.set(key, seq) }], finish };
   }
   // 大文件的表：拉到过、还没下载的（lazy）本机却有了，说明是这台设备自己存的同一个文件，也不用推
   const encoded = hasBinary(raw) ? await encodeBinary(raw, blobs!) : raw;
   const h = fingerprint(store, encoded);
   if (st && st.h === h) return { outs: null, finish };
   const json = JSON.stringify(encoded);
-  const data = json.length > PACK_CHARS ? await packJson(json, blobs!) : encoded;
+  const data = encoder.encode(json).byteLength > PACK_BYTES ? await packJson(json, blobs!) : encoded;
   next = { s: 0, h, ...(keepBase(store, json) && !isLazy(store, key) && !hasBinary(raw) ? { b: json } : {}) };
   // 消息带上时间：存成大文件的云端也知道它是什么时候的（新设备只拉最近的）
   const createdAt = store === 'chatMessages' ? Number((raw as { createdAt?: unknown }).createdAt) : NaN;
   return {
-    outs: [{ rec: { ...wire(store, key), updatedAt: entry.at, deleted: false, data, base: st?.s ?? 0, ...(Number.isFinite(createdAt) ? { createdAt } : {}) }, size: Math.min(json.length, PACK_CHARS), applied: (seq) => applied.set(key, seq) }],
+    outs: [{ rec: { ...wire(store, key), updatedAt: entry.at, deleted: false, data, base: st?.s ?? 0, ...(Number.isFinite(createdAt) ? { createdAt } : {}) }, applied: (seq) => applied.set(key, seq) }],
     finish,
   };
 }
