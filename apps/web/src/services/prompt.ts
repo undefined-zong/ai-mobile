@@ -327,16 +327,16 @@ export function presetFor(character: Character | undefined): Preset | undefined 
   return useLibraryStore().chatPresetFor(character);
 }
 
-/** 这一轮用的是哪个用途的预设：主动消息 → 在场景页里一起做某件事（那件事的功能预设）→ 聊天（这个角色的对话预设）。场景只在场景页开着时有 */
+/** 这一轮的预设用途：明确指定 → 副对话 / 主动消息 → 任务所属用途 → 当前场景 → 对话。 */
 export type ChatPresetUse = PresetUseId | 'chat';
 
-export function presetForTurn(chat: Chat, character: Character, agent?: AgentRole, use?: PresetUseId): { preset: Preset | undefined; use: ChatPresetUse } {
+export function presetForTurn(chat: Chat, character: Character, agent?: AgentRole, use?: PresetUseId, task?: string): { preset: Preset | undefined; use: ChatPresetUse } {
   const lib = useLibraryStore();
   // 指定了用途（语音通话）：按那个用途选，不看场景
   if (use) return { preset: lib.presetForUse(use, character), use };
   if (agent === 'secondary') return { preset: lib.presetForUse('secondary', character), use: 'secondary' };
   if (agent === 'proactive') return { preset: lib.presetForUse('proactive', character), use: 'proactive' };
-  const scene = sceneUse(chat.currentScene);
+  const scene = (task ? lib.useForTask(task) : undefined) ?? sceneUse(chat.currentScene);
   if (scene) return { preset: lib.presetForUse(scene, character), use: scene };
   return { preset: lib.chatPresetFor(character), use: 'chat' };
 }
@@ -397,7 +397,7 @@ export interface ChatAssembleOptions {
    * input 是程序写的这一次的输入（只放数据，填进"场景任务"块；预设里没有这一块时也放在历史前）
    */
   task?: { name: string; input: string };
-  /** 指定按哪个用途选预设（语音通话用 call）；不给时按主动消息 / 场景 / 对话预设 */
+  /** 指定按哪个用途选预设（语音通话用 call）；不给时按功能角色 / 任务用途 / 场景 / 对话预设 */
   use?: PresetUseId;
   /** 重新生成的那条回复：沿用它原来用的记忆 */
   targetId?: string;
@@ -415,7 +415,7 @@ export interface ChatAssembleOptions {
  */
 export function assembleForChat(chat: Chat, character: Character, history: Message[], opts: ChatAssembleOptions = {}): ChatPrompt {
   const lib = useLibraryStore();
-  const { preset, use } = presetForTurn(chat, character, opts.agent, opts.use);
+  const { preset, use } = presetForTurn(chat, character, opts.agent, opts.use, opts.task?.name);
   if (!preset) throw new MissingPresetError(use === 'chat' ? '对话' : useLabel(use));
   const persona = personaOf(chat);
   const model = modelOf(opts.agent);

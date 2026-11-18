@@ -819,6 +819,17 @@ export const useLibraryStore = defineStore('library', () => {
     return presetById(choice);
   }
 
+  /**
+   * 任务属于哪个用途：从预设文件的触发条件和 defaultFor 读取，不依赖聊天里临时的场景状态。
+   * 这里只确定用途，实际预设仍由 presetForUse 按用户的选择取；多个用途共用的触发条件不决定用途。
+   */
+  function useForTask(task: string): PresetUseId | undefined {
+    const matches = new Set(SEEDS
+      .filter((s) => s.preset.blocks.some((b) => b.triggers?.includes(task)))
+      .flatMap((s) => s.defaultFor));
+    return matches.size === 1 ? [...matches][0] : undefined;
+  }
+
   function setUse(use: PresetUseId, id: string | null) {
     uses[use] = id;
   }
@@ -923,6 +934,7 @@ export const useLibraryStore = defineStore('library', () => {
     chatPresetFor,
     useChoice,
     presetForUse,
+    useForTask,
     setUse,
     usesOf,
     lorebookById,
