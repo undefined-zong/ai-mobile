@@ -1,4 +1,4 @@
-import type { Character } from '../types/character.ts';
+import type { PromptCardFields } from '../types/character.ts';
 import { characterPronoun } from '../pronouns.ts';
 import type { LoreTimedState, Lorebook } from '../types/lorebook.ts';
 import type { Preset, PromptBlock } from '../types/preset.ts';
@@ -36,7 +36,7 @@ export type GenerationType = 'normal' | 'continue' | 'impersonate' | 'swipe' | '
 
 export interface AssembleInput {
   preset: Preset;
-  character: Pick<Character, 'name' | 'card'> & { pronoun?: string };
+  character: { name: string; card: PromptCardFields; pronoun?: string };
   user: { name: string; description: string };
   lorebooks: Lorebook[];
   /** 聊天记录，从旧到新，最后一条通常是你刚发的 */

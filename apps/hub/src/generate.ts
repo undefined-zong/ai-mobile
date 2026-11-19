@@ -1,24 +1,9 @@
 import { AgentSystem, fromOpenAIBody } from '@app/ai';
 import {
   anniversaryLine, applyRegexScripts, assemblePrompt, buildChatRequest, estimateTokens, formatEnvironmentBlock, FREE_SCENE,
-  parseControlTags, substituteMacros,
+  parseControlTags, proactiveMessageText, substituteMacros,
   type Message, type MessagePart, type ProactiveContext, type ProactiveCredentials, type Touchpoint,
 } from '@app/shared';
-
-/** 发给云端模型的一条消息：文字（没有文字时是语音的转写、配图的描述），再加上你发的照片（识图看到的内容） */
-function partText(p: MessagePart): string {
-  if (p.type === 'voice') return p.transcript;
-  if (p.type === 'image' && !p.photo) return `[图片：${p.caption}]`;
-  if (p.type === 'chore') return p.status === 'done' ? `[家务：${p.name} 做完了]` : `[家务：${p.name} 说晚点再做（拖了 ${p.later ?? 1} 次）]`;
-  if (p.type === 'workout') return `[运动记录：${p.mode === 'plan' && p.plan ? `照计划练「${p.plan.title}」` : p.sport} ${Math.max(1, Math.round(p.durationSec / 60))} 分钟${p.kcal ? `，约 ${p.kcal} 千卡` : ''}]`;
-  return '';
-}
-
-function messageText(m: Message): string {
-  const base = m.text || m.parts.map(partText).join(' ');
-  const photos = m.parts.flatMap((p) => (p.type === 'image' && p.photo ? [p.seen ? `[照片：${p.seen}]` : '[照片]'] : []));
-  return [base.trim(), ...photos].filter(Boolean).join(' ');
-}
 
 export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: number, model: string) {
   const { character: c, chat, persona, preset, history } = context;
@@ -30,7 +15,7 @@ export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: n
   const time = substituteMacros('{{isodate}} {{time}}', macros);
   const quiet = `【主动消息】现在是 ${time}（${timeZone}），${persona.name}还没有来找你，由${c.name}先开口。这一次要做的事：${hint}。`;
   // 预设里"只改发给 AI 的"正则按深度改（0 = 最后一条），同 App 里发消息时
-  const live = history.filter((m) => !m.deleted).map((m) => ({ m, text: messageText(m) })).filter((x) => x.text);
+  const live = history.filter((m) => !m.deleted).map((m) => ({ m, text: proactiveMessageText(m) })).filter((x) => x.text);
   const result = assemblePrompt({
     character: c, preset, user: persona, lorebooks: context.lorebooks,
     history: live.map(({ m, text }, i) => {

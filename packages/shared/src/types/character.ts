@@ -34,6 +34,10 @@ export interface StCardFields {
   extra: Record<string, unknown>;
 }
 
+/** 拼提示词实际使用的角色卡字段；导出附件和界面配置不属于云端生成上下文。 */
+export type PromptCardFields = Pick<StCardFields,
+  'description' | 'personality' | 'scenario' | 'mesExample' | 'systemPrompt' | 'postHistoryInstructions' | 'characterVersion' | 'extensions'>;
+
 /** 主动消息的性格：决定频率（没有条数上限，来几次只看性格和打开了哪些时段） */
 export type ProactivePersonality = 'clingy' | 'balanced' | 'independent';
 

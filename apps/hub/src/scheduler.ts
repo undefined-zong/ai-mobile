@@ -106,7 +106,7 @@ async function fire(env: Env, point: PointRow, credentials: ProactiveCredentials
       return;
     }
     const serverHistory = await env.DB.prepare('SELECT data FROM messages WHERE character_id = ? ORDER BY created_at DESC LIMIT 200').bind(t.characterId).all<{ data: string }>();
-    const history = new Map(serverHistory.results.map((m) => { const v = JSON.parse(m.data) as Message; return [v.id, v] as const; }));
+    const history = new Map<string, ProactiveContext['history'][number]>(serverHistory.results.map((m) => { const v = JSON.parse(m.data) as Message; return [v.id, v] as const; }));
     // Client edits/read states win for the same message; cloud messages missing from the client remain.
     for (const m of context.history) history.set(m.id, m);
     context.history = [...history.values()].sort((a, b) => a.createdAt - b.createdAt);
