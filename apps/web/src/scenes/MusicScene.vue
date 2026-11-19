@@ -9,6 +9,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import { danmaku as demoDanmaku, songs as demoSongs } from '@/mock/music';
 import { services, type SongInfo, type SongList } from '@/services';
+import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseKind, type NoiseMix } from '@/services/ambience';
 import { extractId } from '@/services/music';
 import { isLiked as likedSong, musicLibrary, removeList as dropList, saveList, toggleLike as flipLike } from '@/services/musicLibrary';
 import {
@@ -27,6 +28,7 @@ import {
   seek,
   setVolume,
   toggle,
+  volumeAdjustable,
 } from '@/services/musicPlayer';
 import { personaOf } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
@@ -41,6 +43,7 @@ import { clock } from '@/utils/time';
  * - 歌词逐行滚动（带译文），点一行跳过去；
  * - 她按歌词发"弹幕"：每首歌开始时「陪伴 · 快速」按"一起听歌"预设的"批量写弹幕"一次写好几句，唱到那一行时出现，也记进聊天；
  * - 边听边跟她说一句，她回一句（可能用 [music:歌名-歌手] 推荐下一首，点一下就放）；
+ * - 右上角一列：音量（音乐的音量记在网易云的设置里，开着白噪音时一起调）、白噪音（本机合成，和歌叠着放，services/ambience.ts）；
  * - 去聊天、打电话时歌还在放；离开这件事时停。
  * 没填 Worker 地址时是示例歌曲（虚构的歌、原创占位歌词、不出声）。
  */
@@ -67,7 +70,6 @@ const progress = computed({
 const isDemoSong = (s: SongInfo) => demoSongs.some((d) => d.id === s.id);
 
 onMounted(() => {
-  setVolume(svc.netease.volume);
   if (real.value && player.queue.some(isDemoSong)) clearQueue();
   // 还没有在放的：演示时把示例歌放进列表；带着 ?q= 进来（聊天里她分享的歌）就搜这首放
   const q = typeof route.query.q === 'string' ? route.query.q.trim() : '';
@@ -407,6 +409,65 @@ const MODE = {
   shuffle: { icon: 'i-lucide-shuffle', label: '随机播放' },
 } as const;
 
+// —— 右上角一列：音量、白噪音（同出逃、戳戳乐：竖着排在顶栏下面，面板在左边展开，同一时间只开一个） ——
+const pop = ref<'volume' | 'noise' | null>(null);
+function togglePop(p: 'volume' | 'noise') {
+  pop.value = pop.value === p ? null : p;
+}
+
+/** 音乐的音量 0–100：记在网易云的设置里（跟着同步），进来就按它放 */
+const musicVolume = computed({
+  get: () => Math.round(svc.netease.volume * 100),
+  set: (v: number) => (svc.netease.volume = v / 100),
+});
+watch(() => svc.netease.volume, (v) => setVolume(v), { immediate: true });
+const volumeIcon = computed(() => {
+  // 调不了音量的设备上歌按音量键的音量放，设置里记的不算
+  const v = volumeAdjustable.value ? svc.netease.volume : 1;
+  return v === 0 ? 'i-lucide-volume-x' : v < 0.5 ? 'i-lucide-volume-1' : 'i-lucide-volume-2';
+});
+
+/** 白噪音：选哪种、多响记在本机；开没开不记（浏览器要点一下才让出声）。第一次用是雨声，比歌小声 */
+const NOISE_SAVE = 'ai-mobile:music:noise';
+const NOISE_DEFAULT: { kind: NoiseKind; volume: number } = { kind: 'rain', volume: 40 };
+function readNoise(): { kind: NoiseKind; volume: number } {
+  try {
+    const v = JSON.parse(localStorage.getItem(NOISE_SAVE) ?? 'null') as { kind?: string; volume?: number } | null;
+    return {
+      kind: NOISE_KINDS.find((k) => k === v?.kind) ?? NOISE_DEFAULT.kind,
+      volume: typeof v?.volume === 'number' ? Math.max(0, Math.min(100, v.volume)) : NOISE_DEFAULT.volume,
+    };
+  } catch {
+    return { ...NOISE_DEFAULT };
+  }
+}
+const savedNoise = readNoise();
+const noise = ref<NoiseKind>(savedNoise.kind);
+const noiseVolume = ref(savedNoise.volume);
+watch([noise, noiseVolume], ([kind, volume]) => {
+  try {
+    localStorage.setItem(NOISE_SAVE, JSON.stringify({ kind, volume }));
+  } catch {
+    // 存不了：下次用默认的
+  }
+});
+const noisePlaying = computed(() => ambience.state.playing && !ambience.state.fading);
+const mixOf = (kind: NoiseKind, v: number) => Object.fromEntries(NOISE_KINDS.map((k) => [k, k === kind ? v : 0])) as NoiseMix;
+/** 在点击里调用（浏览器只允许点了以后出声）；null 是关掉 */
+function pickNoise(kind: NoiseKind | null) {
+  if (!kind) {
+    ambience.stop();
+    return;
+  }
+  noise.value = kind;
+  void ambience.start(mixOf(kind, noiseVolume.value));
+}
+watch(noiseVolume, (v) => {
+  if (noisePlaying.value) ambience.setMix(mixOf(noise.value, v));
+});
+// 离开这一页歌就停了（chat.leaveScene），白噪音也停
+onBeforeUnmount(() => ambience.stop());
+
 const line = computed(() => {
   if (talking.value) return herLine.value;
   if (comment.value) return '';
@@ -422,7 +483,7 @@ const subtitle = computed(() => {
 </script>
 
 <template>
-  <SceneShell scene-id="music" hide-figure :line="line" :typing="talking">
+  <SceneShell class="music-shell" scene-id="music" hide-figure :line="line" :typing="talking">
     <template #actions>
       <button class="pill-btn" aria-label="搜歌" @click="openSearch"><span class="i-lucide-search" /></button>
       <button class="pill-btn" aria-label="播放列表和我们的歌单" @click="listOpen = true"><span class="i-lucide-list-music" /></button>
@@ -440,6 +501,52 @@ const subtitle = computed(() => {
             <span>{{ comment.text }}</span>
           </div>
         </Transition>
+      </div>
+
+      <!-- 右上角一列：音量、白噪音，竖着排在顶栏下面；面板在这一列左边展开，点空白处收起 -->
+      <div class="side-tools">
+        <button type="button" class="pill-btn" :aria-expanded="pop === 'volume'" aria-label="音量" data-testid="music-volume-btn" @click="togglePop('volume')">
+          <span :class="volumeIcon" />
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          :class="{ on: noisePlaying }"
+          :aria-expanded="pop === 'noise'"
+          :aria-label="`白噪音：${noisePlaying ? NOISE_LABEL[noise].label : '关'}`"
+          data-testid="music-noise-btn"
+          @click="togglePop('noise')"
+        >
+          <span :class="ambience.state.loading ? 'i-lucide-loader-circle spin-icon' : noisePlaying ? NOISE_LABEL[noise].icon : 'i-lucide-audio-lines'" />
+        </button>
+      </div>
+      <div v-if="pop" class="pop-catcher" @click="pop = null" />
+      <div v-if="pop === 'volume'" class="side-pop" role="dialog" aria-label="音量" data-testid="music-volume">
+        <div class="mix-row">
+          <span class="i-lucide-music-2 text-ink-3" />
+          <span class="mix-label">音乐</span>
+          <van-slider v-if="volumeAdjustable" v-model="musicVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="音乐音量" />
+          <span v-else class="flex-1 min-w-0 text-[12px] text-ink-3">这台设备不让网页调音乐的音量，用侧面的音量键</span>
+        </div>
+        <div v-if="noisePlaying" class="mix-row">
+          <span :class="NOISE_LABEL[noise].icon" class="text-ink-3" />
+          <span class="mix-label">{{ NOISE_LABEL[noise].label }}</span>
+          <van-slider v-model="noiseVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="白噪音音量" />
+        </div>
+      </div>
+      <div v-if="pop === 'noise'" class="side-pop" role="dialog" aria-label="白噪音" data-testid="music-noise">
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" class="chip" :class="{ on: !noisePlaying }" :aria-pressed="!noisePlaying" @click="pickNoise(null)"><span class="i-lucide-volume-x" />关</button>
+          <button v-for="k in NOISE_KINDS" :key="k" type="button" class="chip" :class="{ on: noisePlaying && noise === k }" :aria-pressed="noisePlaying && noise === k" :data-noise="k" @click="pickNoise(k)">
+            <span :class="NOISE_LABEL[k].icon" />{{ NOISE_LABEL[k].label }}
+          </button>
+        </div>
+        <div class="mix-row mt-2">
+          <span class="i-lucide-volume-2 text-ink-3" />
+          <van-slider v-model="noiseVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="白噪音音量" />
+        </div>
+        <p v-if="ambience.state.error" class="text-[12px] text-bad mt-2 mb-0">{{ ambience.state.error }}</p>
+        <p class="text-[11.5px] text-ink-3 mt-2 mb-0">和歌叠着放；在这台设备上合成，不联网、不用流量</p>
       </div>
     </template>
 
@@ -643,6 +750,75 @@ const subtitle = computed(() => {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   font-size: 17px;
+}
+.pill-btn.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+/* 她的那句话给右上角一列让出位置（按钮宽 38，两边各留 10） */
+.music-shell {
+  --companion-right: 58px;
+}
+.side-tools {
+  position: absolute;
+  /* 比点空白处收起面板的那一层高：面板开着时再点一下按钮就收起 */
+  z-index: 10;
+  top: calc(var(--safe-top) + 56px);
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 盖住她的那句话和底下的面板，不盖顶栏和这一列 */
+.pop-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+}
+.side-pop {
+  position: absolute;
+  z-index: 11;
+  top: calc(var(--safe-top) + 56px);
+  left: 10px;
+  right: 58px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: var(--shadow);
+}
+.mix-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 4px;
+}
+.mix-label {
+  flex-shrink: 0;
+  width: 2.4em;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chip.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  outline: 1px solid var(--accent-line);
 }
 .vinyl-wrap {
   position: absolute;

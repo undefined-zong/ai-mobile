@@ -1,5 +1,5 @@
 import { lrcIndexAt, parseLrc, type LrcLine } from '@app/shared';
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { playbackSession } from './audio';
 import { services } from './index';
 import type { MusicClient, SongInfo } from './types';
@@ -67,6 +67,20 @@ export interface PlayerOptions {
 const DUCK_LEVEL = 0.35;
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/**
+ * 网页能不能改 <audio> 的音量：iPhone、iPad 不让，音量只归侧面的按键管（改了读出来是新值，下一刻又变回去，所以隔一下再看一次）。
+ * 调不了的设备上界面不放音乐的音量滑块，提示用音量键
+ */
+export const volumeAdjustable = ref(true);
+try {
+  const probe = new Audio();
+  probe.volume = 0.5;
+  if (probe.volume === 0.5) setTimeout(() => (volumeAdjustable.value = probe.volume === 0.5), 0);
+  else volumeAdjustable.value = false;
+} catch {
+  volumeAdjustable.value = false;
+}
 
 function readSaved(key: string, fallbackVolume: number): Pick<PlayerState, 'queue' | 'index' | 'mode' | 'source' | 'volume'> {
   try {
