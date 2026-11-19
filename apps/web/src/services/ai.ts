@@ -16,7 +16,8 @@ import { getLocation, hasOwnWorld, imageAppearance, moodOf, slotAt, TIME_OF_DAY_
 import { showToast } from 'vant';
 import { putAsset } from './assets';
 import { playBytes, stopAudio } from './audio';
-import { MissingPresetError } from './prompt';
+import { personaVibes } from './personaVibe';
+import { MissingPresetError, personaOf } from './prompt';
 import type {
   EmbeddingClient,
   IllustrateOptions,
@@ -34,6 +35,7 @@ import type {
 import { DEMO_SIDESTORIES, genericSidestory } from '@/mock/sidestories';
 import { useAiStore } from '@/stores/ai';
 import { useCharacterStore } from '@/stores/characters';
+import { useChatStore } from '@/stores/chat';
 import { useLibraryStore } from '@/stores/library';
 import { useMemoryStore } from '@/stores/memory';
 import { useRhythmStore } from '@/stores/rhythm';
@@ -267,18 +269,23 @@ export class RoutedImage implements ImageClient {
     const weatherStore = useWeatherStore();
     const atReal = getLocation(c?.locationId)?.area === 'real';
     const sky = req.subject || atReal || !c ? weatherStore.mine : weatherStore.forCharacter(c);
+    // "你"：这条聊天用的人设（预设里的 {{user}}）；入画要填了外观 tags
+    const persona = c && !free ? personaOf(useChatStore().chatOfCharacter(c.id)) : null;
+    const looks = persona?.image;
+    const withUser = persona && req.withUser && !req.subject && looks?.appearanceTags.trim() ? { name: persona.name, appearanceTags: looks.appearanceTags.trim(), negativeTags: looks.negativeTags.trim() } : null;
     const input: ImagePromptInput = {
       mode: req.mode,
       moment: req.moment,
-      // 长相：同人是角色 tag + 作品 tag（+ 补充的外观），原创是外观 tags；画"你"时按你给的
+      // 长相：同人是角色 tag + 作品 tag（+ 补充的外观），原创是外观 tags；画"你"时按人设里的
       // 自由画：不画她（名字留给预设里的 {{char}}，长相、衣服都不给）
       character: free || !c
         ? { name: c?.name ?? req.authorName ?? '', appearanceTags: '', outfit: null }
-        : req.subject
-          ? { name: req.subject.name, appearanceTags: req.subject.appearanceTags, outfit: null }
+        : req.subject && persona
+          ? { name: persona.name, appearanceTags: looks?.appearanceTags.trim() ?? '', negativeTags: looks?.negativeTags.trim(), outfit: null }
           : { name: c.name, appearanceTags: imageAppearance(c), negativeTags: c.negativeTags, pronoun: c.pronoun, outfit: outfit ?? null },
       lockOutfit: !!req.lockOutfit && !!outfit?.tags,
-      ...(req.subject && c ? { companionName: c.name } : {}),
+      ...(req.subject && c ? { companionName: c.name } : persona ? { companionName: persona.name } : {}),
+      ...(withUser ? { withUser } : {}),
       ...(req.size ? { size: req.size } : {}),
       caption: req.caption,
       scene: free || !c
@@ -293,7 +300,14 @@ export class RoutedImage implements ImageClient {
     };
     // 写 tags 用这个用途的生图预设：配图（默认），一起做事时用这个场景的（没单独选时跟随配图）；一个生图预设都没有时直接用外观 tags + 画面描述
     const preset = useLibraryStore().presetForUse(req.use ?? 'image', c) ?? null;
-    const r = await illustrate(useAiStore().system, input, { signal: opts.signal, onStage: opts.onStage, seed: req.seed, model: req.model, preset });
+    const r = await illustrate(useAiStore().system, input, {
+      signal: opts.signal,
+      onStage: opts.onStage,
+      seed: req.seed,
+      model: req.model,
+      preset,
+      ...(persona && (withUser || req.subject) ? { userVibes: () => personaVibes(persona, { model: req.model, signal: opts.signal }), userIsSubject: !!req.subject } : {}),
+    });
     const img = r.image.images[0];
     const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;
     if (!assetKey && !img?.url) throw new AiError('empty', '生图接口返回了，但里面没有图片', { detail: JSON.stringify(r.image).slice(0, 4000) });

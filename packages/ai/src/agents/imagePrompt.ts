@@ -56,8 +56,11 @@ export interface ImagePromptInput {
   };
   /** 最近几句对话（帮助理解画面），纯文本 */
   recent?: string[];
-  /** 画面里有没有"你"（两个人同框时用 V4 的多人提示词） */
-  withUser?: { name: string; appearanceTags?: string } | null;
+  /**
+   * "你"可以入画（{{user}} 的长相按人设的外观 tags）：画不画、画成单人还是双人由生图预设定，
+   * 预设里"{{user}}可以入画"那一块（程序填充 imageCharacters）发了才告诉模型；两个人同框时用 V4 的多人提示词
+   */
+  withUser?: { name: string; appearanceTags?: string; negativeTags?: string } | null;
   /**
    * 画幅由程序定（例如陪伴学习分上下两屏时，半屏接近方形就画方图）：告诉模型按这个画幅构图，出图时也按它，不看模型写的 size
    */
@@ -90,15 +93,19 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
   const outfit = c.outfit;
   const locked = lockedOutfit(input);
   return {
-    // 两个人同框才要的输出字段（解析时按 characters 读每个人的动作），其余时候不发
+    // "你"可以入画时：你的长相和两个人同框时的输出字段（解析时按 characters 读每个人的动作）；单人图不写 characters
     imageCharacters:
       withUser && mode === 'scene'
-        ? `画面里有两个人：tags 只写整体画面（人数、构图、场景、光线），再加一个 characters 字段分别写每个人：\n"characters": [{"who": "char", "tags": "${c.name}的表情、动作、服装", "position": "left|right|center"}, {"who": "user", "tags": "${withUser.name}的表情、动作、服装", "position": "left|right|center"}]`
+        ? [
+            `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
+            `画${c.name}和${withUser.name}两个人同框时：tags 只写整体画面（人数、构图、场景、光线），再加一个 characters 字段分别写每个人：`,
+            `"characters": [{"who": "char", "tags": "${c.name}的表情、动作、服装", "position": "left|right|center"}, {"who": "user", "tags": "${withUser.name}的表情、动作、服装", "position": "left|right|center"}]`,
+            `只画${c.name}一个人时不写 characters。`,
+          ].join('\n')
         : '',
     imageSubject: [
       `角色：${c.name}${c.pronoun ? `（${c.pronoun}）` : ''}；外观 tags（程序会加，不要重复）：${c.appearanceTags || '（无）'}`,
       locked && outfit ? `服装：${outfit.name}；服装 tags（程序会加在外观后面，不要重复，也不要另写别的衣服）：${locked}` : outfit ? `${c.name}今天穿：${outfit.name}（${outfit.tags}）` : '',
-      withUser ? `画面里还有：${withUser.name}${withUser.appearanceTags ? `；外观 tags：${withUser.appearanceTags}` : ''}` : '',
     ]
       .filter(Boolean)
       .join('\n'),
@@ -182,9 +189,14 @@ export function parseImagePrompt(value: unknown): ImagePromptOutput | null {
 
 const CENTERS = { left: { x: 0.3, y: 0.5 }, right: { x: 0.7, y: 0.5 }, center: { x: 0.5, y: 0.5 } } as const;
 
+/** 模型画了两个人同框（"你"可以入画、输出里有"你"的那一份） */
+export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput): boolean {
+  return !!input.withUser && input.mode !== 'background' && !!out.characters?.some((c) => c.who === 'user');
+}
+
 /**
  * 智能体的输出 → 生图请求：单人时人数 tags 在最前面，接着是她的长相（同人是角色 tag + 作品 tag）、锁定的衣服，再是画面；
- * 两个人时整体 tags 做基础提示词，每个人的外观 + 动作做 V4 的人物提示词，按左右位置放
+ * 两个人时整体 tags 做基础提示词（人数在这里），每个人的外观（去掉人数 tags）+ 动作做 V4 的人物提示词，按左右位置放
  */
 export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, seed?: number): ImageRequest {
   const size: ImageSize = input.size ?? out.size;
@@ -194,14 +206,16 @@ export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, 
   }
   const negative = joinTags(input.character.negativeTags, out.negative);
   const outfit = lockedOutfit(input);
-  if (out.characters?.length && input.withUser) {
+  if (hasUserInFrame(out, input)) {
+    const looks = (tags: string | undefined) => leadCountTags(tags ?? '').rest;
     return {
       prompt: out.tags,
       negative,
       size,
       seed,
-      characters: out.characters.map((c) => ({
-        prompt: c.who === 'char' ? joinTags(input.character.appearanceTags, outfit, c.tags) : joinTags(input.withUser?.appearanceTags, c.tags),
+      characters: (out.characters ?? []).map((c) => ({
+        prompt: c.who === 'char' ? joinTags(looks(input.character.appearanceTags), outfit, c.tags) : joinTags(looks(input.withUser?.appearanceTags), c.tags),
+        ...(c.who === 'user' && input.withUser?.negativeTags ? { negative: input.withUser.negativeTags } : {}),
         center: CENTERS[c.position ?? 'center'],
       })),
     };

@@ -1,11 +1,11 @@
-import { readPngText } from '@app/shared';
+import { base64Encode, readPngText } from '@app/shared';
 import { joinUrl, transportOf, trimUrl, type Endpoint } from '../core/endpoint.ts';
 import { AiError, httpError, responseContext } from '../core/errors.ts';
 import { readBytes, readText, request, sleep } from '../core/http.ts';
 import { randomSeed } from '../core/util.ts';
 import { extractImage, sniffImageMime } from './extract.ts';
-import { isNovelaiV5, joinTags, NOVELAI_QUALITY_TAGS, NOVELAI_UC_PRESETS, novelaiGeneration, novelaiInpaintModel, resolveSize, supportsCharacterReference } from './presets.ts';
-import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult } from './types.ts';
+import { isNovelaiV5, joinTags, NOVELAI_DEFAULT_MODEL, NOVELAI_QUALITY_TAGS, NOVELAI_UC_PRESETS, novelaiGeneration, novelaiInpaintModel, resolveSize, supportsCharacterReference, supportsVibeTransfer } from './presets.ts';
+import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeEncodeRequest } from './types.ts';
 import { isZip, unzipFirst } from './zip.ts';
 
 /**
@@ -16,6 +16,7 @@ import { isZip, unzipFirst } from './zip.ts';
  *   V5 参数版本 4、straight_alpha（网页版这么发：透明背景存成不预乘的 alpha，PNG 本来就要这样）；
  * - 照着图改（设计文档 §10.7）：图生图 action img2img；局部重绘 action infill（遮罩白色重画，用重绘模型，框外原样贴回）；
  *   精准参考 director_reference_*（只有 V4.5）；字段对照社区客户端（novelai-python、ComfyUI 的几个 NovelAI 节点）；
+ * - Vibe Transfer（V4 起）：reference_image_multiple 放 /ai/encode-vibe 编码好的结果，强度、信息提取量一一对应（见 novelaiEncodeVibe）；
  * - 质量标签和 UC 预设默认不加（同 SleepTogether / SillyTavern：qualityToggle false，质量词写在生图风格的前缀里），可以打开；
  * - Variety Boost 按画面大小算 skip_cfg_above_sigma（同 SillyTavern）；
  * - 返回可能是 zip、直接的图片，公益站也可能回 JSON（图片 base64 或链接），都认；
@@ -32,11 +33,15 @@ const CENTER = { x: 0.5, y: 0.5 };
 export function buildNovelaiPayload(baseModel: string, req: ImageRequest): { body: Record<string, unknown>; prompt: string; negative: string; seed: number } {
   const src = req.source;
   const refs = req.references ?? [];
+  const vibes = req.vibes ?? [];
   const infill = !!src?.mask;
   // 局部重绘用这个模型的重绘版；参数（质量词、提示词结构）还是按原模型
   const model = infill ? (src?.inpaintModel || novelaiInpaintModel(baseModel)) : baseModel;
   if (refs.length && !supportsCharacterReference(baseModel)) {
     throw new AiError('unsupported', `精准参考只有 V4.5 能用，现在的模型是 ${baseModel}`);
+  }
+  if (vibes.length && !supportsVibeTransfer(baseModel)) {
+    throw new AiError('unsupported', `Vibe Transfer 只有 V4、V4.5 能用，现在的模型是 ${baseModel}`);
   }
   const gen = novelaiGeneration(baseModel);
   const { width, height } = resolveSize(req.size);
@@ -135,6 +140,11 @@ export function buildNovelaiPayload(baseModel: string, req: ImageRequest): { bod
     // 网页版的"保真度"：接口里写的是 1 − 保真度
     parameters.director_reference_secondary_strength_values = refs.map((r) => 1 - clamp01(r.fidelity ?? 1));
   }
+  if (vibes.length) {
+    parameters.reference_image_multiple = vibes.map((v) => v.encoding);
+    parameters.reference_information_extracted_multiple = vibes.map((v) => clamp01(v.informationExtracted));
+    parameters.reference_strength_multiple = vibes.map((v) => clamp01(v.strength));
+  }
   Object.assign(parameters, req.extra ?? {});
   return { body: { input: prompt, model, action, parameters }, prompt, negative, seed };
 }
@@ -196,8 +206,8 @@ function novelaiBase(ep: Endpoint): string {
   return trimUrl(ep.baseUrl || NOVELAI_DEFAULT_BASE).replace(/\/ai\/(?:generate|augment)-image$/i, '');
 }
 
-/** POST 一个 NovelAI 的图片接口；429（同一时间只能生成一张）等两三秒再试，最多两次 */
-async function postNovelai(ep: Endpoint, path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<GeneratedImage> {
+/** POST 一个 NovelAI 的接口；429（同一时间只能生成一张）等两三秒再试，最多两次 */
+async function sendNovelai(ep: Endpoint, path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   const url = joinUrl(novelaiBase(ep), path);
   const init = {
     method: 'POST',
@@ -217,11 +227,16 @@ async function postNovelai(ep: Endpoint, path: string, body: Record<string, unkn
     res = await request(transportOf(ep), ep.name, url, init);
   }
   if (!res.ok) throw httpError(ep.name, res.status, await readText(res), res);
-  return readImageResponse(ep, res, signal);
+  return res;
+}
+
+/** POST 一个 NovelAI 的图片接口，读出返回的图 */
+async function postNovelai(ep: Endpoint, path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<GeneratedImage> {
+  return readImageResponse(ep, await sendNovelai(ep, path, body, signal), signal);
 }
 
 export async function novelaiGenerate(ep: Endpoint, req: ImageRequest): Promise<ImageResult> {
-  const { body, prompt, negative, seed } = buildNovelaiPayload(ep.model || 'nai-diffusion-4-5-full', req);
+  const { body, prompt, negative, seed } = buildNovelaiPayload(ep.model || NOVELAI_DEFAULT_MODEL, req);
   const image = await postNovelai(ep, 'ai/generate-image', body, req.signal);
   return {
     images: [image],
@@ -255,6 +270,19 @@ export function buildAugmentPayload(req: AugmentRequest): Record<string, unknown
 
 export async function novelaiAugment(ep: Endpoint, req: AugmentRequest): Promise<GeneratedImage> {
   return postNovelai(ep, 'ai/augment-image', buildAugmentPayload(req), req.signal);
+}
+
+/**
+ * Vibe 编码：POST {站点}/ai/encode-vibe（同网页版；字段对照 novelai-python 的 encode_vibe 和 ComfyUI 的 NovelAI 节点），
+ * 返回的二进制就是编码，出图时 base64 放进 reference_image_multiple。每编码一次花 2 点，编码只对这个模型、这个信息提取量有效
+ */
+export async function novelaiEncodeVibe(ep: Endpoint, req: VibeEncodeRequest): Promise<{ encoding: string; model: string }> {
+  const model = req.model || ep.model || NOVELAI_DEFAULT_MODEL;
+  if (!supportsVibeTransfer(model)) throw new AiError('unsupported', `Vibe Transfer 只有 V4、V4.5 能用，现在的模型是 ${model}`);
+  const res = await sendNovelai(ep, 'ai/encode-vibe', { image: req.image, information_extracted: clamp01(req.informationExtracted), model }, req.signal);
+  const bytes = await readBytes(res);
+  if (!bytes.length) throw new AiError('empty', `${ep.name} 返回了空的 Vibe 编码`, { retryable: true });
+  return { encoding: base64Encode(bytes), model };
 }
 
 export interface NovelaiSubscription {

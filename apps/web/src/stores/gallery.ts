@@ -1,4 +1,4 @@
-import { errorReport, errorText, isAbortError } from '@app/ai';
+import { errorReport, errorText, isAbortError, NOVELAI_DEFAULT_MODEL } from '@app/ai';
 import { getLocation, momentLabel, rhythmDate, sceneImageUse } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -41,6 +41,8 @@ export interface GalleryItem {
   size?: ImageShape;
   /** 画的时候没锁今天那身衣服（心跳）；以前的图没记，按场景算 */
   lockOutfit?: boolean;
+  /** 画的时候"你"可以入画（约会）：重画时照旧 */
+  withUser?: boolean;
   /** 节律日 */
   day: string;
   at: number;
@@ -62,6 +64,8 @@ export interface SceneDrawRequest {
   size?: ImageShape;
   /** 衣服锁成节律里今天这一套（默认锁）；心跳里不锁，衣服按画面写 */
   lockOutfit?: boolean;
+  /** "你"可以入画（按人设的外观 tags、立绘的 Vibe）；画不画你、单人还是双人由这个场景的生图预设定 */
+  withUser?: boolean;
 }
 
 /** 图库里这张图的画幅（以前没记的都是竖图） */
@@ -140,7 +144,7 @@ export const useGalleryStore = defineStore('gallery', () => {
     if (!s.live) return { ok: false, reason: `生图 API 还没接通：${s.reason}` };
     const route = ai.effectiveRoute('image');
     if (route.api?.channel === 'novelai') {
-      const model = route.api.model || 'nai-diffusion-4-5-full';
+      const model = route.api.model || NOVELAI_DEFAULT_MODEL;
       if (/nai-diffusion-5/.test(model)) return { ok: false, reason: 'V5 有用量上限，自动画只用 V4.5 或更早的模型（点"看一眼"照样能画）' };
       if ((route.imageStyle?.steps ?? 28) > 28) return { ok: false, reason: '步数超过 28 会扣点，自动画先停着（API 设置 → 生图 → 步数改到 28 以内）' };
     }
@@ -176,6 +180,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       outfit: r.outfit,
       ...(req.size ? { size: req.size } : {}),
       ...(req.lockOutfit === false ? { lockOutfit: false } : {}),
+      ...(req.withUser ? { withUser: true } : {}),
       day: rhythmDate(new Date()),
       at: Date.now(),
     };
@@ -193,6 +198,7 @@ export const useGalleryStore = defineStore('gallery', () => {
     const r = await paint({
       characterId: before.characterId, sceneId: before.sceneId, moment: before.moment, caption: before.caption, priority: 'user',
       locationId: before.locationId, ...(before.size ? { size: before.size } : {}), lockOutfit: before.lockOutfit ?? before.sceneId !== 'heart',
+      ...(before.withUser ? { withUser: true } : {}),
     });
     if (!r.ok) return r;
     // await 之后按 id 重新取（期间可能被删掉了）
@@ -232,6 +238,7 @@ export const useGalleryStore = defineStore('gallery', () => {
           expression: req.expression,
           recent: req.recent,
           ...(req.size ? { size: req.size } : {}),
+          ...(req.withUser ? { withUser: true } : {}),
         },
         {
           priority: req.priority,

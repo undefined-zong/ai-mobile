@@ -30,6 +30,7 @@ import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { shapeOf, useGalleryStore, type GalleryItem, type ImageShape } from '@/stores/gallery';
+import { usePersonaStore } from '@/stores/personas';
 import { useRealWorldStore } from '@/stores/realworld';
 import { useRhythmStore } from '@/stores/rhythm';
 import { uid } from '@/utils/id';
@@ -114,6 +115,7 @@ const location = inject(SCENE_LOCATION, ref(null));
 
 const her = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
 const chatId = computed(() => chat.chatOfCharacter(her.value.id)?.id ?? '');
+const personas = usePersonaStore();
 const persona = computed(() => personaOf(chat.chatById(chatId.value)));
 const userName = computed(() => persona.value.name);
 /** 她今天手头的事：节律排的（没有节律时用她的世界里写的） */
@@ -156,7 +158,8 @@ interface Saved {
   countdownMin: number;
   noise: NoiseKind | null;
   volume: number;
-  mine: { source: MineSource | null; photoKey: string | null; drawn: MineArt | null; tags: Record<string, string> };
+  /** tags：以前按人设存在这里的外观 tags（已经挪进人设 → 生图，读进来时搬过去） */
+  mine: { source: MineSource | null; photoKey: string | null; drawn: MineArt | null; tags?: Record<string, string> };
   /** 一起专注的圆形计时器被拖到哪（圆心占画面宽高的比例）；没拖过就在正中 */
   ringAt?: { x: number; y: number } | null;
 }
@@ -184,19 +187,26 @@ const mine = reactive<Saved['mine']>({
   source: saved.mine?.source ?? null,
   photoKey: saved.mine?.photoKey ?? null,
   drawn: saved.mine?.drawn ?? null,
-  tags: { ...(saved.mine?.tags ?? {}) },
 });
-watch(
-  [focusMode, timerKind, length, plan, countdownMin, noise, volume, () => JSON.stringify(mine), ringAt],
-  () => {
-    const s: Saved = { focus: focusMode.value, timer: timerKind.value, length: length.value, plan: plan.value, countdownMin: countdownMin.value, noise: noise.value, volume: volume.value, mine, ringAt: ringAt.value };
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-    } catch {
-      // 存不下就算了：这次打开仍然有效
-    }
-  },
-);
+function persist() {
+  const s: Saved = { focus: focusMode.value, timer: timerKind.value, length: length.value, plan: plan.value, countdownMin: countdownMin.value, noise: noise.value, volume: volume.value, mine, ringAt: ringAt.value };
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+  } catch {
+    // 存不下就算了：这次打开仍然有效
+  }
+}
+// 以前在这里填的外观 tags 搬进人设（人设里还没填的才搬），搬完马上存一次，不再留旧的
+if (saved.mine?.tags) {
+  for (const [id, tags] of Object.entries(saved.mine.tags)) {
+    const p = personas.byId(id);
+    if (!p || !tags.trim() || p.image?.appearanceTags.trim()) continue;
+    personas.image(p).appearanceTags = tags.trim();
+    personas.touch(p);
+  }
+  persist();
+}
+watch([focusMode, timerKind, length, plan, countdownMin, noise, volume, () => JSON.stringify(mine), ringAt], persist);
 
 // —— 开场 ——
 const phase = ref<Phase>('setup');
@@ -614,9 +624,10 @@ const mineOpen = ref(false);
 const mineDrawing = ref<string | null>(null);
 const mineIssue = ref<{ text: string; settings: boolean } | null>(null);
 const mineTags = computed({
-  get: () => mine.tags[persona.value.id] ?? '',
+  get: () => persona.value.image?.appearanceTags ?? '',
   set: (v: string) => {
-    mine.tags[persona.value.id] = v;
+    personas.image(persona.value).appearanceTags = v;
+    personas.touch(persona.value);
   },
 });
 /** 按现在这个人设画过的那张 */
@@ -670,7 +681,7 @@ async function drawMine(priority: 'user' | 'auto') {
         sceneId: 'study',
         place: yourPlace.value || '家',
         size,
-        subject: { name: userName.value, appearanceTags: mineTags.value.trim() },
+        subject: 'user',
       },
       { priority, onStage: (s) => (mineDrawing.value = s === 'queued' ? '排队等前一张画完' : s === 'prompt' ? '正在写 tags' : '正在画') },
     );
@@ -1422,7 +1433,7 @@ const herPct = computed(() => Math.round(herProgress.value));
                 <PersonaAvatar :persona="persona" :size="32" />
                 <span class="flex-1 min-w-0 text-[13px] text-ink-2">按「{{ persona.name }}」的人设：{{ persona.description || '（人设还没写描述）' }}</span>
               </div>
-              <label class="field-label" for="mine-tags">你的外观 tags（可以不填，例如 1boy, short hair, glasses）</label>
+              <label class="field-label" for="mine-tags">你的外观 tags（可以不填，例如 1boy, short hair, glasses；和"我的人设 → 生图"里是同一份）</label>
               <input id="mine-tags" v-model="mineTags" class="input" autocapitalize="off" spellcheck="false" />
               <div v-if="mineArt" class="mine-preview"><AssetImg :asset-key="mineArt.assetKey" :url="mineArt.url" :alt="mineArt.title" /></div>
               <div class="flex items-center gap-3 mt-3">

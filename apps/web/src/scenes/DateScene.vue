@@ -25,6 +25,7 @@ import { uid } from '@/utils/id';
  * 边生成边按行翻页（（旁白）和「台词」各一拍，按标签的位置换表情）；每段结尾四个选项：顺着、逆着、皮一下、暧昧，都不满意可以自己说。
  * 想约多久约多久，点"结束约会"她说最后一段。画图用"生图 · 约会"：到达时画一张（今天同一个地方画过的不再画，进场先显示立绘），
  * 她写了 [cg:] 的心动时刻画一张（隔几段才画），结束时画一张留念，也可以自己点"拍一张"；画好的铺满整屏。
+ * 你可以入画（人设 → 生图里填了外观 tags）：到达只画她一个人，之后单人还是两个人同框由"生图 · 约会"预设按画面定，同框时带上你立绘的 Vibe。
  * 结束（或者直接离开）时把"约会回忆"卡片发进聊天：走了几段、每种回法选了几次、她最后说的话、这次画的图。
  */
 const app = useAppStore();
@@ -403,6 +404,7 @@ async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority:
     expression: chars.expression[her.value.id],
     recent: chatId.value ? chat.recentLines(chatId.value, 6) : [],
     size: 'portrait',
+    withUser: true,
   });
   if (!r.ok) {
     if (!r.busy) artIssue.value = { text: `没画出来：${r.reason}`, settings: /没接通/.test(r.reason) };

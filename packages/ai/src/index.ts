@@ -36,12 +36,13 @@ export { sniffAudioMime } from './tts/providers.ts';
 export { transcribeAudio, canTranscribe, type SttRequest } from './stt/client.ts';
 
 export * from './image/types.ts';
-export { augmentImage, generateImage, canDraw, canEditImage } from './image/client.ts';
+export { augmentImage, encodeVibe, generateImage, canDraw, canEditImage, canVibe } from './image/client.ts';
 export { buildAugmentPayload, buildNovelaiPayload, novelaiSubscription, varietySigma, type NovelaiSubscription } from './image/novelai.ts';
 export {
   IMAGE_SIZES,
   NOVELAI_EMOTION_LEVELS,
   NOVELAI_EMOTIONS,
+  NOVELAI_DEFAULT_MODEL,
   NOVELAI_MODELS,
   NOVELAI_REFERENCE_CANVASES,
   NOVELAI_SAMPLERS,
@@ -52,6 +53,7 @@ export {
   novelaiInpaintModel,
   resolveSize,
   supportsCharacterReference,
+  supportsVibeTransfer,
 } from './image/presets.ts';
 export { applyImageStyle, composePrompt, DEFAULT_IMAGE_STYLE } from './image/style.ts';
 export { extractImage, sniffImageMime } from './image/extract.ts';
