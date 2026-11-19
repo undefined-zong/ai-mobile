@@ -100,6 +100,7 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
             `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
             `画${c.name}和${withUser.name}两个人同框时：tags 只写整体画面（人数、构图、场景、光线），再加一个 characters 字段分别写每个人：`,
             `"characters": [{"who": "char", "tags": "${c.name}的表情、动作、服装", "position": "left|right|center"}, {"who": "user", "tags": "${withUser.name}的表情、动作、服装", "position": "left|right|center"}]`,
+            'characters 里保留外观 tags 已有的性别，用 girl / boy / other，不写人数或 solo，其余外观不要重复。position 可以省略，让生图模型自动构图；需要固定位置时才写。',
             `只画${c.name}一个人时不写 characters。`,
           ].join('\n')
         : '',
@@ -189,6 +190,13 @@ export function parseImagePrompt(value: unknown): ImagePromptOutput | null {
 
 const CENTERS = { left: { x: 0.3, y: 0.5 }, right: { x: 0.7, y: 0.5 }, center: { x: 0.5, y: 0.5 } } as const;
 
+/** 人物槽保留已有性别（1girl → girl），人数、solo 等整体构图留在基础提示词。 */
+function characterTags(tags: string): string {
+  const { lead, rest } = leadCountTags(tags);
+  const identities = lead.split(',').map((tag) => /^\d+\+?(girl|boy|other)s?$/i.exec(tag.trim())?.[1]);
+  return joinTags(...identities, rest);
+}
+
 /** 模型画了两个人同框（"你"可以入画、输出里有"你"的那一份） */
 export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput): boolean {
   return !!input.withUser && input.mode !== 'background' && !!out.characters?.some((c) => c.who === 'user');
@@ -196,7 +204,7 @@ export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput):
 
 /**
  * 智能体的输出 → 生图请求：单人时人数 tags 在最前面，接着是她的长相（同人是角色 tag + 作品 tag）、锁定的衣服，再是画面；
- * 两个人时整体 tags 做基础提示词（人数在这里），每个人的外观（去掉人数 tags）+ 动作做 V4 的人物提示词，按左右位置放
+ * 两个人时整体 tags 做基础提示词（人数在这里），每个人的外观（保留性别、去掉人数）+ 动作和负面词放各自的人物槽；没指定位置时自动构图
  */
 export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, seed?: number): ImageRequest {
   const size: ImageSize = input.size ?? out.size;
@@ -204,22 +212,21 @@ export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, 
   if (input.mode === 'background') {
     return { prompt: joinTags('no humans, scenery', out.tags), negative: joinTags('1girl, 1boy, people', out.negative), size: input.size ?? (out.size === 'portrait' ? 'landscape' : size), seed };
   }
-  const negative = joinTags(input.character.negativeTags, out.negative);
   const outfit = lockedOutfit(input);
   if (hasUserInFrame(out, input)) {
-    const looks = (tags: string | undefined) => leadCountTags(tags ?? '').rest;
     return {
       prompt: out.tags,
-      negative,
+      negative: out.negative,
       size,
       seed,
       characters: (out.characters ?? []).map((c) => ({
-        prompt: c.who === 'char' ? joinTags(looks(input.character.appearanceTags), outfit, c.tags) : joinTags(looks(input.withUser?.appearanceTags), c.tags),
-        ...(c.who === 'user' && input.withUser?.negativeTags ? { negative: input.withUser.negativeTags } : {}),
-        center: CENTERS[c.position ?? 'center'],
+        prompt: characterTags(c.who === 'char' ? joinTags(input.character.appearanceTags, outfit, c.tags) : joinTags(input.withUser?.appearanceTags, c.tags)),
+        negative: c.who === 'char' ? input.character.negativeTags : input.withUser?.negativeTags,
+        ...(c.position ? { center: CENTERS[c.position] } : {}),
       })),
     };
   }
+  const negative = joinTags(input.character.negativeTags, out.negative);
   const scene = leadCountTags(out.tags);
   // 模型判断画面里没有人（她只拍了吃的、东西、风景）：不加她的长相和衣服，否则和 no humans 打架，会把她硬塞进画面边上
   if (noHumans(scene.lead)) return { prompt: joinTags(scene.lead, scene.rest), negative, size, seed };

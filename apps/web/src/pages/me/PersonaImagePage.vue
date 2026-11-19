@@ -167,7 +167,7 @@ const vibeModels = computed(() => (img.value.portrait?.vibes ?? []).filter((v) =
         <div class="flex items-center gap-3">
           <div class="flex-1 min-w-0">
             <div class="text-[14.5px] font-600">入画时带上立绘的 Vibe</div>
-            <div class="text-[12px] text-ink-3 leading-relaxed">第一次入画时编码一次（NovelAI 扣 2 点），之后一直用它，长相跟立绘保持一致；只有 NovelAI V4、V4.5 能用</div>
+            <div class="text-[12px] text-ink-3 leading-relaxed">参考立绘的画风、色彩和视觉特征；Vibe 影响整张图，双人同框时也可能影响另一人和背景，不能单独锁定你的长相。首次编码 NovelAI 扣 2 点，之后复用；只有 V4、V4.5 能用。</div>
           </div>
           <van-switch v-model="img.vibe.enabled" size="22px" data-testid="persona-vibe" @change="touch" />
         </div>
@@ -182,7 +182,7 @@ const vibeModels = computed(() => (img.value.portrait?.vibes ?? []).filter((v) =
             <van-slider v-model="img.vibe.informationExtracted" class="flex-1" :min="0" :max="1" :step="0.05" bar-height="4px" button-size="16px" aria-label="Vibe 信息提取量" @change="touch" />
             <span class="slider-val">{{ img.vibe.informationExtracted.toFixed(2) }}</span>
           </div>
-          <p class="hint">强度越高越像立绘；信息提取越高带过去的细节越多（构图也会跟着像），改了要重新编码一次。</p>
+          <p class="hint">强度越高，参考图的影响越大，也可能盖过动作和外观 tags。信息提取量控制编码保留的视觉信息，调低不一定减少构图影响；修改信息提取量后需要重新编码。</p>
           <p class="hint">{{ !img.portrait ? '先画一张立绘。' : vibeModels.length ? `已编码：${vibeModels.join('、')}` : '还没编码：下次入画时编码。' }}</p>
         </template>
       </div>

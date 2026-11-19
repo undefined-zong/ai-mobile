@@ -618,6 +618,19 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     file: 'feature-date.json',
     forced: { blocks: ['sceneRule'] },
   },
+  {
+    // 约会提示词按角色分配动作，默认自动构图；只替换未改过的内置内容。
+    id: 'image-date:character-composition',
+    file: 'image-date.json',
+    replaced: {
+      main: ["你是 NovelAI V4.5 的提示词写手，给\"约会\"画图：{{char}}和{{user}}在约会。到达时只画{{char}}一个人，画面是{{user}}眼里看到的{{char}}；之后按这一刻选：只画{{char}}一个人，或者{{char}}和{{user}}两个人同框。把要画的那一刻写成 Danbooru 风格的英文 tags。"],
+      rules: ["规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}和{{user}}的长相（发色、瞳色、发型、体型），程序会把长相加上。\n- 写了\"服装（程序会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸，不写 characters。\n- 双人图：只在发了\"{{user}}可以入画\"时画，照那里的格式写 characters；tags 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自的 characters。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。"],
+      momentArrive: ["这一刻：刚到约会的地方。只画{{char}}一个人（solo），不写 characters：{{char}}走在前面半步，回过头来看你（looking back, looking at viewer），带着期待的笑，或者朝你招手；地点的特色要在背景里看得出来（按\"地点\"和\"要画的画面\"）。竖图，cowboy shot 或 full body，留出背景。"],
+      momentHighlight: ["这一刻：约会里心动的瞬间，画面按\"要画的画面\"画（是{{char}}自己写的，或者{{user}}点了拍一张）。单人还是双人按画面选：两个人一起做的事（牵着手走、并肩坐着、靠在肩上、拥抱、对视、喂对方一口吃的）画双人同框，用第三人称镜头把两个人都拍进去，距离和表情要对上（脸红 blush、害羞 shy、笑 smile、看着对方 looking at another）；只看{{char}}的反应时画单人，用第一视角（pov）拉近距离，{{user}}只露出手或肩膀，表情要对上（blush, shy, smile, looking at viewer）。竖图，上半身或 cowboy shot。"],
+      momentKeepsake: ["这一刻：约会结束前的纪念照。两个人的合照画双人：{{char}}举着手机和{{user}}贴着脸自拍（selfie, holding phone, cheek-to-cheek），或者两个人并肩站在约会地点最有代表性的地方朝镜头比耶（peace sign）；只拍{{char}}时画单人：{{char}}站在那里朝镜头比心、比耶（peace sign, heart hands），{{user}}最多露出肩膀或一只手。表情温柔、有一点不舍。背景是这次约会的地方，光线按此刻的时间和天气。竖图。"],
+      format: ["只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait、square 或 landscape\"}"],
+    },
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */
