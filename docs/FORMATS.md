@@ -168,6 +168,8 @@ SillyTavern 常用的宏都认（`{{char}}` `{{user}}` `{{time}}` `{{date}}` `{{
 |  | `add` / `move` / `remove` | `after`（块的 identifier，null 是最前）、`block`（新块：`identifier` `name` `role` `content` `triggers` `marker`） |
 |  | `add-regex` / `set-regex` / `remove-regex` | `regex`（`name` `find` `replace` `placement` `markdownOnly` `promptOnly`，改、删时写正则的 id） |
 |  | `meta` | `name`、`description` |
+|  | `copy` / `copy-regex` | `from`（别的预设 id），`blocks`（块的 identifier，原样复制；不写 `after` 时按原来的邻居找位置）/ `regex`（正则 id，全部写 `all`） |
+| `"preset": "new"` | `create` | `from`（照哪个预设复制）、`name`、`description`、`category`（角色扮演类之间能换）；之后 `"preset": "new"` 改的是这个新预设（预设融合） |
 | `"lorebook": id` | `replace` / `set` / `add` / `remove` / `meta` | `entry`（条目的 uid）、`find` `with`、`keys` `constant` `enabled` `position` `depth` `order` `comment` `content` |
 | `"lorebook": "new"` | `create` | `name`、`description`、`entries`、`bindTo`（角色 id，或 `new`：这次新建的角色） |
 | `"character": id` | `replace` / `set` | `field` `find` `with`；`description` `personality` `scenario` `firstMes` `alternateGreetings` `mesExample` `systemPrompt` `postHistoryInstructions` `creatorNotes` `tags` `appearanceTags` `negativeTags` `pronoun` `name` |

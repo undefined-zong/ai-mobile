@@ -16,6 +16,7 @@ import { useLibraryStore } from '@/stores/library';
  * - 其他：每个用途（一起吃饭、主动消息、番外、总结、配图、陪伴学习时画的图、节律……）选一个这一类的预设，
  *   一起做事、主动消息可以选"跟随对话预设"，一起做事时画的图可以选"跟随配图"。
  * 下面是这一类的所有预设。App 自带的预设来自预设文件，和导入的一样能改、能删、能复制、能导出。
+ * "新建"：照模板（src/presets/templates/ 里这一类能用的）新建，或者空白的（只放这一类的程序块）。
  */
 const route = useRoute();
 const router = useRouter();
@@ -66,12 +67,23 @@ function pick(id: string | null) {
     showToast(`${p.character.name}聊天用「${lib.presetById(id)?.name ?? ''}」`);
   }
 }
+
+// —— 新建：选模板，或者空白的 ——
+const createOpen = ref(false);
+const templates = computed(() => lib.templatesFor(cat.value));
+function create(template?: string) {
+  createOpen.value = false;
+  const p = lib.createPreset(cat.value, template);
+  showToast(`新建了「${p.name}」`);
+  void router.push(`/me/presets/${p.id}`);
+}
 </script>
 
 <template>
   <div class="page" data-page="presets">
-    <PageHeader title="预设" :subtitle="`按用途分 ${PRESET_CATEGORY_ORDER.length} 类；每一类都能导入、复制、改、删`" fallback="/me">
+    <PageHeader title="预设" :subtitle="`按用途分 ${PRESET_CATEGORY_ORDER.length} 类；每一类都能新建、导入、复制、改、删`" fallback="/me">
       <template #right>
+        <button type="button" class="icon-btn" aria-label="新建预设" data-testid="preset-create" @click="createOpen = true"><span class="i-lucide-plus text-[21px]" /></button>
         <RouterLink to="/import" class="icon-btn" aria-label="导入预设"><span class="i-lucide-file-down text-[20px]" /></RouterLink>
       </template>
     </PageHeader>
@@ -137,8 +149,9 @@ function pick(id: string | null) {
         </div>
         <div v-if="usedBy(p.id)" class="text-[12px] text-accent-ink mt-1.5">用在：{{ usedBy(p.id) }}</div>
       </RouterLink>
-      <p v-if="!list.length" class="text-[13px] text-ink-3 text-center py-4 m-0">还没有{{ PRESET_CATEGORIES[cat].label }}预设：导入一个预设文件，或者在别的预设里点"复制"。</p>
+      <p v-if="!list.length" class="text-[13px] text-ink-3 text-center py-4 m-0">还没有{{ PRESET_CATEGORIES[cat].label }}预设：新建一个、导入一个预设文件，或者在别的预设里点"复制"。</p>
 
+      <button type="button" class="import-link press" @click="createOpen = true"><span class="i-lucide-plus" />新建{{ PRESET_CATEGORIES[cat].label }}预设</button>
       <RouterLink to="/import" class="import-link"><span class="i-lucide-file-down" />导入预设（SillyTavern 预设或预设文件）</RouterLink>
       <p class="text-[12px] text-ink-3 m-0 leading-relaxed">
         App 自带的预设来自 apps/web/src/presets 里的预设文件：第一次打开时放进预设库，之后和你导入的一样能改、能删；删掉的不会自己回来，想要可以重新导入那个文件。
@@ -158,6 +171,29 @@ function pick(id: string | null) {
           @update:model-value="pick"
           @edit="picking = null"
         />
+      </div>
+    </van-popup>
+
+    <van-popup v-model:show="createOpen" position="bottom" round :style="{ maxHeight: '80%' }">
+      <div class="sheet" data-testid="create-sheet">
+        <div class="sheet-title">新建{{ PRESET_CATEGORIES[cat].label }}预设</div>
+        <p class="text-[12.5px] text-ink-3 mt-1 mb-3 leading-relaxed">新建以后进编辑页接着改：块的文字、程序块、采样参数、名字都能改。</p>
+        <div class="grid gap-2">
+          <button v-for="t in templates" :key="t.file" type="button" class="create-row press" :data-template="t.file" @click="create(t.file)">
+            <span class="use-icon"><span class="i-lucide-layout-template" /></span>
+            <span class="flex-1 min-w-0 text-left">
+              <span class="block text-[14.5px] font-600">照「{{ t.name }}」</span>
+              <span class="block text-[12px] text-ink-3 leading-normal mt-0.5 line-clamp-3">{{ t.description }}</span>
+            </span>
+          </button>
+          <button type="button" class="create-row press" data-template="blank" @click="create()">
+            <span class="use-icon"><span class="i-lucide-file-plus-2" /></span>
+            <span class="flex-1 min-w-0 text-left">
+              <span class="block text-[14.5px] font-600">空白</span>
+              <span class="block text-[12px] text-ink-3 leading-normal mt-0.5">只放{{ PRESET_CATEGORIES[cat].label }}预设用到的程序块（内容由程序填），文字块自己加；采样参数照这一类的自带预设。</span>
+            </span>
+          </button>
+        </div>
       </div>
     </van-popup>
   </div>
@@ -227,6 +263,15 @@ function pick(id: string | null) {
   border: 1px solid var(--border);
   color: inherit;
   text-decoration: none;
+}
+.create-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--panel);
 }
 .import-link {
   display: flex;

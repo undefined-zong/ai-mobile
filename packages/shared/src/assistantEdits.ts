@@ -2,8 +2,10 @@ import { characterFromCard } from './st/card.ts';
 import { normalizeRegexScript, regexFromString } from './st/regex.ts';
 import type { Character, StCardFields } from './types/character.ts';
 import type { LoreEntry, LorePosition, Lorebook } from './types/lorebook.ts';
+import { categoryMarkers } from './formats.ts';
+import { canBecome, copyBlocks, copyRegex } from './presetBlocks.ts';
 import { appBlocks } from './st/preset.ts';
-import { markerName, type Preset, type PromptBlock, type RegexScript } from './types/preset.ts';
+import { PRESET_CATEGORIES, markerName, type Preset, type PresetCategory, type PromptBlock, type RegexScript } from './types/preset.ts';
 import { readBrawlFighter, type BrawlFighter } from './brawl.ts';
 
 /**
@@ -12,6 +14,8 @@ import { readBrawlFighter, type BrawlFighter } from './brawl.ts';
  *   {"preset": "id", "op": "replace", "block": "main", "find": "原文", "with": "新的"}
  *   {"lorebook": "id", "op": "set", "entry": "3", "keys": ["…"]}
  *   {"character": "new", "op": "create", "name": "…", "description": "…"}
+ *   {"preset": "new", "op": "create", "from": "底子的 id", "name": "…"}（照一个预设复制出新预设，之后 "preset": "new" 改的是它）
+ *   {"preset": "new", "op": "copy", "from": "别的预设 id", "blocks": ["…"]}（把别的预设里的块原样复制过来）
  * 程序读出来先算"改之前 / 改之后"给你看，你点"应用"才写进去；应用前对象又变了也没关系：每次都按现在的样子重算。
  */
 
@@ -26,7 +30,7 @@ export interface AssistantOp {
 }
 
 export const EDIT_OPS: Record<EditKind, string[]> = {
-  preset: ['replace', 'set', 'add', 'remove', 'move', 'add-regex', 'set-regex', 'remove-regex', 'meta'],
+  preset: ['replace', 'set', 'add', 'remove', 'move', 'add-regex', 'set-regex', 'remove-regex', 'meta', 'create', 'copy', 'copy-regex'],
   lorebook: ['replace', 'set', 'add', 'remove', 'meta', 'create'],
   character: ['replace', 'set', 'create'],
   fighter: ['set', 'skill'],
@@ -172,6 +176,7 @@ export interface EditPlan {
   /** 新建的 */
   newCharacters: Character[];
   newLorebooks: Lorebook[];
+  newPresets: Preset[];
   /** 新建的世界书绑给谁（角色 id） */
   bindings: { lorebookId: string; characterId: string }[];
   changes: EditChange[];
@@ -188,6 +193,8 @@ export interface PlanContext {
   now: number;
   /** 新建角色用哪个对话预设 */
   defaultPresetId: string | null;
+  /** 这一类预设的程序认得的程序块（复制程序块时查）；不给时按 PROMPT_MARKERS / TASK_MARKERS */
+  knownMarkers?(category: PresetCategory): string[];
 }
 
 function clone<T>(x: T): T {
@@ -292,15 +299,18 @@ function patchBlock(b: PromptBlock, f: Obj): string[] {
   return done;
 }
 
-function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditChange[]): string | null {
+/** 块写的是 identifier 或名字 */
+function blockOf(p: Pick<Preset, 'blocks'>, id: unknown): PromptBlock | undefined {
+  const key = str(id)?.trim();
+  return key ? (p.blocks.find((b) => b.identifier === key) ?? p.blocks.find((b) => b.name === key)) : undefined;
+}
+
+function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditChange[], presetOf: (id: string) => Preset | undefined): string | null {
   const r = op.raw;
   const title = p.name;
   const change = (label: string, textChanged = false, before?: string, after?: string) =>
     changes.push({ kind: 'preset', id: p.id, title, label, textChanged, ...(before !== undefined ? { before } : {}), ...(after !== undefined ? { after } : {}) });
-  const findBlock = (id: unknown) => {
-    const key = str(id)?.trim();
-    return key ? (p.blocks.find((b) => b.identifier === key) ?? p.blocks.find((b) => b.name === key)) : undefined;
-  };
+  const findBlock = (id: unknown) => blockOf(p, id);
   switch (op.op) {
     case 'replace': {
       const b = findBlock(r.block);
@@ -423,6 +433,51 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
       p.regex.splice(p.regex.indexOf(s), 1);
       change(`删掉正则「${s.name}」`, false, `${s.find} → ${s.replace}`);
       return null;
+    }
+    case 'copy': {
+      const fromId = str(r.from)?.trim();
+      const src = fromId ? presetOf(fromId) : undefined;
+      if (!src) return `要从哪个预设复制？没有 id 是「${fromId ?? ''}」的预设`;
+      const keys = strList(r.blocks) ?? (r.block !== undefined ? [str(r.block) ?? ''] : []);
+      const picked: PromptBlock[] = [];
+      for (const k of keys) {
+        const b = blockOf(src, k);
+        if (!b) return `预设「${src.name}」里没有块「${k}」`;
+        if (!picked.includes(b)) picked.push(b);
+      }
+      if (!picked.length) return `从「${src.name}」复制哪几块？blocks 写块的 identifier`;
+      const afterKey = 'after' in r ? r.after : undefined;
+      const anchor = afterKey === undefined ? undefined : afterKey === null || str(afterKey) === 'start' ? -1 : findBlock(afterKey);
+      if (afterKey !== undefined && anchor === undefined) return `预设「${title}」里没有块「${str(afterKey) ?? ''}」，不知道放哪`;
+      const res = copyBlocks(p, src, picked, {
+        known: ctx.knownMarkers?.(p.category) ?? Object.keys(categoryMarkers(p.category)),
+        newId: ctx.newId,
+        ...(anchor === undefined ? {} : { after: anchor === -1 ? -1 : p.blocks.indexOf(anchor) }),
+      });
+      for (const b of res.added) {
+        const prev = p.blocks[p.blocks.indexOf(b) - 1];
+        change(`从「${src.name}」复制${b.marker ? '程序块' : '块'}${blockLabel(b)}，放在${prev ? `${blockLabel(prev)}后面` : '最前面'}`, false, undefined, b.marker ? undefined : b.content);
+      }
+      const skipped = res.skipped.map((s) => s.reason).join('；');
+      return res.added.length ? (skipped ? `有几块没复制：${skipped}` : null) : skipped || '没有复制成的块';
+    }
+    case 'copy-regex': {
+      const fromId = str(r.from)?.trim();
+      const src = fromId ? presetOf(fromId) : undefined;
+      if (!src) return `要从哪个预设复制正则？没有 id 是「${fromId ?? ''}」的预设`;
+      const keys = strList(r.regex) ?? [];
+      const all = keys.length === 1 && keys[0] === 'all';
+      const picked: RegexScript[] = [];
+      for (const k of all ? [] : keys) {
+        const s = src.regex.find((x) => x.id === k) ?? src.regex.find((x) => x.name === k);
+        if (!s) return `预设「${src.name}」里没有正则「${k}」`;
+        picked.push(s);
+      }
+      const list = all ? src.regex : picked;
+      if (!list.length) return `从「${src.name}」复制哪几条正则？regex 写正则的 id（全部写 "all"）`;
+      const added = copyRegex(p, list, ctx.newId);
+      for (const s of added) change(`从「${src.name}」复制正则「${s.name}」${regexTarget(s)}`, false, s.find, s.replace);
+      return added.length ? null : `「${src.name}」的这几条正则「${title}」里已经有一样的了`;
     }
     case 'meta': {
       const f = fieldsOf(r, ['preset', 'op']);
@@ -695,8 +750,30 @@ function planCharacter(c: Character, op: AssistantOp, changes: EditChange[]): st
  * 照修改项算出改之后的样子（不动传进来的对象，改的是副本）。
  * 找不到的对象、块、条目、要换的那段记进 errors，其余照常算。
  */
+/** 照一个预设复制出新预设（预设融合）：名字、说明、分类（角色扮演类之间可以换）按 op 写的 */
+function createPreset(op: AssistantOp, ctx: PlanContext, presetOf: (id: string) => Preset | undefined): { preset: Preset; label: string } | string {
+  const f = fieldsOf(op.raw, ['preset', 'op']);
+  const fromId = str(f.from)?.trim();
+  const base = fromId ? presetOf(fromId) : undefined;
+  if (!base) return fromId ? `没有 id 是「${fromId}」的预设，新预设没法照它复制` : '新预设要写 from：照哪个预设复制（底子的 id）';
+  const want = str(f.category)?.trim() as PresetCategory | undefined;
+  const category = want && PRESET_CATEGORIES[want] && canBecome(base.category, want) ? want : base.category;
+  const { seedFile: _seed, ...rest } = clone(base);
+  const preset: Preset = {
+    ...rest,
+    id: ctx.newId('preset'),
+    createdAt: ctx.now,
+    updatedAt: ctx.now,
+    name: str(f.name)?.trim() || `${base.name}（融合）`,
+    description: str(f.description) ?? base.description,
+    category,
+  };
+  const label = `新建${PRESET_CATEGORIES[category].label}预设「${preset.name}」（照「${base.name}」复制${want && want !== category ? `；分类「${want}」换不了，还是${PRESET_CATEGORIES[category].label}` : ''}）`;
+  return { preset, label };
+}
+
 export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
-  const plan: EditPlan = { fighters: [], presets: [], lorebooks: [], characters: [], newCharacters: [], newLorebooks: [], bindings: [], changes: [], errors: [] };
+  const plan: EditPlan = { fighters: [], presets: [], lorebooks: [], characters: [], newCharacters: [], newLorebooks: [], newPresets: [], bindings: [], changes: [], errors: [] };
   const fighters = new Map<string, BrawlFighter>();
   const presets = new Map<string, Preset>();
   const books = new Map<string, Lorebook>();
@@ -710,6 +787,11 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
     return map.get(id);
   };
   let lastNewChar: Character | null = null;
+  /** 预设按 id 找：这次新建的、改到一半的、库里的（复制的来源按现在改到的样子） */
+  const presetOf = (id: string): Preset | undefined => {
+    if (id === 'new') return plan.newPresets.at(-1);
+    return plan.newPresets.find((x) => x.id === id) ?? presets.get(id) ?? ctx.presets.find((x) => x.id === id);
+  };
   for (const op of ops) {
     let error: string | null = null;
     if (op.kind === 'fighter') {
@@ -733,9 +815,16 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
           }
         }
       }
+    } else if (op.kind === 'preset' && op.op === 'create') {
+      const created = createPreset(op, ctx, presetOf);
+      if (typeof created === 'string') error = created;
+      else {
+        plan.newPresets.push(created.preset);
+        plan.changes.push({ kind: 'preset', id: created.preset.id, title: created.preset.name, label: created.label, textChanged: false });
+      }
     } else if (op.kind === 'preset') {
-      const p = working(presets, ctx.presets, op.id);
-      error = p ? planPreset(p, op, ctx, plan.changes) : `没有 id 是「${op.id}」的预设`;
+      const p = op.id === 'new' ? plan.newPresets.at(-1) : (plan.newPresets.find((x) => x.id === op.id) ?? working(presets, ctx.presets, op.id));
+      error = p ? planPreset(p, op, ctx, plan.changes, presetOf) : op.id === 'new' ? '还没有新建的预设：先写 {"preset": "new", "op": "create", "from": "底子的 id"}' : `没有 id 是「${op.id}」的预设`;
     } else if (op.kind === 'lorebook') {
       if (op.op === 'create') {
         const f = fieldsOf(op.raw, ['lorebook', 'op', 'bindTo', 'entries']);
