@@ -32,6 +32,21 @@
       }
     },
     {
+      "identifier": "outfitFree",
+      "name": "服装参考关着（AI 自己设计衣服）",
+      "role": "system",
+      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时各自的衣服写进 char### 和 user### 那一行，两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相程序会加）。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "outfit-free"
+      ]
+    },
+    {
       "identifier": "sceneRule",
       "name": "这个场景",
       "role": "system",

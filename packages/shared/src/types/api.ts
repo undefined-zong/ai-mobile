@@ -106,6 +106,11 @@ export interface ImageStyle {
   scale?: number;
   /** NovelAI 的 Variety Boost（同 SillyTavern：按画面大小算 skip_cfg_above_sigma） */
   varietyBoost?: boolean;
+  /**
+   * 服装参考（默认开）：开着时画图参考她今天该穿的那套（节律）和你人设里常穿的那套；
+   * false 时都不给，衣服由生图提示词按画面自己设计（生图预设里只在 outfit-free 时发的那块）
+   */
+  outfitRef?: boolean;
 }
 
 /** 朗读前怎么处理文字（同 SillyTavern 的 TTS 设置） */

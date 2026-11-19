@@ -6,10 +6,14 @@ import { DATE_CHOICE_KINDS, isRainy, parseDateChoices, worldOf, type DateChoice,
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { BACKGROUND_GROUPS, BACKGROUND_SETS, backgroundUrl, familyCover, type BackgroundFamily } from '@/backgrounds/library';
 import AssetImg from '@/components/common/AssetImg.vue';
 import { SCENE_LOCATION } from '@/components/scene/location';
+import PlaylistMusic from '@/components/scene/PlaylistMusic.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
 import { assetUrl } from '@/services';
+import { dateMusic } from '@/services/musicPlayer';
+import { dateSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
@@ -27,6 +31,8 @@ import { uid } from '@/utils/id';
  * 她写了 [cg:] 的心动时刻画一张（隔几段才画），结束时画一张留念，也可以自己点"拍一张"；画好的铺满整屏。
  * 你可以入画（人设 → 生图里填了外观 tags）：到达只画她一个人，之后单人还是两个人同框由"生图 · 约会"预设按画面定，同框时带上你立绘的 Vibe。
  * 结束（或者直接离开）时把"约会回忆"卡片发进聊天：走了几段、每种回法选了几次、她最后说的话、这次画的图。
+ * 右上角：音乐（网易云的歌单，播放器 dateMusic，放着的歌她也知道）、随机（从背景库里 roll 一个地方直接去约会）、
+ * 自己从背景库里选；约会中换过去就接着约，她下一段知道换到了哪（进出还算在原来的地点上，聊天里的分隔用新地方的名字）。
  */
 const app = useAppStore();
 const chars = useCharacterStore();
@@ -64,6 +70,60 @@ const recommended = computed(() => datePlaces.value.find((l) => l.indoor === isR
 const place = ref<MapLocation>(fromMap ?? recommended.value);
 const sky = computed(() => (place.value.area === 'real' ? weatherStore.mine : herSky.value));
 const raining = computed(() => isRainy(sky.value?.text));
+
+// —— 背景库里的地方：随机 roll 一个，或者自己选一个 ——
+interface DateBg {
+  family: BackgroundFamily;
+  name: string;
+  blurb: string;
+}
+/** 选了背景库里的地方时是它；null 是地点本身的背景 */
+const bg = ref<DateBg | null>(null);
+const bgOf = (f: BackgroundFamily): DateBg => ({ family: f, name: f.style || f.scene, blurb: f.style && f.style !== f.scene ? `${f.scene}，${f.style}` : f.scene });
+/** 这次约会实际在哪：选了背景库里的地方就是那里（id 带上系列，图库按它分开记），否则是地点本身 */
+const spot = computed<MapLocation>(() => {
+  const b = bg.value;
+  return b ? { ...place.value, id: `${place.value.id}#${b.family.id}`, name: b.name, blurb: b.blurb, indoor: b.family.indoor, backgroundSet: b.family.id } : place.value;
+});
+const libraryOpen = ref(false);
+const bgGroup = ref('');
+const libraryList = computed(() => BACKGROUND_SETS.filter((f) => !bgGroup.value || f.assets[0]?.group === bgGroup.value));
+const coverUrl = (f: BackgroundFamily) => backgroundUrl(familyCover(f));
+/** 结束约会时她在说最后一段：这时不换地方 */
+const canMove = computed(() => phase.value !== 'date' || !ending.value);
+/** 约会中换了地方：下一段的场景任务里说一次 */
+let moveNote = '';
+function rollBg() {
+  const pool = BACKGROUND_SETS.filter((f) => f.id !== bg.value?.family.id);
+  const f = pool[Math.floor(Math.random() * pool.length)];
+  if (f) goTo(f, 'roll');
+}
+function pickBg(f: BackgroundFamily) {
+  libraryOpen.value = false;
+  goTo(f, 'pick');
+}
+/** 去背景库里的这个地方：还没开始（或者看完回忆）就在那里开始约会；约会中就换过去接着约 */
+function goTo(f: BackgroundFamily, how: 'roll' | 'pick') {
+  if (!canMove.value) return;
+  if (phase.value !== 'date') {
+    start(place.value, bgOf(f));
+    if (how === 'roll') showToast(`roll 到了：${bgOf(f).name}`);
+    return;
+  }
+  const from = spot.value.name;
+  bg.value = bgOf(f);
+  chat.enterScene(her.value.id, place.value.id, 'date', undefined, spot.value.name);
+  moveNote = `${userName.value}${how === 'roll' ? '心血来潮' : ''}拉着${her.value.name}换了个地方：从${from}来到了${spot.value.name}`;
+  if (how === 'roll') showToast(`roll 到了：${spot.value.name}`);
+  // 换了地方：先显示新背景和立绘，到达的图另画一张
+  art.value = null;
+  ensureArt();
+  if (showChoices.value) void ask('date-turn', [...contextLines(), '先用旁白写来到这里看到的景象，再接着约会']).then(afterTurn);
+}
+
+// —— 音乐：网易云的歌单（右上角；离开时停），放着的歌写进场景任务 ——
+const musicOpen = ref(false);
+const musicPlaying = computed(() => dateMusic.state.playing && !dateMusic.state.fading);
 
 // —— 四种回法 ——
 const KIND: Record<DateChoiceKind, { icon: string; tone: string }> = {
@@ -162,16 +222,21 @@ watch([beatIdx, () => beats.value.length, done], () => {
 const CG_GAP = 3;
 let lastCgTurn = -CG_GAP;
 function contextLines(): string[] {
-  const p = place.value;
+  const p = spot.value;
   const how = chat.chatOfCharacter(her.value.id)?.togetherMode;
   const w = sky.value;
   const cgOk = gallery.autoCheck().ok && turns.value + 1 - lastCgTurn >= CG_GAP;
+  const song = dateMusic.current();
+  const moved = moveNote;
+  moveNote = '';
   return [
     `约会地点：${p.name}（${p.indoor ? '室内' : '室外'}${p.blurb ? `；${p.blurb}` : ''}）`,
     how === 'bring' ? `${userName.value}带${her.value.name}来到${userName.value}这边的${p.name}` : `${userName.value}去${her.value.name}那边，两个人一起来到${p.name}`,
     w ? `现在的天气：${w.text}，${Math.round(w.tempC)}°C${raining.value && !p.indoor ? '（在室外，要躲雨）' : ''}` : '',
     `这是第 ${turns.value + 1} 段${startedAt.value ? `（约会开始了 ${minutes.value} 分钟）` : ''}`,
     cgOk ? '这一段可以用 [cg:]（只在真正心动的时刻）' : '这一段不要用 [cg:]',
+    song && dateMusic.state.playing ? `${userName.value}放着歌：《${song.title}》- ${song.artist}${dateMusic.state.demo ? '（示例歌曲）' : ''}` : '',
+    moved,
   ];
 }
 
@@ -229,15 +294,17 @@ function retry() {
 function afterTurn(r: { cg?: string } | null) {
   if (!r?.cg || turns.value - lastCgTurn < CG_GAP) return;
   lastCgTurn = turns.value;
-  void drawMoment('highlight', 'auto', `${r.cg}；在${place.value.name}约会`);
+  void drawMoment('highlight', 'auto', `${r.cg}；在${spot.value.name}约会`);
 }
 
-// —— 开始：选地点或者从地图来 ——
-function start(p: MapLocation) {
+// —— 开始：选地点或者从地图来；从背景库 roll 的、选的地方还算在地点 p 上进出 ——
+function start(p: MapLocation, withBg: DateBg | null = null) {
   // 先进场（换地点时上一次约会在这里收尾、发回忆卡片），再清空这一次的
-  chat.enterScene(her.value.id, p.id, 'date');
+  chat.enterScene(her.value.id, p.id, 'date', undefined, withBg?.name);
   chat.setLeaveSummary(her.value.id, leaveNote);
   place.value = p;
+  bg.value = withBg;
+  moveNote = '';
   phase.value = 'date';
   startedAt.value = Date.now();
   now.value = Date.now();
@@ -323,7 +390,7 @@ function keepsakeCaption(): string {
   const mood = Object.entries(picks.value)
     .sort((a, b) => b[1] - a[1])
     .map(([k]) => k)[0];
-  return `约会快结束了，${her.value.name}在${place.value.name}和${userName.value}留一张纪念照${raining.value && !place.value.indoor ? '，外面在下雨' : ''}${mood ? `；今天${userName.value}总是${mood === OWN ? '自己找话说' : mood}` : ''}`;
+  return `约会快结束了，${her.value.name}在${spot.value.name}和${userName.value}留一张纪念照${raining.value && !spot.value.indoor ? '，外面在下雨' : ''}${mood ? `；今天${userName.value}总是${mood === OWN ? '自己找话说' : mood}` : ''}`;
 }
 function showMemory() {
   postMemory(done.value ? farewellLine() : undefined);
@@ -353,7 +420,7 @@ function postMemory(farewell?: string) {
   const part: MessagePart = {
     type: 'date',
     logId: uid('date'),
-    place: place.value.name,
+    place: spot.value.name,
     when: whenText(),
     status: 'memory',
     turns: turns.value,
@@ -400,7 +467,8 @@ async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority:
     moment,
     caption,
     priority,
-    locationId: place.value.id,
+    locationId: spot.value.id,
+    ...(bg.value ? { place: spot.value.name } : {}),
     expression: chars.expression[her.value.id],
     recent: chatId.value ? chat.recentLines(chatId.value, 6) : [],
     size: 'portrait',
@@ -423,8 +491,9 @@ async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority:
 /** 到达：今天在同一个地方、穿同一身画过的不再画（也不拿出来盖住立绘），没有就画一张 */
 function ensureArt() {
   const outfit = rhythm.outfitFor(her.value.id, 'date')?.name ?? null;
-  if (gallery.find(her.value.id, 'date', { moment: 'arrive', today: true, locationId: place.value.id, outfit, size: 'portrait' }).length) return;
-  void drawMoment('arrive', 'auto', `${her.value.name}和${userName.value}刚到${place.value.name}约会${raining.value ? (place.value.indoor ? '，外面在下雨' : '，在下雨') : ''}${place.value.blurb ? `；${place.value.blurb}` : ''}`);
+  const p = spot.value;
+  if (gallery.find(her.value.id, 'date', { moment: 'arrive', today: true, locationId: p.id, outfit, size: 'portrait' }).length) return;
+  void drawMoment('arrive', 'auto', `${her.value.name}和${userName.value}刚到${p.name}约会${raining.value ? (p.indoor ? '，外面在下雨' : '，在下雨') : ''}${p.blurb ? `；${p.blurb}` : ''}`);
 }
 function snap() {
   if (drawingNow.value) {
@@ -436,7 +505,7 @@ function snap() {
     .slice(-3)
     .map((b) => (b.kind === 'narration' ? `（${b.text}）` : `${her.value.name}：${b.text}`))
     .join(' ');
-  void drawMoment('highlight', 'user', `在${place.value.name}约会，画此刻的画面${said ? `：${said}` : ''}`);
+  void drawMoment('highlight', 'user', `在${spot.value.name}约会，画此刻的画面${said ? `：${said}` : ''}`);
 }
 function waitIdle(): Promise<void> {
   if (!drawingNow.value) return Promise.resolve();
@@ -474,7 +543,7 @@ async function save(item: GalleryItem) {
   }
   const a = document.createElement('a');
   a.href = url;
-  a.download = `约会_${place.value.name}_${item.title || MOMENT_TEXT[item.moment] || ''}_${new Date(item.at).toISOString().slice(0, 10)}.png`;
+  a.download = `约会_${spot.value.name}_${item.title || MOMENT_TEXT[item.moment] || ''}_${new Date(item.at).toISOString().slice(0, 10)}.png`;
   a.target = '_blank';
   a.rel = 'noopener';
   document.body.appendChild(a);
@@ -518,6 +587,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(ticker);
   chat.setLeaveSummary(her.value.id, null);
+  dateMusic.stop();
 });
 </script>
 
@@ -534,6 +604,31 @@ onBeforeUnmount(() => {
     :line="`${raining ? '下雨了…' : '天气真好！'}去${recommended.name}好不好？`"
     :layout="{ left: 78, bottom: 56, height: 32 }"
   >
+    <template #actions>
+      <button
+        type="button"
+        class="pill-btn"
+        :class="{ on: musicPlaying }"
+        :aria-expanded="musicOpen"
+        :aria-label="musicPlaying ? `音乐：${dateMusic.current()?.title ?? '正在播放'}` : '音乐'"
+        data-testid="date-music-btn"
+        @click="musicOpen = !musicOpen"
+      >
+        <span :class="dateMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music'" />
+      </button>
+      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="随机：从背景库里 roll 一个地方去约会" data-testid="date-roll" @click="rollBg">
+        <span class="i-lucide-dices" />
+      </button>
+      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="从背景库里选约会的地方" data-testid="date-pick-bg" @click="libraryOpen = true">
+        <span class="i-lucide-images" />
+      </button>
+    </template>
+    <template v-if="musicOpen" #overlay>
+      <div class="pop-catcher" @click="musicOpen = false" />
+      <div class="music-pop" role="dialog" aria-label="音乐">
+        <PlaylistMusic :player="dateMusic" :searches="dateSearches" test-id="date-music" />
+      </div>
+    </template>
     <div class="text-[15px] font-600 mb-2.5">今天去哪儿约会？</div>
     <div class="grid grid-cols-4 gap-2">
       <button v-for="p in datePlaces" :key="p.id" class="place press" :class="{ on: place.id === p.id }" :style="{ '--tone': toneOf(p) }" @click="place = p">
@@ -552,16 +647,33 @@ onBeforeUnmount(() => {
     scene-id="date"
     bare
     hide-mode
-    :title="phase === 'end' ? '约会回忆' : `约会 · ${place.name}`"
-    :backdrop="place.backdrop"
-    :background-location="place"
-    :rain="raining && !place.indoor"
+    :title="phase === 'end' ? '约会回忆' : `约会 · ${spot.name}`"
+    :backdrop="spot.backdrop"
+    :background-location="spot"
+    :rain="raining && !spot.indoor"
     outfit="date"
     :layout="{ left: 50, bottom: 22, height: 66 }"
     :hide-figure="!!art || (phase === 'date' && titleOpen)"
     :drawing="drawingText"
   >
     <template #actions>
+      <button
+        type="button"
+        class="pill-btn"
+        :class="{ on: musicPlaying }"
+        :aria-expanded="musicOpen"
+        :aria-label="musicPlaying ? `音乐：${dateMusic.current()?.title ?? '正在播放'}` : '音乐'"
+        data-testid="date-music-btn"
+        @click="musicOpen = !musicOpen"
+      >
+        <span :class="dateMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music'" />
+      </button>
+      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="随机：从背景库里 roll 一个地方去约会" data-testid="date-roll" @click="rollBg">
+        <span class="i-lucide-dices" />
+      </button>
+      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="从背景库里选约会的地方" data-testid="date-pick-bg" @click="libraryOpen = true">
+        <span class="i-lucide-images" />
+      </button>
       <button
         type="button"
         class="pill-btn"
@@ -591,7 +703,7 @@ onBeforeUnmount(() => {
         <div class="info-col">
           <div class="info-card">
             <span class="i-lucide-map-pin shrink-0 text-accent-ink" />
-            <span class="truncate">{{ place.name }}</span>
+            <span class="truncate">{{ spot.name }}</span>
             <span class="dot" />
             <span class="shrink-0">{{ clockText }}</span>
             <template v-if="weatherText"><span class="dot" /><span class="shrink-0">{{ weatherText }}</span></template>
@@ -611,7 +723,7 @@ onBeforeUnmount(() => {
         <Transition name="fade">
           <button v-if="phase === 'date' && titleOpen" type="button" class="title-card" data-testid="date-title" @click="closeTitle">
             <span class="title-kicker">Date</span>
-            <span class="title-main">{{ place.name }}</span>
+            <span class="title-main">{{ spot.name }}</span>
             <span class="title-rows">
               <span><span class="title-label">和</span>{{ her.name }}</span>
               <span><span class="title-label">时间</span>{{ whenText() }}</span>
@@ -702,7 +814,7 @@ onBeforeUnmount(() => {
 
         <!-- 约会回忆 -->
         <section v-if="phase === 'end'" class="memory" data-testid="date-memory-panel">
-          <div class="text-[17px] font-700">{{ place.name }}的约会</div>
+          <div class="text-[17px] font-700">{{ spot.name }}的约会</div>
           <div class="text-[12.5px] text-ink-3 mt-0.5">{{ whenText() }}<template v-if="turns"> · 走了 {{ turns }} 段</template> · {{ minutes }} 分钟 · 已存进聊天</div>
           <div v-if="pickText" class="text-[12.5px] text-ink-2 mt-1.5">你的回法：{{ pickText }}</div>
           <p v-if="farewellLine()" class="farewell">「{{ farewellLine() }}」</p>
@@ -718,9 +830,39 @@ onBeforeUnmount(() => {
             <van-button type="primary" round block size="small" @click="router.push(`/chat/${chatId}`)">回聊天</van-button>
           </div>
         </section>
+
+        <!-- 音乐：从右上角往下展开，点空白处收起 -->
+        <template v-if="musicOpen">
+          <div class="pop-catcher" @click="musicOpen = false" />
+          <div class="music-pop" role="dialog" aria-label="音乐">
+            <PlaylistMusic :player="dateMusic" :searches="dateSearches" test-id="date-music" />
+          </div>
+        </template>
       </div>
     </template>
   </SceneShell>
+
+  <!-- 从背景库里选约会的地方 -->
+  <van-popup v-model:show="libraryOpen" position="bottom" round :style="{ height: '72%' }">
+    <div class="lib">
+      <div class="lib-head">
+        <span class="text-[15px] font-600">选约会的地方</span>
+        <select v-model="bgGroup" class="lib-group" aria-label="场景分类">
+          <option value="">全部分类</option>
+          <option v-for="g in BACKGROUND_GROUPS" :key="g" :value="g">{{ g }}</option>
+        </select>
+      </div>
+      <div class="lib-scroll">
+        <div class="lib-grid">
+          <button v-for="f in libraryList" :key="f.id" type="button" class="lib-item" :class="{ on: bg?.family.id === f.id }" data-testid="date-bg-item" @click="pickBg(f)">
+            <img :src="coverUrl(f)" alt="" loading="lazy" decoding="async" />
+            <span class="lib-name">{{ f.style || f.scene }}</span>
+            <span class="lib-scene">{{ f.scene }}{{ f.indoor ? ' · 室内' : ' · 室外' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </van-popup>
 </template>
 
 <style scoped>
@@ -1245,6 +1387,112 @@ onBeforeUnmount(() => {
 }
 .pill-btn.off {
   color: var(--ink-3);
+}
+.pill-btn.on {
+  background: color-mix(in srgb, var(--accent) 22%, var(--glass));
+}
+.spin-slow {
+  animation: spin 4s linear infinite;
+}
+
+/* 音乐：盖在约会画面上面（标题卡、对话框之上），点空白处收起 */
+.pop-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 13;
+}
+.music-pop {
+  position: absolute;
+  z-index: 14;
+  top: calc(var(--safe-top) + 56px);
+  left: 10px;
+  right: 10px;
+  max-height: 60%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 14px 14px;
+  border-radius: 18px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: var(--shadow);
+}
+
+/* 从背景库里选约会的地方 */
+.lib {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 14px 14px 0;
+}
+.lib-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.lib-group {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+}
+.lib-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* 网格自己不定高：定了高的网格会把每一行压扁去凑高度 */
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding-bottom: calc(var(--safe-bottom) + 14px);
+}
+.lib-item {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  text-align: left;
+}
+.lib-item.on {
+  outline-color: var(--accent);
+}
+.lib-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.lib-name,
+.lib-scene {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-name {
+  bottom: 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.lib-scene {
+  bottom: 5px;
+  font-size: 10.5px;
+  opacity: 0.85;
 }
 .pill-btn:disabled {
   opacity: 0.7;

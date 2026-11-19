@@ -1103,6 +1103,9 @@ export const useChatStore = defineStore('chat', () => {
     return id === 'real:out' ? undefined : id;
   }
 
+  /** 这件事在哪做的名字不是地点本身的（约会从背景库选的地方）：按角色记着，进出的分隔用它 */
+  const placeNames = new Map<string, string>();
+
   function enterTitle(mode: TogetherMode, characterName: string, pronoun: string, locName: string, activity: string, locationId?: string) {
     if (mode === 'remote') return { title: `和${characterName}连线 · ${activity}`, summary: `你在${yourPlace().name}，${pronoun}在${locName}` };
     // 你的家（共同的家、在家吃饭……）：她"回家"，不是"带她去家"
@@ -1117,7 +1120,7 @@ export const useChatStore = defineStore('chat', () => {
    * - 去她那：地点在她的世界，你"坐到她旁边"；
    * - 带她来：地点在你的真实世界，她暂时"来你这边"，离开后回到自己的世界。
    */
-  function enterScene(characterId: string, locationId: string, sceneId: string, mode?: TogetherMode) {
+  function enterScene(characterId: string, locationId: string, sceneId: string, mode?: TogetherMode, placeName?: string) {
     const chat = chatOfCharacter(characterId);
     const character = useCharacterStore().byId(characterId);
     if (!chat || !character) return;
@@ -1125,9 +1128,13 @@ export const useChatStore = defineStore('chat', () => {
     const how: TogetherMode = isRealPlace(loc) ? 'bring' : (mode ?? DEFAULT_MODE[sceneId] ?? 'remote');
     if (chat.togetherAt === locationId && chat.currentScene === sceneId) {
       if (chat.togetherMode !== how) setTogetherMode(characterId, how);
+      // 还在这件事里、换了个地方（约会里从背景库换了一处）：离开时的分隔用新名字
+      if (placeName) placeNames.set(characterId, placeName);
+      else placeNames.delete(characterId);
       return;
     }
     if (chat.togetherAt) leaveScene(characterId);
+    if (placeName) placeNames.set(characterId, placeName);
     const activity = loc?.activities.find((a) => a.sceneId === sceneId)?.label ?? getScene(sceneId).name;
     const last = list(chat.id).at(-1);
     const lastPart = last?.parts[0];
@@ -1137,7 +1144,7 @@ export const useChatStore = defineStore('chat', () => {
     } else {
       const youAt = how === 'bring' ? locationId : how === 'remote' ? footprintId() : undefined;
       push(chat.id, 'narrator', [
-        { type: 'scene', event: 'enter', sceneId, locationId, mode: how, youAt, ...enterTitle(how, character.name, character.pronoun, loc?.name ?? '', activity, locationId) },
+        { type: 'scene', event: 'enter', sceneId, locationId, mode: how, youAt, ...enterTitle(how, character.name, character.pronoun, placeName ?? loc?.name ?? '', activity, locationId) },
       ]);
     }
     if (!beforeVisit.has(characterId)) beforeVisit.set(characterId, { locationId: character.locationId, status: character.status });
@@ -1186,7 +1193,8 @@ export const useChatStore = defineStore('chat', () => {
     const before = beforeVisit.get(characterId) ?? { locationId: null, status: '' };
     beforeVisit.delete(characterId);
     const how = chat.togetherMode ?? 'visit';
-    const loc = getLocation(chat.togetherAt);
+    const placeName = placeNames.get(characterId) ?? getLocation(chat.togetherAt)?.name;
+    placeNames.delete(characterId);
     const last = list(chat.id).at(-1);
     const lastPart = last?.parts[0];
     if (last && lastPart?.type === 'scene' && lastPart.event === 'enter' && last.parts.length === 1 && !summary) {
@@ -1200,7 +1208,7 @@ export const useChatStore = defineStore('chat', () => {
           event: 'leave',
           sceneId: chat.currentScene ?? 'free',
           locationId: chat.togetherAt,
-          title: how === 'remote' ? '结束连线' : `离开${loc?.name ?? ''}`,
+          title: how === 'remote' ? '结束连线' : `离开${placeName ?? ''}`,
           summary,
           mode: how,
           youAt,

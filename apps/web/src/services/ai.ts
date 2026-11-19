@@ -277,8 +277,10 @@ export class RoutedImage implements ImageClient {
     const free = !!req.free && (!!c || req.authorName !== undefined);
     if (!c && !free) throw new AiError('no_route', '找不到这个角色');
     const now = new Date();
+    // 服装参考（生图设置，默认开）：关着时她和你的衣服都不给，由模型按画面自己设计（预设里 outfit-free 那块）
+    const outfitRef = useAiStore().routeOf('image').imageStyle?.outfitRef !== false;
     // 节律里今天这个场景该穿的那套：一起做事时锁定（同一天的图衣服一致），配图时只告诉模型；画"你"时不用她的衣服
-    const outfit = req.subject || !c || free ? undefined : useRhythmStore().outfitFor(c.id, req.sceneId ?? null);
+    const outfit = !outfitRef || req.subject || !c || free ? undefined : useRhythmStore().outfitFor(c.id, req.sceneId ?? null);
     // 真实天气：画"你"、或者她在你这边真实的地方时用你那边的，否则用她那边的（她住在别的城市时是那里的）
     const weatherStore = useWeatherStore();
     const atReal = getLocation(c?.locationId)?.area === 'real';
@@ -286,7 +288,11 @@ export class RoutedImage implements ImageClient {
     // "你"：这条聊天用的人设（预设里的 {{user}}）；入画要填了外观 tags
     const persona = c && !free ? personaOf(useChatStore().chatOfCharacter(c.id)) : null;
     const looks = persona?.image;
-    const withUser = persona && req.withUser && !req.subject && looks?.appearanceTags.trim() ? { name: persona.name, appearanceTags: looks.appearanceTags.trim(), negativeTags: looks.negativeTags.trim() } : null;
+    // 你常穿的那套：服装参考开着时给（和她的衣服一起锁就由程序加进你那一份，否则只告诉模型）
+    const yourOutfit = outfitRef ? looks?.outfitTags.trim() : '';
+    const withUser = persona && req.withUser && !req.subject && looks?.appearanceTags.trim()
+      ? { name: persona.name, appearanceTags: looks.appearanceTags.trim(), negativeTags: looks.negativeTags.trim(), ...(yourOutfit ? { outfit: { tags: yourOutfit, locked: !!req.lockOutfit } } : {}) }
+      : null;
     const input: ImagePromptInput = {
       mode: req.mode,
       moment: req.moment,
@@ -295,9 +301,10 @@ export class RoutedImage implements ImageClient {
       character: free || !c
         ? { name: c?.name ?? req.authorName ?? '', appearanceTags: '', outfit: null }
         : req.subject && persona
-          ? { name: persona.name, appearanceTags: looks?.appearanceTags.trim() ?? '', negativeTags: looks?.negativeTags.trim(), outfit: null }
+          ? { name: persona.name, appearanceTags: looks?.appearanceTags.trim() ?? '', negativeTags: looks?.negativeTags.trim(), outfit: yourOutfit ? { name: '常穿', tags: yourOutfit } : null }
           : { name: c.name, appearanceTags: imageAppearance(c), negativeTags: c.negativeTags, pronoun: c.pronoun, outfit: outfit ?? null },
       lockOutfit: !!req.lockOutfit && !!outfit?.tags,
+      ...(outfitRef ? {} : { outfitFree: true }),
       ...(req.subject && c ? { companionName: c.name } : persona ? { companionName: persona.name } : {}),
       ...(withUser ? { withUser } : {}),
       ...(req.size ? { size: req.size } : {}),
