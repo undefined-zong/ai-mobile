@@ -4,7 +4,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
 import { useLibraryStore } from './library';
-import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
+import { blockedReason, DEFAULT_INTIFACE_ADDRESS, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
 import { MissingPresetError } from '@/services/prompt';
 import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, type ToyCaps, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
 
@@ -40,7 +40,7 @@ export interface ToySettings {
 const KEY = 'ai-mobile:toys';
 
 export const DEFAULT_TOY_SETTINGS: ToySettings = {
-  url: '127.0.0.1:12345',
+  url: DEFAULT_INTIFACE_ADDRESS,
   autoConnect: false,
   source: 'separate',
   caps: { ...DEFAULT_CAPS },

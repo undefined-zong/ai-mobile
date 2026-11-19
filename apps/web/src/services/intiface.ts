@@ -1,4 +1,5 @@
 import type { ScalarKind } from '@app/shared';
+import { platform } from '@/pwa';
 
 /**
  * Intiface Central 的客户端（心跳用，设计文档 §9.14）：Buttplug 协议 v3，JSON 走 WebSocket。
@@ -9,6 +10,8 @@ import type { ScalarKind } from '@app/shared';
  *
  * 地址：Intiface Central 默认在 127.0.0.1:12345（设置里打开"所有网卡"才能从别的设备连）。
  * 页面是 https 时浏览器只让连 ws://127.0.0.1 / localhost 和 wss://（混合内容），连局域网别的电脑要 wss；
+ * iPhone / iPad 上的浏览器（都是 WebKit，装到主屏幕的也一样）和 Mac 上的 Safari 连本机的 ws:// 也拦（WebKit bug 171934），
+ * Intiface Central 只有 ws://，所以那里只有 wss:// 的地址连得上。
  * 连不上、被拦时把原因写清楚（见 blockedReason / connectError）。
  */
 
@@ -72,6 +75,8 @@ interface Pending {
 }
 
 const DEFAULT_PORT = '12345';
+/** 没填地址时连的：这台设备上的 Intiface Central */
+export const DEFAULT_INTIFACE_ADDRESS = `127.0.0.1:${DEFAULT_PORT}`;
 
 function isLoopback(host: string): boolean {
   const h = host.replace(/^\[|\]$/g, '');
@@ -80,14 +85,14 @@ function isLoopback(host: string): boolean {
 
 /** 你填的地址 → WebSocket 地址：127.0.0.1:12345 / 192.168.1.5 / ws://… / wss://…（没写端口时 ws 用 12345） */
 export function normalizeIntifaceUrl(input: string): { url: string; host: string; loopback: boolean; secure: boolean } | { error: string } {
-  let t = input.trim() || `127.0.0.1:${DEFAULT_PORT}`;
+  let t = input.trim() || DEFAULT_INTIFACE_ADDRESS;
   if (/^https?:\/\//i.test(t)) t = t.replace(/^http/i, 'ws');
   if (!/^wss?:\/\//i.test(t)) t = `ws://${t}`;
   let u: URL;
   try {
     u = new URL(t);
   } catch {
-    return { error: '地址看不懂：写成 127.0.0.1:12345，或者 ws://192.168.1.5:12345、wss://…' };
+    return { error: `地址看不懂：写成 ${DEFAULT_INTIFACE_ADDRESS}，或者 ws://192.168.1.5:${DEFAULT_PORT}、wss://…` };
   }
   if (!u.port && u.protocol === 'ws:') u.port = DEFAULT_PORT;
   return { url: u.toString().replace(/\/$/, ''), host: u.host, loopback: isLoopback(u.hostname), secure: u.protocol === 'wss:' };
@@ -96,13 +101,23 @@ export function normalizeIntifaceUrl(input: string): { url: string; host: string
 /** 浏览器会不会直接拦下这个地址（https 页面连没加密的局域网地址）：会的话返回原因 */
 export function blockedReason(target: { host: string; loopback: boolean; secure: boolean }): string | null {
   if (typeof location === 'undefined' || location.protocol !== 'https:' || target.secure || target.loopback) return null;
-  return `这个页面是 https，浏览器不让它连没加密的 ws://${target.host}。可以：在这台设备上开 Intiface Central（地址填 127.0.0.1:12345）；或者给 Intiface 套一层 https（例如 Caddy、cloudflared），地址填 wss://…`;
+  return `这个页面是 https，浏览器不让它连没加密的 ws://${target.host}。可以：在这台设备上开 Intiface Central（地址填 ${DEFAULT_INTIFACE_ADDRESS}）；或者给 Intiface 套一层 https（例如 Caddy、cloudflared），地址填 wss://…`;
+}
+
+/** 页面是 https、地址是没加密的 ws://，浏览器又是 WebKit（iPhone / iPad 上的所有浏览器、Mac 上的 Safari）：连本机也会被拦 */
+function webkitBlocks(target: { secure: boolean }): boolean {
+  if (typeof location === 'undefined' || location.protocol !== 'https:' || target.secure) return false;
+  const ua = navigator.userAgent;
+  return platform() === 'ios' || (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua));
 }
 
 /** 连不上时说清楚可能是哪一步 */
-export function connectError(target: { url: string; loopback: boolean }, detail: string): string {
+export function connectError(target: { url: string; loopback: boolean; secure: boolean }, detail: string): string {
   const where = target.loopback ? '这台设备上的 Intiface Central' : `${target.url} 那边的 Intiface Central`;
-  return `连不上 ${target.url}（${detail}）。看看${where}开着没有、点了 Start Server 没有、端口是不是 12345${target.loopback ? '' : '，Intiface 设置里有没有打开"所有网卡"'}；浏览器问要不要允许访问本地网络设备时选允许。`;
+  const webkit = webkitBlocks(target)
+    ? 'iPhone / iPad 上的网页（装到主屏幕的也一样）和 Mac 上的 Safari 不让 https 页面连 ws://，连本机的 Intiface 也不行，多半就是这个原因；Intiface Central 只有 ws://，在这里只有 wss:// 的地址连得上。'
+    : '';
+  return `连不上 ${target.url}（${detail}）。${webkit}看看${where}开着没有、点了 Start Server 没有、端口对不对（默认 ${DEFAULT_PORT}）${target.loopback ? '' : '，Intiface 设置里有没有打开"所有网卡"'}；浏览器问要不要允许访问本地网络设备时选允许。`;
 }
 
 function parseDevice(raw: Obj): ToyDevice | null {
@@ -149,14 +164,16 @@ export class IntifaceClient {
   }
 
   /** 连上并握手；失败时抛出写好原因的错误 */
-  async connect(target: { url: string; loopback: boolean }): Promise<void> {
+  async connect(target: { url: string; loopback: boolean; secure: boolean }): Promise<void> {
     this.close();
     this.closing = false;
     let ws: WebSocket;
     try {
       ws = new WebSocket(target.url);
     } catch (e) {
-      throw new Error(connectError(target, e instanceof Error ? e.message : String(e)));
+      // 浏览器直接拒绝（SecurityError）：是浏览器拦的，不是 Intiface 没开
+      const blocked = e instanceof DOMException && e.name === 'SecurityError';
+      throw new Error(connectError(target, blocked ? '浏览器不让这个 https 页面连没加密的 ws://' : e instanceof Error ? e.message : String(e)));
     }
     this.ws = ws;
     await new Promise<void>((resolve, reject) => {
