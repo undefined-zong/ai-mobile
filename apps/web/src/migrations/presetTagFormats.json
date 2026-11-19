@@ -15,27 +15,13 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- tags 顺序：人数（1girl / 1boy / 1girl, 1boy）→ 构图与镜头（upper body, cowboy shot, from side, close-up…）→ 表情与动作 → 服装 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写角色的外观（发色、瞳色、发型、体型），程序会自动加在最前面。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 人物特写、半身用 portrait；风景、两个人并排用 landscape。"
-      ]
-    }
-  },
-  {
-    "id": "tag-format:image-workshop",
-    "file": "image-workshop.json",
-    "forced": {
-      "blocks": [
-        "format"
-      ]
-    },
-    "renamed": {
-      "blocks": {
-        "format": [
-          "输出格式（JSON，字段名别改）",
-          "输出格式（### 和它前面的英文词别改）"
+        [
+          "- 人物特写、半身用 portrait；风景、两个人并排用 landscape。",
+          "- 画幅：人物特写、半身是竖图（不用写 size###）；风景、两个人并排写 size###landscape###。"
         ]
-      }
+      ]
     }
   },
   {
@@ -58,13 +44,40 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- tags 顺序：人数（no humans / 1girl / 1boy…）→ 构图与镜头（from above, close-up, still life, selfie, pov…）→ 主体（食物、物件、人物的表情和动作）→ 场景与背景 → 光线、时段 → 氛围。\n- 食物、物件、风景这类画面用 no humans；食物写清楚是什么、装在什么里、冒不冒热气（food focus, steam…）。\n- 吃的、东西要画对：Danbooru 上有的直接用那个 tag；冷门的（地方小吃、家常菜）写最接近的 tag，再用 tags 写出外形（皮的厚薄透明、形状褶边、汤色、配料、切法……），\"要画的画面\"和正文里写到的细节都画进去；容易被画成别的东西的（馄饨画成饺子、肠粉画成春卷），在 negative 里写那个别的东西。\n- 画面描述很短时，补上合适的构图、背景和光线，让画面完整。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画幅按内容选：俯拍的一桌菜、一碗面用 square，竖着拍的街景、人物用 portrait，横着拍的风景用 landscape。"
+        [
+          "在 negative 里写那个别的东西",
+          "在 negative### 里写那个别的东西"
+        ],
+        [
+          "- 画幅按内容选：",
+          "- 画幅按内容选（写在 size### 里）："
+        ]
       ],
       "communityMember": [
-        "这一帖是{{char}}自己发的。先看\"要画的画面\"里有没有{{char}}本人：\n- 没写到{{char}}（只拍了吃的、东西、风景）：这是{{char}}用手机拍的照片，画面里没有人。tags 以 no humans 开头，negative 写 1girl, 1boy；这时程序不会加{{char}}的长相。不要因为是{{char}}发的帖就把{{char}}画进去。\n- 写到了{{char}}（自拍、别人帮拍、{{char}}在画面里吃东西）：{{char}}是画面的主角，长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写。tags 以 1girl 或 1boy（按{{char}}的性别）、solo 开头；自拍用 selfie，别人帮拍用 upper body 或 cowboy shot；{{char}}在画面中间、整张脸都在画面里，吃的、东西拿在手里或摆在面前，大小和人对得上；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。不要用 food focus、still life 这类以东西为主的镜头，否则{{char}}会被挤到画面边上、只露半张脸。"
+        [
+          "tags 以 no humans 开头，negative 写 1girl, 1boy；",
+          "tags 以 no humans 开头，另起一行写 negative###1girl, 1boy###；"
+        ]
       ]
+    }
+  },
+  {
+    "id": "tag-format:image-workshop",
+    "file": "image-workshop.json",
+    "forced": {
+      "blocks": [
+        "format"
+      ]
+    },
+    "renamed": {
+      "blocks": {
+        "format": [
+          "输出格式（JSON，字段名别改）",
+          "输出格式（### 和它前面的英文词别改）"
+        ]
+      }
     }
   },
   {
@@ -134,9 +147,12 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 写了\"服装（程序会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只画{{char}}一个人（solo）；{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。"
+        [
+          "- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+          "- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。"
+        ]
       ]
     }
   },
@@ -156,9 +172,12 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 桌上的食物和饮料 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 写了\"服装（程序会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只有{{char}}一个人（solo）；{{user}}最多露出手或者碗盘的一角，不画脸。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。"
+        [
+          "- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+          "- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。"
+        ]
       ]
     }
   },
@@ -178,9 +197,16 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（upper body, cowboy shot, close-up…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 写了\"服装（程序会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只有{{char}}一个人（solo）。\n- 一律正对面：像坐在{{char}}对面看过去，构图里写 from front、facing viewer，脸朝向镜头、两只眼睛都看得到；不要侧脸、侧身、背影（不写 from side、profile、from behind），negative 里写上 from side, profile, from behind。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。"
+        [
+          "- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+          "- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。"
+        ],
+        [
+          "，negative 里写上 from side, profile, from behind。",
+          "，另起一行 negative### 里写上 from side, profile, from behind。"
+        ]
       ]
     }
   },
@@ -200,15 +226,52 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}和{{user}}的长相（发色、瞳色、发型、体型），程序会把长相加上。\n- 写了\"服装（程序会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸，不写 characters。\n- 双人图：只在发了\"{{user}}可以入画\"时画，照那里的格式写 characters；tags 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自的 characters。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。"
+        [
+          "- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+          "- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。"
+        ],
+        [
+          "不画脸，不写 characters。",
+          "不画脸，不写 char### / user###。"
+        ],
+        [
+          "照那里的格式写 characters；tags 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自的 characters。",
+          "照那里的写法分别写 char### 和 user###；image### 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自那一行。"
+        ]
       ],
       "duoRules": [
-        "双人画面按以下规则写（单人仍按单人规则）：\n- 全局 tags 写总人数，例如 1boy, 1girl 或 2girls；各自 characters 的 tags 写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物栏。人物类别要写，其他已有外观仍由程序补上。\n- 人物之间的动作写在各自人物栏：主动拥抱者写 source#hug，被拥抱者写 target#hug；相互拥抱时双方都写 mutual#hug。source# 表示发起，target# 表示承受，mutual# 表示相互；按画面里的真实动作使用，不把普通物件或外观词一律加前缀。指向对方的示例是 source#pointing at another，对方写 target#pointing。必要时用简短英文句子说明谁对谁做什么，保留 # 写法。\n- 拿手机、比耶等属于某个人的动作只写进那个人的 tags，不写全局。自拍时在持手机者栏说明 holding phone, taking selfie，并用英文明确由这个人拿手机；另一人的手势写在另一栏。\n- 各人物的 negative 只写针对该人物的额外负面词，可用来避免另一人的特征或动作串过来；全局 negative 只写整张画面的限制。\n- 位置明确时写 position，并按画面从左到右排列 characters；英文描述、人物顺序、位置一致。位置不明确时省略 position，交给模型安排，不给两个人都填 center。"
+        [
+          "- 全局 tags 写总人数，例如 1boy, 1girl 或 2girls；各自 characters 的 tags 写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物栏。",
+          "- image### 写总人数，例如 1boy, 1girl 或 2girls；char### / user### 里写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物那一行。"
+        ],
+        [
+          "- 人物之间的动作写在各自人物栏：",
+          "- 人物之间的动作写在各自那一行："
+        ],
+        [
+          "只写进那个人的 tags，不写全局。自拍时在持手机者栏说明",
+          "只写进那个人的那一行，不写进 image###。自拍时在持手机者那一行说明"
+        ],
+        [
+          "另一人的手势写在另一栏。",
+          "另一人的手势写在另一行。"
+        ],
+        [
+          "- 各人物的 negative 只写针对该人物的额外负面词，可用来避免另一人的特征或动作串过来；全局 negative 只写整张画面的限制。",
+          "- 只针对一个人的额外负面词写在 char negative### / user negative### 里，可用来避免另一人的特征或动作串过来；negative### 只写整张画面的限制。"
+        ],
+        [
+          "- 位置明确时写 position，并按画面从左到右排列 characters；英文描述、人物顺序、位置一致。位置不明确时省略 position，交给模型安排，不给两个人都填 center。",
+          "- 位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），并按画面从左到右排这两行；英文描述、人物顺序、位置一致。位置不明确时不写位置，交给模型安排，不给两个人都写 center。"
+        ]
       ],
       "momentArrive": [
-        "这一刻：刚到约会的地方。只画{{char}}一个人（solo），不写 characters：{{char}}走在前面半步，回过头来看你（looking back, looking at viewer），带着期待的笑，或者朝你招手；地点的特色要在背景里看得出来（按\"地点\"和\"要画的画面\"）。竖图，cowboy shot 或 full body，留出背景。"
+        [
+          "只画{{char}}一个人（solo），不写 characters：",
+          "只画{{char}}一个人（solo），不写 char### / user###："
+        ]
       ]
     }
   },
@@ -245,9 +308,32 @@
         ]
       }
     },
-    "replaced": {
+    "patched": {
       "rules": [
-        "规则：\n- 只写\"连着的玩具\"里列出的键；强度在上限以内。\n- 轻重跟着剧情：没有身体接触、只是聊天时保持现状或者很轻（5–15），也可以不写；轻抚、试探 10–30；渐入、贴紧 30–55；节奏加快、激烈 55–80；最激烈、快到顶点时才接近上限。先轻后重，从很轻一下子跳到很强要有理由。\n- at 写{{char}}原话里连续的 4–10 个字（照抄，不改字），读到那里时执行；第一步可以写原话开头的几个字。\n- 一句话里 1–4 步就够，不要每句都换。玩具已经在做的和这句话对得上时不用重复写，输出空的 steps。\n- 变速（pattern + interval）比单一的强度更像真的：抚摸用慢的起伏（每档 600–1500 毫秒），揉动、抽送用快一点的（每档 200–500 毫秒），寸止用骤停（例如 [90, 0]，停的那一档长一点）。\n- 伸缩（LINEAR）：缓慢的用大幅度、每下 800–1500 毫秒；激烈的用中等幅度、每下 250–500 毫秒；不要快过\"最快的速度\"。\n- {{char}}说停下、结束、休息的时候：写 {\"STOP\": true}。"
+        [
+          "；强度在上限以内。",
+          "；强度照 0–100 写，不用自己压低（每个头的上限由程序按比例换算）。"
+        ],
+        [
+          "最激烈、快到顶点时才接近上限。",
+          "最激烈、快到顶点时 80–100。"
+        ],
+        [
+          "- at 写{{char}}原话里连续的 4–10 个字（照抄，不改字），读到那里时执行；第一步可以写原话开头的几个字。",
+          "- <device> 插在发生那件事的字后面，读到那里时执行；一开口就要变的插在最前面。"
+        ],
+        [
+          "- 一句话里 1–4 步就够",
+          "- 一句话里 1–4 个就够"
+        ],
+        [
+          "不用重复写，输出空的 steps。",
+          "不用重复写，原样抄一遍、不插 <device>。"
+        ],
+        [
+          "写 {\"STOP\": true}。",
+          "插 <device>\"STOP\": true</device>。"
+        ]
       ]
     },
     "maxTokens": [
@@ -258,18 +344,202 @@
   {
     "id": "tag-format:feature-heart",
     "file": "feature-heart.json",
-    "replaced": {
+    "patched": {
       "deviceInline": [
-        "【玩具：你自己写指令】{{user}}连着成人玩具（场景任务里写着能写哪些键、强度上限、现在在做什么）。说到身体上的动作、节奏变化时，在那句话后面紧接着写一个 <device>…</device>，{{user}}读到那里时玩具照着做：\n<device>\"VIBRATE\": 30</device>  强度 0–100\n<device>\"VIBRATE\": {\"pattern\": [20, 50, 30], \"interval\": [800, 400, 600]}</device>  变速：每一档的强度、每一档多少毫秒，一直循环（加 \"loop\": 3 只放 3 遍）\n<device>\"LINEAR\": {\"start_position\": 10, \"end_position\": 90, \"duration\": 800}</device>  伸缩：在两个位置之间来回，每一下多少毫秒\n<device>\"STOP\": true</device>  停下\n规则：只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近上限；先轻后重，和你说的话对得上；{{user}}说停、说难受时立刻写 STOP。一次回复里 1–3 个就够，不解释指令；{{user}}看不到标签里的东西。"
+        [
+          "（场景任务里写着能写哪些键、强度上限、现在在做什么）",
+          "（场景任务里写着能写哪些键、现在在做什么）"
+        ],
+        [
+          "<device>\"VIBRATE\": 30</device>  强度 0–100\n",
+          "<device>\"VIBRATE\": 30</device>  强度 0–100（几个头时写 [a, b] 分别控制，顺序见场景任务）\n"
+        ],
+        [
+          "规则：只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近上限；",
+          "规则：只写场景任务里列出的键；强度照 0–100 写，不用自己压低（{{user}}给每个头设的上限程序会按比例换算）；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时 80–100；"
+        ]
       ]
     }
   },
   {
     "id": "tag-format:feature-heart-voice",
     "file": "feature-heart-voice.json",
-    "replaced": {
+    "patched": {
       "deviceInline": [
-        "【玩具：你自己写指令】{{user}}连着成人玩具（场景任务里写着能写哪些键、强度上限、现在在做什么）。说到身体上的动作、节奏变化时，在那一句后面紧接着写一个 <device>…</device>，{{user}}听到那里时玩具照着做：\n<device>\"VIBRATE\": 30</device>  强度 0–100\n<device>\"VIBRATE\": {\"pattern\": [20, 50, 30], \"interval\": [800, 400, 600]}</device>  变速：每一档的强度、每一档多少毫秒，一直循环（加 \"loop\": 3 只放 3 遍）\n<device>\"LINEAR\": {\"start_position\": 10, \"end_position\": 90, \"duration\": 800}</device>  伸缩：在两个位置之间来回，每一下多少毫秒\n<device>\"STOP\": true</device>  停下\n规则：只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近上限；先轻后重，和你说的话对得上；{{user}}说停、说难受时立刻写 STOP。一次回复里 1–3 个就够，不解释指令；{{user}}看不到标签里的东西，也不会念出来，别把指令的内容说出口。"
+        [
+          "（场景任务里写着能写哪些键、强度上限、现在在做什么）",
+          "（场景任务里写着能写哪些键、现在在做什么）"
+        ],
+        [
+          "<device>\"VIBRATE\": 30</device>  强度 0–100\n",
+          "<device>\"VIBRATE\": 30</device>  强度 0–100（几个头时写 [a, b] 分别控制，顺序见场景任务）\n"
+        ],
+        [
+          "规则：只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近上限；",
+          "规则：只写场景任务里列出的键；强度照 0–100 写，不用自己压低（{{user}}给每个头设的上限程序会按比例换算）；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时 80–100；"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "tag-format:assistant",
+    "file": "assistant.json",
+    "patched": {
+      "rules": [
+        [
+          "（照参照预设里那块抄，字段名一个字都别改）",
+          "（照参照预设里那块抄，字段名和 image###、<device> 这类写法一个字都别改）"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "tag-format:copies:image",
+    "categories": [
+      "image"
+    ],
+    "patched": {
+      "*": [
+        [
+          "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait|landscape|square\"}",
+          "只输出下面这样的一段，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\n需要额外的负面 tags 时另起一行写 negative###英文 tags###；不是竖图时另起一行写 size###landscape### 或 size###square###（程序给了\"画幅\"时照程序的）。"
+        ],
+        [
+          "- 人物特写、半身用 portrait；风景、两个人并排用 landscape。",
+          "- 画幅：人物特写、半身是竖图（不用写 size###）；风景、两个人并排写 size###landscape###。"
+        ],
+        [
+          "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait、square 或 landscape\"}",
+          "只输出下面这样的一段，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\n需要额外的负面 tags 时另起一行写 negative###英文 tags###；不是竖图时另起一行写 size###landscape### 或 size###square###（程序给了\"画幅\"时照程序的）。"
+        ],
+        [
+          "在 negative 里写那个别的东西",
+          "在 negative### 里写那个别的东西"
+        ],
+        [
+          "- 画幅按内容选：",
+          "- 画幅按内容选（写在 size### 里）："
+        ],
+        [
+          "tags 以 no humans 开头，negative 写 1girl, 1boy；",
+          "tags 以 no humans 开头，另起一行写 negative###1girl, 1boy###；"
+        ],
+        [
+          "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait\"}",
+          "只输出下面这样的一段，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\n需要额外的负面 tags 时另起一行写 negative###英文 tags###。"
+        ],
+        [
+          "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags（总是写上 loli, child, underage）\", \"size\": \"portrait\"}",
+          "只输出下面这样的两行，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\nnegative###loli, child, underage（再加别的要避开的）###"
+        ],
+        [
+          "- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+          "- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。"
+        ],
+        [
+          "，negative 里写上 from side, profile, from behind。",
+          "，另起一行 negative### 里写上 from side, profile, from behind。"
+        ],
+        [
+          "不画脸，不写 characters。",
+          "不画脸，不写 char### / user###。"
+        ],
+        [
+          "照那里的格式写 characters；tags 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自的 characters。",
+          "照那里的写法分别写 char### 和 user###；image### 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自那一行。"
+        ],
+        [
+          "- 全局 tags 写总人数，例如 1boy, 1girl 或 2girls；各自 characters 的 tags 写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物栏。",
+          "- image### 写总人数，例如 1boy, 1girl 或 2girls；char### / user### 里写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物那一行。"
+        ],
+        [
+          "- 人物之间的动作写在各自人物栏：",
+          "- 人物之间的动作写在各自那一行："
+        ],
+        [
+          "只写进那个人的 tags，不写全局。自拍时在持手机者栏说明",
+          "只写进那个人的那一行，不写进 image###。自拍时在持手机者那一行说明"
+        ],
+        [
+          "另一人的手势写在另一栏。",
+          "另一人的手势写在另一行。"
+        ],
+        [
+          "- 各人物的 negative 只写针对该人物的额外负面词，可用来避免另一人的特征或动作串过来；全局 negative 只写整张画面的限制。",
+          "- 只针对一个人的额外负面词写在 char negative### / user negative### 里，可用来避免另一人的特征或动作串过来；negative### 只写整张画面的限制。"
+        ],
+        [
+          "- 位置明确时写 position，并按画面从左到右排列 characters；英文描述、人物顺序、位置一致。位置不明确时省略 position，交给模型安排，不给两个人都填 center。",
+          "- 位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），并按画面从左到右排这两行；英文描述、人物顺序、位置一致。位置不明确时不写位置，交给模型安排，不给两个人都写 center。"
+        ],
+        [
+          "只画{{char}}一个人（solo），不写 characters：",
+          "只画{{char}}一个人（solo），不写 char### / user###："
+        ],
+        [
+          "只输出JSON：{\"caption\":\"人物名与身份，20字以内\",\"tags\":\"solo, full body, standing等英文tags\",\"negative\":\"额外英文负面tags\",\"size\":\"portrait\"}。不写质量词或画师名。",
+          "只输出：image###solo, full body, standing等英文tags###，需要额外负面词时另起一行写 negative###英文负面tags###。不写质量词或画师名，### 和它前面的英文词别改。"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "tag-format:copies:device",
+    "categories": [
+      "device"
+    ],
+    "patched": {
+      "*": [
+        [
+          "只输出一个 JSON 对象，不要任何其他文字：\n{\"steps\": [{\"at\": \"{{char}}原话里的几个字\", \"do\": {\"VIBRATE\": 30}}, {\"at\": \"……\", \"do\": {\"VIBRATE\": {\"pattern\": [30, 60, 40], \"interval\": [800, 400, 600]}}}]}\ndo 里可以同时写几个键（例如震动和伸缩一起）。键的写法：\n- \"VIBRATE\" / \"OSCILLATE\" / \"ROTATE\" / \"CONSTRICT\" / \"INFLATE\"：0–100 的数；或者 [a, b] 分别控制几个马达；或者 {\"pattern\": [强度…], \"interval\": [毫秒…], \"loop\": 遍数（不写就一直循环）}\n- \"LINEAR\"：{\"start_position\": 0–100, \"end_position\": 0–100, \"duration\": 每下毫秒}\n- \"LINEAR_SPEED\"：{\"start_position\", \"end_position\", \"start_duration\", \"end_duration\", \"steps\"}（越来越快或越来越慢）\n- \"LINEAR_PATTERN\"：{\"repeat\": true, \"segments\": [{\"start\", \"end\", \"durations\": [毫秒…], \"loop\": 遍数}]}\n- \"STOP\": true\n这一句不用变时输出 {\"steps\": []}。",
+          "输出：把{{char}}这一句照抄一遍（不改字、不加别的话），在要变的地方插入 <device>…</device>。例如：\n嗯……先轻一点<device>\"VIBRATE\": 20</device>，慢慢来——这样呢？<device>\"VIBRATE\": {\"pattern\": [40, 70, 50], \"interval\": [800, 400, 600]}</device>\n抄到最后一个 <device> 为止就可以停，后面不用抄。<device> 里写一个或几个键（例如震动和伸缩一起），键的写法：\n- \"VIBRATE\" / \"OSCILLATE\" / \"ROTATE\" / \"CONSTRICT\" / \"INFLATE\"：0–100 的数；或者 [a, b] 分别控制几个头（顺序见\"连着的玩具\"）；或者 {\"pattern\": [强度…], \"interval\": [毫秒…], \"loop\": 遍数（不写就一直循环）}\n- \"LINEAR\"：{\"start_position\": 0–100, \"end_position\": 0–100, \"duration\": 每下毫秒}\n- \"LINEAR_SPEED\"：{\"start_position\", \"end_position\", \"start_duration\", \"end_duration\", \"steps\"}（越来越快或越来越慢）\n- \"LINEAR_PATTERN\"：{\"repeat\": true, \"segments\": [{\"start\", \"end\", \"durations\": [毫秒…], \"loop\": 遍数}]}\n- \"STOP\": true\n这一句不用变时原样抄一遍，不插 <device>。"
+        ],
+        [
+          "；强度在上限以内。",
+          "；强度照 0–100 写，不用自己压低（每个头的上限由程序按比例换算）。"
+        ],
+        [
+          "最激烈、快到顶点时才接近上限。",
+          "最激烈、快到顶点时 80–100。"
+        ],
+        [
+          "- at 写{{char}}原话里连续的 4–10 个字（照抄，不改字），读到那里时执行；第一步可以写原话开头的几个字。",
+          "- <device> 插在发生那件事的字后面，读到那里时执行；一开口就要变的插在最前面。"
+        ],
+        [
+          "- 一句话里 1–4 步就够",
+          "- 一句话里 1–4 个就够"
+        ],
+        [
+          "不用重复写，输出空的 steps。",
+          "不用重复写，原样抄一遍、不插 <device>。"
+        ],
+        [
+          "写 {\"STOP\": true}。",
+          "插 <device>\"STOP\": true</device>。"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "tag-format:copies:feature",
+    "categories": [
+      "feature"
+    ],
+    "patched": {
+      "*": [
+        [
+          "（场景任务里写着能写哪些键、强度上限、现在在做什么）",
+          "（场景任务里写着能写哪些键、现在在做什么）"
+        ],
+        [
+          "<device>\"VIBRATE\": 30</device>  强度 0–100\n",
+          "<device>\"VIBRATE\": 30</device>  强度 0–100（几个头时写 [a, b] 分别控制，顺序见场景任务）\n"
+        ],
+        [
+          "规则：只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近上限；",
+          "规则：只写场景任务里列出的键；强度照 0–100 写，不用自己压低（{{user}}给每个头设的上限程序会按比例换算）；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时 80–100；"
+        ]
       ]
     }
   }

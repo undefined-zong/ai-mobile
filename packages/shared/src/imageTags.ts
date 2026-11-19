@@ -12,6 +12,15 @@ export const IMAGE_PROMPT_SECTIONS = ['image', 'negative', 'size', 'char', 'user
 /** char / user 后面能跟的：位置，和只针对这个人的负面 tags */
 export const IMAGE_PROMPT_MODIFIERS = ['left', 'right', 'center', 'negative'] as const;
 
+/** 每一段写什么（写给助手看的说明，也是预设里输出格式的依据） */
+export const IMAGE_PROMPT_SECTION_DOCS: Record<(typeof IMAGE_PROMPT_SECTIONS)[number], string> = {
+  image: '画面的英文 tags（必须有）',
+  negative: '额外的负面 tags（可以不写）',
+  size: '画幅 portrait / landscape / square（可以不写：不写是竖图，程序给了画幅时照程序的）',
+  char: '两个人同框时Ta的那一份（人物类别 boy / girl / other、表情、动作、服装）',
+  user: '两个人同框时你的那一份',
+};
+
 /** 逗号分隔的 tags 合并：去掉空项和重复项（不区分大小写），保留第一次出现的顺序 */
 export function joinTags(...lists: (string | undefined | null)[]): string {
   const seen = new Set<string>();

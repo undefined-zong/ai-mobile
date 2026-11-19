@@ -97,7 +97,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 
 | 自带预设 | 用途 | 块 | 发送时机 | 字段 |
 | --- | --- | --- | --- | --- |
-| image*.json（9 个） | image、image:*、community-image、game-workshop-image | 输出格式 | 每次 | caption、tags、negative、size；画面里有你时多一个 characters（who、tags、position） |
+| image*.json（11 个） | image、image:*、community-image、game-workshop-image | 输出格式 | 每次 | 不是 JSON：`image###tags###`，可选 `negative###…###`、`size###…###`；画面里有你时多 `char###…###`、`user###…###`（位置 `char left###…###`，只针对一人的负面 `char negative###…###`）。标题、画幅、长相由程序拼 |
 | summary.json | summary | 输出格式 | 每次 | summary、slices（title、text、from、to、mood、special、important）、memories（type、content、importance、dueAt、supersedes、lines、entities）、relationship（affectionDelta、mood、nicknames） |
 | theater.json | theater | 输出格式 | 每次 | title、story、time、place、mood、people、hook、cg |
 | consolidate.json | consolidate | 合并重复的记忆 / 合并时间线 / 过期的待跟进改时态 / 修改画像卡 | merge / rollup / tense / profile | merges（ids、content、type、importance）/ text / updates（id、content、type、dueAt）/ ops（op、section、text、id） |
@@ -105,7 +105,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 | social-community.json | community | 建社群 / 发帖 / 网友回应 / 角色回应 | community-create / community-feed、community-member-post / community-react / community-member-react | name、description、vibe、tags、icon、color、memberCount / posts（author、title、text、image、html、htmlTitle、likes、bumps、comments、replyTo）/ likes、bumps、comments / like、bump、comment |
 | rhythm.json | rhythm | 建世界、小镇外观 / 画小镇 / 排今天 | build-world / draw-town / plan-day | fixed、name、blurb、areas、home、locations、people、schedule、meals、wardrobe……/ look、ground、path、water、buildings……/ schedule、meals、outfits、events…… |
 | health.json | health | 排这周 / 排今天 | plan-week / plan-day | focus、days（weekday、workout、minutes、rest、meals）、shopping（name、amount、where、search）、tips / warmup、items（name、sets、reps、seconds、how、easier）、cooldown、meals（breakfast、lunch、dinner……） |
-| device-heart.json | device | 输出格式 | 每次 | steps（at、do）、VIBRATE、pattern、interval、loop、start_position、end_position、duration、STOP…… |
+| device-heart.json | device | 输出格式 | 每次 | 不是 JSON：把Ta那一句照抄一遍、在要变的地方插 `<device>`，里面的 VIBRATE、pattern、interval、loop、start_position、end_position、duration、STOP…… |
 | feature-heart*.json | scene:heart、heart-voice | 玩具：你自己写指令 | device-inline | `<device>` 里的 VIBRATE、LINEAR、STOP…… |
 | feature-game-brawl.json | game-brawl | 生成战斗档案 / 开场 / 结算 | brawl-make / brawl-open / brawl-end | title、style、hp、mp、attack、speed、color、look、passive、skills / line / line |
 | feature-game-decor.json | game-decor | 她动手布置 / 她捏小人 | decor-plan / decor-avatar | line、expr、actions（do、item、x、z、turn、color……）/ line、expr、avatar（skin、hair、bangs、eyes、suit……） |
