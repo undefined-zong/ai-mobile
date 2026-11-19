@@ -4,7 +4,7 @@ import { SCALAR_KINDS, TOY_KIND_LABEL, type ScalarKind, type ToyKind } from '@ap
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
-import type { ToyDevice } from '@/services/intiface';
+import { DEFAULT_INTIFACE_ADDRESS, type ToyDevice } from '@/services/intiface';
 import { useAiStore } from '@/stores/ai';
 import { useToyStore, type CommandSource } from '@/stores/toys';
 
@@ -73,12 +73,13 @@ async function toggleConnect() {
     </div>
     <div v-if="helpOpen" class="help">
       <p>1. 装 Intiface Central（电脑、安卓、iPhone 都有），打开蓝牙，在 Devices 里连上玩具。</p>
-      <p>2. 点 Start Server（默认端口 12345）。</p>
-      <p>3. Intiface 和这个页面在同一台设备上：地址填 127.0.0.1:12345。在别的电脑上：Intiface 设置里打开"所有网卡"，地址填那台电脑的 IP；这个页面是 https 时浏览器只让连 wss://，要给 Intiface 套一层 https（例如 Caddy、cloudflared）。</p>
+      <p>2. 点 Start Server。</p>
+      <p>3. Intiface 和这个页面在同一台设备上：地址填 {{ DEFAULT_INTIFACE_ADDRESS }}。在别的电脑上：Intiface 设置里打开"所有网卡"，地址填那台电脑的 IP；这个页面是 https 时浏览器只让连 wss://，要给 Intiface 套一层 https（例如 Caddy、cloudflared）。</p>
       <p>4. 浏览器问要不要允许访问本地网络设备时选允许。</p>
+      <p>iPhone / iPad：苹果的浏览器不让 https 页面连 ws://，连本机的也不行（装到主屏幕也一样），Intiface Central 又只有 ws://，所以这里只有 wss:// 的地址连得上。</p>
     </div>
     <div class="flex gap-2 mt-2.5">
-      <input v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" placeholder="127.0.0.1:12345" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
+      <input v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" :placeholder="DEFAULT_INTIFACE_ADDRESS" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
       <van-button size="small" round :type="toys.status === 'connected' ? 'default' : 'primary'" :loading="toys.status === 'connecting'" loading-text="在连" data-testid="toy-connect" @click="toggleConnect">
         {{ toys.status === 'connected' ? '断开' : '连接' }}
       </van-button>
