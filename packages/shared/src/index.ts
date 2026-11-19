@@ -25,6 +25,7 @@ export * from './anniversary.ts';
 export * from './tags.ts';
 export * from './chatModules.ts';
 export * from './device.ts';
+export * from './kisstoy.ts';
 export * from './expressions.ts';
 export * from './outfitMatch.ts';
 export * from './portraits.ts';

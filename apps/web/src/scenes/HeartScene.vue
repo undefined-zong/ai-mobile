@@ -454,7 +454,7 @@ function stepClock() {
 const pulseStatus = computed(() => {
   const doing = Object.values(toys.levels.doing)[0];
   if (toys.notice) return toys.notice;
-  if (toys.status === 'connecting') return '正在连 Intiface Central…';
+  if (toys.status === 'connecting') return `正在连 ${toys.connectionName}…`;
   if (toys.ready) return `${toys.devices.map((d) => d.name).join('、')} · ${doing ?? (toys.settings.source === 'off' ? '指令关着' : `等${her.value.pronoun}的指令`)}`;
   if (toys.status === 'connected') return '连上了 Intiface，还没有玩具 · 点这里找';
   if (toys.settings.simulate) return `只在界面上试 · ${doing ?? `等${her.value.pronoun}的指令`}`;
@@ -527,7 +527,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibility);
   chat.setLeaveSummary(her.value.id, summary);
   ensureArt();
-  if (toys.settings.autoConnect && toys.status === 'idle') void toys.connect();
+  if (toys.autoConnect && toys.status === 'idle') void toys.connect();
   if (inputMode.value === 'type') void herTurn('heart-open');
   clockTimer = setInterval(stepClock, 400);
   beatLoop();

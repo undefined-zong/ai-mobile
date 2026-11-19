@@ -17,6 +17,7 @@ export interface ToyCaps {
   rotate: number;
   constrict: number;
   inflate: number;
+  suction: number;
   /** 伸缩：从 0 到 100 走一下最快多少毫秒（幅度小时按比例） */
   strokeMs: number;
   /** 伸缩的范围（0–100）：指令里的 0–100 按比例落在这中间 */
@@ -24,7 +25,7 @@ export interface ToyCaps {
   posMax: number;
 }
 
-export const DEFAULT_CAPS: ToyCaps = { vibrate: 100, oscillate: 100, rotate: 100, constrict: 100, inflate: 100, strokeMs: 300, posMin: 0, posMax: 100 };
+export const DEFAULT_CAPS: ToyCaps = { vibrate: 100, oscillate: 100, rotate: 100, constrict: 100, inflate: 100, suction: 100, strokeMs: 300, posMin: 0, posMax: 100 };
 /** 以前的默认上限：存着的还是这个值（没调过）就换成现在的默认 */
 export const OLD_DEFAULT_CAPS: Partial<ToyCaps> = { vibrate: 80, oscillate: 80, rotate: 80, constrict: 60, inflate: 60 };
 
@@ -36,6 +37,7 @@ export interface ToyLevels {
   rotate: number;
   constrict: number;
   inflate: number;
+  suction: number;
   /** 伸缩：现在去的位置、多快（0–100，越大越快），停着时 pace 是 0 */
   position: number;
   pace: number;
@@ -44,12 +46,12 @@ export interface ToyLevels {
 }
 
 export function emptyLevels(): ToyLevels {
-  return { vibrate: [], oscillate: 0, rotate: 0, constrict: 0, inflate: 0, position: 0, pace: 0, doing: {} };
+  return { vibrate: [], oscillate: 0, rotate: 0, constrict: 0, inflate: 0, suction: 0, position: 0, pace: 0, doing: {} };
 }
 
 /** 现在最强的那一种（0–100）：心跳的快慢按它 */
 export function intensityOf(l: ToyLevels): number {
-  return Math.max(0, ...l.vibrate, l.oscillate, l.rotate, l.constrict, l.inflate, l.pace);
+  return Math.max(0, ...l.vibrate, l.oscillate, l.rotate, l.constrict, l.inflate, l.suction, l.pace);
 }
 
 export interface ToyOutput {
@@ -61,7 +63,7 @@ export interface ToyOutput {
   stopAll(): void;
 }
 
-const ACTUATOR: Record<ScalarKind, string> = { vibrate: 'Vibrate', oscillate: 'Oscillate', rotate: 'Rotate', constrict: 'Constrict', inflate: 'Inflate' };
+const ACTUATOR: Record<ScalarKind, string> = { vibrate: 'Vibrate', oscillate: 'Oscillate', rotate: 'Rotate', constrict: 'Constrict', inflate: 'Inflate', suction: 'Suction' };
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));

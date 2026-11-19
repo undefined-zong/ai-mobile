@@ -5,6 +5,8 @@ export interface Env {
   KEK: string;
   APP_ORIGIN: string;
   APP_URL: string;
+  /** KISSTOY 官方分享遥控服务的来源，可随服务迁移调整 */
+  KISSTOY_ORIGIN?: string;
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
   VAPID_SUBJECT?: string;
