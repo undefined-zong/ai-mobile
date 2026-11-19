@@ -2,12 +2,13 @@
  * 微信读书 MCP（照 freestylefly/mcp-server-weread 移植）：那个仓库是 stdio 服务器，手机和浏览器跑不了，
  * 所以在你自己的 Hub 里兼容原有四个工具，并增加目录和章节正文工具，提供 Streamable HTTP 的 MCP 端点（/v1/weread/mcp，要登录 Hub）。
  * - 无状态：每个请求自己带登录信息，不发 Mcp-Session-Id；只实现 initialize、ping、tools/list、tools/call；
- * - 微信读书的登录信息放在请求头里（WEREAD_HEADERS）：直接给 Cookie，或者给 CookieCloud（每次去取最新的，Cookie 不怕过期），
- *   两样都给时先用 CookieCloud，取不到再用 Cookie（和那个仓库一样）。Hub 不存它们；
+ * - 微信读书的登录信息放在请求头里（WEREAD_HEADERS）：直接给 Cookie，或者给 CookieCloud（每次去取浏览器同步的 Cookie），
+ *   两样都给时先用 CookieCloud，取不到再用 Cookie。更新后的 Cookie 放在响应头里交回客户端，Hub 不落库；
  * - 返回的 JSON 照那个仓库的字段写，多给封面、简介、划线位置（range），划线和想法按在章里的位置排。
  */
 import { WEREAD_HEADERS, WEREAD_TOOLS } from '@app/shared';
 import { WeReadReader } from './weread-reader.ts';
+import { WeReadSession } from './weread-session.ts';
 
 const BASE = 'https://weread.qq.com';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
@@ -69,18 +70,18 @@ async function cookieOf(auth: Auth): Promise<string> {
 }
 
 class WeRead {
-  constructor(private readonly cookie: string) {}
+  constructor(private readonly session: WeReadSession) {}
 
-  reader() { return new WeReadReader(this.cookie); }
+  reader() { return new WeReadReader(this.session); }
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
-    return { Cookie: this.cookie, 'User-Agent': UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'zh-CN,zh;q=0.9', Referer: `${BASE}/`, ...extra };
+    return { 'User-Agent': UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'zh-CN,zh;q=0.9', Referer: `${BASE}/`, ...extra };
   }
 
   private async send(path: string, init: RequestInit, attempt = 1): Promise<Obj> {
     let res: Response;
     try {
-      res = await fetch(`${BASE}${path}`, { ...init, signal: AbortSignal.timeout(30_000) });
+      res = await this.session.fetch(`${BASE}${path}`, { ...init, signal: AbortSignal.timeout(30_000) });
     } catch (e) {
       if (attempt < 2) return this.send(path, init, attempt + 1);
       throw new Error(`连不上微信读书（${e instanceof Error ? e.message : String(e)}）`);
@@ -90,7 +91,15 @@ class WeRead {
     if (!data) throw new Error(`微信读书返回 HTTP ${res.status}，不是 JSON（${path.split('?')[0]}）`);
     const code = data.errcode ?? data.errCode;
     if (code !== undefined && code !== 0) {
-      if (code === -2012 || code === -2010) throw new Error('微信读书 Cookie 过期了：重新复制一次 Cookie（或者让 CookieCloud 再同步一次）');
+      if (code === -2012 || code === -2010) {
+        // 网页首页可用登录 Cookie 换回新会话；沿用 Set-Cookie 后重试一次。
+        if (attempt < 2) {
+          await this.session.fetch(`${BASE}/`, { headers: this.headers({ Accept: 'text/html' }), signal: AbortSignal.timeout(15_000) })
+            .then((r) => r.body?.cancel()).catch(() => undefined);
+          return this.send(path, init, attempt + 1);
+        }
+        throw new Error('微信读书 Cookie 过期了：重新复制一次 Cookie（或者让 CookieCloud 再同步一次）');
+      }
       throw new Error(`微信读书报错：${data.errmsg ?? data.errMsg ?? '未知'}（${code}）`);
     }
     return data;
@@ -133,7 +142,7 @@ class WeRead {
   /** 章节目录（加上"点评"这一章） */
   async chapters(bookId: string): Promise<Obj[]> {
     // 先访问一次首页（那个仓库也这样做，让会话有效）
-    await fetch(`${BASE}/`, { headers: this.headers({ Accept: 'text/html' }), signal: AbortSignal.timeout(15_000) }).then((r) => r.body?.cancel()).catch(() => undefined);
+    await this.session.fetch(`${BASE}/`, { headers: this.headers({ Accept: 'text/html' }), signal: AbortSignal.timeout(15_000) }).then((r) => r.body?.cancel()).catch(() => undefined);
     const data = await this.send('/web/book/chapterInfos', {
       method: 'POST',
       headers: this.headers({ 'Content-Type': 'application/json;charset=UTF-8', Origin: BASE, Referer: `${BASE}/web/reader/${bookId}` }),
@@ -467,7 +476,7 @@ interface RpcRequest {
   params?: Obj;
 }
 
-async function handle(msg: RpcRequest, auth: Auth): Promise<Obj | null> {
+async function handle(msg: RpcRequest, session: () => Promise<WeReadSession>): Promise<Obj | null> {
   const id = msg.id ?? null;
   const ok = (result: unknown) => ({ jsonrpc: '2.0', id, result });
   const fail = (code: number, message: string) => ({ jsonrpc: '2.0', id, error: { code, message } });
@@ -489,7 +498,7 @@ async function handle(msg: RpcRequest, auth: Auth): Promise<Obj | null> {
       const run = HANDLERS[name];
       if (!run) return fail(-32602, `未知的工具：${name}`);
       try {
-        const api = new WeRead(await cookieOf(auth));
+        const api = new WeRead(await session());
         return ok(text(await run(api, (msg.params?.arguments as Obj) ?? {})));
       } catch (e) {
         return ok({ content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true });
@@ -513,7 +522,12 @@ export async function wereadMcp(request: Request): Promise<Response> {
     return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: '无效的 JSON' } }, { status: 400 });
   }
   const auth = authOf(request);
-  const out = Array.isArray(msg) ? (await Promise.all(msg.map((m) => handle(m, auth)))).filter((r): r is Obj => !!r) : await handle(msg, auth);
+  let current: WeReadSession | undefined;
+  let pending: Promise<WeReadSession> | undefined;
+  const session = () => pending ??= cookieOf(auth).then((cookie) => current = new WeReadSession(cookie));
+  const out = Array.isArray(msg) ? (await Promise.all(msg.map((m) => handle(m, session)))).filter((r): r is Obj => !!r) : await handle(msg, session);
   if (!out || (Array.isArray(out) && !out.length)) return new Response(null, { status: 202 });
-  return Response.json(out, { headers: { 'Cache-Control': 'no-store' } });
+  const headers = new Headers({ 'Cache-Control': 'no-store' });
+  if (current && current.cookie !== auth.cookie) headers.set(WEREAD_HEADERS.cookie, current.cookie);
+  return Response.json(out, { headers });
 }

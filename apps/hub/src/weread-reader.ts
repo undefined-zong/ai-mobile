@@ -1,4 +1,6 @@
 /** 微信读书网页阅读器：目录和章节正文。一次 MCP 请求取一章，整书由客户端逐章导入。 */
+import { WeReadSession } from './weread-session.ts';
+
 const BASE = 'https://weread.qq.com';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
 type Obj = Record<string, any>;
@@ -75,22 +77,15 @@ export function decodeReaderContent(shards: string[]): string {
 }
 
 export class WeReadReader {
-  constructor(private cookie: string) {}
+  constructor(private readonly session: WeReadSession) {}
 
   private async request(path: string, referer: string, body?: Obj): Promise<string> {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await this.session.fetch(`${BASE}${path}`, {
       method: body ? 'POST' : 'GET',
-      headers: { Cookie: this.cookie, 'User-Agent': UA, Referer: referer, Origin: BASE, 'Content-Type': 'application/json;charset=UTF-8' },
+      headers: { 'User-Agent': UA, Referer: referer, Origin: BASE, 'Content-Type': 'application/json;charset=UTF-8' },
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(30_000),
     });
-    // 只在这一章的请求期间沿用网页发来的会话 Cookie，不写到 Hub 数据库。
-    const cookies = new Map(this.cookie.split(/;\s*/).filter(Boolean).map((item) => [item.slice(0, item.indexOf('=')), item]));
-    for (const value of res.headers.getSetCookie()) {
-      const item = value.split(';')[0]!;
-      cookies.set(item.slice(0, item.indexOf('=')), item);
-    }
-    this.cookie = [...cookies.values()].join('; ');
     const raw = await res.text();
     if (!res.ok) throw new Error(`微信读书正文返回 HTTP ${res.status}`);
     if (raw.trimStart().startsWith('{')) {

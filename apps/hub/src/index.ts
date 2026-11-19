@@ -724,7 +724,7 @@ export default {
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     // MCP 客户端会带协议版本和会话号；微信读书 MCP 的登录信息也在请求头里；同步的大文件分块传时类型放在 X-Blob-Type
     response.headers.set('Access-Control-Allow-Headers', ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'MCP-Protocol-Version', 'X-Blob-Type', ...Object.values(WEREAD_HEADERS)].join(', '));
-    response.headers.set('Access-Control-Expose-Headers', 'Mcp-Session-Id, X-Blob-Type');
+    response.headers.set('Access-Control-Expose-Headers', ['Mcp-Session-Id', 'X-Blob-Type', WEREAD_HEADERS.cookie].join(', '));
     return response;
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
