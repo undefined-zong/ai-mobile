@@ -155,3 +155,12 @@ export const heartSearches = playlistSearches('ai-mobile:heart:searches:v1', [
   { name: 'Chill', keyword: 'chill 放松 歌单', icon: 'i-lucide-headphones' },
   { name: '爵士', keyword: '深夜 爵士', icon: 'i-lucide-music-2' },
 ]);
+
+/** 约会：甜甜的、心动的几个 */
+export const dateSearches = playlistSearches('ai-mobile:date:searches:v1', [
+  { name: '心动', keyword: '心动 恋爱 歌单', icon: 'i-lucide-heart' },
+  { name: '甜甜的', keyword: '甜歌 约会', icon: 'i-lucide-candy' },
+  { name: '散步', keyword: '散步 轻快 治愈', icon: 'i-lucide-footprints' },
+  { name: 'City Pop', keyword: 'city pop 夏夜', icon: 'i-lucide-building-2' },
+  { name: '咖啡馆', keyword: '咖啡馆 爵士 bossa nova', icon: 'i-lucide-coffee' },
+]);

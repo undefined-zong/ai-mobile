@@ -650,6 +650,12 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     files: ['image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json', 'image-study.json', 'image-meal.json'],
     added: ['duoScene'],
   },
+  {
+    // 生图设置里的"服装参考"关着时（类型多一个 outfit-free）：不给她今天那套、你常穿的那套，衣服由模型按画面自己设计
+    id: 'image:outfit-free',
+    files: ['image.json', 'image-date.json', 'image-study.json', 'image-meal.json', 'image-sleep.json', 'image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json', 'image-workshop.json', 'image-community.json', 'image-game-kingdom.json'],
+    added: ['outfitFree'],
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */

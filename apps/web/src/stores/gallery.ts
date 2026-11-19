@@ -37,6 +37,8 @@ export interface GalleryItem {
   model: string;
   vibeComparison?: IllustrateOutcome['vibeComparison'];
   locationId: string | null;
+  /** 地点的名字（不是世界里的地点时，比如约会从背景库里选的地方）：重画时照旧 */
+  place?: string;
   outfit: string | null;
   /** 程序定的画幅（陪伴学习：一起专注竖图，各自专注上半屏方图或横图）；以前的图没记，都是竖图 */
   size?: ImageShape;
@@ -59,6 +61,8 @@ export interface SceneDrawRequest {
   /** user：你点的（排在前面）；auto：场景自己画的 */
   priority: 'user' | 'auto';
   locationId?: string | null;
+  /** 地点的名字：不给时按 locationId 在世界里找 */
+  place?: string;
   expression?: string | null;
   recent?: string[];
   /** 画幅由程序定；不给按生图预设（模型写的） */
@@ -180,6 +184,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       model: out.model,
       vibeComparison: out.vibeComparison,
       locationId: r.locationId,
+      ...(req.place ? { place: req.place } : {}),
       outfit: r.outfit,
       ...(req.size ? { size: req.size } : {}),
       ...(req.lockOutfit === false ? { lockOutfit: false } : {}),
@@ -200,7 +205,7 @@ export const useGalleryStore = defineStore('gallery', () => {
     if (!before) return { ok: false, reason: '图库里已经没有这张了' };
     const r = await paint({
       characterId: before.characterId, sceneId: before.sceneId, moment: before.moment, caption: before.caption, priority: 'user',
-      locationId: before.locationId, ...(before.size ? { size: before.size } : {}), lockOutfit: before.lockOutfit ?? before.sceneId !== 'heart',
+      locationId: before.locationId, ...(before.place ? { place: before.place } : {}), ...(before.size ? { size: before.size } : {}), lockOutfit: before.lockOutfit ?? before.sceneId !== 'heart',
       ...(before.withUser ? { withUser: true } : {}),
     });
     if (!r.ok) return r;
@@ -237,7 +242,7 @@ export const useGalleryStore = defineStore('gallery', () => {
           moment: req.moment,
           sceneId: req.sceneId,
           lockOutfit: req.lockOutfit ?? true,
-          place: getLocation(locationId)?.name,
+          place: req.place ?? getLocation(locationId)?.name,
           expression: req.expression,
           recent: req.recent,
           ...(req.size ? { size: req.size } : {}),

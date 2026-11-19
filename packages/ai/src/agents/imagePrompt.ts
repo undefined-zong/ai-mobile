@@ -52,6 +52,11 @@ export interface ImagePromptInput {
    * 不锁时只告诉模型她今天穿什么，画面要换装（[cg:] 里写了泳装之类）时模型自己写
    */
   lockOutfit?: boolean;
+  /**
+   * 服装参考关着（生图设置）：程序不给她和你的衣服，衣服由模型按画面自己设计；
+   * 这一次的类型多一个 outfit-free，生图预设里只在这时发的那块讲怎么写
+   */
+  outfitFree?: boolean;
   /** 要画的画面（中文描述） */
   caption: string;
   scene?: {
@@ -70,7 +75,13 @@ export interface ImagePromptInput {
    * "你"可以入画（{{user}} 的长相按人设的外观 tags）：画不画、画成单人还是双人由生图预设定，
    * 预设里"{{user}}可以入画"那一块（程序填充 imageCharacters）发了才告诉模型；两个人同框时用 V4 的多人提示词
    */
-  withUser?: { name: string; appearanceTags?: string; negativeTags?: string } | null;
+  withUser?: {
+    name: string;
+    appearanceTags?: string;
+    negativeTags?: string;
+    /** 你人设里常穿的那套（服装参考开着时才有）；locked：和她的衣服一起锁，程序加进你那一份，否则只告诉模型 */
+    outfit?: { tags: string; locked: boolean };
+  } | null;
   /**
    * 画幅由程序定（例如陪伴学习分上下两屏时，半屏接近方形就画方图）：告诉模型按这个画幅构图，出图时也按它，不看模型写的 size
    */
@@ -102,18 +113,30 @@ function lockedOutfit(input: ImagePromptInput): string {
   return input.lockOutfit && input.mode !== 'background' ? (input.character.outfit?.tags.trim() ?? '') : '';
 }
 
+/** 你锁定的衣服：两个人同框时程序加进你那一份 */
+function lockedUserOutfit(input: ImagePromptInput): string {
+  const o = input.withUser?.outfit;
+  return o?.locked && input.mode !== 'background' ? o.tags.trim() : '';
+}
+
 /** 这一次的输入：填进"生图"预设的程序填充块 */
 export function imagePromptFills(input: ImagePromptInput): Record<string, string> {
   const { character: c, scene = {}, withUser } = input;
   const mode = input.mode ?? 'scene';
   const outfit = c.outfit;
   const locked = lockedOutfit(input);
+  const youOutfit = withUser?.outfit?.tags.trim();
   return {
     // "你"可以入画时：你的长相和两个人同框时的输出字段（解析时按 characters 读每个人的动作）；单人图不写 characters
     imageCharacters:
       withUser && mode === 'scene'
         ? [
             `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
+            ...(youOutfit
+              ? [lockedUserOutfit(input)
+                  ? `${withUser.name}的服装 tags（两个人同框时程序会加在 user### 那一份里，不要重复，也不要另写别的衣服）：${youOutfit}`
+                  : `${withUser.name}常穿：${youOutfit}（两个人同框时照它写进 user###，画面要换装时可以换）`]
+              : []),
             `画${c.name}和${withUser.name}两个人同框时：image### 里只写整体画面（人数、构图、场景、光线），再各起一行分别写每个人：`,
             `char###${c.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
             `user###${withUser.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
@@ -149,13 +172,19 @@ export function imagePromptMacros(input: ImagePromptInput): Record<string, strin
     char_appearance: input.character.appearanceTags,
     char_outfit: input.character.outfit ? `${input.character.outfit.name}（${input.character.outfit.tags}）` : '',
     user_appearance: input.withUser?.appearanceTags ?? '',
+    user_outfit: input.withUser?.outfit?.tags ?? '',
   };
 }
 
-/** 这一次的类型：画什么（scene / portrait / face / background）+ 场景里的时刻；"你"入画（双人图）时多一个 duo，预设里只在双人时发的块按它发 */
+/** 这一次的类型：画什么（scene / portrait / face / background）+ 场景里的时刻；"你"入画（双人图）时多一个 duo，预设里只在双人时发的块按它发；服装参考关着时多一个 outfit-free */
 export function imagePromptTypes(input: ImagePromptInput): string[] {
   const mode = input.mode ?? 'scene';
-  return [mode, ...(input.moment ? [input.moment] : []), ...(input.withUser && mode === 'scene' ? ['duo'] : [])];
+  return [
+    mode,
+    ...(input.moment ? [input.moment] : []),
+    ...(input.withUser && mode === 'scene' ? ['duo'] : []),
+    ...(input.outfitFree && mode !== 'background' ? ['outfit-free'] : []),
+  ];
 }
 
 /** 按"生图"预设拼写 tags 的提示词；"画什么"那几块、场景时刻那几块按这次的类型只发对应的 */
@@ -292,7 +321,7 @@ function personPrompts(out: ImagePromptOutput, input: ImagePromptInput): ImageCh
     if (c.who === 'char') return { ...her(c), ...center };
     const you = input.withUser;
     return you
-      ? { prompt: joinTags(characterTags(you.appearanceTags), characterTags(c.tags)), negative: joinTags(you.negativeTags, c.negative), ...center }
+      ? { prompt: joinTags(characterTags(you.appearanceTags), lockedUserOutfit(input), characterTags(c.tags)), negative: joinTags(you.negativeTags, c.negative), ...center }
       : { prompt: characterTags(c.tags), negative: c.negative ?? '', ...center };
   });
   list.push(...others.map((o) => ({ prompt: characterTags(o.tags), negative: o.negative })));

@@ -421,6 +421,13 @@ async function runReindex() {
           <input id="style-suffix" v-model="draft.imageStyle.suffix" class="input" autocomplete="off" spellcheck="false" />
           <label class="field-label" for="style-negative">固定负面词</label>
           <textarea id="style-negative" v-model="draft.imageStyle.negative" class="textarea" rows="3" spellcheck="false" />
+          <div class="flex items-center justify-between gap-3 mt-3">
+            <div>
+              <div class="text-[14px]">服装参考</div>
+              <div class="text-[12px] text-ink-3">开：参考角色今天该穿的那套和你人设里常穿的那套；关：衣服由 AI 按画面自己设计（生图预设里"服装参考关着"那一块）</div>
+            </div>
+            <van-switch class="shrink-0" :model-value="draft.imageStyle.outfitRef !== false" size="22px" data-testid="image-outfit-ref" @update:model-value="draft.imageStyle.outfitRef = $event ? undefined : false" />
+          </div>
           <template v-if="imageKind === 'novelai'">
             <div class="flex items-center justify-between gap-3 mt-3">
               <div>

@@ -55,6 +55,7 @@ export const TRIGGER_NOTES: { pattern: string; desc: string }[] = [
   { pattern: Object.keys(LIFE_FLAGS).join(' / '), desc: '角色扮演预设：你人设里开了家务 / 健康系统时才发这块' },
   { pattern: LEVEL_PREFIXES.map((p) => `${p}名字`).join(' / '), desc: '真心话大冒险 / 海龟汤 / 戳戳乐的尺度：一块一个尺度，名字是冒号后面的字' },
   { pattern: Object.keys(IMAGE_MODES).join(' / '), desc: `生图预设：画什么（${Object.values(IMAGE_MODES).join('、')}），只发对应的那块` },
+  { pattern: 'outfit-free', desc: '生图预设：生图设置里关了"服装参考"时才发这块（不给角色和你的衣服，衣服由模型按画面自己设计）' },
   {
     pattern: Object.values(IMAGE_MOMENTS)
       .flatMap((m) => Object.keys(m ?? {}))
