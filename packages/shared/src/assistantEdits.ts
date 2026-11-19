@@ -214,6 +214,9 @@ export function parseAssistantReply(raw: string): ParsedAssistantReply {
 // —— 算出改之后的样子 ——
 
 export interface EditChange {
+  /** 在这条回复里的稳定位置；旧的应用记录没有这两个字段 */
+  key?: string;
+  requires?: string[];
   kind: EditKind;
   /** 对象的 id；新建的是 new:序号 */
   id: string;
@@ -254,6 +257,39 @@ export interface PlanContext {
   defaultPresetId: string | null;
   /** 这一类预设的程序认得的程序块（复制程序块时查）；不给时按 PROMPT_MARKERS / TASK_MARKERS */
   knownMarkers?(category: PresetCategory): string[];
+}
+
+/** 选中一项时一起选它的前置项；取消前置项时一起取消依赖它的项。 */
+export function toggleEditSelection(changes: EditChange[], selected: ReadonlySet<string>, key: string, on: boolean): Set<string> {
+  const next = new Set(selected);
+  const byKey = new Map(changes.map((c) => [c.key, c]));
+  const include = (k: string) => {
+    if (next.has(k)) return;
+    next.add(k);
+    for (const dep of byKey.get(k)?.requires ?? []) include(dep);
+  };
+  if (on) include(key);
+  else {
+    next.delete(key);
+    for (const c of changes) if (c.key && c.requires?.some((dep) => !next.has(dep))) next.delete(c.key);
+  }
+  return next;
+}
+
+interface EditSelectionContext {
+  key: string;
+  selected?: ReadonlySet<string>;
+  requires: Set<string>;
+  owners: Map<string, string>;
+  entryUid?: string;
+}
+
+const ownerKey = (...parts: string[]) => JSON.stringify(parts);
+const partKey = (selection: EditSelectionContext, part: string) => `${selection.key}:${part}`;
+const partSelected = (selection: EditSelectionContext, part: string) => !selection.selected || selection.selected.has(partKey(selection, part));
+function requireOwner(selection: EditSelectionContext, ...parts: string[]) {
+  const key = selection.owners.get(ownerKey(...parts));
+  if (key) selection.requires.add(key);
 }
 
 function clone<T>(x: T): T {
@@ -364,12 +400,16 @@ function blockOf(p: Pick<Preset, 'blocks'>, id: unknown): PromptBlock | undefine
   return key ? (p.blocks.find((b) => b.identifier === key) ?? p.blocks.find((b) => b.name === key)) : undefined;
 }
 
-function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditChange[], presetOf: (id: string) => Preset | undefined): string | null {
+function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditChange[], presetOf: (id: string) => Preset | undefined, selection: EditSelectionContext): string | null {
   const r = op.raw;
   const title = p.name;
-  const change = (label: string, textChanged = false, before?: string, after?: string) =>
-    changes.push({ kind: 'preset', id: p.id, title, label, textChanged, ...(before !== undefined ? { before } : {}), ...(after !== undefined ? { after } : {}) });
-  const findBlock = (id: unknown) => blockOf(p, id);
+  const change = (label: string, textChanged = false, before?: string, after?: string, key = selection.key, requires = [...selection.requires]) =>
+    changes.push({ key, requires, kind: 'preset', id: p.id, title, label, textChanged, ...(before !== undefined ? { before } : {}), ...(after !== undefined ? { after } : {}) });
+  const findBlock = (id: unknown) => {
+    const b = blockOf(p, id);
+    if (b) requireOwner(selection, p.id, 'block', b.identifier);
+    return b;
+  };
   switch (op.op) {
     case 'replace': {
       const b = findBlock(r.block);
@@ -424,6 +464,7 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
       p.blocks.splice(at, 0, block);
       const where = after === -1 ? '最前面' : after ? `${blockLabel(after)}后面` : '最后';
       change(`在${where}加${marker ? '程序填充块' : '一块'}${blockLabel(block)}${block.triggers?.length ? `（只在 ${block.triggers.join(' / ')} 时发送）` : ''}`, false, undefined, marker ? undefined : block.content);
+      selection.owners.set(ownerKey(p.id, 'block', block.identifier), selection.key);
       return null;
     }
     case 'remove': {
@@ -466,12 +507,14 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
       if (!regexFromString(script.find)) return `正则「${script.name}」的 find 写错了：${script.find}`;
       p.regex.push(script);
       change(`加正则「${script.name}」${regexTarget(script)}`, false, script.find, script.replace);
+      selection.owners.set(ownerKey(p.id, 'regex', script.id), selection.key);
       return null;
     }
     case 'set-regex': {
       const key = str(r.regex) ?? str(r.id);
       const s = p.regex.find((x) => x.id === key) ?? p.regex.find((x) => x.name === key);
       if (!s) return `预设「${title}」里没有正则「${key ?? ''}」`;
+      requireOwner(selection, p.id, 'regex', s.id);
       const f = fieldsOf(r, ['preset', 'op', 'regex', 'id']);
       const before = `${s.find} → ${s.replace}`;
       if (str(f.name) !== undefined) s.name = str(f.name)!;
@@ -489,6 +532,7 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
       const key = str(r.regex) ?? str(r.id);
       const s = p.regex.find((x) => x.id === key) ?? p.regex.find((x) => x.name === key);
       if (!s) return `预设「${title}」里没有正则「${key ?? ''}」`;
+      requireOwner(selection, p.id, 'regex', s.id);
       p.regex.splice(p.regex.indexOf(s), 1);
       change(`删掉正则「${s.name}」`, false, `${s.find} → ${s.replace}`);
       return null;
@@ -502,7 +546,7 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
       for (const k of keys) {
         const b = blockOf(src, k);
         if (!b) return `预设「${src.name}」里没有块「${k}」`;
-        if (!picked.includes(b)) picked.push(b);
+        if (!picked.includes(b) && partSelected(selection, `block:${b.identifier}`)) picked.push(b);
       }
       if (!picked.length) return `从「${src.name}」复制哪几块？blocks 写块的 identifier`;
       const afterKey = 'after' in r ? r.after : undefined;
@@ -513,9 +557,14 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
         newId: ctx.newId,
         ...(anchor === undefined ? {} : { after: anchor === -1 ? -1 : p.blocks.indexOf(anchor) }),
       });
-      for (const b of res.added) {
+      const copiedFrom = picked.filter((b) => !res.skipped.some((s) => s.block === b)).sort((a, b) => src.blocks.indexOf(a) - src.blocks.indexOf(b));
+      for (const [i, b] of res.added.entries()) {
+        const source = copiedFrom[i]!;
+        const key = partKey(selection, `block:${source.identifier}`);
+        const sourceOwner = selection.owners.get(ownerKey(src.id, 'block', source.identifier));
         const prev = p.blocks[p.blocks.indexOf(b) - 1];
-        change(`从「${src.name}」复制${b.marker ? '程序块' : '块'}${blockLabel(b)}，放在${prev ? `${blockLabel(prev)}后面` : '最前面'}`, false, undefined, b.marker ? undefined : b.content);
+        change(`从「${src.name}」复制${b.marker ? '程序块' : '块'}${blockLabel(b)}，放在${prev ? `${blockLabel(prev)}后面` : '最前面'}`, false, undefined, b.marker ? undefined : b.content, key, [...selection.requires, ...(sourceOwner ? [sourceOwner] : [])]);
+        selection.owners.set(ownerKey(p.id, 'block', b.identifier), key);
       }
       const skipped = res.skipped.map((s) => s.reason).join('；');
       return res.added.length ? (skipped ? `有几块没复制：${skipped}` : null) : skipped || '没有复制成的块';
@@ -532,11 +581,19 @@ function planPreset(p: Preset, op: AssistantOp, ctx: PlanContext, changes: EditC
         if (!s) return `预设「${src.name}」里没有正则「${k}」`;
         picked.push(s);
       }
-      const list = all ? src.regex : picked;
+      const list = (all ? src.regex : picked).filter((s) => partSelected(selection, `regex:${s.id}`));
       if (!list.length) return `从「${src.name}」复制哪几条正则？regex 写正则的 id（全部写 "all"）`;
-      const added = copyRegex(p, list, ctx.newId);
-      for (const s of added) change(`从「${src.name}」复制正则「${s.name}」${regexTarget(s)}`, false, s.find, s.replace);
-      return added.length ? null : `「${src.name}」的这几条正则「${title}」里已经有一样的了`;
+      const start = changes.length;
+      for (const source of list) {
+        const added = copyRegex(p, [source], ctx.newId);
+        const key = partKey(selection, `regex:${source.id}`);
+        const sourceOwner = selection.owners.get(ownerKey(src.id, 'regex', source.id));
+        for (const s of added) {
+          change(`从「${src.name}」复制正则「${s.name}」${regexTarget(s)}`, false, s.find, s.replace, key, [...selection.requires, ...(sourceOwner ? [sourceOwner] : [])]);
+          selection.owners.set(ownerKey(p.id, 'regex', s.id), key);
+        }
+      }
+      return changes.length > start ? null : `「${src.name}」的这几条正则「${title}」里已经有一样的了`;
     }
     case 'meta': {
       const f = fieldsOf(r, ['preset', 'op']);
@@ -636,14 +693,16 @@ function nextUid(book: Lorebook): string {
   return String(n + 1);
 }
 
-function planLorebook(b: Lorebook, op: AssistantOp, changes: EditChange[]): string | null {
+function planLorebook(b: Lorebook, op: AssistantOp, changes: EditChange[], selection: EditSelectionContext): string | null {
   const r = op.raw;
   const title = b.name;
   const change = (label: string, textChanged = false, before?: string, after?: string) =>
     changes.push({ kind: 'lorebook', id: b.id, title, label, textChanged, ...(before !== undefined ? { before } : {}), ...(after !== undefined ? { after } : {}) });
   const findEntry = (id: unknown) => {
     const key = str(id)?.trim();
-    return key ? (b.entries.find((e) => e.uid === key) ?? b.entries.find((e) => e.comment === key)) : undefined;
+    const entry = key ? (b.entries.find((e) => e.uid === key) ?? b.entries.find((e) => e.comment === key)) : undefined;
+    if (entry) requireOwner(selection, b.id, 'entry', entry.uid);
+    return entry;
   };
   switch (op.op) {
     case 'replace': {
@@ -673,11 +732,12 @@ function planLorebook(b: Lorebook, op: AssistantOp, changes: EditChange[]): stri
     }
     case 'add': {
       const f = isObj(r.entry) ? r.entry : fieldsOf(r, ['lorebook', 'op']);
-      const e = blankEntry(nextUid(b));
+      const e = blankEntry(selection.entryUid ?? nextUid(b));
       patchEntry(e, f);
       e.content = str(f.content) ?? '';
       b.entries.push(e);
       change(`加条目${entryLabel(e)}${e.constant ? '（常驻）' : e.keys.length ? `（关键词 ${e.keys.join('、')}）` : ''}`, false, undefined, e.content);
+      selection.owners.set(ownerKey(b.id, 'entry', e.uid), selection.key);
       return null;
     }
     case 'remove': {
@@ -770,7 +830,7 @@ function patchCharacter(c: Character, f: Obj): { field: string; before: string; 
   return done;
 }
 
-function planCharacter(c: Character, op: AssistantOp, changes: EditChange[]): string | null {
+function planCharacter(c: Character, op: AssistantOp, changes: EditChange[], selection: EditSelectionContext): string | null {
   const r = op.raw;
   const title = c.name;
   if (op.op === 'replace') {
@@ -788,10 +848,13 @@ function planCharacter(c: Character, op: AssistantOp, changes: EditChange[]): st
     changes.push({ kind: 'character', id: c.id, title, label: `改${CHARACTER_FIELD_LABELS[key] ?? key}的一段`, textChanged: isTextChange(before, next), before: d.before, after: d.after });
     return null;
   }
-  const done = patchCharacter(c, fieldsOf(r, ['character', 'op']));
+  const done = Object.entries(fieldsOf(r, ['character', 'op'])).flatMap(([field, value]) =>
+    partSelected(selection, `field:${field}`) ? patchCharacter(c, { [field]: value }).map((d) => ({ ...d, key: partKey(selection, `field:${field}`) })) : [],
+  );
   if (!done.length) return `角色「${title}」没有要改的`;
   for (const d of done) {
     changes.push({
+      key: d.key,
       kind: 'character',
       id: c.id,
       title,
@@ -831,12 +894,17 @@ function createPreset(op: AssistantOp, ctx: PlanContext, presetOf: (id: string) 
   return { preset, label };
 }
 
-export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
+/** 不传 selected 时预览全部；传入预览项的 key 时只把所选修改写入副本。 */
+export function planEdits(ops: AssistantOp[], ctx: PlanContext, selected?: ReadonlySet<string>): EditPlan {
   const plan: EditPlan = { fighters: [], presets: [], lorebooks: [], characters: [], newCharacters: [], newLorebooks: [], newPresets: [], bindings: [], changes: [], errors: [] };
   const fighters = new Map<string, BrawlFighter>();
   const presets = new Map<string, Preset>();
   const books = new Map<string, Lorebook>();
   const chars = new Map<string, Character>();
+  const owners = new Map<string, string>();
+  // 新条目的编号按原操作顺序分配；取消前面的新增项不能把后续修改指向别的条目。
+  const entryUids = new Map(ctx.lorebooks.map((b) => [b.id, Number(nextUid(b))]));
+  const selectedOps = selected && new Set([...selected].map((key) => key.split(':')[0]));
   const working = <T extends { id: string }>(map: Map<string, T>, list: T[], id: string): T | undefined => {
     if (!map.has(id)) {
       const src = list.find((x) => x.id === id);
@@ -851,7 +919,18 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
     if (id === 'new') return plan.newPresets.at(-1);
     return plan.newPresets.find((x) => x.id === id) ?? presets.get(id) ?? ctx.presets.find((x) => x.id === id);
   };
-  for (const op of ops) {
+  for (const [index, op] of ops.entries()) {
+    const key = String(index);
+    const entryUid = op.kind === 'lorebook' && op.op === 'add' ? entryUids.get(op.id) : undefined;
+    if (entryUid !== undefined) entryUids.set(op.id, entryUid + 1);
+    if (selectedOps && !selectedOps.has(key)) continue;
+    const selection: EditSelectionContext = { key, selected, requires: new Set(), owners, entryUid: entryUid?.toString() };
+    const start = plan.changes.length;
+    const sourcePreset = (id: string) => {
+      const p = presetOf(id);
+      if (p) requireOwner(selection, p.id);
+      return p;
+    };
     let error: string | null = null;
     if (op.kind === 'fighter') {
       const f = working(fighters, ctx.fighters ?? [], op.id);
@@ -875,15 +954,17 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
         }
       }
     } else if (op.kind === 'preset' && op.op === 'create') {
-      const created = createPreset(op, ctx, presetOf);
+      const created = createPreset(op, ctx, sourcePreset);
       if (typeof created === 'string') error = created;
       else {
         plan.newPresets.push(created.preset);
         plan.changes.push({ kind: 'preset', id: created.preset.id, title: created.preset.name, label: created.label, textChanged: false });
+        owners.set(ownerKey(created.preset.id), key);
       }
     } else if (op.kind === 'preset') {
       const p = op.id === 'new' ? plan.newPresets.at(-1) : (plan.newPresets.find((x) => x.id === op.id) ?? working(presets, ctx.presets, op.id));
-      error = p ? planPreset(p, op, ctx, plan.changes, presetOf) : op.id === 'new' ? '还没有新建的预设：先写 {"preset": "new", "op": "create", "from": "底子的 id"}' : `没有 id 是「${op.id}」的预设`;
+      if (p) requireOwner(selection, p.id);
+      error = p ? planPreset(p, op, ctx, plan.changes, sourcePreset, selection) : op.id === 'new' ? '还没有新建的预设：先写 {"preset": "new", "op": "create", "from": "底子的 id"}' : `没有 id 是「${op.id}」的预设`;
     } else if (op.kind === 'lorebook') {
       if (op.op === 'create') {
         const f = fieldsOf(op.raw, ['lorebook', 'op', 'bindTo', 'entries']);
@@ -910,6 +991,7 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
         const target = bindTo === 'new' ? lastNewChar : bindTo ? (working(chars, ctx.characters, bindTo) ?? null) : null;
         if (bindTo && !target) error = `世界书「${book.name}」要绑的角色「${bindTo}」找不到，先不绑`;
         if (target) {
+          requireOwner(selection, target.id);
           target.lorebookIds = [...target.lorebookIds, book.id];
           plan.bindings.push({ lorebookId: book.id, characterId: target.id });
         }
@@ -923,7 +1005,7 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
         });
       } else {
         const b = working(books, ctx.lorebooks, op.id);
-        error = b ? planLorebook(b, op, plan.changes) : `没有 id 是「${op.id}」的世界书`;
+        error = b ? planLorebook(b, op, plan.changes, selection) : `没有 id 是「${op.id}」的世界书`;
       }
     } else if (op.op === 'create') {
       const f = fieldsOf(op.raw, ['character', 'op']);
@@ -950,6 +1032,7 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
         patchCharacter(c, f);
         plan.newCharacters.push(c);
         lastNewChar = c;
+        owners.set(ownerKey(c.id), key);
         const filled = Object.keys(CHARACTER_FIELD_LABELS).filter((k) => k !== 'name' && (k in c.card ? String((c.card as unknown as Obj)[k] ?? '').trim() : String((c as unknown as Obj)[k] ?? '').trim()));
         plan.changes.push({
           kind: 'character',
@@ -964,7 +1047,12 @@ export function planEdits(ops: AssistantOp[], ctx: PlanContext): EditPlan {
       }
     } else {
       const c = op.id === 'new' ? (lastNewChar ?? undefined) : working(chars, ctx.characters, op.id);
-      error = c ? planCharacter(c, op, plan.changes) : `没有 id 是「${op.id}」的角色`;
+      if (c) requireOwner(selection, c.id);
+      error = c ? planCharacter(c, op, plan.changes, selection) : `没有 id 是「${op.id}」的角色`;
+    }
+    for (const change of plan.changes.slice(start)) {
+      change.key ??= key;
+      change.requires ??= [...selection.requires];
     }
     if (error) plan.errors.push(error);
   }

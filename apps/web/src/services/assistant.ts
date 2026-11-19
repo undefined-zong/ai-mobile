@@ -441,7 +441,7 @@ export function userName(): string {
 // —— 修改：预览、应用、撤销 ——
 
 /** 按对象现在的样子算出改之后的样子（预览、应用都用它） */
-export function planOps(ops: AssistantOp[]): EditPlan {
+export function planOps(ops: AssistantOp[], selected?: ReadonlySet<string>): EditPlan {
   const lib = useLibraryStore();
   return planEdits(ops, {
     presets: lib.presets,
@@ -452,7 +452,7 @@ export function planOps(ops: AssistantOp[]): EditPlan {
     now: Date.now(),
     defaultPresetId: defaultPresetId(),
     knownMarkers: (category) => lib.markerChoices(category).map((m) => m.identifier),
-  });
+  }, selected);
 }
 
 function clone<T>(x: T): T {
