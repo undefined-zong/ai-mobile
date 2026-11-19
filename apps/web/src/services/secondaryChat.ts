@@ -1,4 +1,4 @@
-import { fromOpenAIBody, parseSecondaryReply } from '@app/ai';
+import { fromOpenAIBody, parseSecondaryOutput } from '@app/ai';
 import { IMAGE_MOMENTS, IMAGE_MODES, PRESET_USES, type Character, type Chat, type Message } from '@app/shared';
 import { assembleForChat, type ChatAssembleOptions } from './prompt';
 import { useAiStore } from '@/stores/ai';
@@ -38,6 +38,6 @@ export async function secondaryChat(chat: Chat, character: Character, history: M
   });
   const request = fromOpenAIBody(prompt.request);
   request.names = { user: prompt.persona.name, char: character.name };
-  const response = await ai.system.json('secondary', request, parseSecondaryReply, { signal });
-  return { ...response, preset: prompt.preset };
+  const result = await ai.system.chat('secondary', request, { signal });
+  return { value: parseSecondaryOutput(result.text), result, preset: prompt.preset };
 }
