@@ -13,7 +13,8 @@ import type { MusicClient, SongInfo } from './types';
  * - 播放列表、播放模式记在本机，下次打开还在（不自动播放）；
  * - 锁屏 / 通知栏的播放控制（Media Session）；iPhone 静音键打开时也有声（audioSession = playback）。
  * - 音量 = 你调的音量 × 压低 × 渐弱，调的是这首歌自己的音量，不碰系统音量。iPhone 不让网页改 <audio>.volume：
- *   在 iPhone 上歌接进 Web Audio，用一个增益节点调（见下面的 elementVolumeLocked）。
+ *   在 iPhone 上音量 100% 时照常用 <audio> 放（省电、不受页面卡顿影响），不是 100%（拖了音量、她说话时压低、定时渐弱）
+ *   才把歌接进 Web Audio，用一个增益节点调（见下面的 elementVolumeLocked）。
  * 没填网易云 Worker 时是演示：虚构的歌、不出声，进度按时间走。
  */
 
@@ -68,25 +69,14 @@ export interface PlayerOptions {
 /** 她说话时音乐压到多少 */
 const DUCK_LEVEL = 0.35;
 
-/**
- * 接进 Web Audio 的歌要真的听得到：歌往前走了这么多秒（按歌的进度，不按钟表），AudioContext 一直没在跑、或者进来的全是 0，
- * 就当这次接进去没声，换回普通 <audio> 从刚才的位置接着放（这时音量只归侧面的按键）
- */
-const SILENT_FALLBACK_S = 6;
-/** 比这个小的采样算没声音（约 -80 dB） */
-const SILENCE_FLOOR = 1e-4;
-/** 多久看一次有没有声音 */
-const WATCH_MS = 500;
-/** 看声音时一次取多少个采样 */
-const PROBE_SIZE = 2048;
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
 /** 解锁 <audio> 用的一小段静音 */
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==';
 
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-
 /**
  * <audio>.volume 改不了的设备：iPhone、iPad（改了读出来是新值，下一刻又变回去，声音不变），别的设备也试一下。
- * 这些设备上歌接进 Web Audio，后面接一个增益节点调这首歌的音量。接进去要求音频地址允许跨域：
+ * 这些设备上音量不是 100% 时歌接进 Web Audio，后面接一个增益节点调这首歌的音量。接进去要求音频地址允许跨域：
  * 网易云的音频 CDN（m7 / m8 / m10 / m701 / m801.music.126.net）都回 access-control-allow-origin: *。
  * 锁屏接着放靠 audioSession = playback（iOS 17 起 Web Audio 也算播放，不算环境音）。
  * 用的 AudioContext 要在设好 playback 会话之后才建（acquireAudioContext）：先建好再改会话的，iPhone 上放着却没声音。
@@ -182,21 +172,18 @@ export function createMusicPlayer(opts: PlayerOptions) {
   // —— <audio> ——
 
   let audio: HTMLAudioElement | null = null;
-  /** 接进 Web Audio 时这首歌的音量节点（<audio>.volume 改不了的设备上才接） */
+  /** 接进 Web Audio 时这首歌的音量节点（<audio>.volume 改不了的设备上、音量不是 100% 时才接） */
   let gain: GainNode | null = null;
-  /** 碰到过不让跨域的音频地址：这个播放器之后不接 Web Audio（这时 iPhone 上音量只归侧面的按键） */
+  /** 碰到过不让跨域的音频地址、或者不支持网页音频：这个播放器之后不接 Web Audio（这时 iPhone 上音量只归侧面的按键） */
   let unrouted = false;
-  /** 接进 Web Audio 时借着的 AudioContext（连带 playback 会话）：接着的 <audio> 换掉时还回去 */
+  /** <audio>.volume 改不了的设备上借着的 AudioContext（连带 playback 会话）：点播放时借、停下时还，没接进去时挂着不跑 */
   let lease: AudioContextLease | null = null;
-  /** 接进 Web Audio 时看有没有声音的节点（在增益前面：音量调到 0 不算没声） */
-  let probe: AnalyserNode | null = null;
-  const probeBuf = new Float32Array(PROBE_SIZE);
-  let watchTimer: ReturnType<typeof setInterval> | undefined;
-  /** 这首接进去以后听到过声音 */
-  let heard = false;
-  /** 从歌的第几秒起一直没声（-1：现在有声） */
-  let silentSince = -1;
-  /** 在点击里解锁好的普通 <audio>：接进去没声、地址不让跨域时换它接着放，iPhone 上不用再点一下 */
+  /** 正在等 AudioContext 跑起来再接进去 */
+  let routing = false;
+  /**
+   * 在点击里解锁好的普通 <audio>：接进 Web Audio 的拿不出来，音量回到 100% 后换歌时换成它；
+   * 碰到不让跨域的地址也换它接着放。iPhone 上新建的 <audio> 要再点一下才能出声
+   */
   let spare: HTMLAudioElement | null = null;
   let primed = false;
   let url = '';
@@ -227,63 +214,64 @@ export function createMusicPlayer(opts: PlayerOptions) {
   let fadeTimer: ReturnType<typeof setInterval> | undefined;
   let fadeDone: (() => void) | null = null;
 
+  /** 现在该有的音量：你调的 × 压低 × 渐弱 */
+  const level = () => clamp01(player.volume * duckGain * fadeGain);
+
+  /** iPhone 这类改不了 <audio>.volume 的设备上，还能不能接进 Web Audio 调音量 */
+  const canRoute = () => elementVolumeLocked && !unrouted;
+
   function applyVolume() {
-    const v = clamp01(player.volume * duckGain * fadeGain);
+    const v = level();
     if (gain) {
       // 几十毫秒里滑过去：拖滑块、压低时不咔哒
       const t = gain.context.currentTime;
       gain.gain.cancelScheduledValues(t);
       gain.gain.setTargetAtTime(v, t, 0.015);
-    } else if (audio) audio.volume = v;
-  }
-
-  /**
-   * <audio>.volume 改不了的设备：把 <audio> 接进 Web Audio，后面接增益节点调音量。
-   * crossOrigin 要在设地址之前设，不然跨域的音频接进去没声。接上了返回 true
-   */
-  function route(a: HTMLAudioElement): boolean {
-    if (!elementVolumeLocked || unrouted) return false;
-    try {
-      lease ??= acquireAudioContext('playback');
-      const ctx = lease.ctx;
-      a.crossOrigin = 'anonymous';
-      const g = ctx.createGain();
-      g.gain.value = clamp01(player.volume * duckGain * fadeGain);
-      const p = ctx.createAnalyser();
-      p.fftSize = PROBE_SIZE;
-      ctx.createMediaElementSource(a).connect(p).connect(g).connect(ctx.destination);
-      gain = g;
-      probe = p;
-      heard = false;
-      silentSince = -1;
-      clearInterval(watchTimer);
-      watchTimer = setInterval(checkRouted, WATCH_MS);
-      return true;
-    } catch {
-      // 不支持网页音频：照常放
-      a.removeAttribute('crossorigin');
-      lease?.release();
-      lease = null;
-      return false;
+    } else if (audio) {
+      audio.volume = v;
+      // iPhone 上 <audio>.volume 不管用：音量不是 100% 才接进 Web Audio
+      if (v < 1) void route(audio);
     }
   }
 
   /**
-   * 换掉接进 Web Audio 的 <audio>（接过的再也不能直接出声）：断开增益节点、还回 AudioContext，下次 el() 重建、prime() 重新解锁。
-   * 停下时也换掉：AudioContext 一直借着会让 iPhone 的音频会话一直占着（别的 App 的音乐接不回来）
+   * 把正在用的 <audio> 接进 Web Audio，后面接增益节点调音量（改不了 <audio>.volume、音量不是 100% 时）。
+   * AudioContext 在点播放时已经借好、跑起来过（prime），这里恢复它不用再点；等它跑起来再接，接上那一刻声音就改走它，没跑会断一下
    */
-  function dropRouted() {
+  async function route(a: HTMLAudioElement): Promise<void> {
+    const l = lease;
+    // 没按跨域取的 <audio> 接进去没声（这台设备是后来才检测出改不了音量的）：不接
+    if (!canRoute() || !l || gain || routing || a.crossOrigin !== 'anonymous') return;
+    routing = true;
+    l.setActive(true);
+    const ctx = l.ctx;
+    if (ctx.state !== 'running') await ctx.resume().catch(() => undefined);
+    routing = false;
+    // 等的时候换了 <audio>、停了、音量回到 100%，或者 AudioContext 没跑起来：这次不接（下次调音量再试）
+    if (a !== audio || lease !== l || gain || ctx.state !== 'running' || level() >= 1) {
+      if (!gain) l.setActive(false);
+      return;
+    }
+    try {
+      const g = ctx.createGain();
+      g.gain.value = level();
+      ctx.createMediaElementSource(a).connect(g).connect(ctx.destination);
+      gain = g;
+    } catch {
+      l.setActive(false);
+    }
+  }
+
+  /** 换掉现在的 <audio>（接进 Web Audio 的再也不能直接出声）：断开增益节点、AudioContext 挂起，下次 el() 换新的 */
+  function dropAudio() {
     const old = audio;
-    clearInterval(watchTimer);
-    watchTimer = undefined;
-    probe?.disconnect();
-    probe = null;
-    gain?.disconnect();
+    if (gain) {
+      gain.disconnect();
+      lease?.setActive(false);
+    }
     gain = null;
     audio = null;
     primed = false;
-    lease?.release();
-    lease = null;
     if (old) {
       old.pause();
       old.removeAttribute('src');
@@ -291,32 +279,15 @@ export function createMusicPlayer(opts: PlayerOptions) {
     }
   }
 
-  /** 接进 Web Audio 的歌听不听得到（见 SILENT_FALLBACK_S）：听不到就换回普通 <audio> */
-  function checkRouted() {
-    const a = audio;
-    if (!probe || !gain || !a || a.paused || !isSong(a)) return;
-    const ctx = gain.context;
-    let silent: boolean;
-    if (ctx.state !== 'running') {
-      resumeAudioContext();
-      silent = true;
-    } else if (heard) silent = false;
-    else {
-      probe.getFloatTimeDomainData(probeBuf);
-      heard = probeBuf.some((v) => Math.abs(v) > SILENCE_FLOOR);
-      silent = !heard;
-    }
-    if (!silent) {
-      silentSince = -1;
-      return;
-    }
-    if (silentSince < 0) silentSince = a.currentTime;
-    else if (a.currentTime - silentSince >= SILENT_FALLBACK_S) void playUnrouted(token);
+  /** 还回 AudioContext：不还的话 iPhone 的音频会话一直占着（别的 App 的音乐接不回来） */
+  function releaseLease() {
+    lease?.release();
+    lease = null;
   }
 
-  /** 在点击里解锁一个备用的普通 <audio>（只在接进 Web Audio 时需要） */
+  /** 在点击里解锁一个备用的普通 <audio>（只在能接进 Web Audio 的设备上需要） */
   function unlockSpare() {
-    if (spare || unrouted) return;
+    if (spare || !canRoute()) return;
     const s = new Audio();
     s.preload = 'auto';
     s.setAttribute('playsinline', '');
@@ -341,12 +312,16 @@ export function createMusicPlayer(opts: PlayerOptions) {
 
   function el(): HTMLAudioElement {
     if (audio) return audio;
-    // 不接 Web Audio 时先用点击里解锁好的备用 <audio>：iPhone 上新建的要再点一下才能出声
-    const a = unrouted && spare ? spare : new Audio();
-    if (a === spare) spare = null;
+    // 先用点击里解锁好的备用 <audio>：iPhone 上新建的要再点一下才能出声
+    const a = spare ?? new Audio();
+    primed = a === spare;
+    spare = null;
     a.preload = 'auto';
     a.setAttribute('playsinline', '');
-    if (!route(a)) a.volume = clamp01(player.volume * duckGain * fadeGain);
+    // 以后可能接进 Web Audio（音量不是 100% 时）：跨域的音频要在设地址之前就按跨域取，不然接进去没声
+    if (canRoute()) a.crossOrigin = 'anonymous';
+    else a.removeAttribute('crossorigin');
+    a.volume = level();
     // 解锁用的静音片段也会触发这些事件（而且一放就完）：只认真的歌
     a.addEventListener('timeupdate', () => {
       if (!player.demo && isSong(a)) player.posMs = Math.round(a.currentTime * 1000);
@@ -381,12 +356,22 @@ export function createMusicPlayer(opts: PlayerOptions) {
 
   /**
    * 在点击里调用：iPhone 上只有在用户点过之后"解锁"过的 <audio> 才能在网络请求之后播放。
-   * 先用一段静音放一下，等取到歌曲地址再换成真的。接进 Web Audio 的顺手恢复 AudioContext（切后台、来电以后会被挂起）
+   * 先用一段静音放一下，等取到歌曲地址再换成真的。
+   * 改不了 <audio>.volume 的设备：顺手借好 AudioContext（先设好 playback 会话再建，在点击里跑起来一次就挂着），
+   * 之后拖音量、她说话时压低、定时渐弱要接进 Web Audio 时不用再点；接进去的被挂起了（切后台、来电）也在这里恢复
    */
   function prime() {
     if (player.demo) return;
     const a = el();
-    if (gain) {
+    if (canRoute()) {
+      if (!lease) {
+        try {
+          lease = acquireAudioContext('playback', false);
+        } catch {
+          // 不支持网页音频：音量只归侧面的按键
+          unrouted = true;
+        }
+      }
       resumeAudioContext();
       unlockSpare();
     }
@@ -422,8 +407,6 @@ export function createMusicPlayer(opts: PlayerOptions) {
         expiresAt = r.expiresAt;
         const a = el();
         a.src = url;
-        heard = false;
-        silentSince = -1;
         a.currentTime = at / 1000;
         await a.play();
         return;
@@ -432,9 +415,9 @@ export function createMusicPlayer(opts: PlayerOptions) {
       }
     }
     if (mine !== token) return;
-    // 接进 Web Audio 的：可能只是这个地址不让跨域，是的话换成不接的 <audio> 接着放
-    if (gain && (await corsBlocked(url))) {
-      if (mine === token && gain) await playUnrouted(mine);
+    // 能接进 Web Audio 的设备上 <audio> 都按跨域取：可能只是这个地址不让跨域，是的话换成不按跨域取的 <audio> 接着放
+    if (canRoute() && (await corsBlocked(url))) {
+      if (mine === token && !unrouted) await playUnrouted(mine);
       return;
     }
     if (mine !== token) return;
@@ -443,10 +426,11 @@ export function createMusicPlayer(opts: PlayerOptions) {
     if (player.queue.length > 1) setTimeout(() => mine === token && void next(), 1200);
   }
 
-  /** 不接 Web Audio 了：换一个普通的 <audio>，从刚才的位置接着放这首 */
+  /** 不接 Web Audio 了：换一个不按跨域取的普通 <audio>（有解锁好的备用就用它），从刚才的位置接着放这首 */
   async function playUnrouted(mine: number) {
     unrouted = true;
-    dropRouted();
+    dropAudio();
+    releaseLease();
     const a = el();
     a.src = url;
     a.currentTime = player.posMs / 1000;
@@ -553,6 +537,8 @@ export function createMusicPlayer(opts: PlayerOptions) {
     }
     clearInterval(demoTimer);
     player.loading = true;
+    // 接进 Web Audio 的、音量已经回到 100%：换歌时换回普通 <audio>（有解锁好的备用才换，iPhone 上新建的放不出来）
+    if (gain && spare && level() >= 1) dropAudio();
     const a = el();
     a.pause();
     try {
@@ -562,8 +548,9 @@ export function createMusicPlayer(opts: PlayerOptions) {
       expiresAt = r.expiresAt;
       player.level = r.level ?? '';
       a.src = url;
-      heard = false;
-      silentSince = -1;
+      // 音量不是 100%：先接进 Web Audio 再放，免得开头一下子是满音量
+      if (level() < 1) await route(a);
+      if (mine !== token) return;
       applyVolume();
       try {
         await a.play();
@@ -573,7 +560,7 @@ export function createMusicPlayer(opts: PlayerOptions) {
           player.needsTap = true;
           player.playing = false;
         } else if (!a.error) throw e;
-        // 音频加载失败（a.error）：交给 onAudioError（重取地址、不让跨域时换不接 Web Audio 的、还不行跳下一首），这里不再跳
+        // 音频加载失败（a.error）：交给 onAudioError（重取地址、不让跨域时换不按跨域取的、还不行跳下一首），这里不再跳
       }
     } catch (e) {
       if (mine !== token) return;
@@ -786,12 +773,13 @@ export function createMusicPlayer(opts: PlayerOptions) {
     clearInterval(duckTimer);
     duckTimer = undefined;
     duckGain = duckTarget = 1;
-    if (gain) dropRouted();
+    if (gain) dropAudio();
     else if (audio) {
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
     }
+    releaseLease();
     url = '';
     player.playing = false;
     player.loading = false;
