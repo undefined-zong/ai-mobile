@@ -11,6 +11,8 @@
 
 let el: HTMLAudioElement | null = null;
 let ctx: AudioContext | null = null;
+/** 正在用共用 AudioContext 的有几个（白噪音、通话时听你说话） */
+let ctxUsers = 0;
 let unlocked = false;
 let stopCurrent: (() => void) | null = null;
 
@@ -24,15 +26,6 @@ function element(): HTMLAudioElement | null {
 }
 
 type AudioContextCtor = typeof AudioContext;
-
-/** 共用的 AudioContext（白噪音、通话时的说话检测）。要在点击里调用一次 resume() 才会真的跑起来 */
-export function audioContext(): AudioContext {
-  if (ctx && ctx.state !== 'closed') return ctx;
-  const Ctor = (globalThis.AudioContext ?? (globalThis as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext) as AudioContextCtor | undefined;
-  if (!Ctor) throw new Error('这个浏览器不支持网页音频');
-  ctx = new Ctor({ latencyHint: 'interactive' });
-  return ctx;
-}
 
 /** 用户点屏幕时顺手恢复被挂起的 AudioContext（切后台回来、iPhone 来电之后） */
 export function resumeAudioContext(): void {
@@ -85,6 +78,48 @@ function audioSession(kind: 'record' | 'playback'): () => void {
 export const playbackSession = () => audioSession('playback');
 export const recordSession = () => audioSession('record');
 
+export interface AudioContextLease {
+  ctx: AudioContext;
+  /** 不用了（调多次只算一次）：最后一个不用的关掉 AudioContext，并松开音频会话 */
+  release(): void;
+}
+
+/**
+ * 用共用的 AudioContext（白噪音、通话时的说话检测）：在点击里调用，拿到后当下就 resume()（Safari 只认点击当下的调用）。
+ * 先按用途设好 iPhone 的音频会话（playback / play-and-record），再建 AudioContext：iPhone 上 AudioContext 按它跑起来时的会话出声，
+ * 先以 auto（环境音，静音键打开就没声）跑起来、之后才改成 playback 的，显示在跑却一直没声音。
+ * 所以不再一点屏幕就建好它；都不用了就关掉，下次按那时的会话重新建。
+ */
+export function acquireAudioContext(kind: 'record' | 'playback'): AudioContextLease {
+  const releaseSession = audioSession(kind);
+  if (!ctx || ctx.state === 'closed') {
+    const Ctor = (globalThis.AudioContext ?? (globalThis as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext) as AudioContextCtor | undefined;
+    try {
+      if (!Ctor) throw new Error('这个浏览器不支持网页音频');
+      ctx = new Ctor({ latencyHint: 'interactive' });
+    } catch (e) {
+      releaseSession();
+      throw e;
+    }
+  }
+  const mine = ctx;
+  ctxUsers += 1;
+  let released = false;
+  return {
+    ctx: mine,
+    release() {
+      if (released) return;
+      released = true;
+      ctxUsers = Math.max(0, ctxUsers - 1);
+      if (!ctxUsers && ctx === mine) {
+        ctx = null;
+        void mine.close().catch(() => undefined);
+      }
+      releaseSession();
+    },
+  };
+}
+
 /** 1 个采样的静音 WAV */
 function silentWavUrl(): string {
   const bytes = new Uint8Array(46);
@@ -105,13 +140,8 @@ function silentWavUrl(): string {
   return URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
 }
 
-/** 在用户手势里调用：解锁共享的 <audio>，顺便激活 AudioContext */
+/** 在用户手势里调用：解锁共享的 <audio>（不碰 AudioContext：它要等设好音频会话再建，见 acquireAudioContext） */
 export function unlockAudio(): boolean {
-  try {
-    void audioContext().resume().catch(() => undefined);
-  } catch {
-    // 不支持网页音频：语音照样能用 <audio> 播
-  }
   const a = element();
   if (!a || unlocked) return unlocked;
   unlocked = true;

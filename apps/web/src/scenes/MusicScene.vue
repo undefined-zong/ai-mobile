@@ -29,6 +29,7 @@ import {
   seek,
   setVolume,
   toggle,
+  volumeLocked,
 } from '@/services/musicPlayer';
 import { personaOf } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
@@ -547,7 +548,8 @@ const subtitle = computed(() => {
         <div class="mix-row">
           <span class="i-lucide-music-2 text-ink-3" />
           <span class="mix-label">音乐</span>
-          <van-slider v-model="musicVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="音乐音量" />
+          <van-slider v-if="!volumeLocked" v-model="musicVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="音乐音量" />
+          <span v-else class="flex-1 text-[12px] text-ink-3">用手机侧面的音量键调</span>
         </div>
         <div v-if="noisePlaying" class="mix-row">
           <span :class="NOISE_LABEL[noise].icon" class="text-ink-3" />

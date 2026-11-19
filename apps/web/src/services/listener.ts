@@ -1,4 +1,4 @@
-import { audioContext, recordSession } from './audio';
+import { acquireAudioContext, type AudioContextLease } from './audio';
 
 /**
  * 通话时听你说话（设计文档 §11.2）：打开麦克风（回声消除、降噪、自动增益），按音量判断你什么时候开口、什么时候说完，
@@ -107,7 +107,8 @@ export class CallListener {
   private node: AudioWorkletNode | ScriptProcessorNode | null = null;
   private sink: GainNode | null = null;
   private ctx: AudioContext | null = null;
-  private releaseSession: (() => void) | null = null;
+  /** 用着共用的 AudioContext（连带 play-and-record 的音频会话）：停下时还回去 */
+  private lease: AudioContextLease | null = null;
   private rate = 48000;
   private noise = 0.004;
   private speaking = false;
@@ -150,16 +151,19 @@ export class CallListener {
     if (this.stream) return;
     if (!globalThis.navigator?.mediaDevices?.getUserMedia) throw new Error('这个浏览器不能用麦克风：请用支持麦克风的浏览器，并通过 HTTPS 打开');
     const gen = (this.gen += 1);
-    const ctx = audioContext();
+    this.lease ??= acquireAudioContext('record');
+    const ctx = this.lease.ctx;
     this.ctx = ctx;
     const resumed = ctx.resume().catch(() => undefined);
-    this.releaseSession ??= recordSession();
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
     } catch (e) {
-      this.releaseSession?.();
-      this.releaseSession = null;
+      if (gen === this.gen) {
+        this.lease?.release();
+        this.lease = null;
+        this.ctx = null;
+      }
       if (e instanceof Error && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw new Error('麦克风权限没开：在浏览器的网站设置里允许麦克风，或者改用打字', { cause: e });
       if (e instanceof Error && e.name === 'NotFoundError') throw new Error('没有找到可用的麦克风', { cause: e });
       throw e;
@@ -185,6 +189,8 @@ export class CallListener {
           URL.revokeObjectURL(url);
         }
         loaded.add(ctx);
+        // 加载的时候挂断了：AudioContext 已经还回去
+        if (gen !== this.gen) return;
       }
       const w = new AudioWorkletNode(ctx, WORKLET_NAME, { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
       w.port.onmessage = (e: MessageEvent<Float32Array>) => this.onChunk(e.data);
@@ -245,8 +251,9 @@ export class CallListener {
     this.source = null;
     this.node = null;
     this.sink = null;
-    this.releaseSession?.();
-    this.releaseSession = null;
+    this.lease?.release();
+    this.lease = null;
+    this.ctx = null;
     this.opts.onLevel?.(0);
   }
 

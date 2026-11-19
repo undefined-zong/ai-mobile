@@ -7,7 +7,7 @@ import { songs as demoSongs } from '@/mock/music';
 import { services, type SongInfo, type SongList } from '@/services';
 import { extractId } from '@/services/music';
 import { musicLibrary, saveList } from '@/services/musicLibrary';
-import type { MusicPlayer, PlayMode, QueueSource } from '@/services/musicPlayer';
+import { volumeLocked, type MusicPlayer, type PlayMode, type QueueSource } from '@/services/musicPlayer';
 import type { PlaylistSearches } from '@/services/playlistSearches';
 import { useServicesStore } from '@/stores/services';
 import { clock } from '@/utils/time';
@@ -252,7 +252,8 @@ function saveImported() {
     <div class="flex items-center gap-3 mt-3">
       <button class="mode-btn" :aria-label="MODES[player.mode].label" @click="cycleMode"><span :class="MODES[player.mode].icon" />{{ MODES[player.mode].label }}</button>
       <span class="i-lucide-volume-1 text-ink-3 shrink-0" />
-      <van-slider v-model="volume" class="flex-1" bar-height="4px" button-size="16px" aria-label="音乐音量" />
+      <van-slider v-if="!volumeLocked" v-model="volume" class="flex-1" bar-height="4px" button-size="16px" aria-label="音乐音量" />
+      <span v-else class="flex-1 text-[12px] text-ink-3">音量用手机侧面的按键调</span>
     </div>
 
     <!-- 更多：搜一个 / 导入歌单。挂到 .app-frame 上：场景面板有毛玻璃（backdrop-filter），弹层放在里面会被面板框住；也还在点缀色的范围里 -->
