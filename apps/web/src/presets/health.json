@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-health",
   "category": "health",
+  "worldInfoEnabled": false,
   "name": "健康 · 健身和饮食计划",
   "defaultFor": [
     "health"

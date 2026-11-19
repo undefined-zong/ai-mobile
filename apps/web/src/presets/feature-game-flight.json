@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-game-flight",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "飞行棋 · 甜蜜日常",
   "defaultFor": [
     "game-flight"

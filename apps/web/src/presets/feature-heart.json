@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-heart",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "心跳 · 文字",
   "defaultFor": [
     "scene:heart"

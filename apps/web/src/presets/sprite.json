@@ -5,6 +5,7 @@
   "name": "立绘 · NovelAI 透明底",
   "description": "AI 画立绘：缺外观 tags 时先写 tags（调\"生图提示词\"的 API），用 NovelAI V5 直接画一张透明底的平静底图，再照着底图画别的表情（默认只重画脸，身子、衣服一像素不动，换表情时立绘不会跳）和动作。构图默认半身（App 里的立绘框、头像框都按半身定），全身也能画（和半身的角色混着用时留着备用）。自带平静、大笑、害羞、愤怒、悲伤、惊讶、嫌弃、微笑、睡着九个表情和三个动作：增删、改名、改 tags 都在这里（关掉的不用），出图参数在\"出图参数\"里。底图换成 V4.5 时把画法里透明背景的几个词换成 simple background, white background，画完会自动去背景。",
   "category": "sprite",
+  "worldInfoEnabled": false,
   "defaultFor": [
     "sprite"
   ],

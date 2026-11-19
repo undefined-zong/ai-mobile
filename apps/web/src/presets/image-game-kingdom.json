@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-game-kingdom",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "王国模拟 · 朝代立绘",
   "defaultFor": [
     "game-kingdom-image"

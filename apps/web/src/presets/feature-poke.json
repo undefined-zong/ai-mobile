@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-poke",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "戳戳乐",
   "defaultFor": [
     "scene:poke"

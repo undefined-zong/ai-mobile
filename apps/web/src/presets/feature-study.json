@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-study",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "陪伴学习",
   "defaultFor": [
     "scene:study"

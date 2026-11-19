@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-game",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起游戏 · 海龟汤",
   "defaultFor": [
     "scene:game"

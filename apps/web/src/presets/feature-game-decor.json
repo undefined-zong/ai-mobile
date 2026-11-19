@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-game-decor",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起游戏 · 装修小屋",
   "defaultFor": [
     "game-decor"

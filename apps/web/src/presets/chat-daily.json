@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-daily",
   "category": "chat",
+  "worldInfoEnabled": true,
   "name": "陪伴 · 日常",
   "description": "默认的对话预设。角色和预设正文在前，环境、记忆、场景等程序上下文统一放在聊天记录之前。",
   "blocks": [

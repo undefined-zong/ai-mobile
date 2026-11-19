@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · NovelAI tags",
   "defaultFor": [
     "image"

@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-sleep-scene",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "哄睡 · 场景",
   "defaultFor": [
     "sleep-scene"

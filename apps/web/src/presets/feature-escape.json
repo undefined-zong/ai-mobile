@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-escape",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "出逃",
   "defaultFor": [
     "scene:escape"

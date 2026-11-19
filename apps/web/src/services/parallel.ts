@@ -434,7 +434,8 @@ export type ParallelResult = { ok: true; note: ParallelNote } | { ok: false; rea
 
 /** 使用"平行时空"用途选中的预设。 */
 export function parallelPreset(character?: Character): Preset | undefined {
-  return useLibraryStore().presetForUse('parallel', character);
+  const lib = useLibraryStore();
+  return lib.withLorebooks(lib.presetForUse('parallel', character), character);
 }
 
 /** 能不能调模型（API 接通了、有平行时空预设）；不能时说明原因 */

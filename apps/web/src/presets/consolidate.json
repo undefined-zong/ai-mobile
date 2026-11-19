@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-consolidate",
   "category": "summary",
+  "worldInfoEnabled": false,
   "name": "整理 · 记忆",
   "defaultFor": [
     "consolidate"

@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-parallel-capture",
   "category": "parallel",
+  "worldInfoEnabled": false,
   "name": "平行时空 · AI 记一件事",
   "defaultFor": [
     "parallel-capture"

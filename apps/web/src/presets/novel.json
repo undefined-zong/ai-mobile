@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-novel",
   "category": "novel",
+  "worldInfoEnabled": false,
   "name": "小说 · 创意工坊",
   "defaultFor": [
     "novel"

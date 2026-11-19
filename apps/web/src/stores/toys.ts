@@ -429,7 +429,8 @@ export const useToyStore = defineStore('toys', () => {
     const ai = useAiStore();
     const s = ai.status('device');
     if (!s.live) throw new Error(`「控制指令」还没接通：${s.reason}`);
-    const preset = useLibraryStore().presetForUse('device', opts.character);
+    const lib = useLibraryStore();
+    const preset = lib.withLorebooks(lib.presetForUse('device', opts.character), opts.character);
     if (!preset) throw new MissingPresetError('控制指令');
     const messages = buildDeviceMessages(
       {

@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-music",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起听歌",
   "defaultFor": [
     "scene:music"

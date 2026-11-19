@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-date",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 约会",
   "defaultFor": [
     "image:date"

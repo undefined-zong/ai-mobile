@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-sleep",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 哄睡",
   "defaultFor": [
     "image:sleep"

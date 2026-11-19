@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-date",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "约会",
   "defaultFor": [
     "scene:date"

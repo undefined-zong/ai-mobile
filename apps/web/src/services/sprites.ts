@@ -103,7 +103,8 @@ export interface SpriteStatus {
 
 /** 立绘预设（不给角色时是"立绘"用途选的那个：画"你"的立绘用） */
 export function spritePresetFor(c?: Character): Preset | undefined {
-  return useLibraryStore().presetForUse('sprite', c);
+  const lib = useLibraryStore();
+  return lib.withLorebooks(lib.presetForUse('sprite', c), c);
 }
 
 export function spriteStatus(c?: Character): SpriteStatus {

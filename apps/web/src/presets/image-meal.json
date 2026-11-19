@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-meal",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 一起吃饭",
   "defaultFor": [
     "image:meal"

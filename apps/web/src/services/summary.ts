@@ -157,7 +157,8 @@ async function summarizeBatch(chat: Chat, list: Message[], opts: { signal?: Abor
   const c = chars.byId(chat.characterId);
   if (!c) throw new AiError('no_route', '找不到这个角色');
   if (!ai.isLive('summary')) throw new AiError('no_route', '"总结 / 记忆"还没接通 API：在"我的 → API 设置"里设置（默认跟随主对话）');
-  const preset = useLibraryStore().presetForUse('summary', c);
+  const lib = useLibraryStore();
+  const preset = lib.withLorebooks(lib.presetForUse('summary', c), c);
   if (!preset) throw new MissingPresetError('总结');
   const every = useMessageSettingsStore().summaryEvery();
   const batch = pendingForSummary(chat, list).slice(0, every);

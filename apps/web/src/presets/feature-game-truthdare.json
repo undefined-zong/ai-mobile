@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-game-truthdare",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起游戏 · 真心话大冒险",
   "defaultFor": [
     "game-truthdare"

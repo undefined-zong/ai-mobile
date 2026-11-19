@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-watch",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起观影",
   "defaultFor": [
     "scene:watch"
