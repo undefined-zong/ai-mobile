@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { autoSave, getAll, getOne } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
+import { useCharacterStore } from './characters';
 import { uid } from '@/utils/id';
 
 /**
@@ -83,18 +84,23 @@ export const useSocialStore = defineStore('social', () => {
     return moments.value.find((m) => m.id === id);
   }
 
+  /** 只展示还在的角色和你发的动态；保留原记录，重新导入角色后仍能看到历史。 */
+  const available = computed(() => {
+    const authors = new Set(useCharacterStore().list.map((c) => c.id));
+    return moments.value.filter((m) => m.authorId === MOMENT_USER || authors.has(m.authorId));
+  });
   /** 朋友圈页显示的：最新的在前，只显示最近 x 条（"我的"页里设；0 = 全部） */
   const feed = computed(() => {
-    const all = [...moments.value].sort((a, b) => b.createdAt - a.createdAt);
+    const all = [...available.value].sort((a, b) => b.createdAt - a.createdAt);
     return settings.visibleCount > 0 ? all.slice(0, settings.visibleCount) : all;
   });
   /** 因为"只显示最近 x 条"没显示出来的条数 */
-  const hidden = computed(() => moments.value.length - feed.value.length);
+  const hidden = computed(() => available.value.length - feed.value.length);
   const unread = computed(() => feed.value.filter((m) => m.unread).length);
 
   /** 这个角色看得到的：她自己发的，和你发的里面她看得到的（从旧到新） */
   function visibleTo(characterId: string): Moment[] {
-    return moments.value.filter((m) => m.authorId === characterId || (m.authorId === MOMENT_USER && (m.visibleTo === null || m.visibleTo.includes(characterId))));
+    return available.value.filter((m) => m.authorId === characterId || (m.authorId === MOMENT_USER && (m.visibleTo === null || m.visibleTo.includes(characterId))));
   }
 
   // —— 改 ——
@@ -106,11 +112,12 @@ export const useSocialStore = defineStore('social', () => {
     return byId(m.id) as Moment;
   }
 
-  /** 云端发来的：没见过、也没被你删过的才放进来 */
+  /** 云端发来的：作者还在、没见过、也没被你删过的才放进来 */
   function ingest(list: Moment[]): Moment[] {
     const out: Moment[] = [];
     for (const m of list) {
       if (!m?.id || byId(m.id) || removed.value.includes(m.id)) continue;
+      if (m.authorId !== MOMENT_USER && !useCharacterStore().byId(m.authorId)) continue;
       out.push(add({ ...m, likes: m.likes ?? [], comments: m.comments ?? [], images: m.images ?? [], unread: true }));
     }
     return out;

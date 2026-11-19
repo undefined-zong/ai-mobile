@@ -265,6 +265,7 @@ export async function postMoment(characterId: string, opts: { /** 按排好的�
       { messages: buildSocialMessages(socialPostInput(context, now), preset), ...samplerRequest(preset.sampler) },
       parseMomentDraft,
     );
+    if (!useCharacterStore().byId(characterId)) return { ok: false, reason: '找不到这个角色' };
     const moment = social.add({
       id: opts.id ?? uid('moment'), authorId: c.id, text: value.text,
       images: value.image ? [{ caption: value.image, assetKey: null }] : [],
@@ -363,7 +364,7 @@ export async function reactToMoment(momentId: string, characterId: string, kind:
     social.busy[key] = true;
     await sleep(900 + Math.random() * 1500).catch(() => undefined);
     delete social.busy[key];
-    if (!social.byId(momentId)) return;
+    if (!useCharacterStore().byId(characterId) || !social.byId(momentId)) return;
     if (kind === 'new') social.setLike(momentId, characterId, true);
     social.comment(momentId, characterId, pick(kind === 'new' ? demo.comment : demo.reply), kind === 'reply' ? MOMENT_USER : undefined);
     rememberMoment(momentId, characterId);
@@ -405,7 +406,7 @@ export async function reactToMoment(momentId: string, characterId: string, kind:
       },
       parseMomentReaction,
     );
-    if (!social.byId(momentId)) return;
+    if (!useCharacterStore().byId(characterId) || !social.byId(momentId)) return;
     if (kind === 'new' && value.like) social.setLike(momentId, characterId, true);
     // 直接评论你的朋友圈不写"回复"；接你评论里的话才是回复你
     if (value.comment) social.comment(momentId, characterId, value.comment, kind === 'reply' ? MOMENT_USER : undefined);
