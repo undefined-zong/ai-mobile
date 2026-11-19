@@ -644,6 +644,12 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     file: 'image-date.json',
     added: ['duoRules'],
   },
+  {
+    // 心跳、陪伴学习、一起吃饭：连线画她一个人，坐在她旁边画你和她两个人同框（你入画时多一个 duo，这块只在那时发）
+    id: 'image-scenes:visit-duo',
+    files: ['image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json', 'image-study.json', 'image-meal.json'],
+    added: ['duoScene'],
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */

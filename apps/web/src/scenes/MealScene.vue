@@ -283,7 +283,10 @@ function captionFor(m: Moment, extra?: string): string {
       .join('；');
   }
   const where = how.value === 'together' ? `两个人坐在同一张桌子两边吃${label.value}${herMeal.value ? `，${her.value.name}吃的是${herMeal.value}` : ''}` : herSideLine();
-  if (m === 'side') return [where, `${userName.value}在${yourPlace.value || '自己那边'}吃${label.value}，${her.value.name}隔着屏幕陪着（${userName.value}不在画面里）`, extra].filter(Boolean).join('；');
+  const mineSide = together.value === 'visit'
+    ? `${userName.value}坐在${her.value.name}旁边吃${label.value}${mine ? `（${mine}）` : ''}`
+    : `${userName.value}在${yourPlace.value || '自己那边'}吃${label.value}，${her.value.name}隔着屏幕陪着（${userName.value}不在画面里）`;
+  if (m === 'side') return [where, mineSide, extra].filter(Boolean).join('；');
   return [`${her.value.name}举起手边的杯子和${userName.value}碰杯（第 ${cheers.value} 次）`, where, extra].filter(Boolean).join('；');
 }
 function cardImage(i: GalleryItem) {
@@ -311,6 +314,8 @@ async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string):
     expression: chars.expression[her.value.id],
     recent: chatId.value ? chat.recentLines(chatId.value, 4) : [],
     size: m === 'table' || (m === 'cheers' && how.value === 'together') ? 'portrait' : halfShape.value,
+    // 连线画她一个人，坐在她旁边画两个人同框
+    withUser: together.value === 'visit',
   });
   if (!r.ok) {
     if (!r.busy) artIssue.value = { text: `没画出来：${r.reason}`, settings: /没接通/.test(r.reason) };
@@ -329,12 +334,13 @@ async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string):
 function ensureArt() {
   const m: Moment = how.value === 'together' ? 'table' : 'side';
   const size: ImageShape = m === 'table' ? 'portrait' : halfShape.value;
+  const duo = together.value === 'visit';
   const have = m === 'table' ? tableArt.value : sideArt.value;
-  if (have && shapeOf(have) === size && have.caption.includes(label.value)) return;
+  if (have && shapeOf(have) === size && have.caption.includes(label.value) && !!have.withUser === duo) return;
   const outfit = rhythm.outfitFor(her.value.id, 'meal')?.name ?? null;
   const status = herSlot.value?.status ?? '';
   const found = gallery
-    .find(her.value.id, 'meal', { moment: m, today: true, locationId: herLocId.value, outfit, size })
+    .find(her.value.id, 'meal', { moment: m, today: true, locationId: herLocId.value, outfit, size, withUser: duo })
     .find((i) => i.caption.includes(label.value) && (m === 'table' || !status || i.caption.includes(status)));
   if (found) placeArt(found);
   else void drawMoment(m, 'auto');
@@ -352,6 +358,10 @@ function toggleAutoDraw() {
     ensureArt();
   }
 }
+// 右上角在连线和坐在她旁边之间切换：开饭后的单人图、双人图跟着换
+watch(together, () => {
+  if (phase.value === 'prep' || phase.value === 'eat') ensureArt();
+});
 async function preview(item: { assetKey: string | null; url?: string } | null) {
   if (!item) return;
   const img = await shotViewerImage(item);
