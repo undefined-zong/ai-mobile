@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import type { Character } from '@app/shared';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Avatar from '@/components/common/Avatar.vue';
 
 /**
- * 飘过的弹幕（一起观影的放映厅里用）：从右边进、匀速飘到左边出去。
- * - 一行一行地排（行高 34px，从 top 开始，占画面上面大约六成，不挡下面播放器的进度条）；
+ * 飘过的弹幕（一起观影的放映厅、一起听歌里用）：从右边进、匀速飘到左边出去。
+ * - 一行一行地排（行高 34px，从 top 开始，默认占画面上面大约六成，不挡下面播放器的进度条；fill 改用多少）；
  * - 所有弹幕同样的速度（每秒走画面宽度的七分之一），后面的追不上前面的；
  *   新的一条放进最早空出来的那一行（上一条整个进了画面、还隔开一点），都没空出来就放最快空出来的那行；
  * - 她的带头像、底色是她的颜色；你的带一个框（像 B 站里自己发的弹幕）；
  * - 系统设置了"减少动态效果"时不飘，在原地淡入淡出。
- * 用 push(who, text) 发一条。
+ * 用 push(who, text) 发一条；count 是现在画面上有几条。
  */
-const props = withDefaults(defineProps<{ character: Character; top?: number }>(), { top: 10 });
+const props = withDefaults(defineProps<{ character: Character; top?: number; fill?: number }>(), { top: 10, fill: 0.62 });
 
 const LANE = 34;
 const GAP = 28;
@@ -76,7 +76,7 @@ function push(who: Fly['who'], text: string) {
   const H = height.value || window.innerHeight;
   const w = textWidth(t) + (who === 'her' ? 24 + 6 + 12 : 18);
   const speed = Math.max(90, W / 7);
-  const lanes = Math.max(1, Math.floor((H * 0.62 - props.top) / LANE));
+  const lanes = Math.max(1, Math.floor((H * props.fill - props.top) / LANE));
   if (laneFree.length !== lanes) laneFree = Array.from({ length: lanes }, (_, i) => laneFree[i] ?? 0);
   const now = performance.now();
   let lane = laneFree.findIndex((at) => at <= now);
@@ -92,7 +92,7 @@ function push(who: Fly['who'], text: string) {
   timers.add(timer);
 }
 
-defineExpose({ push });
+defineExpose({ push, count: computed(() => flies.value.length) });
 </script>
 
 <template>
