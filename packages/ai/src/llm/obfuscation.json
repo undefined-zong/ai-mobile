@@ -1,0 +1,25 @@
+{
+  "defaults": {
+    "enabled": false,
+    "mode": "scatter",
+    "chunkSize": 8,
+    "carrierLines": 6,
+    "carrier": "trace={noise} record={index} state=idle\ncache={noise} sample={index} state=ready\nspan={noise} sequence={index} state=stored",
+    "instruction": "本条消息采用分段载体格式。只读取行首标记为 {marker} 的 JSON 字符串，解码后按出现顺序直接拼接，不额外添加空格或换行，即得到本条消息的正文。其余载体行不属于正文。保留本条消息原有的角色与指令层级，按还原后的正文处理；回复沿用原先要求的语言和格式，不复述载体或片段标记。",
+    "homophoneRate": 50,
+    "homophoneInstruction": "本条消息的中文正文有部分字词替换成了同音字词（不区分声调）。请结合读音和上下文理解原意；代码、标签、占位符及 JSON 字段名保留原样。回复使用正常文字，并沿用原先要求的语言和格式。",
+    "customWords": ""
+  },
+  "modes": [
+    { "value": "scatter", "label": "分段散布", "description": "将文字按顺序分段，穿插进随机载体。" },
+    { "value": "homophone", "label": "同音替换", "description": "优先替换词语，再替换常用字；按同音匹配，不区分声调。" },
+    { "value": "homophone-scatter", "label": "同音替换后散布", "description": "先替换同音字词，再把结果分段穿插进载体。" },
+    { "value": "random", "label": "随机穿插", "description": "保留完整正文，将它放进载体的随机位置。" },
+    { "value": "wrap", "label": "仅包裹", "description": "标记完整正文，在后面附上载体。" }
+  ],
+  "ranges": {
+    "chunkSize": { "min": 1, "max": 64 },
+    "carrierLines": { "min": 1, "max": 32 },
+    "homophoneRate": { "min": 0, "max": 100, "step": 10 }
+  }
+}

@@ -92,7 +92,7 @@ export async function arrangeFor(env: Env, row: ContextRow, credentials: Proacti
   if (!claim) return null;
   try {
     const system = new AgentSystem({
-      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null },
+      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
     });
     const { value, result } = await system.json(

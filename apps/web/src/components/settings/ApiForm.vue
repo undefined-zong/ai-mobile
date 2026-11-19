@@ -160,7 +160,7 @@ async function runTest() {
   }
   testing.value = true;
   try {
-    const r = await testConnection(ep, cap.value === 'vision' ? 'chat' : cap.value, { voice: cap.value === 'tts' ? props.testVoice : undefined });
+    const r = await testConnection(ep, cap.value === 'vision' ? 'chat' : cap.value, { voice: cap.value === 'tts' ? props.testVoice : undefined, textObfuscation: ai.textObfuscation });
     a.lastTest = { ok: r.ok, at: Date.now(), latencyMs: r.latencyMs, message: r.message, ...(r.detail ? { detail: r.detail } : {}) };
   } catch (e) {
     a.lastTest = { ok: false, at: Date.now(), message: errorText(e), detail: errorReport(e) };

@@ -5,6 +5,7 @@ import {
   DEFAULT_IMAGE_STYLE,
   DEFAULT_OUTPUT_FILTERS,
   DEFAULT_TTS_TEXT,
+  DEFAULT_TEXT_OBFUSCATION,
   endpointOfApi,
   errorReport,
   errorText,
@@ -27,6 +28,7 @@ import {
   type CustomFormat,
   type FeatureApi,
   type PromptProcessing,
+  type TextObfuscationSettings,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { showToast } from 'vant';
@@ -226,6 +228,7 @@ export const useAiStore = defineStore('ai', () => {
   const keys = reactive<Record<string, string>>({});
   /** 输出修剪规则（SleepTogether 的全局正则）：所有文本功能的回复都过一遍 */
   const outputFilters = ref<string[]>([...DEFAULT_OUTPUT_FILTERS]);
+  const textObfuscation = reactive<TextObfuscationSettings>({ ...DEFAULT_TEXT_OBFUSCATION });
   /** 每个功能上次调用失败的报错（只在内存里）；之后成功了就清掉 */
   const lastErrors = reactive<Partial<Record<AgentRole, CallError>>>({});
 
@@ -234,8 +237,9 @@ export const useAiStore = defineStore('ai', () => {
     () => [
       { key: 'apiFeatures', value: routes.value },
       { key: 'outputFilters', value: outputFilters.value },
+      { key: 'textObfuscation', value: { ...textObfuscation } },
     ],
-    () => [routes.value, outputFilters.value],
+    () => [routes.value, outputFilters.value, textObfuscation],
     {
       // 别的设备改了 API 设置（同步；Key 不同步，各自在自己的设备上填）：放进来
       apply: (changes) => {
@@ -243,6 +247,7 @@ export const useAiStore = defineStore('ai', () => {
           if (c.deleted) continue;
           if (c.key === 'apiFeatures' && Array.isArray(c.value)) routes.value = completeRoutes(c.value as Partial<AgentRoute>[]);
           else if (c.key === 'outputFilters' && Array.isArray(c.value)) setOutputFilters(c.value as string[]);
+          else if (c.key === 'textObfuscation') Object.assign(textObfuscation, DEFAULT_TEXT_OBFUSCATION, c.value);
         }
       },
     },
@@ -256,6 +261,7 @@ export const useAiStore = defineStore('ai', () => {
 
   const config: AgentConfig = {
     routes: () => routes.value,
+    textObfuscation: () => textObfuscation,
     keyOf: (id) => keys[id] || null,
   };
 
@@ -286,13 +292,14 @@ export const useAiStore = defineStore('ai', () => {
   );
 
   async function hydrate() {
-    const [saved, savedFilters, secrets, legacyConns, legacyRoutes, legacySlots] = await Promise.all([
+    const [saved, savedFilters, secrets, legacyConns, legacyRoutes, legacySlots, savedObfuscation] = await Promise.all([
       getOne<Partial<AgentRoute>[]>('settings', 'apiFeatures'),
       getOne<string[]>('settings', 'outputFilters'),
       getEntries<string>('secrets'),
       getOne<LegacyConnection[]>('settings', 'connections'),
       getOne<LegacyRoute[]>('settings', 'routes'),
       getOne<LegacySlots>('settings', 'apiSlots'),
+      getOne<Partial<TextObfuscationSettings>>('settings', 'textObfuscation'),
     ]);
     const stored: Record<string, string> = {};
     for (const { key, value } of secrets) if (typeof value === 'string' && value) stored[key] = value;
@@ -331,6 +338,7 @@ export const useAiStore = defineStore('ai', () => {
       );
     }
     if (Array.isArray(savedFilters)) setOutputFilters(savedFilters);
+    Object.assign(textObfuscation, savedObfuscation);
     settingsSaver.start();
     secretSaver.start();
   }
@@ -402,6 +410,7 @@ export const useAiStore = defineStore('ai', () => {
   return {
     routes,
     outputFilters,
+    textObfuscation,
     lastErrors,
     system,
     hydrate,

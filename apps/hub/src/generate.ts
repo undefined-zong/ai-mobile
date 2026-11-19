@@ -72,7 +72,7 @@ export async function generateMessage(context: ProactiveContext, credentials: Pr
     // The scheduler reserves the shared daily budget atomically in D1 before calling this.
     const system = new AgentSystem({ config: {
       routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })),
-      keyOf: (id) => credentials.keys[id] || null,
+      keyOf: (id) => credentials.keys[id] || null, textObfuscation: () => credentials.textObfuscation,
     }, outputFilters: credentials.outputFilters });
     const attempt = system.router.attempts('proactive')[0]!;
     const request = proactivePrompt(context, t, now, attempt.endpoint.model);

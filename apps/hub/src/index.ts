@@ -352,7 +352,7 @@ async function api(request: Request, env: Env): Promise<Response> {
       : path === '/v1/secrets/planner' ? 'planner' : path === '/v1/secrets/parallel' ? 'parallel' : path === '/v1/secrets/health' ? 'health' : 'proactive';
     const credentials = await body<ProactiveCredentials>(request);
     assert(Array.isArray(credentials.routes) && credentials.keys && Array.isArray(credentials.outputFilters), 'API 配置无效');
-    const system = new AgentSystem({ config: { routes: () => credentials.routes, keyOf: (id) => credentials.keys[id] || null } });
+    const system = new AgentSystem({ config: { routes: () => credentials.routes, keyOf: (id) => credentials.keys[id] || null, textObfuscation: () => credentials.textObfuscation } });
     const chain = system.router.chain(role);
     assert(credentials.routes.every((r) => chain.includes(r.role)), '只接受该功能及其跟随的 API 配置');
     const status = system.status(role);

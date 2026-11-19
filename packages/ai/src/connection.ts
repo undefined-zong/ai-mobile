@@ -1,4 +1,4 @@
-import type { Capability } from '@app/shared';
+import type { Capability, TextObfuscationSettings } from '@app/shared';
 import { anthropicBase, bearerHeaders, deepseekBase, geminiBase, isFullChatUrl, joinUrl, openaiModelsUrl, transportOf, type Endpoint } from './core/endpoint.ts';
 import { VERTEX_MODELS } from './channels.ts';
 import { AiError, annotateError, errorReport, errorText, httpError } from './core/errors.ts';
@@ -7,6 +7,7 @@ import { embedTexts } from './embedding/client.ts';
 import { NOVELAI_MODELS } from './image/presets.ts';
 import { novelaiSubscription } from './image/novelai.ts';
 import { chatOnce } from './llm/client.ts';
+import { obfuscateChatRequest } from './llm/obfuscation.ts';
 import { synthesize } from './tts/client.ts';
 import type { VoiceSpec } from './tts/types.ts';
 import { sttTestAudio, transcribeAudio } from './stt/client.ts';
@@ -121,7 +122,7 @@ function defaultVoice(ep: Endpoint): VoiceSpec | null {
  * 按这个连接要做的事测一次：对话发一句很短的话；向量化算一句话；语音合成读"你好"；
  * NovelAI 查订阅（不出图，不花点数）。其余生图接口只拉模型列表——真出一张图会花钱。
  */
-export async function testConnection(ep: Endpoint, capability: Capability, opts: { voice?: VoiceSpec; signal?: AbortSignal } = {}): Promise<TestResult> {
+export async function testConnection(ep: Endpoint, capability: Capability, opts: { voice?: VoiceSpec; signal?: AbortSignal; textObfuscation?: TextObfuscationSettings } = {}): Promise<TestResult> {
   const started = Date.now();
   const done = (ok: boolean, message: string, detail?: string): TestResult => ({ ok, latencyMs: Date.now() - started, message, ...(detail ? { detail } : {}) });
   try {
@@ -129,7 +130,8 @@ export async function testConnection(ep: Endpoint, capability: Capability, opts:
       case 'chat':
       case 'vision': {
         try {
-          const r = await chatOnce(ep, { messages: [{ role: 'user', content: '测试连接：请只回复一个字"在"。' }], maxTokens: 64, temperature: 0 }, { stream: false, signal: opts.signal });
+          const req = obfuscateChatRequest({ messages: [{ role: 'user', content: '测试连接：请只回复一个字"在"。' }], maxTokens: 64, temperature: 0 }, opts.textObfuscation);
+          const r = await chatOnce(ep, req, { stream: false, signal: opts.signal });
           return done(true, `回复：${r.text.trim().slice(0, 40)}`);
         } catch (e) {
           // 会思考的模型可能把 64 个 token 都用在思考上：接口是通的

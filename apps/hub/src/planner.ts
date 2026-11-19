@@ -80,7 +80,7 @@ export async function planFor(env: Env, row: ContextRow, credentials: ProactiveC
     const last = await env.DB.prepare('SELECT MAX(done_at) AS at FROM planner_jobs WHERE persona_id = ? AND done_at IS NOT NULL').bind(id).first<{ at: number | null }>();
     const want = force ?? { day: true, week: !week || ctx.settings.weekRefresh === 'daily' };
     const system = new AgentSystem({
-      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null },
+      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
     });
     const signal = AbortSignal.timeout(LEASE_MS - 30_000);

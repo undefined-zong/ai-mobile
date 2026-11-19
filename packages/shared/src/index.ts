@@ -10,6 +10,7 @@ export * from './types/activity.ts';
 export * from './types/api.ts';
 export * from './types/proactive.ts';
 export * from './types/settings.ts';
+export * from './types/obfuscation.ts';
 export * from './types/hub.ts';
 export * from './types/life.ts';
 export * from './types/planner.ts';
