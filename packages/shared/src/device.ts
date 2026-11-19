@@ -1,14 +1,16 @@
+import { parseControlTags } from './tags.ts';
+
 /**
  * 心跳：玩具的控制指令（设计文档 §9.14）。
  *
  * 写法沿用 SillyTavern 的 Intiface 插件（Enclave0775/Intiface_Central-Sillytavern-plugin）里的键，
  * 用过那个插件的世界书、预设可以直接照着写：
  *
- *   "VIBRATE": 40                                                震动 40%（多个马达时一起）
- *   "VIBRATE": [80, 30]                                          每个马达各自的强度
+ *   "VIBRATE": 40                                                震动 40%（多个头时一起）
+ *   "VIBRATE": [80, 30]                                          每个头各自的强度（顺序是连着的玩具按顺序排下来的那几个头）
  *   "VIBRATE": {"pattern": [20, 60], "interval": [800, 400], "loop": 3}
  *                                                                变速：每一档的强度、每一档多久（毫秒）、整组放几遍（不写一直循环）；
- *                                                                pattern 里的一档也可以是数组（每个马达各自的强度）
+ *                                                                pattern 里的一档也可以是数组（每个头各自的强度）
  *   "OSCILLATE" / "ROTATE" / "CONSTRICT" / "INFLATE"             摆动 / 旋转 / 收缩 / 充气，写法同震动（旋转可以加 "clockwise": false）
  *   "LINEAR": {"start_position": 10, "end_position": 90, "duration": 1000}
  *                                                                伸缩：在两个位置（0–100，100 在顶端）之间来回，每一下多久
@@ -18,10 +20,10 @@
  *                                                                分段的伸缩：每段把 durations 走 loop 遍（往上、往下各算一下）
  *   "STOP": true                                                 全部停下
  *
- * 指令从两个地方来：
- * - 她在回复里写 <device>…</device>（"她自己写"）：parseControlTags 把它从正文里拿掉、记下位置，parseDeviceBlock 读里面的内容；
- * - "控制指令"预设单独写一份（"单独生成"）：{"steps": [{"at": "她原话里的几个字", "do": {"VIBRATE": 30}}]}，parseDeviceSteps 读，placeSteps 放到原话的位置上。
- * 读到 / 念到那个位置时执行，强度上限、安全时间由播放的那一边（apps/web 的 toyPlayer）管。
+ * 指令都写在 <device>…</device> 里，从两个地方来：
+ * - 她在回复里写（"她自己写"）：parseControlTags 把它从正文里拿掉、记下位置，parseDeviceBlock 读里面的内容；
+ * - "控制指令"预设单独写一份（"单独生成"）：把她这句话照抄一遍、在要变的地方插 <device>，placeDeviceTags 按抄的字放回原话的位置上。
+ * 读到 / 念到那个位置时执行。强度都按 0–100 写，每个头的上限、伸缩的范围和最快速度由播放的那一边（apps/web 的 toyPlayer）按比例换算。
  */
 
 export const SCALAR_KINDS = ['vibrate', 'oscillate', 'rotate', 'constrict', 'inflate'] as const;
@@ -38,6 +40,9 @@ export const TOY_KIND_LABEL: Record<ToyKind, string> = {
   inflate: '充气',
   linear: '伸缩',
 };
+
+/** 一个字的简称（心跳那条上每个头的名字：震1、震2、转） */
+export const TOY_KIND_SHORT: Record<ToyKind, string> = { vibrate: '震', oscillate: '摆', rotate: '转', constrict: '缩', inflate: '气', linear: '伸' };
 
 /** 每一种在指令里写哪些键 */
 export const TOY_KIND_KEYS: Record<ToyKind, string[]> = {
@@ -58,7 +63,7 @@ export const MIN_TOY_INTERVAL = 120;
 export const MIN_TOY_STROKE = 80;
 
 export interface ToyWave {
-  /** 每一档的强度 0–100；一档是数组时是每个马达各自的强度 */
+  /** 每一档的强度 0–100；一档是数组时是每个头各自的强度 */
   steps: (number | number[])[];
   /** 每一档持续多久（毫秒），比 steps 短时循环着用 */
   intervals: number[];
@@ -95,9 +100,9 @@ export interface ToyCommand {
   stop?: boolean;
 }
 
-/** "控制指令"预设写的一步：读到她原话里的 at 时执行 */
-export interface DeviceStep {
-  at: string;
+/** 一条指令和它在她原话里的位置（字符下标）：读到 / 念到那里时执行 */
+export interface PlacedCommand {
+  pos: number;
   command: ToyCommand;
 }
 
@@ -182,7 +187,7 @@ function toLinear(key: string, v: unknown): ToyLinear | null {
   return segments.length ? { segments, repeat: v.repeat === true } : null;
 }
 
-/** 一组"键: 值"（<device> 里读出来的，或者"控制指令"预设写的 do）→ 一条指令；一个都认不出来时为 null */
+/** 一组"键: 值"（<device> 里读出来的）→ 一条指令；一个都认不出来时为 null */
 export function commandFromEntries(entries: Iterable<[string, unknown]>): ToyCommand | null {
   const cmd: ToyCommand = {};
   for (const [rawKey, v] of entries) {
@@ -292,30 +297,10 @@ export function parseDeviceBlock(inner: string): ToyCommand | null {
   return commandFromEntries(entries);
 }
 
-/**
- * 读"控制指令"预设的输出：{"steps": [{"at": "她原话里的几个字", "do": {...}}]}（也认直接给数组、do 写成 cmd / command、键直接写在这一步里）。
- * 格式不对时为 null（让模型重写）；空数组是"这一句不用变"
- */
-export function parseDeviceSteps(value: unknown): DeviceStep[] | null {
-  const list = Array.isArray(value) ? value : isObj(value) && Array.isArray(value.steps) ? value.steps : null;
-  if (!list) return null;
-  const out: DeviceStep[] = [];
-  for (const s of list) {
-    if (!isObj(s)) continue;
-    const body = isObj(s.do) ? s.do : isObj(s.cmd) ? s.cmd : isObj(s.command) ? s.command : s;
-    const cmd = commandFromEntries(Object.entries(body));
-    if (cmd) out.push({ at: typeof s.at === 'string' ? s.at.trim().slice(0, 60) : '', command: cmd });
-  }
-  return out.slice(0, 12);
-}
-
 const SKIP = /[\s\p{P}\p{S}]/u;
 
-/**
- * 把"控制指令"的每一步放到她原话里的位置（字符下标）：按 at 去找（不看标点和空格，按顺序往后找，找不到时用前一半再找一次），
- * 还是找不到的夹在前后两步中间（第一步放开头），保证位置不往回走
- */
-export function placeSteps(steps: DeviceStep[], text: string): { pos: number; command: ToyCommand }[] {
+/** 去掉标点和空格（找位置时不看它们），记下每个字在原文里的下标 */
+function flatten(text: string): { flat: string; index: number[] } {
   const index: number[] = [];
   let flat = '';
   for (let i = 0; i < text.length; i += 1) {
@@ -325,27 +310,50 @@ export function placeSteps(steps: DeviceStep[], text: string): { pos: number; co
       flat += ch;
     }
   }
+  return { flat, index };
+}
+
+/** 找一段抄的话时依次试的：整段，再试它最后几个字 */
+const ANCHOR_TAILS = [12, 8, 5, 3];
+
+/**
+ * 读"控制指令"预设的输出（单独生成）：她这句话照抄了一遍，要变的地方插着 <device>…</device>（和她自己写时一样）。
+ * 每个 <device> 放回她原话里的位置：按它前面抄的那段话去原话里找（不看标点和空格，按顺序往后找，整段找不到时用那段的最后几个字找），
+ * 还是找不到的（抄的时候改了字）从上一个位置往后数那段话的字数；位置不往回走。可以只抄到最后一个 <device> 为止。
+ * 返回 null：一个 <device> 都没有，却在标签外面写了指令的键（模型没按写法来，让它重写）；没有 <device> 是"这一句不用变"
+ */
+export function placeDeviceTags(output: string, line: string): PlacedCommand[] | null {
+  const parsed = parseControlTags(output, ['device']);
+  const blocks = parsed.tags.filter((t) => t.tag.kind === 'device');
+  if (!blocks.length) return new RegExp(KEY_SOURCE, 'i').test(parsed.visible) ? null : [];
+  const src = flatten(line);
+  const copied = parsed.visible;
+  /** 原话里第 k 个字（不算标点和空格）后面的位置 */
+  const after = (k: number) => (k > 0 ? (src.index[Math.min(k, src.flat.length) - 1] ?? line.length - 1) + 1 : 0);
+  const out: PlacedCommand[] = [];
   let from = 0;
-  const found = steps.map((s) => {
-    const q = [...s.at].filter((ch) => !SKIP.test(ch)).join('');
-    if (!q) return null;
-    let k = flat.indexOf(q, from);
-    if (k < 0 && q.length > 3) k = flat.indexOf(q.slice(0, Math.ceil(q.length / 2)), from);
-    if (k < 0) return null;
-    from = k + 1;
-    return index[k] ?? null;
-  });
-  const out: { pos: number; command: ToyCommand }[] = [];
-  let prev = 0;
-  for (let i = 0; i < steps.length; i += 1) {
-    let pos = found[i];
-    if (pos === null || pos === undefined) {
-      const next = found.slice(i + 1).find((p): p is number => typeof p === 'number' && p >= prev);
-      pos = i === 0 ? 0 : Math.round((prev + (next ?? text.length)) / 2);
+  let prevPos = 0;
+  let prevAt = 0;
+  for (const { tag, at } of blocks) {
+    const command = parseDeviceBlock('value' in tag ? tag.value : '');
+    if (!command) continue;
+    const seg = flatten(copied.slice(prevAt, at)).flat;
+    prevAt = at;
+    let pos: number | null = seg ? null : prevPos;
+    for (const q of seg ? [seg, ...ANCHOR_TAILS.filter((n) => n < seg.length).map((n) => seg.slice(-n))] : []) {
+      const k = src.flat.indexOf(q, from);
+      if (k < 0) continue;
+      from = k + q.length;
+      pos = after(from);
+      break;
     }
-    pos = Math.max(prev, Math.min(text.length, pos));
-    out.push({ pos, command: steps[i]!.command });
-    prev = pos;
+    if (pos === null) {
+      from = Math.min(src.flat.length, from + seg.length);
+      pos = after(from);
+    }
+    pos = Math.max(prevPos, Math.min(line.length, pos));
+    out.push({ pos, command });
+    prevPos = pos;
   }
   return out;
 }

@@ -4,6 +4,14 @@ import type { Character } from './types/character.ts';
  * 生图 tags 的小工具：前端和 Worker 共用（@app/ai 的生图提示词智能体也用这里的 joinTags）。
  */
 
+/**
+ * 生图提示词输出里的几段（"名字###内容###"，@app/ai 的 parseImagePrompt 读）：
+ * image 画面的 tags、negative 额外的负面 tags、size 画幅、char / user 两个人同框时各自的一份
+ */
+export const IMAGE_PROMPT_SECTIONS = ['image', 'negative', 'size', 'char', 'user'] as const;
+/** char / user 后面能跟的：位置，和只针对这个人的负面 tags */
+export const IMAGE_PROMPT_MODIFIERS = ['left', 'right', 'center', 'negative'] as const;
+
 /** 逗号分隔的 tags 合并：去掉空项和重复项（不区分大小写），保留第一次出现的顺序 */
 export function joinTags(...lists: (string | undefined | null)[]): string {
   const seen = new Set<string>();

@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { TOY_KIND_LABEL, type ToyKind } from '@app/shared';
+import { TOY_KIND_LABEL } from '@app/shared';
 import { computed } from 'vue';
-import type { ToyLevels } from '@/services/toyPlayer';
+import { headHeat, type HeadLevel } from '@/services/toyPlayer';
 
 /**
  * 心跳画面最下面的那条（压在图上，不挡脸）：
- * 左边一颗按心率跳的心和心率；中间一段心电图，一拍走一格，越激烈波形越高；右边每一种玩具现在的强度（震动的每个马达一根）；
- * 有东西在动时最右边是"停"（一下全部停下）。点中间去连玩具、看设置。
+ * 左边一颗跳动的心（越激烈跳得越快）；中间一段心电图，一拍走一格，越激烈波形越高；
+ * 右边每个头现在发给玩具的数值（双头玩具每个头一根，下面写着数）；有东西在动时最右边是"停"（一下全部停下）。点中间去连玩具、看设置。
  */
 const props = defineProps<{
+  /** 心跳多快（每分钟几下）：只管心和心电图跳的快慢，不显示 */
   bpm: number;
   /** 0–100 */
   intensity: number;
-  levels: ToyLevels;
-  kinds: ToyKind[];
+  /** 每个头现在的数值 */
+  heads: HeadLevel[];
   /** 上面一行小字：连着哪个玩具、在做什么，或者为什么没连 */
   status: string;
   /** 指令会执行（连着玩具，或者在界面上试） */
@@ -23,7 +24,8 @@ defineEmits<{ (e: 'stop'): void; (e: 'open'): void }>();
 
 /** 实心的心（lucide 只有空心的） */
 const HEART_PATH = 'M12 20.5C6 16 2.5 12.5 2.5 8.6 2.5 5.7 4.8 3.5 7.5 3.5c1.9 0 3.5 1.1 4.5 2.7 1-1.6 2.6-2.7 4.5-2.7 2.7 0 5 2.2 5 5.1 0 3.9-3.5 7.4-9.5 11.9z';
-const SHORT: Record<ToyKind, string> = { vibrate: '震', oscillate: '摆', rotate: '转', constrict: '缩', inflate: '气', linear: '伸' };
+/** 心跳那条上最多显示几个头（再多挤不下） */
+const MAX_BARS = 6;
 
 const beatMs = computed(() => Math.round(60_000 / Math.max(40, props.bpm)));
 
@@ -53,26 +55,23 @@ const ecg = computed(() => {
   return d;
 });
 
-/** 每一种一根（震动每个马达一根） */
-const bars = computed(() => {
-  const out: { key: string; label: string; value: number; title: string }[] = [];
-  for (const k of props.kinds) {
-    if (k === 'vibrate') {
-      const motors = props.levels.vibrate.length ? props.levels.vibrate : [0];
-      motors.forEach((v, i) => out.push({ key: `v${i}`, label: motors.length > 1 ? `震${i + 1}` : SHORT.vibrate, value: v, title: `${TOY_KIND_LABEL.vibrate}${motors.length > 1 ? ` ${i + 1}` : ''} ${v}%` }));
-    } else if (k === 'linear') out.push({ key: 'l', label: SHORT.linear, value: props.levels.pace, title: `${TOY_KIND_LABEL.linear} 速度 ${props.levels.pace}` });
-    else out.push({ key: k, label: SHORT[k], value: props.levels[k], title: `${TOY_KIND_LABEL[k]} ${props.levels[k]}%` });
-  }
-  return out.slice(0, 6);
-});
+/** 每个头一根：强度条和数（伸缩看快慢，数是现在的位置） */
+const bars = computed(() =>
+  props.heads.slice(0, MAX_BARS).map((h) => ({
+    key: h.key,
+    label: h.short,
+    fill: headHeat(h),
+    value: h.value,
+    title: h.kind === 'linear' ? `${h.name}：位置 ${h.value}，速度 ${h.pace}` : `${h.name}（${TOY_KIND_LABEL[h.kind]}）：${h.value}%`,
+  })),
+);
 const moving = computed(() => props.intensity > 0);
 </script>
 
 <template>
   <div class="pulse" :class="{ hot: intensity >= 60, warm: intensity > 0 && intensity < 60 }" :style="{ '--beat': `${beatMs}ms` }" data-testid="heart-pulse">
-    <div class="beat" role="img" :aria-label="`心跳 ${bpm}`">
-      <svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path :d="HEART_PATH" /></svg>
-      <span class="bpm num">{{ bpm }}</span>
+    <div class="beat" aria-hidden="true">
+      <svg class="heart" viewBox="0 0 24 24"><path :d="HEART_PATH" /></svg>
     </div>
     <button type="button" class="mid" aria-label="玩具和画面的设置" @click="$emit('open')">
       <span class="status">{{ status }}</span>
@@ -82,9 +81,10 @@ const moving = computed(() => props.intensity > 0);
         </g>
       </svg>
     </button>
-    <div v-if="live && bars.length" class="bars" aria-label="玩具现在的强度">
-      <span v-for="b in bars" :key="b.key" class="bar" :title="b.title">
-        <span class="track"><span class="fill" :style="{ height: `${b.value}%` }" /></span>
+    <div v-if="live && bars.length" class="bars" aria-label="每个头现在的数值" data-testid="heart-heads">
+      <span v-for="b in bars" :key="b.key" class="bar" :title="b.title" :aria-label="b.title">
+        <span class="val num">{{ b.value }}</span>
+        <span class="track"><span class="fill" :style="{ height: `${b.fill}%` }" /></span>
         <span class="lab">{{ b.label }}</span>
       </span>
     </div>
@@ -121,10 +121,10 @@ const moving = computed(() => props.intensity > 0);
 }
 .beat {
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  width: 38px;
+  width: 28px;
 }
 .heart {
   width: 22px;
@@ -132,12 +132,6 @@ const moving = computed(() => props.intensity > 0);
   fill: var(--tone);
   animation: lubdub var(--beat) infinite;
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--tone) 55%, transparent));
-}
-.bpm {
-  margin-top: 1px;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--ink-2);
 }
 .mid {
   flex: 1;
@@ -189,11 +183,18 @@ const moving = computed(() => props.intensity > 0);
   align-items: center;
   gap: 2px;
 }
+.val {
+  min-width: 18px;
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  color: var(--ink-2);
+}
 .track {
   position: relative;
   display: block;
   width: 6px;
-  height: 26px;
+  height: 20px;
   border-radius: 3px;
   background: var(--glass-line);
   overflow: hidden;

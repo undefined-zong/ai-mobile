@@ -842,6 +842,9 @@ export const pokeMusic = createMusicPlayer({ storageKey: 'ai-mobile:poke:music:v
 /** 出逃时的音乐：播放列表单独存，默认小声一点，和白噪音叠着也不吵 */
 export const escapeMusic = createMusicPlayer({ storageKey: 'ai-mobile:escape:music:v1', lyrics: false, volume: 0.6 });
 
+/** 心跳时的音乐：播放列表单独存，默认小声一点，不盖过她说话 */
+export const heartMusic = createMusicPlayer({ storageKey: 'ai-mobile:heart:music:v1', lyrics: false, volume: 0.5 });
+
 /** 一件事自带的几个歌单（components/scene/PlaylistMusic.vue）：按这些词去网易云搜，搜到的歌就是这个歌单 */
 export interface PlaylistSearch {
   name: string;

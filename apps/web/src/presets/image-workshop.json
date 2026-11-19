@@ -88,9 +88,9 @@
     },
     {
       "identifier": "format",
-      "name": "输出格式（JSON，字段名别改）",
+      "name": "输出格式（### 和它前面的英文词别改）",
       "role": "system",
-      "content": "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait、square 或 landscape\"}",
+      "content": "只输出下面这样的一段，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\n需要额外的负面 tags 时另起一行写 negative###英文 tags###；不是竖图时另起一行写 size###landscape### 或 size###square###（程序给了\"画幅\"时照程序的）。",
       "marker": false,
       "enabled": true,
       "injection": {

@@ -146,3 +146,12 @@ export const escapeSearches = playlistSearches('ai-mobile:escape:searches:v1', [
   { name: '后摇', keyword: '后摇 空灵', icon: 'i-lucide-cloud' },
   { name: '一个人', keyword: '一个人 安静 歌单', icon: 'i-lucide-moon' },
 ]);
+
+/** 心跳：暧昧、慵懒的几个 */
+export const heartSearches = playlistSearches('ai-mobile:heart:searches:v1', [
+  { name: '暧昧', keyword: '暧昧 氛围 歌单', icon: 'i-lucide-heart' },
+  { name: 'R&B', keyword: '慵懒 R&B', icon: 'i-lucide-wine' },
+  { name: '深夜', keyword: '深夜 氛围 纯音乐', icon: 'i-lucide-moon' },
+  { name: 'Chill', keyword: 'chill 放松 歌单', icon: 'i-lucide-headphones' },
+  { name: '爵士', keyword: '深夜 爵士', icon: 'i-lucide-music-2' },
+]);

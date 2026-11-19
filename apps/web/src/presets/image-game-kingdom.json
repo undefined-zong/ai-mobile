@@ -92,7 +92,7 @@
       "identifier": "format",
       "name": "输出格式",
       "role": "system",
-      "content": "只输出JSON：{\"caption\":\"人物名与身份，20字以内\",\"tags\":\"solo, full body, standing等英文tags\",\"negative\":\"额外英文负面tags\",\"size\":\"portrait\"}。不写质量词或画师名。",
+      "content": "只输出：image###solo, full body, standing等英文tags###，需要额外负面词时另起一行写 negative###英文负面tags###。不写质量词或画师名，### 和它前面的英文词别改。",
       "enabled": true,
       "marker": false,
       "injection": {

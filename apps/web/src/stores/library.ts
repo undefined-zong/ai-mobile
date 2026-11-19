@@ -1,5 +1,6 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import assistantMergeUpgrades from '@/migrations/presetAssistantMerge.json';
+import tagFormatUpgrades from '@/migrations/presetTagFormats.json';
 import {
   appContextBeforeHistory,
   categoryMarkers,
@@ -652,7 +653,8 @@ function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
       }
     }
   }
-  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[], ...assistantMergeUpgrades as SeedUpgrade[]]) {
+  // tagFormatUpgrades：生图的输出从 JSON 换成 image###tags###、控制指令从 JSON 换成照抄原话插 <device>（输出格式那块强制换，程序不再读旧写法）
+  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[], ...assistantMergeUpgrades as SeedUpgrade[], ...tagFormatUpgrades as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);

@@ -1,4 +1,4 @@
-import { assembleTaskPrompt, joinTags, leadCountTags } from '@app/shared';
+import { assembleTaskPrompt, IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags } from '@app/shared';
 import type { ImageRequest, ImageSize } from '../image/types.ts';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -6,8 +6,16 @@ import type { TaskPreset } from './taskPreset.ts';
 /**
  * 生图提示词智能体（设计文档 §4.3）：把对话里的一个画面（[cg:描述]、"画一张"、约会的关键时刻、番外里的一幕）
  * 写成 NovelAI 的 tags。外观基础 tags 来自角色卡，模型只写构图、动作、表情、服装、场景、光线；
- * 程序把外观 tags 放在最前面，负面 tags 合并角色卡的。
+ * 程序把外观 tags 放在最前面，负面 tags 合并角色卡的，标题、画幅也由程序定。
  * 提示词（任务、规则、"画什么"、输出格式）全在"生图"预设里；这里只填这一次的输入。
+ *
+ * 模型的输出不是 JSON，是几段"名字###内容###"（parseImagePrompt 读，toImageRequest 拼成生图请求）：
+ *   image###1girl, upper body, smile, ...###        画面的 tags（必须有）
+ *   negative###...###                              额外的负面 tags（可以不写）
+ *   size###landscape###                            画幅 portrait / landscape / square（可以不写：程序给了画幅时照程序的，否则竖图）
+ *   char left###girl, smile, ...###                两个人同框时她的那一份（left / right / center 是位置，可以不写）
+ *   user right###boy, ...###                       两个人同框时"你"的那一份
+ *   char negative###...###                         只针对她（或 user negative###：只针对你）的负面 tags
  */
 
 /**
@@ -64,19 +72,23 @@ export interface ImagePromptInput {
   /**
    * 画幅由程序定（例如陪伴学习分上下两屏时，半屏接近方形就画方图）：告诉模型按这个画幅构图，出图时也按它，不看模型写的 size
    */
-  size?: ImagePromptOutput['size'];
+  size?: PromptSize;
   /** 不同框、只在预设里出现的另一个人（{{user}}）：画"你"这边时是她，陪着你但不在画面里 */
   companionName?: string;
 }
 
-const SIZE_LABEL: Record<ImagePromptOutput['size'], string> = { portrait: '竖图（portrait）', landscape: '横图（landscape）', square: '方图（square）' };
+/** 提示词里能用的画幅（竖图、横图、方图） */
+export type PromptSize = 'portrait' | 'landscape' | 'square';
+
+const SIZE_LABEL: Record<PromptSize, string> = { portrait: '竖图（portrait）', landscape: '横图（landscape）', square: '方图（square）' };
 
 export interface ImagePromptOutput {
-  /** 中文短标题，进相册 */
+  /** 中文短标题，进相册（程序按要画的画面写） */
   caption: string;
   tags: string;
   negative: string;
-  size: 'portrait' | 'landscape' | 'square';
+  /** 模型写的画幅（size###）；没写时由程序定 */
+  size?: PromptSize;
   /** 两个人同框时每个人单独的 tags（模型给出的动作），外观 tags 由程序补上 */
   characters?: { who: 'char' | 'user'; tags: string; negative?: string; position?: 'left' | 'right' | 'center' }[];
 }
@@ -98,10 +110,11 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
       withUser && mode === 'scene'
         ? [
             `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
-            `画${c.name}和${withUser.name}两个人同框时：tags 只写整体画面（人数、构图、场景、光线），再加一个 characters 字段分别写每个人：`,
-            `"characters": [{"who": "char", "tags": "${c.name}的人物类别（boy/girl/other）、表情、动作、服装", "negative": "只针对${c.name}的负面 tags"}, {"who": "user", "tags": "${withUser.name}的人物类别（boy/girl/other）、表情、动作、服装", "negative": "只针对${withUser.name}的负面 tags"}]`,
-            `人物类别按各自的外观与角色信息填写，不按 who 固定性别。位置明确时为对应人物添加 "position": "left"、"right" 或 "center"，不指定位置时省略。`,
-            `只画${c.name}一个人时不写 characters。`,
+            `画${c.name}和${withUser.name}两个人同框时：image### 里只写整体画面（人数、构图、场景、光线），再各起一行分别写每个人：`,
+            `char###${c.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
+            `user###${withUser.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
+            `人物类别按各自的外观与角色信息填写，不按 char / user 固定性别。位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），不指定位置时不写。`,
+            `只针对一个人的负面 tags 另起一行写 char negative###…### 或 user negative###…###。只画${c.name}一个人时不写 char### 和 user###。`,
           ].join('\n')
         : '',
     imageSubject: [
@@ -149,10 +162,7 @@ export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPr
 }
 
 const SIZES = new Set(['portrait', 'landscape', 'square']);
-
-function isPosition(v: unknown): v is 'left' | 'right' | 'center' {
-  return v === 'left' || v === 'right' || v === 'center';
-}
+const POSITIONS: ReadonlySet<string> = new Set(IMAGE_PROMPT_MODIFIERS.filter((m) => m !== 'negative'));
 
 /** 英文 tags 清理：去掉中文和模型多写的外观、质量词 */
 function cleanTags(tags: string): string {
@@ -166,32 +176,51 @@ function cleanTags(tags: string): string {
   );
 }
 
-export function parseImagePrompt(value: unknown): ImagePromptOutput | null {
-  if (!value || typeof value !== 'object') return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.tags !== 'string' || !v.tags.trim()) return null;
-  const tags = cleanTags(v.tags);
+/** 一段"名字###"的开头：名字见 IMAGE_PROMPT_SECTIONS，char、user 后面可以跟位置和 negative（IMAGE_PROMPT_MODIFIERS） */
+const SECTION_RE = new RegExp(`\\b(${IMAGE_PROMPT_SECTIONS.join('|')})((?:[ \\t_-]+(?:${IMAGE_PROMPT_MODIFIERS.join('|')}))*)[ \\t]*###`, 'gi');
+
+/** 输出里的每一段：内容到下一个 ### 或者下一段的开头为止（最后一段忘了收尾的 ### 也认） */
+function sections(text: string): { name: string; mods: string[]; body: string }[] {
+  const heads = [...text.matchAll(SECTION_RE)];
+  return heads.map((m, i) => {
+    const from = (m.index ?? 0) + m[0].length;
+    const close = text.indexOf('###', from);
+    const next = heads[i + 1]?.index ?? text.length;
+    const end = close >= 0 ? Math.min(close, next) : next;
+    return {
+      name: (m[1] ?? '').toLowerCase(),
+      mods: (m[2] ?? '').toLowerCase().split(/[ \t_-]+/).filter(Boolean),
+      body: text.slice(from, end).trim(),
+    };
+  });
+}
+
+/** 读模型的输出（image###tags### 那几段）；没有 image### 或者里面没有能用的 tags 时为 null（让模型重写） */
+export function parseImagePrompt(text: string): ImagePromptOutput | null {
+  const list = sections(text);
+  const tags = cleanTags(list.filter((x) => x.name === 'image').map((x) => x.body).join(', '));
   if (!tags) return null;
+  const size = list.find((x) => x.name === 'size')?.body.toLowerCase();
   const out: ImagePromptOutput = {
-    caption: typeof v.caption === 'string' && v.caption.trim() ? v.caption.trim().slice(0, 30) : '',
+    caption: '',
     tags,
-    negative: typeof v.negative === 'string' ? cleanTags(v.negative) : '',
-    size: typeof v.size === 'string' && SIZES.has(v.size) ? (v.size as ImagePromptOutput['size']) : 'portrait',
+    negative: cleanTags(list.filter((x) => x.name === 'negative').map((x) => x.body).join(', ')),
+    ...(size && SIZES.has(size) ? { size: size as PromptSize } : {}),
   };
-  if (Array.isArray(v.characters)) {
-    const chars = v.characters
-      .map((x) => x as Record<string, unknown>)
-      .filter((x) => (x.who === 'char' || x.who === 'user') && typeof x.tags === 'string')
-      .map((x) => ({
-        who: x.who as 'char' | 'user',
-        tags: cleanTags(x.tags as string),
-        negative: typeof x.negative === 'string' ? cleanTags(x.negative) : '',
-        ...(isPosition(x.position) ? { position: x.position } : {}),
-      }));
-    if (chars.length) out.characters = chars;
-  }
+  const chars = (['char', 'user'] as const).flatMap((who) => {
+    const mine = list.filter((x) => x.name === who);
+    const own = cleanTags(mine.filter((x) => !x.mods.includes('negative')).map((x) => x.body).join(', '));
+    if (!own) return [];
+    const position = mine.flatMap((x) => x.mods).find((m): m is 'left' | 'right' | 'center' => POSITIONS.has(m));
+    return [{ who, tags: own, negative: cleanTags(mine.filter((x) => x.mods.includes('negative')).map((x) => x.body).join(', ')), ...(position ? { position } : {}), at: list.indexOf(mine[0]!) }];
+  });
+  // 按写的先后排（位置明确时从左到右写）
+  if (chars.length) out.characters = chars.sort((a, b) => a.at - b.at).map(({ at: _at, ...c }) => c);
   return out;
 }
+
+/** 让模型重写时的提醒 */
+export const IMAGE_PROMPT_RETRY = '上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。';
 
 const CENTERS = { left: { x: 0.3, y: 0.5 }, right: { x: 0.7, y: 0.5 }, center: { x: 0.5, y: 0.5 } } as const;
 
@@ -215,11 +244,12 @@ export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput):
  * 两个人时整体 tags 做基础提示词（人数在这里），每个人的外观（去掉人数 tags）+ 动作做 V4 的人物提示词，按左右位置放
  */
 export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, seed?: number): ImageRequest {
-  const size: ImageSize = input.size ?? out.size;
-  // 背景图不画人：不加外观 tags，确保有 no humans
+  // 背景图不画人：不加外观 tags，确保有 no humans；画幅没定时用横图
   if (input.mode === 'background') {
-    return { prompt: joinTags('no humans, scenery', out.tags), negative: joinTags('1girl, 1boy, people', out.negative), size: input.size ?? (out.size === 'portrait' ? 'landscape' : size), seed };
+    return { prompt: joinTags('no humans, scenery', out.tags), negative: joinTags('1girl, 1boy, people', out.negative), size: input.size ?? out.size ?? 'landscape', seed };
   }
+  // 画幅：程序给的 → 模型写的 size### → 两个人同框横图、其余竖图
+  const size: ImageSize = input.size ?? out.size ?? (hasUserInFrame(out, input) ? 'landscape' : 'portrait');
   const negative = joinTags(input.character.negativeTags, out.negative);
   const outfit = lockedOutfit(input);
   if (hasUserInFrame(out, input)) {
@@ -253,5 +283,5 @@ function noHumans(lead: string): boolean {
 /** 没有分配生图提示词智能体时的退路：外观 tags + 画面描述原文（V4 起能读懂一些自然语言） */
 export function fallbackImagePrompt(input: ImagePromptInput): ImagePromptOutput {
   const lead = { scene: '', portrait: 'full body', face: 'close-up, portrait', background: '' }[input.mode ?? 'scene'];
-  return { caption: input.caption.slice(0, 30), tags: joinTags(lead, input.caption), negative: '', size: input.size ?? (input.mode === 'background' ? 'landscape' : 'portrait') };
+  return { caption: input.caption.slice(0, 30), tags: joinTags(lead, input.caption), negative: '' };
 }

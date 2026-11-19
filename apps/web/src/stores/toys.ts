@@ -1,17 +1,18 @@
 import { buildDeviceMessages, errorText, samplerRequest } from '@app/ai';
-import { describeCommand, parseDeviceSteps, SCALAR_KINDS, TOY_KIND_KEYS, TOY_KIND_LABEL, type Character, type DeviceStep, type ToyCommand, type ToyKind } from '@app/shared';
+import { describeCommand, MIN_TOY_INTERVAL, placeDeviceTags, SCALAR_KINDS, TOY_KIND_KEYS, TOY_KIND_LABEL, type Character, type PlacedCommand, type ToyCommand, type ToyKind } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
 import { useLibraryStore } from './library';
 import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
 import { MissingPresetError } from '@/services/prompt';
-import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, type ToyCaps, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
+import { DEFAULT_HEAD_LIMIT, emptyLevels, intensityOf, listHeads, ToyPlayer, type HeadLimit, type ToyHead, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
 
 /**
  * 心跳里的玩具（设计文档 §9.14）：连 Intiface Central、列出连着的玩具、把指令放上去、按设置守着上限和安全时间。
  * - 指令从哪来（source）：单独生成（"控制指令"预设按她的话写，默认）/ 她自己写（心跳的功能预设里"她自己写指令"那一块，她在回复里写 <device>）/ 不控制；
- * - 强度上限、伸缩最快多快和范围、多久没有新指令就停、切到后台就停、打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）；
+ * - 每个头的上限（双头玩具的每个马达、震动加伸缩的每一种各设各的：强度上限，伸缩的范围和最快多快）、多久没有新指令就停、切到后台就停、
+ *   打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）。她照 0–100 写，发给玩具时按每个头的上限按比例换算；
  * - 按了"停"全部停下，她下一条指令照常执行；断开时停下。
  * 连接留着（再进心跳不用重连），设置里"断开"才断。
  */
@@ -24,7 +25,10 @@ export interface ToySettings {
   /** 进心跳时自动连（连上过一次以后打开，点"断开"时关） */
   autoConnect: boolean;
   source: CommandSource;
-  caps: ToyCaps;
+  /** 每个头的上限（键是 listHeads 的 key）；没设过的头用 kindDefaults，再没有用 DEFAULT_HEAD_LIMIT */
+  limits: Record<string, HeadLimit>;
+  /** 以前按种类设的上限（震动一个数、伸缩一组）：没单独设过的头照它 */
+  kindDefaults: Partial<Record<ToyKind, Partial<HeadLimit>>>;
   /** 多久没有新指令就停下（分钟，0 = 一直放着） */
   safetyMin: number;
   /** 切到别的 App、锁屏时停下 */
@@ -33,25 +37,63 @@ export interface ToySettings {
   simulate: boolean;
   /** 打字时她的话按多快读（字 / 秒），指令读到那里时执行 */
   readCps: number;
-  /** 设置的版本：2 以前存的，还是旧默认值（强度上限 80 / 60、10 分钟自动停、切走就停）的换成现在的默认 */
+  /**
+   * 设置的版本：2 以前存的，还是旧默认值（强度上限 80 / 60、10 分钟自动停、切走就停）的换成现在的默认；
+   * 3 以前的上限是按种类存的（caps），改过的那几种放进 kindDefaults
+   */
   version: number;
 }
 
 const KEY = 'ai-mobile:toys';
+/** 没连玩具、在界面上试时能写的几种 */
+const SIM_KINDS: ToyKind[] = ['vibrate', 'oscillate', 'rotate', 'linear'];
 
 export const DEFAULT_TOY_SETTINGS: ToySettings = {
   url: '127.0.0.1:12345',
   autoConnect: false,
   source: 'separate',
-  caps: { ...DEFAULT_CAPS },
+  limits: {},
+  kindDefaults: {},
   safetyMin: 0,
   stopOnHide: false,
   simulate: false,
   readCps: 9,
-  version: 2,
+  version: 3,
 };
 
+/** 版本 1 的默认强度上限：存着的还是这个值（没调过）时不算改过 */
+const V1_DEFAULT_CAPS: Partial<Record<ToyKind, number>> = { vibrate: 80, oscillate: 80, rotate: 80, constrict: 60, inflate: 60 };
+
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d);
+
+/** 一个头的上限：缺的、超出范围的按 fallback 补 */
+function readLimit(v: unknown, fallback: HeadLimit): HeadLimit {
+  const o = (v && typeof v === 'object' ? v : {}) as Partial<HeadLimit>;
+  return {
+    max: num(o.max, 0, 100, fallback.max),
+    posMin: num(o.posMin, 0, 100, fallback.posMin),
+    posMax: num(o.posMax, 0, 100, fallback.posMax),
+    strokeMs: num(o.strokeMs, 100, 3000, fallback.strokeMs),
+  };
+}
+
+/** 3 以前按种类存的 caps → 没单独设过的头照它（只留改过的） */
+function fromCaps(raw: Record<string, unknown>): ToySettings['kindDefaults'] {
+  const c = (raw.caps && typeof raw.caps === 'object' ? raw.caps : {}) as Record<string, unknown>;
+  const v1 = typeof raw.version !== 'number' || raw.version < 2;
+  const out: ToySettings['kindDefaults'] = {};
+  for (const k of SCALAR_KINDS) {
+    const v = c[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || (v1 && v === V1_DEFAULT_CAPS[k])) continue;
+    const max = num(v, 0, 100, DEFAULT_HEAD_LIMIT.max);
+    if (max !== DEFAULT_HEAD_LIMIT.max) out[k] = { max };
+  }
+  const linear = readLimit({ posMin: c.posMin, posMax: c.posMax, strokeMs: c.strokeMs }, DEFAULT_HEAD_LIMIT);
+  if (linear.posMin !== DEFAULT_HEAD_LIMIT.posMin || linear.posMax !== DEFAULT_HEAD_LIMIT.posMax || linear.strokeMs !== DEFAULT_HEAD_LIMIT.strokeMs) {
+    out.linear = { posMin: linear.posMin, posMax: linear.posMax, strokeMs: linear.strokeMs };
+  }
+  return out;
+}
 
 function load(): ToySettings {
   let raw: Record<string, unknown> = {};
@@ -61,27 +103,23 @@ function load(): ToySettings {
   } catch {
     // 读不出来就用默认的
   }
-  const c = (raw.caps && typeof raw.caps === 'object' ? raw.caps : {}) as Partial<ToyCaps>;
-  const d = DEFAULT_CAPS;
-  // 旧版存的、还是旧默认值的（没调过）：换成现在的默认
-  const legacy = raw.version !== DEFAULT_TOY_SETTINGS.version;
-  if (legacy) for (const [k, v] of Object.entries(OLD_DEFAULT_CAPS) as [keyof ToyCaps, number][]) if (c[k] === v) delete c[k];
-  if (legacy && raw.safetyMin === 10) delete raw.safetyMin;
-  if (legacy && raw.stopOnHide === true) delete raw.stopOnHide;
+  // 版本 1 存的、还是旧默认值的（没调过）：换成现在的默认
+  const v1 = typeof raw.version !== 'number' || raw.version < 2;
+  if (v1 && raw.safetyMin === 10) delete raw.safetyMin;
+  if (v1 && raw.stopOnHide === true) delete raw.stopOnHide;
+  const kindDefaults: ToySettings['kindDefaults'] = {};
+  if (typeof raw.version === 'number' && raw.version >= 3) {
+    const kd = (raw.kindDefaults && typeof raw.kindDefaults === 'object' ? raw.kindDefaults : {}) as Record<string, unknown>;
+    for (const k of [...SCALAR_KINDS, 'linear'] as ToyKind[]) if (kd[k] && typeof kd[k] === 'object') kindDefaults[k] = kd[k] as Partial<HeadLimit>;
+  } else Object.assign(kindDefaults, fromCaps(raw));
+  const limits: Record<string, HeadLimit> = {};
+  if (raw.limits && typeof raw.limits === 'object') for (const [key, v] of Object.entries(raw.limits as Record<string, unknown>)) limits[key] = readLimit(v, DEFAULT_HEAD_LIMIT);
   return {
     url: typeof raw.url === 'string' && raw.url.trim() ? raw.url.trim() : DEFAULT_TOY_SETTINGS.url,
     autoConnect: raw.autoConnect === true,
     source: raw.source === 'inline' || raw.source === 'off' ? raw.source : 'separate',
-    caps: {
-      vibrate: num(c.vibrate, 0, 100, d.vibrate),
-      oscillate: num(c.oscillate, 0, 100, d.oscillate),
-      rotate: num(c.rotate, 0, 100, d.rotate),
-      constrict: num(c.constrict, 0, 100, d.constrict),
-      inflate: num(c.inflate, 0, 100, d.inflate),
-      strokeMs: num(c.strokeMs, 100, 3000, d.strokeMs),
-      posMin: num(c.posMin, 0, 100, d.posMin),
-      posMax: num(c.posMax, 0, 100, d.posMax),
-    },
+    limits,
+    kindDefaults,
     safetyMin: num(raw.safetyMin, 0, 120, DEFAULT_TOY_SETTINGS.safetyMin),
     stopOnHide: raw.stopOnHide === true,
     simulate: raw.simulate === true,
@@ -158,10 +196,22 @@ export const useToyStore = defineStore('toys', () => {
       if (client.connected) void client.stopAll().catch(() => undefined);
     },
   };
-  const player = new ToyPlayer(levels, output, () => settings.caps);
+  /** 这个头的上限：单独设过的 → 以前按种类设的 → 默认 */
+  function headLimit(head: Pick<ToyHead, 'key' | 'kind'>): HeadLimit {
+    return settings.limits[head.key] ?? readLimit(settings.kindDefaults[head.kind], DEFAULT_HEAD_LIMIT);
+  }
+
+  /** 改一个头的上限（设置里拖滑块） */
+  function setHeadLimit(head: Pick<ToyHead, 'key' | 'kind'>, patch: Partial<HeadLimit>) {
+    settings.limits[head.key] = readLimit({ ...headLimit(head), ...patch }, DEFAULT_HEAD_LIMIT);
+  }
+
+  const player = new ToyPlayer(levels, output, headLimit, () => (ready.value ? [] : SIM_KINDS));
 
   /** 连着、有玩具 */
   const ready = computed(() => status.value === 'connected' && devices.value.length > 0);
+  /** 连着的玩具的每个头（指令里写数组时按这个顺序） */
+  const heads = computed<ToyHead[]>(() => (ready.value ? listHeads(devices.value) : []));
   /** 指令会被执行（连着玩具，或者在界面上试） */
   const live = computed(() => ready.value || settings.simulate);
   /** 要不要让她写指令：会执行、指令来源没关 */
@@ -232,31 +282,47 @@ export const useToyStore = defineStore('toys', () => {
     scanning.value = false;
   }
 
-  /** 试一下：这个玩具轻轻动一下（不经过她，也不管按没按停） */
+  /** 试一下时"指令"写多少：强度 30，伸缩在 20–70 之间走一下（都按每个头的上限换算） */
+  const TEST = { level: 30, from: 20, to: 70, strokeMs: 600, holdMs: 800 };
+
+  /** 试一下：这个玩具轻轻动一下（不经过她，也不管按没按停；也照每个头的上限换算） */
   function test(d: ToyDevice) {
     if (!client.connected) return;
-    const scalars = d.features.filter((f) => f.via === 'scalar' && f.kind !== 'linear');
-    const rotations = d.features.filter((f) => f.via === 'rotate');
-    const linears = d.features.filter((f) => f.kind === 'linear');
-    if (scalars.length) void client.scalar(d.index, scalars.map((f) => ({ Index: f.index, Scalar: 0.3, ActuatorType: f.actuator }))).catch(fail);
-    if (rotations.length) void client.rotate(d.index, rotations.map((f) => ({ Index: f.index, Speed: 0.3, Clockwise: true }))).catch(fail);
-    for (const f of linears) {
-      if (f.via === 'linear') void client.linear(d.index, [{ Index: f.index, Duration: 600, Position: 0.7 }]).catch(fail);
-    }
+    const mine = heads.value.filter((h) => h.device?.index === d.index && h.feature);
+    const send = (level: number, pos: number) => {
+      const scalars = mine.filter((h) => h.feature!.via === 'scalar' && h.kind !== 'linear');
+      const rotations = mine.filter((h) => h.feature!.via === 'rotate');
+      const amount = (h: ToyHead) => (level * headLimit(h).max) / 10_000;
+      const place = (h: ToyHead) => {
+        const l = headLimit(h);
+        return (Math.min(l.posMin, l.posMax) + (Math.abs(l.posMax - l.posMin) * pos) / 100) / 100;
+      };
+      if (scalars.length) void client.scalar(d.index, scalars.map((h) => ({ Index: h.feature!.index, Scalar: amount(h), ActuatorType: h.feature!.actuator }))).catch(fail);
+      if (rotations.length) void client.rotate(d.index, rotations.map((h) => ({ Index: h.feature!.index, Speed: amount(h), Clockwise: true }))).catch(fail);
+      for (const h of mine) if (h.kind === 'linear' && h.feature!.via === 'linear') void client.linear(d.index, [{ Index: h.feature!.index, Duration: TEST.strokeMs, Position: place(h) }]).catch(fail);
+    };
+    send(TEST.level, TEST.to);
     setTimeout(() => {
-      if (!client.connected) return;
-      if (scalars.length) void client.scalar(d.index, scalars.map((f) => ({ Index: f.index, Scalar: 0, ActuatorType: f.actuator }))).catch(fail);
-      if (rotations.length) void client.rotate(d.index, rotations.map((f) => ({ Index: f.index, Speed: 0, Clockwise: true }))).catch(fail);
-      for (const f of linears) if (f.via === 'linear') void client.linear(d.index, [{ Index: f.index, Duration: 600, Position: 0.2 }]).catch(fail);
-    }, 800);
+      if (client.connected) send(0, TEST.from);
+    }, TEST.holdMs);
   }
 
   /** 连着的玩具能做的（在界面上试时都能） */
   const kinds = computed<ToyKind[]>(() => {
-    if (!ready.value) return settings.simulate ? ['vibrate', 'oscillate', 'rotate', 'linear'] : [];
+    if (!ready.value) return settings.simulate ? SIM_KINDS : [];
     const set = new Set(devices.value.flatMap((d) => d.features.map((f) => f.kind)));
     return ([...SCALAR_KINDS, 'linear'] as ToyKind[]).filter((k) => set.has(k));
   });
+
+  // 头变了（连上、断开、玩具增减、打开 / 关掉在界面上试）：心跳那条跟着换
+  watch(
+    () => (ready.value ? heads.value.map((h) => h.key).join(',') : settings.simulate ? 'sim' : ''),
+    () => {
+      if (live.value) player.sync();
+      else levels.heads = [];
+    },
+    { immediate: true },
+  );
 
   /** 去掉玩具做不了的那几种；什么都不剩时为 null */
   function fitCommand(cmd: ToyCommand): ToyCommand | null {
@@ -312,29 +378,40 @@ export const useToyStore = defineStore('toys', () => {
 
   // —— 写给"控制指令"预设、她自己写指令时看的几行 ——
 
-  /** 连着的玩具和能写的键 */
+  /** 连着的玩具、能写的键，写数组时每个位置是哪个头 */
   function toysLine(): string {
-    if (!ready.value) return settings.simulate ? '没连真的玩具（只在界面上显示）：VIBRATE、OSCILLATE、ROTATE、LINEAR 都可以写。' : '';
+    if (!ready.value) return settings.simulate ? `没连真的玩具（只在界面上显示）：${SIM_KINDS.flatMap((k) => TOY_KIND_KEYS[k]).join('、')} 都可以写。` : '';
     const lines = devices.value.map((d) => {
       const by = new Map<ToyKind, number>();
       for (const f of d.features) by.set(f.kind, (by.get(f.kind) ?? 0) + 1);
-      const parts = [...by].map(([k, n]) => `${TOY_KIND_LABEL[k]}${n > 1 ? ` ${n} 个马达（可以写成数组分别控制）` : ''}（${TOY_KIND_KEYS[k].join(' / ')}）`);
+      const parts = [...by].map(([k, n]) => `${TOY_KIND_LABEL[k]}${n > 1 ? ` ${n} 个头` : ''}（${TOY_KIND_KEYS[k].join(' / ')}）`);
       return `- ${d.name}：${parts.join('、') || '没有能控制的'}`;
     });
+    const many = SCALAR_KINDS.map((k) => {
+      const hs = heads.value.filter((h) => h.kind === k);
+      if (hs.length < 2) return '';
+      const owner = (h: ToyHead) => (devices.value.length > 1 ? `${h.device?.name ?? ''}的` : '');
+      return `${TOY_KIND_KEYS[k][0]} 有 ${hs.length} 个头：写一个数是一起，写数组 [${hs.map((_, i) => String.fromCharCode(97 + i)).join(', ')}] 依次是 ${hs.map((h) => `${owner(h)}${h.name}`).join('、')}`;
+    }).filter(Boolean);
     const keys = kinds.value.flatMap((k) => TOY_KIND_KEYS[k]);
-    return `${lines.join('\n')}\n能写的键：${keys.join('、')}、STOP；别的键这些玩具做不了，不要写。`;
+    return [
+      ...lines,
+      ...many,
+      `能写的键：${keys.join('、')}、STOP；别的键这些玩具做不了，不要写。`,
+      '强度都照 0–100 写：每个头的上限是在心跳设置里单独设的，程序发给玩具时按比例换算，不用自己压低。',
+    ].join('\n');
   }
 
-  /** 强度上限和最快的速度 */
-  function limitsLine(): string {
-    const c = settings.caps;
-    const caps = kinds.value.filter((k): k is (typeof SCALAR_KINDS)[number] => k !== 'linear').map((k) => `${TOY_KIND_LABEL[k]} ${c[k]}`);
-    const parts = [
-      caps.length ? `强度上限：${caps.join('、')}（超过的会被压到上限，写的时候就在上限以内安排轻重）` : '',
-      kinds.value.includes('linear') ? `伸缩：从底到顶一下最快 ${c.strokeMs} 毫秒（幅度小按比例更快）` : '',
-      '变速的每一档不短于 120 毫秒',
-    ];
-    return parts.filter(Boolean).join('；');
+  /** 最快的速度（太快玩具跟不上，程序会放慢） */
+  function speedLine(): string {
+    const linear = heads.value.filter((h) => h.kind === 'linear');
+    const strokeMs = linear.length ? Math.max(...linear.map((h) => headLimit(h).strokeMs)) : readLimit(settings.kindDefaults.linear, DEFAULT_HEAD_LIMIT).strokeMs;
+    return [
+      `变速的每一档不短于 ${MIN_TOY_INTERVAL} 毫秒`,
+      kinds.value.includes('linear') ? `伸缩：从底到顶一下最快 ${strokeMs} 毫秒（幅度小按比例更快）` : '',
+    ]
+      .filter(Boolean)
+      .join('；');
   }
 
   /** 现在在做什么 */
@@ -346,9 +423,9 @@ export const useToyStore = defineStore('toys', () => {
 
   /**
    * "控制指令"预设：按她这句话写指令（「控制指令」的 API，默认跟随「陪伴 · 快速」）。
-   * 返回放到原话里之前的步骤；没接通、没有预设、写坏了时抛出
+   * 输出是她这句话照抄一遍、要变的地方插 <device>，返回放回原话位置的指令；没接通、没有预设、写坏了时抛出
    */
-  async function writeCommands(opts: { character: Character; userName: string; line: string; recent: string[]; signal?: AbortSignal }): Promise<DeviceStep[]> {
+  async function writeCommands(opts: { character: Character; userName: string; line: string; recent: string[]; signal?: AbortSignal }): Promise<PlacedCommand[]> {
     const ai = useAiStore();
     const s = ai.status('device');
     if (!s.live) throw new Error(`「控制指令」还没接通：${s.reason}`);
@@ -361,7 +438,7 @@ export const useToyStore = defineStore('toys', () => {
         pronoun: opts.character.pronoun,
         fills: {
           deviceToys: `连着的玩具：\n${toysLine()}`,
-          deviceLimits: `强度上限和最快的速度：${limitsLine()}`,
+          deviceLimits: `最快的速度：${speedLine()}`,
           deviceNow: `玩具现在：${nowLine()}`,
           deviceRecent: opts.recent.length ? `最近的对话：\n${opts.recent.join('\n')}` : '',
           deviceLine: `${opts.character.name}这一句（要配指令的话）：\n${opts.line}`,
@@ -370,10 +447,17 @@ export const useToyStore = defineStore('toys', () => {
       preset,
     );
     try {
-      const { value } = await ai.system.json('device', { messages, ...samplerRequest(preset.sampler) }, parseDeviceSteps, { signal: opts.signal });
-      const steps = value.map((st) => ({ at: st.at, command: fitCommand(st.command) })).filter((st): st is DeviceStep => !!st.command);
-      lastWritten.value = { line: opts.line, steps: steps.map((st) => `${st.at ? `「${st.at}」` : '开头'} → ${describeCommand(st.command)}`), at: Date.now() };
-      return steps;
+      const { value } = await ai.system.text(
+        'device',
+        { messages, ...samplerRequest(preset.sampler) },
+        (text) => placeDeviceTags(text, opts.line),
+        `指令要写在 <device>…</device> 里：把${opts.character.name}这一句照抄一遍，在要变的地方插 <device>"键": 值</device>，不要别的写法、不要解释。`,
+        { signal: opts.signal },
+      );
+      const placed = value.map((st) => ({ pos: st.pos, command: fitCommand(st.command) })).filter((st): st is PlacedCommand => !!st.command);
+      const where = (pos: number) => (pos <= 0 ? '开头' : `「…${opts.line.slice(Math.max(0, pos - 8), pos).trim()}」之后`);
+      lastWritten.value = { line: opts.line, steps: placed.map((st) => `${where(st.pos)} → ${describeCommand(st.command)}`), at: Date.now() };
+      return placed;
     } catch (e) {
       if (!opts.signal?.aborted) lastWritten.value = { line: opts.line, steps: [], at: Date.now(), error: errorText(e) };
       throw e;
@@ -398,6 +482,9 @@ export const useToyStore = defineStore('toys', () => {
     wanted,
     intensity,
     kinds,
+    heads,
+    headLimit,
+    setHeadLimit,
     connect,
     disconnect,
     scan,
@@ -405,7 +492,7 @@ export const useToyStore = defineStore('toys', () => {
     apply,
     stopAll,
     toysLine,
-    limitsLine,
+    speedLine,
     nowLine,
     writeCommands,
   };

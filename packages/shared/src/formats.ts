@@ -1,3 +1,4 @@
+import { IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_SECTIONS } from './imageTags.ts';
 import { characterPronoun } from './pronouns.ts';
 import type { Character } from './types/character.ts';
 import type { Lorebook } from './types/lorebook.ts';
@@ -186,13 +187,16 @@ export function scanForeign(text: string): ForeignHit[] {
 // —— 三、输出格式：从自带预设里读 ——
 
 const JSON_KEY_RE = /"([A-Za-z_][A-Za-z0-9_]*)"\s*:/g;
+/** "名字###内容###"写法的段名（生图的 image###tags###；只认程序读的那几段，收尾的 ### 不算） */
+const SECTION_KEY_RE = new RegExp(`(?<![A-Za-z0-9_])(${IMAGE_PROMPT_SECTIONS.join('|')})(?:[ \\t_-]+(?:${IMAGE_PROMPT_MODIFIERS.join('|')}))*[ \\t]*###`, 'gi');
 
-/** 文字里 JSON 示例的字段名（按出现的顺序，不重复） */
+/** 文字里输出格式的字段名（按出现的顺序，不重复）：JSON 示例的字段名，和 image### 这种段名（带着 ###） */
 export function jsonKeysOf(text: string): string[] {
-  return [...new Set([...text.matchAll(JSON_KEY_RE)].map((m) => m[1]!))];
+  return [...new Set([...[...text.matchAll(JSON_KEY_RE)].map((m) => m[1]!), ...[...text.matchAll(SECTION_KEY_RE)].map((m) => `${m[1]!.toLowerCase()}###`)])];
 }
 
 function mentions(text: string, key: string): boolean {
+  if (key.endsWith('###')) return new RegExp(`(^|[^A-Za-z0-9_])${key.slice(0, -3)}(?:[ \\t_-]+(?:${IMAGE_PROMPT_MODIFIERS.join('|')}))*[ \\t]*###`, 'i').test(text);
   return new RegExp(`(^|[^A-Za-z0-9_])${key}($|[^A-Za-z0-9_])`).test(text);
 }
 
