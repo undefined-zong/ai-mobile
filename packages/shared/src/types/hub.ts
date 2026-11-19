@@ -1,5 +1,5 @@
 import type { AgentRoute } from './api.ts';
-import type { Character, Persona } from './character.ts';
+import type { Character, Persona, PromptCardFields } from './character.ts';
 import type { Chat, Message } from './chat.ts';
 import type { Lorebook } from './lorebook.ts';
 import type { Preset } from './preset.ts';
@@ -29,12 +29,12 @@ export interface HubRhythms {
 
 /** Only the context needed by the proactive agent. API credentials use /v1/secrets separately. */
 export interface ProactiveContext {
-  character: Character;
-  chat: Chat;
-  persona: Persona;
+  character: Pick<Character, 'id' | 'name' | 'pronoun' | 'proactive' | 'relationship'> & { card: PromptCardFields };
+  chat: Pick<Chat, 'id' | 'characterId' | 'lastMessageAt' | 'summaries' | 'vars' | 'loreState'>;
+  persona: Pick<Persona, 'name' | 'description'>;
   preset: Preset | null;
   lorebooks: Lorebook[];
-  history: Message[];
+  history: Pick<Message, 'id' | 'chatId' | 'role' | 'text' | 'parts' | 'createdAt' | 'deleted' | 'proactive' | 'read'>[];
   /** 截取上传历史之前的有效消息总数，供世界书计时。旧客户端未提供时用 history.length。 */
   chatLength?: number;
   /** 待跟进（排期用）、置顶的和最重要的几十条；不传全部记忆 */
@@ -46,7 +46,7 @@ export interface ProactiveContext {
   memoryBlocks?: { summary: string; memory: string; home?: string };
   /** 你人设里开着的系统（housework、health）：预设里触发条件写了它们的块只在开着时发送 */
   flags?: string[];
-  environment: EnvironmentSettings;
+  environment: Pick<EnvironmentSettings, 'timezone' | 'wakeTime' | 'sleepTime' | 'meals'>;
   rules: ProactiveRule[];
   /** An active study/sleep session is refreshed by the client and expires if it disappears. */
   busyUntil: number;

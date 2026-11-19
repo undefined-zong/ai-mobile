@@ -1,7 +1,7 @@
 import type { ConnectionKind } from '@app/shared';
 import { bearerHeaders, geminiBase, joinUrl, openaiBase, transportOf, trimUrl, type Endpoint } from '../core/endpoint.ts';
-import { AiError, httpError, responseContext } from '../core/errors.ts';
-import { readText, request } from '../core/http.ts';
+import { abortError, AiError, httpError, isAbortError, responseContext, throwIfAborted } from '../core/errors.ts';
+import { readText, request, sleep } from '../core/http.ts';
 import { dropField, sendFixing } from '../llm/retry.ts';
 import { decodeFloat32Base64, l2normalize } from './vector.ts';
 
@@ -25,6 +25,9 @@ export interface EmbedRequest {
   /** 原样并入请求体；queryPrefix / documentPrefix 不发出去，用来覆盖默认前缀 */
   extra?: Record<string, unknown>;
   batchSize?: number;
+  /** 临时失败时只重试当前批次；设为 0 可关闭。 */
+  retries?: number;
+  retryDelayMs?: number;
   signal?: AbortSignal;
 }
 
@@ -48,7 +51,7 @@ const openaiBatch: Batch = async (ep, inputs, req, extra) => {
     dropField(body, 'dimensions', /dimension/i),
   ]);
   if (!response.ok) throw httpError(ep.name, response.status, errText ?? '', response);
-  const data = await parseJson(response, ep.name);
+  const data = await parseJson(response, ep.name, req.signal);
   const rows = Array.isArray(data?.data) ? [...data.data] : [];
   rows.sort((a: any, b: any) => (a?.index ?? 0) - (b?.index ?? 0));
   const vectors = rows.map((r: any) => (typeof r?.embedding === 'string' ? decodeFloat32Base64(r.embedding) : (r?.embedding as number[])));
@@ -69,7 +72,7 @@ const geminiBatch: Batch = async (ep, inputs, req) => {
   };
   const res = await request(transportOf(ep), ep.name, url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(ep.headers ?? {}) }, body: JSON.stringify(body), signal: req.signal });
   if (!res.ok) throw httpError(ep.name, res.status, await readText(res), res);
-  const data = await parseJson(res, ep.name);
+  const data = await parseJson(res, ep.name, req.signal);
   return { vectors: (data?.embeddings ?? []).map((e: any) => e?.values ?? []) };
 };
 
@@ -84,12 +87,21 @@ const workersAiBatch: Batch = async (ep, inputs, req, extra) => {
   return openaiBatch({ ...ep, baseUrl: base }, inputs, req, extra);
 };
 
-async function parseJson(res: Response, provider: string): Promise<any> {
-  const text = await readText(res);
+async function parseJson(res: Response, provider: string, signal?: AbortSignal): Promise<any> {
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (cause) {
+    if (signal?.aborted || isAbortError(cause)) throw abortError();
+    throw new AiError('network', `读取 ${provider} 的向量回复时连接断了`, { retryable: true, cause, context: responseContext(res) });
+  }
+  throwIfAborted(signal);
   try {
     return JSON.parse(text);
   } catch {
-    throw new AiError('bad_response', `${provider} 的回复看不懂：${text.slice(0, 200)}`, { retryable: true, detail: text, context: responseContext(res) });
+    throw new AiError(text.trim() ? 'bad_response' : 'empty', text.trim() ? `${provider} 的回复看不懂：${text.slice(0, 200)}` : `${provider} 没有返回向量内容`, {
+      status: res.status, retryable: true, detail: text, context: responseContext(res),
+    });
   }
 }
 
@@ -128,9 +140,20 @@ export async function embedTexts(ep: Endpoint, req: EmbedRequest): Promise<Embed
   let counted = false;
   for (let i = 0; i < inputs.length; i += size) {
     const chunk = inputs.slice(i, i + size);
-    const r = await provider.batch(ep, chunk, req, bodyExtra);
-    if (r.vectors.length !== chunk.length) {
-      throw new AiError('bad_response', `${ep.name} 返回了 ${r.vectors.length} 个向量，应该是 ${chunk.length} 个`, { retryable: true });
+    let r: Awaited<ReturnType<Batch>>;
+    for (let attempt = 0; ; attempt++) {
+      throwIfAborted(req.signal);
+      try {
+        r = await provider.batch(ep, chunk, req, bodyExtra);
+        if (r.vectors.length !== chunk.length) {
+          throw new AiError('bad_response', `${ep.name} 返回了 ${r.vectors.length} 个向量，应该是 ${chunk.length} 个`, { retryable: true });
+        }
+        break;
+      } catch (error) {
+        if (req.signal?.aborted || isAbortError(error)) throw abortError();
+        if (!(error instanceof AiError) || !error.retryable || attempt >= (req.retries ?? 1)) throw error;
+        await sleep((req.retryDelayMs ?? 500) * 2 ** attempt, req.signal);
+      }
     }
     for (const v of r.vectors) vectors.push(l2normalize(v));
     if (typeof r.tokens === 'number') {

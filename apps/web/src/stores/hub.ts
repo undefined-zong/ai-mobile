@@ -1,5 +1,5 @@
 import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
-import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
+import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
   type Character, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
@@ -304,8 +304,7 @@ export const useHubStore = defineStore('hub', () => {
     return chars.list.flatMap((character) => {
       const chat = chats.chatOfCharacter(character.id);
       if (!chat || chats.streams[chat.id]) return [];
-      // Local blob URLs / media are not useful to the server. Text, preset and lorebook stay intact.
-      return [{ character: { ...character, avatar: null }, chat, persona: { ...personaOf(chat), avatar: null },
+      return [packProactiveContext({ character, chat, persona: personaOf(chat),
         preset: lib.presetForUse('proactive', character) ?? null,
         lorebooks: character.lorebookIds.map((id) => lib.lorebookById(id)).filter((b) => !!b),
         chatLength: chats.list(chat.id).filter((m) => !m.deleted && !m.meta.error && !m.meta.interrupted).length,
@@ -325,7 +324,7 @@ export const useHubStore = defineStore('hub', () => {
         flags: lifeFlags(personaOf(chat)),
         environment: useEnvironmentStore().settings, rules: DEFAULT_PROACTIVE_RULES,
         busyUntil: ['study', 'sleep'].includes(chat.currentScene ?? '') ? chat.lastMessageAt + 4 * 3_600_000 : 0,
-        preview: config.preview }];
+        preview: config.preview })];
     });
   }
 

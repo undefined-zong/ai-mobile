@@ -35,6 +35,7 @@ export * from './escape.ts';
 export * from './environment.ts';
 export * from './weather.ts';
 export * from './proactive.ts';
+export * from './proactiveContext.ts';
 export * from './presetUses.ts';
 export * from './poke.ts';
 export * from './presetFile.ts';
