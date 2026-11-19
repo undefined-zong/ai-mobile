@@ -32,6 +32,7 @@ import PersonaHealthPage from '@/pages/me/PersonaHealthPage.vue';
 import PersonaHouseworkPage from '@/pages/me/PersonaHouseworkPage.vue';
 import HealthPlanPage from '@/pages/me/HealthPlanPage.vue';
 import PersonaPlannerPage from '@/pages/me/PersonaPlannerPage.vue';
+import PersonaImagePage from '@/pages/me/PersonaImagePage.vue';
 import PlannerPage from '@/pages/me/PlannerPage.vue';
 import PresetEditPage from '@/pages/me/PresetEditPage.vue';
 import PresetsPage from '@/pages/me/PresetsPage.vue';
@@ -89,6 +90,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/me/personas/:id/health', component: PersonaHealthPage, meta: { title: '健康系统' } },
   { path: '/me/health', component: HealthPlanPage, meta: { title: '健康计划' } },
   { path: '/me/personas/:id/planner', component: PersonaPlannerPage, meta: { title: '日程系统' } },
+  { path: '/me/personas/:id/image', component: PersonaImagePage, meta: { title: '生图' } },
   { path: '/me/planner', component: PlannerPage, meta: { title: '日程计划' } },
   { path: '/me/lorebooks', component: LorebooksPage, meta: { title: '世界书' } },
   { path: '/me/lorebooks/:id', component: LorebookEditPage, meta: { title: '编辑世界书' } },

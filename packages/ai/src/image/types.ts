@@ -44,6 +44,30 @@ export interface ImageReference {
   fidelity?: number;
 }
 
+/**
+ * NovelAI 的 Vibe Transfer（V4 起）：参考图先用 /ai/encode-vibe 编码一次（花点数），编码按模型和信息提取量各算一份；
+ * 之后出图只带编码，不再花点数，同一张参考图画出来的人一直像同一个人
+ */
+export interface ImageVibe {
+  /** encode-vibe 返回的编码（base64） */
+  encoding: string;
+  /** 跟参考图有多像 0–1 */
+  strength: number;
+  /** 编码时的信息提取量 0–1（和编码对上） */
+  informationExtracted: number;
+}
+
+/** 给一张参考图编码 Vibe（只有 NovelAI V4 起） */
+export interface VibeEncodeRequest {
+  /** PNG 的 base64（不带 data: 前缀） */
+  image: string;
+  /** 信息提取量 0–1：越高带过去的细节越多（构图也会跟着像） */
+  informationExtracted: number;
+  /** 编码给哪个模型用（和出图的模型一致）；不给用这个 API 选的模型 */
+  model?: string;
+  signal?: AbortSignal;
+}
+
 /** NovelAI Director Tools（/ai/augment-image）：在一张图上做一件事 */
 export interface AugmentRequest {
   /** bg-removal 去背景 / emotion 换表情 / declutter 去杂物 / lineart / sketch / colorize …… */
@@ -88,6 +112,8 @@ export interface ImageRequest {
   source?: ImageSource;
   /** 精准参考（只有 NovelAI V4.5） */
   references?: ImageReference[];
+  /** Vibe Transfer（只有 NovelAI V4 起），编码要和这次出图的模型对上 */
+  vibes?: ImageVibe[];
   /** 原样并入请求参数（NovelAI 的 parameters、OpenAI 兼容接口的请求体） */
   extra?: Record<string, unknown>;
   signal?: AbortSignal;

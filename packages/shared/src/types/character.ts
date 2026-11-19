@@ -156,4 +156,40 @@ export interface Persona extends SyncMeta {
   health?: HealthSettings;
   /** 日程系统（可以不开）：接上邮箱和日程软件的 MCP，每天到点云端排这周和今天的计划 */
   planner?: PlannerSettings;
+  /** 生图（可以不填）：你入画时的长相、AI 画的立绘和它的 Vibe */
+  image?: PersonaImage;
+}
+
+/**
+ * "你"的生图设置：约会这类场景里你入画时用（生图预设里的 {{user_appearance}}），陪伴学习画你那边时也用；
+ * 能像角色一样让 AI 写外观 tags、画一张立绘，立绘编码成 Vibe 以后入画时带上，长相一直和立绘一样
+ */
+export interface PersonaImage {
+  /** NovelAI 外观 tags（人数和性别放最前面：1boy / 1girl，再写发型、发色、瞳色、体型……） */
+  appearanceTags: string;
+  negativeTags: string;
+  /** 常穿的一套（画立绘时穿；入画时衣服由生图提示词按画面写） */
+  outfitTags: string;
+  /** AI 画的立绘 */
+  portrait?: PersonaPortrait;
+  vibe: PersonaVibe;
+}
+
+/** 立绘的 Vibe Transfer：入画时带上（NovelAI V4、V4.5） */
+export interface PersonaVibe {
+  enabled: boolean;
+  /** 跟立绘有多像 0–1 */
+  strength: number;
+  /** 信息提取量 0–1：越高带过去的细节越多（构图也会跟着像）；改了要重新编码一次 */
+  informationExtracted: number;
+}
+
+export interface PersonaPortrait {
+  /** 本机素材库的 key */
+  assetKey: string;
+  width: number;
+  height: number;
+  gen: import('./sprite.ts').PortraitGen;
+  /** 编码好的 Vibe（编码存在素材库）：按模型和信息提取量各一份，编码过就一直用它 */
+  vibes?: { model: string; informationExtracted: number; assetKey: string }[];
 }

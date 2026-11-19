@@ -15,6 +15,9 @@ export function resolveSize(size: ImageSize | undefined): { width: number; heigh
   return { width: r(size.width), height: r(size.height) };
 }
 
+/** NovelAI 连接没选模型时用的 */
+export const NOVELAI_DEFAULT_MODEL = 'nai-diffusion-4-5-full';
+
 export const NOVELAI_MODELS = [
   'nai-diffusion-4-5-full',
   'nai-diffusion-4-5-curated',
@@ -54,6 +57,11 @@ export function novelaiInpaintModel(model: string): string {
 /** 精准参考（Precise Reference）只有 V4.5 能用（官方文档） */
 export function supportsCharacterReference(model: string): boolean {
   return /nai-diffusion-4-5/.test(model);
+}
+
+/** Vibe Transfer：V4 起的模型要先编码（/ai/encode-vibe）再用；V5 还不支持 */
+export function supportsVibeTransfer(model: string): boolean {
+  return /nai-diffusion-4/.test(model);
 }
 
 /** 精准参考的参考图只收这三种尺寸，别的尺寸接口报 400 / 500：按比例最接近的垫（官方文档、社区客户端） */

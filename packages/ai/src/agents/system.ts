@@ -3,9 +3,9 @@ import { AiError, isAbortError } from '../core/errors.ts';
 import { parseJsonLoose } from '../core/util.ts';
 import { embedTexts, type EmbedPurpose, type EmbedResult } from '../embedding/client.ts';
 import { modelFamily, vectorSpace } from '../embedding/vector.ts';
-import { augmentImage, generateImage } from '../image/client.ts';
+import { augmentImage, encodeVibe, generateImage } from '../image/client.ts';
 import { applyImageStyle } from '../image/style.ts';
-import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult } from '../image/types.ts';
+import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeEncodeRequest } from '../image/types.ts';
 import { chatOnce } from '../llm/client.ts';
 import { applyFilters, compileFilters, DEFAULT_OUTPUT_FILTERS } from '../llm/filter.ts';
 import { textOf } from '../llm/messages.ts';
@@ -317,6 +317,24 @@ export class AgentSystem {
         this.failover('image', opts),
       );
       return { image: value, ...this.meta(attempt, fellBack, started) };
+    });
+  }
+
+  /**
+   * Vibe 编码：用"生图"功能的 API（编码只对这个模型有效，出图时要用同一个模型），同 augment 只换到同一种协议的备用 API
+   */
+  async encodeVibe(req: VibeEncodeRequest, opts: AgentCallOptions = {}): Promise<{ encoding: string; model: string } & CallMeta> {
+    return this.track('image', async () => {
+      const all = this.router.attempts('image');
+      const kind = all[0]?.endpoint.kind;
+      const attempts = all.filter((a, i) => i === 0 || a.endpoint.kind === kind);
+      const started = Date.now();
+      const { value, attempt, fellBack } = await this.router.run(
+        attempts,
+        (ep) => encodeVibe(ep, { ...req, signal: req.signal ?? opts.signal }),
+        this.failover('image', opts),
+      );
+      return { ...value, ...this.meta(attempt, fellBack, started) };
     });
   }
 

@@ -46,6 +46,7 @@ export * from './types/rhythm.ts';
 export * from './rhythm.ts';
 export * from './town.ts';
 export * from './imageTags.ts';
+export * from './personaImage.ts';
 export * from './housework.ts';
 export * from './health.ts';
 export * from './places.ts';

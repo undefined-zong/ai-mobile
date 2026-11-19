@@ -151,7 +151,9 @@ function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
 /**
  * 自带的预设文件改过以后，本机已经放进库里的那份怎么跟上。只动你没改过的地方，每一条只做一次：
  * - replaced：块的旧默认内容。本机那块还是旧的（你没改过）就换成文件里现在的；
- * - added：文件里新加的块。本机那份没有就照文件里的位置插进去（之后你删了不会再放回来）。
+ * - added：文件里新加的块。本机那份没有就照文件里的位置插进去（之后你删了不会再放回来）；
+ * - forced：强制升级。列出的块不管你改没改过、删没删，都换成（放回）文件里现在的内容、开关和触发条件；description 为 true 时预设说明也换成文件里的。
+ *   也只做一次，之后你再改、再删都不会被覆盖。
  * 复制出来的、导入的预设不动；想整份回到文件的样子用"恢复成预设文件"。
  */
 interface SeedUpgrade {
@@ -165,6 +167,7 @@ interface SeedUpgrade {
   renamed?: { preset?: [string, string]; description?: [string, string]; blocks?: Record<string, [string, string]> };
   /** 回复长度：还是旧的默认值时换成新的 [旧, 新] */
   maxTokens?: [number, number];
+  forced?: { blocks: string[]; description?: boolean };
 }
 const SEED_UPGRADES: SeedUpgrade[] = [
   {
@@ -570,6 +573,18 @@ const SEED_UPGRADES: SeedUpgrade[] = [
       communityMember: ["这一帖是{{char}}自己发的：画面里有{{char}}时，{{char}}的长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写，按\"要画的画面\"写{{char}}的表情、动作、服装和场景（1girl 或 1boy 按{{char}}的性别）；画面里只有东西和场景、没有{{char}}时用 no humans，并在 negative 里写 1girl, 1boy。"],
     },
   },
+  {
+    // 约会的图：到达只画她一个人，之后可以是单人图也可以是你和她两个人同框（你按人设的外观 tags、立绘的 Vibe 入画）；
+    // [cg:] 里可以写你们俩在画面里的样子。改过这几块的也强制换成新的一次，不然旧规则（只画她一个人）会挡住双人图
+    id: 'image-date:duo',
+    file: 'image-date.json',
+    forced: { blocks: ['main', 'rules', 'momentArrive', 'momentHighlight', 'momentKeepsake', 'imageCharacters'], description: true },
+  },
+  {
+    id: 'feature-date:duo-cg',
+    file: 'feature-date.json',
+    forced: { blocks: ['sceneRule'] },
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */
@@ -654,13 +669,28 @@ function upgradeFile(list: Preset[], u: SeedUpgrade, file: string, changed: Set<
         changed.add(p);
       }
     }
-    for (const id of u.added ?? []) {
+    for (const id of [...(u.added ?? []), ...(u.forced?.blocks ?? [])]) {
       const at = seed.blocks.findIndex((b) => b.identifier === id);
       if (at < 0 || p.blocks.some((b) => b.identifier === id)) continue;
       // 插在文件里它前面那一块的后面；那一块你删了就放最后
       const prev = seed.blocks[at - 1]?.identifier;
       const i = prev ? p.blocks.findIndex((b) => b.identifier === prev) : -1;
       p.blocks.splice(i >= 0 ? i + 1 : p.blocks.length, 0, clone(seed.blocks[at]!));
+      changed.add(p);
+    }
+    for (const id of u.forced?.blocks ?? []) {
+      const mine = p.blocks.find((b) => b.identifier === id);
+      const now = seed.blocks.find((b) => b.identifier === id);
+      if (!mine || !now) continue;
+      if (mine.content === now.content && mine.enabled === now.enabled && JSON.stringify(mine.triggers ?? []) === JSON.stringify(now.triggers ?? [])) continue;
+      mine.content = now.content;
+      mine.enabled = now.enabled;
+      if (now.triggers?.length) mine.triggers = [...now.triggers];
+      else delete mine.triggers;
+      changed.add(p);
+    }
+    if (u.forced?.description && p.description !== seed.description) {
+      p.description = seed.description;
       changed.add(p);
     }
   }

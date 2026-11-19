@@ -1,4 +1,4 @@
-import { DEFAULT_HEALTH, DEFAULT_PLANNER, normalizeHealth, normalizeHousework, normalizePlanner, type Chat, type HealthSettings, type HouseworkSettings, type Persona, type PlannerSettings } from '@app/shared';
+import { DEFAULT_HEALTH, DEFAULT_PLANNER, normalizeHealth, normalizeHousework, normalizePersonaImage, normalizePlanner, type Chat, type HealthSettings, type HouseworkSettings, type Persona, type PersonaImage, type PlannerSettings } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { autoSave, getOne } from '@/db/idb';
@@ -7,7 +7,7 @@ import { uid } from '@/utils/id';
 
 /**
  * 我的人设（ST 的 Persona）：角色眼中的"你"。可以有多个身份，聊天里用默认的那个（聊天上另选的除外）。
- * 名字、描述、家务系统、健康系统、日程系统都存在本机（settings 表的 personas 一项），改了刷新后还在。
+ * 名字、描述、家务系统、健康系统、日程系统、生图设置都存在本机（settings 表的 personas 一项），改了刷新后还在。
  * 第一次打开时用演示的两个身份。
  */
 
@@ -21,6 +21,7 @@ function normalize(p: Persona): Persona {
   if (p.housework) out.housework = normalizeHousework(p.housework);
   if (p.health) out.health = normalizeHealth(p.health);
   if (p.planner) out.planner = normalizePlanner(p.planner);
+  if (p.image) out.image = normalizePersonaImage(p.image);
   return out;
 }
 
@@ -93,8 +94,14 @@ export const usePersonaStore = defineStore('personas', () => {
     return p.planner;
   }
 
+  /** 生图设置（还没有时建一份空的） */
+  function image(p: Persona): PersonaImage {
+    if (!p.image) p.image = normalizePersonaImage(null);
+    return p.image;
+  }
+
   /** 马上写进本机（跳去 OAuth 授权页之前用：页面要离开了，等不到自动保存） */
   const flush = () => saver.flush();
 
-  return { list, hydrate, defaultPersona, byId, forChat, touch, setDefault, add, remove, housework, health, planner, flush };
+  return { list, hydrate, defaultPersona, byId, forChat, touch, setDefault, add, remove, housework, health, planner, image, flush };
 });

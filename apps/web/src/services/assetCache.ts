@@ -3,6 +3,7 @@ import { getKeys, getOne, registerFlusher, write } from '@/db/idb';
 import { setAssetUseHook } from '@/services/assets';
 import { cloudBackedAssets, syncState } from '@/services/sync';
 import { useCharacterStore } from '@/stores/characters';
+import { usePersonaStore } from '@/stores/personas';
 import { useChatStore } from '@/stores/chat';
 import { useCommunityStore } from '@/stores/community';
 import { useGalleryStore } from '@/stores/gallery';
@@ -93,10 +94,11 @@ function collect(value: unknown, out: (key: string) => void, depth = 0) {
   }
 }
 
-/** 一直留着的：挂在角色身上的（立绘） */
+/** 一直留着的：挂在角色身上的（立绘）、挂在人设上的（你的立绘和它的 Vibe 编码） */
 function pinnedKeys(): Set<string> {
   const pinned = new Set<string>();
   for (const c of useCharacterStore().list) collect(c, (k) => pinned.add(k));
+  for (const p of usePersonaStore().list) collect(p, (k) => pinned.add(k));
   return pinned;
 }
 

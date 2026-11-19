@@ -7,13 +7,13 @@
   "defaultFor": [
     "image:date"
   ],
-  "description": "约会时画的图：到达（刚到约会的地方，Ta回头看你）、关键时刻（Ta在约会里用 [cg:] 留的心动瞬间，画面描述是Ta写的）、留念（结束约会时的纪念照）；每块按触发条件只发这次画的那一块。长相（同人是角色 tag + 作品 tag）和今天的约会装由程序按角色加在最前面；都是竖图，铺满整屏当约会的画面。预设只管构图、光线、地点和这一刻在做什么。",
+  "description": "约会时画的图：到达（刚到约会的地方，Ta回头看你，只画Ta一个人）、关键时刻（Ta在约会里用 [cg:] 留的心动瞬间，或者你点的拍一张）、留念（结束约会时的纪念照）；每块按触发条件只发这次画的那一块。关键时刻和留念可以是单人图，也可以是你和Ta两个人同框（你在\"我的人设 → 生图\"里填了外观 tags 时，\"{{user}}可以入画\"那一块才发，同框时带上你立绘的 Vibe）。长相（同人是角色 tag + 作品 tag）和今天的约会装由程序按角色加；都是竖图，铺满整屏当约会的画面。预设只管单人还是双人、构图、光线、地点和这一刻在做什么。",
   "blocks": [
     {
       "identifier": "main",
       "name": "任务",
       "role": "system",
-      "content": "你是 NovelAI V4.5 的提示词写手，给\"约会\"画图：{{char}}和{{user}}在约会，画面是{{user}}眼里看到的{{char}}。把要画的那一刻写成 Danbooru 风格的英文 tags。",
+      "content": "你是 NovelAI V4.5 的提示词写手，给\"约会\"画图：{{char}}和{{user}}在约会。到达时只画{{char}}一个人，画面是{{user}}眼里看到的{{char}}；之后按这一刻选：只画{{char}}一个人，或者{{char}}和{{user}}两个人同框。把要画的那一刻写成 Danbooru 风格的英文 tags。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -25,7 +25,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 写了\"服装（程序会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只画{{char}}一个人（solo）；{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
+      "content": "规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}和{{user}}的长相（发色、瞳色、发型、体型），程序会把长相加上。\n- 写了\"服装（程序会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸，不写 characters。\n- 双人图：只在发了\"{{user}}可以入画\"时画，照那里的格式写 characters；tags 写两个人的人数、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，每个人的表情、动作、服装写进各自的 characters。\n- 画幅：写了\"画幅\"就照它构图，size 也写它；没写时用竖图 portrait（在手机上竖着看）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -49,7 +49,7 @@
       "identifier": "momentArrive",
       "name": "时刻 · 到达",
       "role": "system",
-      "content": "这一刻：刚到约会的地方。{{char}}走在前面半步，回过头来看你（looking back, looking at viewer），带着期待的笑，或者朝你招手；地点的特色要在背景里看得出来（按\"地点\"和\"要画的画面\"）。竖图，cowboy shot 或 full body，留出背景。",
+      "content": "这一刻：刚到约会的地方。只画{{char}}一个人（solo），不写 characters：{{char}}走在前面半步，回过头来看你（looking back, looking at viewer），带着期待的笑，或者朝你招手；地点的特色要在背景里看得出来（按\"地点\"和\"要画的画面\"）。竖图，cowboy shot 或 full body，留出背景。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -64,7 +64,7 @@
       "identifier": "momentHighlight",
       "name": "时刻 · 关键时刻",
       "role": "system",
-      "content": "这一刻：约会里心动的瞬间，画面按\"要画的画面\"（是{{char}}自己写的）画：牵手、靠在肩上、对视、意外的近距离、递过来一口吃的……用第一视角（pov）拉近距离，{{user}}只露出手或肩膀；表情要对上（脸红 blush、害羞 shy、笑 smile、看着你 looking at viewer）。竖图，上半身或 cowboy shot。",
+      "content": "这一刻：约会里心动的瞬间，画面按\"要画的画面\"画（是{{char}}自己写的，或者{{user}}点了拍一张）。单人还是双人按画面选：两个人一起做的事（牵着手走、并肩坐着、靠在肩上、拥抱、对视、喂对方一口吃的）画双人同框，用第三人称镜头把两个人都拍进去，距离和表情要对上（脸红 blush、害羞 shy、笑 smile、看着对方 looking at another）；只看{{char}}的反应时画单人，用第一视角（pov）拉近距离，{{user}}只露出手或肩膀，表情要对上（blush, shy, smile, looking at viewer）。竖图，上半身或 cowboy shot。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -79,7 +79,7 @@
       "identifier": "momentKeepsake",
       "name": "时刻 · 留念",
       "role": "system",
-      "content": "这一刻：约会结束前的纪念照。像{{char}}举着手机和你自拍（selfie, holding phone, pov），或者{{char}}站在约会地点最有代表性的地方朝镜头比心、比耶（peace sign, heart hands），{{user}}最多露出肩膀或一只手；表情温柔、有一点不舍。背景是这次约会的地方，光线按此刻的时间和天气。竖图。",
+      "content": "这一刻：约会结束前的纪念照。两个人的合照画双人：{{char}}举着手机和{{user}}贴着脸自拍（selfie, holding phone, cheek-to-cheek），或者两个人并肩站在约会地点最有代表性的地方朝镜头比耶（peace sign）；只拍{{char}}时画单人：{{char}}站在那里朝镜头比心、比耶（peace sign, heart hands），{{user}}最多露出肩膀或一只手。表情温柔、有一点不舍。背景是这次约会的地方，光线按此刻的时间和天气。竖图。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -101,6 +101,22 @@
         "position": "relative",
         "depth": 4
       }
+    },
+    {
+      "identifier": "imageCharacters",
+      "name": "你可以入画（你的长相、两个人同框时的输出格式）",
+      "role": "system",
+      "content": "",
+      "marker": true,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "highlight",
+        "keepsake"
+      ]
     },
     {
       "identifier": "imageSubject",

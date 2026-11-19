@@ -14,6 +14,7 @@ import { usePersonaStore } from '@/stores/personas';
  * - 家务：每天、每周要做的家务（"共同的家"按它列今天的清单，做没做会影响她怎么跟你说话）；
  * - 健康：身高体重、目标、能练的方式和时间、食材、做饭时间、厨具（「健康计划」按它排健身和饮食计划）；
  * - 日程：接上邮箱（Gmail MCP）和日程软件（日历 MCP，可以不接），每天到点云端排这周和今天的计划（「日程计划」）。
+ * 还有"生图"：你入画时的长相（外观 tags、AI 画的立绘和它的 Vibe）。
  */
 const store = usePersonaStore();
 const selected = ref(store.defaultPersona.id);
@@ -48,12 +49,18 @@ function plannerValue(p: Persona): string {
   return on.length ? `开 · ${on.map((x) => x.name).join('、')}` : '开 · 还没接邮箱和日程';
 }
 
+function imageValue(p: Persona): string {
+  const img = p.image;
+  if (!img?.appearanceTags.trim()) return '没填';
+  return img.portrait ? (img.vibe.enabled ? '有立绘 · Vibe 开' : '有立绘') : '有外观 tags';
+}
+
 function addPersona() {
   const p = store.add();
   selected.value = p.id;
 }
 async function removePersona(p: Persona) {
-  const ok = await showConfirmDialog({ title: `删掉"${p.name}"？`, message: '这个身份的家务、健康、日程设置一起删掉；聊天记录不动。', confirmButtonText: '删掉', confirmButtonColor: 'var(--bad)' }).then(
+  const ok = await showConfirmDialog({ title: `删掉"${p.name}"？`, message: '这个身份的家务、健康、日程、生图设置一起删掉；聊天记录不动。', confirmButtonText: '删掉', confirmButtonColor: 'var(--bad)' }).then(
     () => true,
     () => false,
   );
@@ -87,6 +94,19 @@ async function removePersona(p: Persona) {
           <input :id="`pn-${p.id}`" v-model="p.name" class="input" @change="store.touch(p)" />
           <label class="field-label" :for="`pd-${p.id}`">描述</label>
           <textarea :id="`pd-${p.id}`" v-model="p.description" class="textarea" @change="store.touch(p)" />
+
+          <div class="field-label">生图（可以不填）</div>
+          <div class="systems">
+            <RouterLink :to="`/me/personas/${p.id}/image`" class="sys-row press" data-system="image" @click.stop>
+              <span class="sys-icon"><span class="i-lucide-image" /></span>
+              <span class="flex-1 min-w-0">
+                <span class="block text-[14.5px] font-600">入画的长相</span>
+                <span class="block text-[12px] text-ink-3 truncate">外观 tags、AI 画立绘、Vibe Transfer；约会里两个人同框时按它画你</span>
+              </span>
+              <span class="sys-val" :class="{ on: !!p.image?.appearanceTags.trim() }">{{ imageValue(p) }}</span>
+              <span class="i-lucide-chevron-right text-ink-3 shrink-0" />
+            </RouterLink>
+          </div>
 
           <div class="field-label">生活（可以不开）</div>
           <div class="systems">

@@ -27,6 +27,7 @@ import {
   spritePrompt,
   type Character,
   type OutfitKind,
+  type Persona,
   type Portrait,
   type PortraitGen,
   type Preset,
@@ -36,7 +37,7 @@ import {
   type SpriteTask,
 } from '@app/shared';
 import { enqueueImage } from './ai';
-import { assetUrl } from './assets';
+import { assetUrl, putAsset } from './assets';
 import { characterLines, sourceLines } from './characterSource';
 import { addGeneratedPortrait, ensurePortraitSet, ensureOutfit } from './portraits';
 import { useAiStore } from '@/stores/ai';
@@ -101,12 +102,13 @@ export interface SpriteStatus {
   promptReason: string;
 }
 
-export function spritePresetFor(c: Character): Preset | undefined {
+/** 立绘预设（不给角色时是"立绘"用途选的那个：画"你"的立绘用） */
+export function spritePresetFor(c?: Character): Preset | undefined {
   const p = useLibraryStore().presetForUse('sprite', c);
   return p && isSpritePreset(p) ? p : undefined;
 }
 
-export function spriteStatus(c: Character): SpriteStatus {
+export function spriteStatus(c?: Character): SpriteStatus {
   const ai = useAiStore();
   const preset = spritePresetFor(c);
   const image = ai.status('image');
@@ -124,7 +126,7 @@ export function spriteStatus(c: Character): SpriteStatus {
 }
 
 /** 画之前查一遍：有立绘预设、生图接通了；照着图改的还要是 NovelAI */
-function need(c: Character, edit = false): { preset: Preset; params: SpriteParams; canEdit: boolean } {
+function need(c?: Character, edit = false): { preset: Preset; params: SpriteParams; canEdit: boolean } {
   const s = spriteStatus(c);
   if (!s.preset) throw new AiError('no_route', '没有立绘预设：去"我的 → 预设 → 立绘"导入或恢复一个');
   if (!s.imageLive) throw new AiError('no_route', `「生图」还没接通：${s.imageReason}`);
@@ -156,20 +158,31 @@ function lookFills(c: Character): Partial<Record<SpriteFill, string>> {
   };
 }
 
-async function callSprite<T>(c: Character, task: SpriteTask, ask: string, parse: (v: unknown) => T | null, signal?: AbortSignal): Promise<{ value: T; model: string }> {
+/** 按立绘预设的一件任务调"生图提示词"：who 是给谁写（角色，或者"你"） */
+async function callSprite<T>(
+  who: { preset: Preset | undefined; name: string; pronoun?: string; userName: string; fills: Partial<Record<SpriteFill, string>> },
+  task: SpriteTask,
+  ask: string,
+  parse: (v: unknown) => T | null,
+  signal?: AbortSignal,
+): Promise<{ value: T; model: string }> {
   const ai = useAiStore();
   const status = ai.status('imagePrompt');
   if (!status.live) throw new AiError('no_route', `「生图提示词」还没接通：${status.reason}`);
-  const preset = spritePresetFor(c);
+  const preset = who.preset;
   if (!preset) throw new AiError('no_route', '没有立绘预设：去"我的 → 预设 → 立绘"导入或恢复一个');
-  const messages = buildSpriteMessages({ task, characterName: c.name, pronoun: c.pronoun, userName: userName(c), fills: { ...lookFills(c), spriteAsk: ask } }, preset);
+  const messages = buildSpriteMessages({ task, characterName: who.name, pronoun: who.pronoun, userName: who.userName, fills: { ...who.fills, spriteAsk: ask } }, preset);
   const { value, result } = await ai.system.json('imagePrompt', { messages, ...samplerRequest(preset.sampler) }, parse, { signal });
   return { value, model: result.model };
 }
 
+function forCharacter(c: Character) {
+  return { preset: spritePresetFor(c), name: c.name, pronoun: c.pronoun, userName: userName(c), fills: lookFills(c) };
+}
+
 /** 写外观 tags（还有一套常穿的衣服）：先给你看，"就用这个"再存（applyLooks） */
 export function writeLooks(c: Character, signal?: AbortSignal): Promise<{ value: SpriteLooks; model: string }> {
-  return callSprite(c, 'sprite-tags', '写外观 tags', parseSpriteLooks, signal);
+  return callSprite(forCharacter(c), 'sprite-tags', '写外观 tags', parseSpriteLooks, signal);
 }
 
 /** 存外观 tags；衣服记成立绘的一套服装（还没有节律衣柜时，画底图默认穿它） */
@@ -190,7 +203,7 @@ export function applyLooks(c: Character, looks: SpriteLooks) {
 
 /** 给预设里没有的表情 / 动作写 tags */
 export function writeLabelTags(c: Character, kind: 'expression' | 'pose', name: string, signal?: AbortSignal): Promise<{ value: SpriteLabelTags; model: string }> {
-  return callSprite(c, 'sprite-label', `${kind === 'expression' ? '表情' : '动作'}：${name}`, parseSpriteLabel, signal);
+  return callSprite(forCharacter(c), 'sprite-label', `${kind === 'expression' ? '表情' : '动作'}：${name}`, parseSpriteLabel, signal);
 }
 
 /** 把一个表情 / 动作加进立绘预设（别的角色也能用） */
@@ -357,17 +370,26 @@ async function finish(
  * framing：构图的名字（不给 = 这个角色平时用的那种）；reference：照着一张图画（V4.5 的精准参考，例如角色卡的原图），画完不是透明底的去背景
  */
 export function drawBase(c: Character, opts: { outfit: SpriteOutfit | null; framing?: string; reference?: Blob | null; signal?: AbortSignal } = { outfit: null }): Promise<SpriteDraft> {
-  const { preset, params, canEdit } = need(c, !!opts.reference);
-  const framing = framingNamed(preset, opts.framing ?? mainFraming(c));
-  const expression = spriteBaseLabel(spriteLabels(preset, 'expression'), params.baseExpression) ?? null;
-  const pose = spriteBaseLabel(spriteLabels(preset, 'pose'), params.basePose) ?? null;
+  const ready = need(c, !!opts.reference);
   const appearance = imageAppearance(c);
   if (!appearance) throw new AiError('empty', `${c.name}还没有外观 tags：先让 AI 写外观 tags（同人角色在"生图"里填角色 tag 也行）`);
-  const { prompt, negative } = spritePrompt(preset, { name: c.name, appearance, outfit: opts.outfit?.tags ?? '', framing, expression: expression?.tags ?? '', pose: pose?.tags ?? '', negative: c.negativeTags });
+  const framing = framingNamed(ready.preset, opts.framing ?? mainFraming(c));
+  return paintBase(ready, { name: c.name, appearance, negative: c.negativeTags, outfit: opts.outfit, framing, reference: opts.reference, signal: opts.signal });
+}
+
+/** 画底图（角色和"你"共用）：按立绘预设的画法拼提示词，排进出图队列，画完看要不要去背景 */
+function paintBase(
+  { preset, params, canEdit }: { preset: Preset; params: SpriteParams; canEdit: boolean },
+  input: { name: string; appearance: string; negative: string; outfit: SpriteOutfit | null; framing: SpriteFraming | null; reference?: Blob | null; signal?: AbortSignal },
+): Promise<SpriteDraft> {
+  const { framing, signal } = input;
+  const expression = spriteBaseLabel(spriteLabels(preset, 'expression'), params.baseExpression) ?? null;
+  const pose = spriteBaseLabel(spriteLabels(preset, 'pose'), params.basePose) ?? null;
+  const { prompt, negative } = spritePrompt(preset, { name: input.name, appearance: input.appearance, outfit: input.outfit?.tags ?? '', framing, expression: expression?.tags ?? '', pose: pose?.tags ?? '', negative: input.negative });
   return enqueueImage(
     'user',
     async () => {
-      const ref = opts.reference ? await referenceImage(opts.reference, NOVELAI_REFERENCE_CANVASES) : null;
+      const ref = input.reference ? await referenceImage(input.reference, NOVELAI_REFERENCE_CANVASES) : null;
       const req: ImageRequest = {
         prompt,
         negative,
@@ -375,9 +397,9 @@ export function drawBase(c: Character, opts: { outfit: SpriteOutfit | null; fram
         ...drawParams(params),
         ...(ref ? { references: [{ image: ref, strength: params.referenceStrength, fidelity: params.referenceFidelity }] } : {}),
       };
-      const r = await useAiStore().system.draw(req, { signal: opts.signal, model: (ref ? params.referenceModel : params.model) || undefined });
+      const r = await useAiStore().system.draw(req, { signal, model: (ref ? params.referenceModel : params.model) || undefined });
       const img = r.images[0];
-      const done = await finish(img?.bytes ?? null, img?.mime ?? 'image/png', params, { framing, signal: opts.signal, canEdit });
+      const done = await finish(img?.bytes ?? null, img?.mime ?? 'image/png', params, { framing, signal, canEdit });
       return {
         ...done,
         url: URL.createObjectURL(new Blob([done.bytes], { type: done.mime })),
@@ -394,11 +416,58 @@ export function drawBase(c: Character, opts: { outfit: SpriteOutfit | null; fram
         framing,
         expression,
         pose,
-        outfit: opts.outfit,
+        outfit: input.outfit,
       };
     },
-    opts.signal,
+    signal,
   );
+}
+
+// —— "你"的立绘（人设 → 生图）：和角色一样先让 AI 写外观 tags，再按立绘预设画一张底图 ——
+
+function personaFills(p: Persona): Partial<Record<SpriteFill, string>> {
+  const img = p.image;
+  return {
+    spriteCharacter: [`名字：${p.name}`, p.description.trim() ? `人设：${p.description.trim()}` : ''].filter(Boolean).join('\n'),
+    spriteLooks: [
+      `现在的外观 tags：${img?.appearanceTags.trim() || '（还没有）'}`,
+      img?.negativeTags.trim() ? `负面 tags：${img.negativeTags.trim()}` : '',
+      img?.outfitTags.trim() ? `常穿：${img.outfitTags.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  };
+}
+
+/** 按人设写"你"的外观 tags（还有常穿的一套）：先给你看，"就用这个"再存（applyPersonaLooks） */
+export function writePersonaLooks(p: Persona, signal?: AbortSignal): Promise<{ value: SpriteLooks; model: string }> {
+  return callSprite({ preset: spritePresetFor(), name: p.name, userName: '', fills: personaFills(p) }, 'sprite-tags', '写外观 tags', parseSpriteLooks, signal);
+}
+
+export function applyPersonaLooks(p: Persona, looks: SpriteLooks) {
+  const img = usePersonaStore().image(p);
+  img.appearanceTags = looks.appearance;
+  img.negativeTags = looks.negative;
+  if (looks.outfit?.tags) img.outfitTags = looks.outfit.tags;
+  usePersonaStore().touch(p);
+}
+
+/** 画"你"的立绘：外观 tags + 常穿的那套，构图用立绘预设默认的；先给你看（acceptPersonaBase 才存） */
+export function drawPersonaBase(p: Persona, signal?: AbortSignal): Promise<SpriteDraft> {
+  const ready = need();
+  const img = p.image;
+  const appearance = joinTags(img?.appearanceTags);
+  if (!appearance) throw new AiError('empty', '还没有你的外观 tags：先填上，或者让 AI 按人设写');
+  const outfit: SpriteOutfit | null = img?.outfitTags.trim() ? { name: '常穿', tags: img.outfitTags.trim(), from: 'portrait' } : null;
+  return paintBase(ready, { name: p.name, appearance, negative: img?.negativeTags ?? '', outfit, framing: defaultFraming(ready.preset), signal });
+}
+
+/** 用这张当"你"的立绘：存进素材库；以前编码过的 Vibe 是旧立绘的，换掉 */
+export async function acceptPersonaBase(p: Persona, draft: SpriteDraft) {
+  const assetKey = await putAsset(draft.bytes, draft.mime);
+  usePersonaStore().image(p).portrait = { assetKey, width: draft.width, height: draft.height, gen: draft.gen };
+  usePersonaStore().touch(p);
+  URL.revokeObjectURL(draft.url);
 }
 
 /**
