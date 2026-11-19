@@ -6,7 +6,6 @@ import { musicLibrary, saveList, type SavedList } from '@/services/musicLibrary'
 import type { SongList } from '@/services/types';
 import { normalizeBase, useServicesStore } from '@/stores/services';
 import { clock } from '@/utils/time';
-import { volumeLocked } from '@/services/musicPlayer';
 import { decorRadio as music, radioClient } from './radio';
 
 const open = defineModel<boolean>({ required: true });
@@ -103,7 +102,7 @@ const modeName = computed(() => ({ list: '顺序播放', single: '单曲循环',
             <button type="button" class="icon-button" aria-label="停止音乐" :disabled="!state.queue.length" @click="music.stop()"><span class="i-lucide-square" /></button>
           </div>
           <label class="progress-control"><span>{{ clock(state.posMs / 1000) }}</span><input type="range" min="0" step="1000" :max="state.durationMs || 1" :value="state.posMs" :disabled="!song || !state.durationMs" aria-label="播放进度" @change="music.seek(Number(($event.target as HTMLInputElement).value))" /><span>{{ clock(state.durationMs / 1000) }}</span></label>
-          <span v-if="volumeLocked" class="volume-control"><span class="i-lucide-volume-2" aria-hidden="true" /><span>音量用手机侧面的按键调</span></span><label v-else class="volume-control"><span class="i-lucide-volume-2" aria-hidden="true" /><span>音量</span><input type="range" min="0" max="100" :value="Math.round(state.volume * 100)" aria-label="收音机音量" @input="music.setVolume(Number(($event.target as HTMLInputElement).value) / 100)" /></label>
+          <label class="volume-control"><span class="i-lucide-volume-2" aria-hidden="true" /><span>音量</span><input type="range" min="0" max="100" :value="Math.round(state.volume * 100)" aria-label="收音机音量" @input="music.setVolume(Number(($event.target as HTMLInputElement).value) / 100)" /></label>
         </div>
         <p v-if="state.needsTap" class="message" role="status">浏览器需要你点一下播放，才能出声。</p>
         <p v-if="state.error" class="message error" role="alert">{{ state.error }}</p>
