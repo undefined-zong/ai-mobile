@@ -252,8 +252,8 @@ function appFills(chat: Chat, character: Character, history: Message[], now: Dat
   const before = history.at(-2)?.createdAt;
   const sinceLastChatMin = before ? Math.max(0, (now.getTime() - before) / 60_000) : null;
 
-  // 她今天穿什么（节律里这个场景该穿的那套）
-  const outfit = useRhythmStore().outfitFor(character.id, chat.currentScene);
+  // 她今天穿什么（节律里这个场景该穿的那套）；服装参考关着时不告诉，免得 [cg:] 里写的永远是这一身
+  const outfit = useAiStore().outfitRef() ? useRhythmStore().outfitFor(character.id, chat.currentScene) : undefined;
   // 真实天气：你那边；她住在别的城市（例如国内）时再加她那边的。取不到就不写，不编
   const { weather, herWeather } = useWeatherStore().envInput(character);
 

@@ -74,10 +74,12 @@ export function recentMomentsLines(character: Character): { text: string; at: nu
 
 // —— 发朋友圈要的输入 ——
 
-/** 她今天的节律（地点换成名字）；没有节律（没建世界）时为空 */
+/** 她今天的节律（地点换成名字）；没有节律（没建世界）时为空。服装参考关着时不写穿什么（配图的衣服由模型自己设计） */
 export function dayOf(characterId: string): SocialDay | null {
   const day = useRhythmStore().todayOf(characterId);
-  return day ? socialDayOf(day, (id) => getLocation(id)?.name ?? id) : null;
+  if (!day) return null;
+  const out = socialDayOf(day, (id) => getLocation(id)?.name ?? id);
+  return useAiStore().outfitRef() ? out : { ...out, outfit: '' };
 }
 
 /** 她醒着的时段：节律里今天第一件不是睡觉的事开始，到最后一件结束；没有节律按你的作息 */
@@ -113,6 +115,7 @@ export function socialContextOf(c: Character, preset: Preset | null, opts: { /**
     settings: { enabled: opts.enabled ?? true, perDay: socialPerDay(useSocialStore().characterSettings(c.id)) },
     awake: awakeOf(day),
     day,
+    ...(useAiStore().outfitRef() ? {} : { outfitFree: true as const }),
     memories: memoriesText(c, userName),
     recent: chat ? useChatStore().recentLines(chat.id, 12).join('\n') : '',
     feed: feedText(c.id),
