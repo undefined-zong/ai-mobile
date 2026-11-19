@@ -27,6 +27,26 @@ const R = MESSAGE_RANGES;
       </van-cell-group>
       <p class="note">范围 {{ R.sendLast.min }}–{{ R.sendLast.max }}，0 表示不发送聊天记录。截取后仍受预设上下文长度限制。</p>
 
+      <div class="group-title">注入记忆</div>
+      <van-cell-group inset>
+        <van-cell title="记忆总预算（tokens）" center>
+          <template #right-icon>
+            <van-stepper v-model="s.memoryTokens" :min="R.memoryTokens.min" :max="R.memoryTokens.max" :step="100" integer input-width="60px" class="shrink-0" aria-label="记忆总预算" />
+          </template>
+        </van-cell>
+        <van-cell title="最多相关条目" center>
+          <template #right-icon>
+            <van-stepper v-model="s.memoryItems" :min="R.memoryItems.min" :max="R.memoryItems.max" integer input-width="44px" class="shrink-0" aria-label="最多相关条目" />
+          </template>
+        </van-cell>
+        <van-cell title="语义相似度下限（%）" center>
+          <template #right-icon>
+            <van-stepper v-model="s.memorySimilarity" :min="R.memorySimilarity.min" :max="R.memorySimilarity.max" :step="5" integer input-width="44px" class="shrink-0" aria-label="语义相似度下限" />
+          </template>
+        </van-cell>
+      </van-cell-group>
+      <p class="note">按本轮内容选择画像、时间线和记忆，朋友圈、社群、留言也按相关性选取。置顶记忆优先；所有内容和标题共用总预算，0 表示不注入。相似度越高，语义召回越严格；没接通向量化时按字面搜索。tokens 为估算值。</p>
+
       <div class="group-title">显示</div>
       <van-cell-group inset>
         <van-cell title="限制条数" center>

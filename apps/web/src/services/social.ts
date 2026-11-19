@@ -4,7 +4,7 @@ import {
   type Character, type Moment, type MomentImage, type Preset, type SocialContext, type SocialDay,
 } from '@app/shared';
 import { putAsset } from './assets';
-import { memoryBlock, profileText } from './memoryBlocks';
+import { memoryBlocks } from './memoryBlocks';
 import { describePhoto } from './photos';
 import { MissingPresetError, personaOf } from './prompt';
 import { services } from '@/services';
@@ -63,14 +63,13 @@ export function feedText(characterId: string, n = 6, except?: string): string {
     .join('\n');
 }
 
-/** 每次聊天都带着的"最近的朋友圈"（接在长期记忆后面）：最近三天、最多 4 条 */
-export function recentMomentsBlock(character: Character): string {
+/** 最近三天的朋友圈候选（最多 4 条），由记忆拼装器按相关性和总预算选择。 */
+export function recentMomentsLines(character: Character): { text: string; at: number }[] {
   const since = Date.now() - 3 * 86_400_000;
   const timeZone = useEnvironmentStore().settings.timezone;
   const names = momentNames(character.id);
   const list = useSocialStore().visibleTo(character.id).filter((m) => m.createdAt >= since).slice(-4);
-  if (!list.length) return '';
-  return `最近的朋友圈（${character.name}发的、${names(MOMENT_USER)}发的；聊天时可以自然地提起，不用复述）：\n${list.map((m) => momentText(m, names, { timeZone, comments: 4 })).join('\n')}`;
+  return list.map((m) => ({ text: momentText(m, names, { timeZone, comments: 4 }), at: m.createdAt }));
 }
 
 // —— 发朋友圈要的输入 ——
@@ -93,11 +92,10 @@ export function awakeOf(day: SocialDay | null): { from: string; to: string } {
 }
 
 /** 她记得的关于你的事：画像卡 + 关系 + 置顶的和最重要的记忆（不带"最近的朋友圈"和社群，那两块单独给） */
-export function memoriesText(c: Character, userName: string): string {
+export function memoriesText(c: Character, _userName: string): string {
   const timeZone = useEnvironmentStore().settings.timezone;
-  const profile = profileText(c.id);
-  const memory = memoryBlock(c, [], Date.now(), timeZone, { proactive: true, moments: false }).content;
-  return [profile ? `${c.name}知道的${userName}：\n${profile}` : '', memory].filter(Boolean).join('\n\n');
+  const blocks = memoryBlocks(undefined, c, Date.now(), timeZone, { proactive: true, moments: false });
+  return [blocks.summary.content, blocks.memory.content].filter(Boolean).join('\n\n');
 }
 
 /**

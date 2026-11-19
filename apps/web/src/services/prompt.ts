@@ -48,7 +48,7 @@ import { useRealWorldStore } from '@/stores/realworld';
 import { useRhythmStore } from '@/stores/rhythm';
 import { useWeatherStore } from '@/stores/weather';
 import { homeBlock, lifeFlags } from './homeBlock';
-import { memoryBlock, summaryBlock } from './memoryBlocks';
+import { memoryBlocks } from './memoryBlocks';
 import { recallForTurn, type RecallForTurn } from './recall';
 
 /**
@@ -235,7 +235,7 @@ export function storeRegex(chat: Chat, character: Character, text: string, role:
 }
 
 /** App 自己的四块：摘要、记忆 + 关系、【当前环境】、场景规则 */
-function appFills(chat: Chat, character: Character, history: Message[], now: Date, timeZone: string, recall: RecallForTurn, proactive: boolean): Record<string, AppBlockFill> {
+function appFills(chat: Chat, character: Character, history: Message[], now: Date, timeZone: string, recall: RecallForTurn, proactive: boolean, query: string): Record<string, AppBlockFill> {
   const scene = getScene(chat.currentScene ?? 'free');
   const loc = getLocation(chat.togetherAt ?? character.locationId);
   const place = !loc
@@ -257,11 +257,14 @@ function appFills(chat: Chat, character: Character, history: Message[], now: Dat
   // 真实天气：你那边；她住在别的城市（例如国内）时再加她那边的。取不到就不写，不编
   const { weather, herWeather } = useWeatherStore().envInput(character);
 
-  const summary = summaryBlock(chat, character, timeZone);
-  const memory = memoryBlock(character, recall.lines, now.getTime(), timeZone, { proactive });
+  const blocks = memoryBlocks(chat, character, now.getTime(), timeZone, { proactive, query, recall: recall.lines });
+  const { summary, memory } = blocks;
+  recall.lines = blocks.recall;
+  const cached = new Set(recall.snapshot?.lines.map((l) => l.key));
+  recall.added = recall.reused ? 0 : recall.lines.filter((l) => !cached.has(l.key)).length;
   if (!proactive) {
     const notes = [
-      recall.reused ? '重新生成：沿用这条回复原来用的记忆' : recall.snapshot ? `上一轮回复后搜好的 ${recall.snapshot.lines.length} 条${recall.snapshot.dense ? '（按意思 + 字面）' : `（${recall.snapshot.denseNote || '只按字面'}）`}` : '还没有搜过',
+      recall.reused ? '重新生成：沿用这条回复原来用的记忆' : recall.snapshot ? `本轮输入检索保留 ${recall.lines.length} 条${recall.snapshot.dense ? '（按意思 + 字面）' : `（${recall.snapshot.denseNote || '只按字面'}）`}` : '按本轮输入在本机检索',
       recall.added ? `发送时按本轮消息补了 ${recall.added} 条` : '',
     ].filter(Boolean);
     memory.source = `${memory.source} · ${notes.join(' · ')}`;
@@ -427,7 +430,7 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const proactive = opts.agent === 'proactive' || opts.type === 'quiet';
   const userText = lastUser ? messageToText(lastUser, character, persona.name) : '';
   const recall: RecallForTurn = proactive ? { lines: [], snapshot: undefined, added: 0, reused: false } : recallForTurn(chat, character, userText, opts.targetId);
-  const app = appFills(chat, character, history, now, timeZone, recall, proactive);
+  const app = appFills(chat, character, history, now, timeZone, recall, proactive, userText);
   if (opts.allowedTags) app.sceneRules = {
     content: tagsLine(getScene(chat.currentScene ?? 'free'), character, opts.allowedTags),
     source: '本轮实际可用的标签',
