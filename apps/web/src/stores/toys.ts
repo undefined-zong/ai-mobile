@@ -12,7 +12,7 @@ import { DEFAULT_HEAD_LIMIT, emptyLevels, intensityOf, listHeads, ToyPlayer, typ
  * 心跳里的玩具（设计文档 §9.14）：连 Intiface Central、列出连着的玩具、把指令放上去、按设置守着上限和安全时间。
  * - 指令从哪来（source）：单独生成（"控制指令"预设按她的话写，默认）/ 她自己写（心跳的功能预设里"她自己写指令"那一块，她在回复里写 <device>）/ 不控制；
  * - 每个头的上限（双头玩具的每个马达、震动加伸缩的每一种各设各的：强度上限，伸缩的范围和最快多快）、多久没有新指令就停、切到后台就停、
- *   打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）。她照 0–100 写，发给玩具时按每个头的上限按比例换算；
+ *   打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）。她照 0–100 写，写多少发多少，超过这个头上限的发给玩具时压到上限；
  * - 按了"停"全部停下，她下一条指令照常执行；断开时停下。
  * 连接留着（再进心跳不用重连），设置里"断开"才断。
  */
@@ -282,20 +282,20 @@ export const useToyStore = defineStore('toys', () => {
     scanning.value = false;
   }
 
-  /** 试一下时"指令"写多少：强度 30，伸缩在 20–70 之间走一下（都按每个头的上限换算） */
+  /** 试一下时"指令"写多少：强度 30，伸缩在 20–70 之间走一下（超过每个头上限、范围的压到上限、范围里） */
   const TEST = { level: 30, from: 20, to: 70, strokeMs: 600, holdMs: 800 };
 
-  /** 试一下：这个玩具轻轻动一下（不经过她，也不管按没按停；也照每个头的上限换算） */
+  /** 试一下：这个玩具轻轻动一下（不经过她，也不管按没按停；也守着每个头的上限） */
   function test(d: ToyDevice) {
     if (!client.connected) return;
     const mine = heads.value.filter((h) => h.device?.index === d.index && h.feature);
     const send = (level: number, pos: number) => {
       const scalars = mine.filter((h) => h.feature!.via === 'scalar' && h.kind !== 'linear');
       const rotations = mine.filter((h) => h.feature!.via === 'rotate');
-      const amount = (h: ToyHead) => (level * headLimit(h).max) / 10_000;
+      const amount = (h: ToyHead) => Math.min(level, headLimit(h).max) / 100;
       const place = (h: ToyHead) => {
         const l = headLimit(h);
-        return (Math.min(l.posMin, l.posMax) + (Math.abs(l.posMax - l.posMin) * pos) / 100) / 100;
+        return Math.min(Math.max(pos, Math.min(l.posMin, l.posMax)), Math.max(l.posMin, l.posMax)) / 100;
       };
       if (scalars.length) void client.scalar(d.index, scalars.map((h) => ({ Index: h.feature!.index, Scalar: amount(h), ActuatorType: h.feature!.actuator }))).catch(fail);
       if (rotations.length) void client.rotate(d.index, rotations.map((h) => ({ Index: h.feature!.index, Speed: amount(h), Clockwise: true }))).catch(fail);
@@ -398,7 +398,7 @@ export const useToyStore = defineStore('toys', () => {
       ...lines,
       ...many,
       `能写的键：${keys.join('、')}、STOP；别的键这些玩具做不了，不要写。`,
-      '强度都照 0–100 写：每个头的上限是在心跳设置里单独设的，程序发给玩具时按比例换算，不用自己压低。',
+      '强度都照 0–100 写，不用自己压低：每个头的上限在心跳设置里单独设，超过上限的，程序发给玩具时压到上限。',
     ].join('\n');
   }
 

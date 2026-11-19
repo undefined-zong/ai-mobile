@@ -154,7 +154,7 @@ async function toggleConnect() {
           </template>
         </template>
       </div>
-      <p v-if="toys.devices.length" class="hint">每个头的上限各设各的：{{ characterPronoun(character) }}照 0–100 写，发给玩具时按比例换算（上限 60 时写 100 发 60、写 50 发 30）；伸缩的位置按范围换算，不快于"一下最快"。</p>
+      <p v-if="toys.devices.length" class="hint">每个头的上限各设各的：{{ characterPronoun(character) }}照 0–100 写，写多少发多少，超过上限的发给玩具时压到上限（上限 80 时写 100 发 80、写 60 还是 60）；伸缩的位置超出范围的压回范围里，不快于"一下最快"。</p>
       <button type="button" class="scan" :disabled="toys.scanning" @click="toys.scan()">
         <span :class="toys.scanning ? 'i-lucide-loader-circle spin' : 'i-lucide-radar'" />{{ toys.scanning ? '在找玩具…（Intiface 里配对过的会自己出现）' : toys.devices.length ? '再找找' : '找玩具' }}
       </button>

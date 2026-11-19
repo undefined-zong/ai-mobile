@@ -23,7 +23,7 @@ import { parseControlTags } from './tags.ts';
  * 指令都写在 <device>…</device> 里，从两个地方来：
  * - 她在回复里写（"她自己写"）：parseControlTags 把它从正文里拿掉、记下位置，parseDeviceBlock 读里面的内容；
  * - "控制指令"预设单独写一份（"单独生成"）：把她这句话照抄一遍、在要变的地方插 <device>，placeDeviceTags 按抄的字放回原话的位置上。
- * 读到 / 念到那个位置时执行。强度都按 0–100 写，每个头的上限、伸缩的范围和最快速度由播放的那一边（apps/web 的 toyPlayer）按比例换算。
+ * 读到 / 念到那个位置时执行。强度都按 0–100 写，写多少发多少；超过每个头的上限、超出伸缩的范围、快过最快速度的，由播放的那一边（apps/web 的 toyPlayer）压回去。
  */
 
 export const SCALAR_KINDS = ['vibrate', 'oscillate', 'rotate', 'constrict', 'inflate'] as const;

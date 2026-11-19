@@ -19,8 +19,8 @@ import type { LinearSub, RotateSub, ScalarSub, ToyDevice, ToyFeature } from './i
  * 心跳：把控制指令放到玩具上（设计文档 §9.14）。
  * - ToyPlayer：每一种（震动、摆动、旋转、收缩、充气、伸缩）各放一段：新指令只换掉它写了的那几种，没写的接着放；
  *   变速按 pattern / interval 走，loop 放完停在 0，不写 loop 一直循环；伸缩在两个位置之间来回。
- *   指令里的强度都是 0–100，发给每个头时按这个头的上限按比例换算（上限 60 时指令写 100 发 60、写 50 发 30），
- *   伸缩按这个头的范围换算位置、不快于它的"一下最快"；和上一次发的一样就不再发（省蓝牙）。
+ *   指令里的强度都是 0–100，写多少发多少，只有超过这个头的上限时压到上限（上限 80 时写 100 发 80、写 60 还是 60）；
+ *   伸缩的位置超出这个头的范围时压回范围里，不快于它的"一下最快"；和上一次发的一样就不再发（省蓝牙）。
  *   没连玩具时（"不连玩具也试试"）只在界面上算每个头的数值，心跳照样跟着走。
  * - ReplyTimeline：她一句话里的几条指令，读到 / 念到那个位置时执行。打字时按"读多快"往前走（不超过已经写出来的字），
  *   连麦时跟着她念到第几句（每句里按语速往前走）；指令来晚了（单独生成要等她说完）一下子到的几条合成一条再执行。
@@ -28,9 +28,9 @@ import type { LinearSub, RotateSub, ScalarSub, ToyDevice, ToyFeature } from './i
 
 /** 一个头（一个玩具的一项能力：双头玩具的每个马达、震动加伸缩的每一种）的上限 */
 export interface HeadLimit {
-  /** 强度上限 0–100：指令里的 0–100 按比例落到 0–max（震动、摆动、旋转、收缩、充气） */
+  /** 强度上限 0–100：指令写多少发多少，超过 max 的发 max（震动、摆动、旋转、收缩、充气） */
   max: number;
-  /** 伸缩的范围（0–100）：指令里的位置 0–100 按比例落在这中间 */
+  /** 伸缩的范围（0–100）：指令里的位置在这中间的照发，超出的压到边上 */
   posMin: number;
   posMax: number;
   /** 伸缩：从 0 到 100 走一下最快多少毫秒（幅度小时按比例） */
@@ -99,7 +99,7 @@ export interface HeadLevel {
   kind: ToyKind;
   short: string;
   name: string;
-  /** 发给玩具的数值 0–100（已经按上限换算）；伸缩是现在去的位置 */
+  /** 发给玩具的数值 0–100（超过上限的已经压到上限）；伸缩是现在去的位置 */
   value: number;
   /** 伸缩多快（0–100，越大越快），停着时是 0；别的种类不用 */
   pace: number;
@@ -220,14 +220,14 @@ export class ToyPlayer {
     return this.levels.heads.find((h) => h.key === key);
   }
 
-  /** 给这一种设一个强度（一个数是所有头，数组是每个头各自的），按每个头的上限换算 */
+  /** 给这一种设一个强度（一个数是所有头，数组是每个头各自的），超过这个头上限的压到上限 */
   private setLevel(kind: ScalarKind, step: number | number[], clockwise?: boolean) {
     if (!this.out.devices().length && Array.isArray(step) && step.length > (this.virtualCount[kind] ?? 1)) this.virtualCount[kind] = Math.min(MAX_VIRTUAL, step.length);
     const heads = this.sync().filter((h) => h.kind === kind);
     const pick = (i: number) => clamp(Math.round(Array.isArray(step) ? (step[i] ?? step.at(-1) ?? 0) : step), 0, 100);
     const byDevice = new Map<number, { scalars: ScalarSub[]; rotations: RotateSub[] }>();
     heads.forEach((head, i) => {
-      const v = Math.round((pick(i) * clamp(this.limit(head).max, 0, 100)) / 100);
+      const v = Math.min(pick(i), clamp(this.limit(head).max, 0, 100));
       const lv = this.level(head.key);
       if (lv) lv.value = v;
       const { device, feature } = head;
@@ -279,11 +279,11 @@ export class ToyPlayer {
   private runLinear(l: ToyLinear) {
     this.clear('linear');
     this.levels.doing.linear = describeCommand({ linear: l });
-    /** 一个头的位置怎么换算：指令里的 0–100 落在它的范围里 */
-    const mapper = (lim: HeadLimit) => {
+    /** 一个头能去的位置：指令里的位置在它的范围里照发，超出的压到边上 */
+    const within = (lim: HeadLimit) => {
       const lo = clamp(Math.min(lim.posMin, lim.posMax), 0, 100);
       const hi = clamp(Math.max(lim.posMin, lim.posMax), 0, 100);
-      return (p: number) => lo + ((hi - lo) * clamp(p, 0, 100)) / 100;
+      return (p: number) => clamp(p, lo, hi);
     };
     let seg = 0;
     let loop = 0;
@@ -322,7 +322,7 @@ export class ToyPlayer {
         .filter((h) => h.kind === 'linear')
         .map((head) => {
           const lim = this.limit(head);
-          const map = mapper(lim);
+          const map = within(lim);
           return { head, lim, pos: map(target), span: Math.abs(map(s.to) - map(s.from)) };
         });
       // 一起走：按最慢的那个头（它的"一下最快"和幅度）定这一下多久
