@@ -146,6 +146,8 @@ export interface IllustrateOutcome {
   model: string;
   /** 写提示词的模型；没用生图提示词智能体时为空 */
   promptModel: string | null;
+  /** 带 Vibe 的 NovelAI 场景图：原始生成参数存进素材库，供关闭 Vibe 对比。 */
+  vibeComparison?: { assetKey: string };
   /** 写 tags 用的生图预设；没有预设时为空 */
   presetName: string | null;
 }
@@ -155,6 +157,8 @@ export interface ImageClient {
   readonly live: boolean;
   /** 配图：生图提示词智能体写 tags → 生图智能体出图 → 存进本机素材库。所有出图排队，一次一张 */
   illustrate(req: IllustrateRequest, opts?: IllustrateOptions): Promise<IllustrateOutcome>;
+  /** 保留原图，复用其参数再生成一张关闭 Vibe 的对比图。 */
+  compareVibe(sourceAssetKey: string, opts?: IllustrateOptions): Promise<Pick<IllustrateOutcome, 'assetKey' | 'url' | 'seed'>>;
 }
 
 export interface SongInfo {

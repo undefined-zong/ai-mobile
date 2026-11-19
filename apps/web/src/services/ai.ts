@@ -9,12 +9,13 @@ import {
   parseSidestory,
   samplerRequest,
   type ImagePromptInput,
+  type VibeComparisonSource,
   type Sidestory,
   type VoiceSpec,
 } from '@app/ai';
 import { getLocation, hasOwnWorld, imageAppearance, moodOf, slotAt, TIME_OF_DAY_LABEL, timeOfDay, worldOf, type Character } from '@app/shared';
 import { showToast } from 'vant';
-import { putAsset } from './assets';
+import { assetUrl, putAsset } from './assets';
 import { playBytes, stopAudio } from './audio';
 import { personaVibes } from './personaVibe';
 import { MissingPresetError, personaOf } from './prompt';
@@ -257,6 +258,19 @@ export class RoutedImage implements ImageClient {
     return enqueueImage(opts.priority ?? 'user', () => this.illustrateNow(req, opts), opts.signal);
   }
 
+  compareVibe(sourceAssetKey: string, opts: IllustrateOptions = {}): Promise<Pick<IllustrateOutcome, 'assetKey' | 'url' | 'seed'>> {
+    if (this.busy) opts.onStage?.('queued');
+    return enqueueImage(opts.priority ?? 'user', async () => {
+      const url = await assetUrl(sourceAssetKey);
+      if (!url) throw new AiError('empty', '找不到原图的生成参数');
+      const source: VibeComparisonSource = await (await fetch(url)).json();
+      opts.onStage?.('image');
+      const result = await useAiStore().system.compareVibe(source, opts);
+      const image = result.images[0]!;
+      return { assetKey: image.bytes ? await putAsset(image.bytes, image.mime) : null, url: image.url, seed: result.seed };
+    }, opts.signal);
+  }
+
   private async illustrateNow(req: IllustrateRequest, opts: IllustrateOptions): Promise<IllustrateOutcome> {
     const c = useCharacterStore().byId(req.characterId);
     // 自由画可以不属于哪个角色（社群里网友的帖子）：只要一个名字给预设里的 {{char}}
@@ -311,6 +325,16 @@ export class RoutedImage implements ImageClient {
     const img = r.image.images[0];
     const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;
     if (!assetKey && !img?.url) throw new AiError('empty', '生图接口返回了，但里面没有图片', { detail: JSON.stringify(r.image).slice(0, 4000) });
+    const source: VibeComparisonSource = {
+      connectionId: r.image.connectionId,
+      model: r.image.model,
+      prompt: r.image.prompt,
+      negative: r.image.negative,
+      params: r.image.params,
+    };
+    const vibeComparison = r.image.provider === 'novelai' && (r.image.params.reference_image_multiple as unknown[] | undefined)?.length
+      ? { assetKey: await putAsset(new TextEncoder().encode(JSON.stringify(source)), 'application/json') }
+      : undefined;
     return {
       assetKey,
       url: img?.url,
@@ -319,6 +343,7 @@ export class RoutedImage implements ImageClient {
       negative: r.image.negative,
       seed: r.image.seed,
       model: r.image.model,
+      vibeComparison,
       promptModel: r.promptBy?.model ?? null,
       presetName: preset?.name ?? null,
     };

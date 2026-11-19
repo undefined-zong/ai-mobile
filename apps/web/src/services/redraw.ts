@@ -1,4 +1,5 @@
 import { assetUrl } from '@/services/assets';
+import { services } from '@/services';
 import type { ViewerImage } from '@/services/imageViewer';
 import { useChatStore } from '@/stores/chat';
 import { useGalleryStore, type GalleryItem } from '@/stores/gallery';
@@ -57,7 +58,24 @@ export async function shotViewerImage(shot: Shot | null | undefined): Promise<Vi
   if (!url) return null;
   const item = galleryItemOf(shot);
   const id = item?.id;
-  return { url, name: shot.title || item?.title, ...(id ? { redraw: () => redrawGalleryItem(id) } : {}) };
+  return {
+    url,
+    name: shot.title || item?.title,
+    ...(id ? {
+      redraw: async () => {
+        await redrawGalleryItem(id);
+        return shotViewerImage(useGalleryStore().items.find((i) => i.id === id));
+      },
+    } : {}),
+    ...(item?.vibeComparison ? {
+      label: '原图 · Vibe 开启',
+      compareVibe: async () => {
+        const result = await services.image.compareVibe(item.vibeComparison!.assetKey);
+        const comparisonUrl = await urlOf(result);
+        return comparisonUrl ? { url: comparisonUrl, name: `${item.title} · Vibe 关闭`, label: '对比图 · Vibe 关闭' } : null;
+      },
+    } : {}),
+  };
 }
 
 /** 一组（这次画的几张）：找不到图的跳过；返回列表和 start 在列表里的位置 */

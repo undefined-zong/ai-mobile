@@ -34,6 +34,22 @@
       }
     },
     {
+      "identifier": "duoRules",
+      "name": "双人 · 人数、动作归属、负面词和位置",
+      "role": "system",
+      "content": "双人画面按以下规则写（单人仍按单人规则）：\n- 全局 tags 写总人数，例如 1boy, 1girl 或 2girls；各自 characters 的 tags 写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物栏。人物类别要写，其他已有外观仍由程序补上。\n- 人物之间的动作写在各自人物栏：主动拥抱者写 source#hug，被拥抱者写 target#hug；相互拥抱时双方都写 mutual#hug。source# 表示发起，target# 表示承受，mutual# 表示相互；按画面里的真实动作使用，不把普通物件或外观词一律加前缀。指向对方的示例是 source#pointing at another，对方写 target#pointing。必要时用简短英文句子说明谁对谁做什么，保留 # 写法。\n- 拿手机、比耶等属于某个人的动作只写进那个人的 tags，不写全局。自拍时在持手机者栏说明 holding phone, taking selfie，并用英文明确由这个人拿手机；另一人的手势写在另一栏。\n- 各人物的 negative 只写针对该人物的额外负面词，可用来避免另一人的特征或动作串过来；全局 negative 只写整张画面的限制。\n- 位置明确时写 position，并按画面从左到右排列 characters；英文描述、人物顺序、位置一致。位置不明确时省略 position，交给模型安排，不给两个人都填 center。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "highlight",
+        "keepsake"
+      ]
+    },
+    {
       "identifier": "sceneRule",
       "name": "这个场景",
       "role": "system",

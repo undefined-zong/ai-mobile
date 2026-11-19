@@ -1,29 +1,38 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { showToast } from 'vant';
+import { computed, nextTick, ref } from 'vue';
+import { showToast, type ImagePreviewInstance } from 'vant';
 import { saveFiles } from '@/services/download';
 import { imageViewer, type ViewerImage } from '@/services/imageViewer';
 
 /** 全屏看图：和原来的 vant 看图一样，底下多一个"下载"（services/imageViewer.ts 的 previewImages 打开） */
 const urls = computed(() => imageViewer.images.map((i) => i.url));
 const saving = ref(false);
+const preview = ref<ImagePreviewInstance>();
 /** 正在重画的那几张 */
 const redrawing = ref<Set<ViewerImage>>(new Set());
 const current = computed(() => imageViewer.images[imageViewer.index]);
 const busy = computed(() => !!current.value && redrawing.value.has(current.value));
 
 /** 重新生成这一张：画好在这里直接换成新的（关掉看图也照样画完，原来的地方会换） */
-async function redraw() {
+async function redraw(compare = false) {
   const img = current.value;
-  if (!img?.redraw || redrawing.value.has(img)) return;
+  const generate = compare ? img?.compareVibe : img?.redraw;
+  if (!img || !generate || redrawing.value.has(img)) return;
   const list = imageViewer.images;
   redrawing.value = new Set([...redrawing.value, img]);
   try {
-    const url = await img.redraw();
+    const result = await generate();
     // 还开着这一组：把这一张换成新画的（关掉了、换了别的图就不动）
     const i = list.indexOf(img);
-    if (url && imageViewer.images === list && i >= 0) list[i] = { ...img, url };
-    showToast('画好了');
+    if (result && imageViewer.images === list && i >= 0) {
+      const next = typeof result === 'string' ? { ...img, url: result } : result;
+      if (compare) {
+        list.splice(i + 1, 0, next);
+        await nextTick();
+        preview.value?.swipeTo(i + 1);
+      } else list[i] = next;
+    }
+    showToast(compare ? '对比图已生成' : '画好了');
   } catch (e) {
     showToast({ message: `没画成：${e instanceof Error ? e.message : String(e)}`, duration: 3500 });
   } finally {
@@ -51,6 +60,7 @@ async function save() {
 
 <template>
   <van-image-preview
+    ref="preview"
     v-model:show="imageViewer.show"
     :images="urls"
     :start-position="imageViewer.start"
@@ -60,9 +70,18 @@ async function save() {
   >
     <template #cover>
       <div class="viewer-actions">
-        <button v-if="current?.redraw" type="button" class="viewer-btn press" :disabled="busy" aria-label="重新生成这张图" data-testid="viewer-redraw" @click.stop="redraw">
+        <div v-if="current?.label || urls.length > 1" class="viewer-label">
+          <button v-if="urls.length > 1" type="button" class="viewer-btn press" aria-label="上一张" @click.stop="preview?.prev()"><span class="i-lucide-chevron-left" /></button>
+          <span v-if="current?.label">{{ current.label }}</span>
+          <button v-if="urls.length > 1" type="button" class="viewer-btn press" aria-label="下一张" @click.stop="preview?.next()"><span class="i-lucide-chevron-right" /></button>
+        </div>
+        <button v-if="current?.redraw" type="button" class="viewer-btn press" :disabled="busy" aria-label="重新生成这张图" data-testid="viewer-redraw" @click.stop="redraw()">
           <span :class="busy ? 'i-lucide-loader-circle animate-spin' : 'i-lucide-refresh-cw'" />
           <span>{{ busy ? '正在画…' : '重新生成' }}</span>
+        </button>
+        <button v-if="current?.compareVibe" type="button" class="viewer-btn press" :disabled="busy" data-testid="viewer-compare-vibe" @click.stop="redraw(true)">
+          <span class="i-lucide-columns-2" />
+          <span>去掉 Vibe 对比</span>
         </button>
         <button type="button" class="viewer-btn press" :disabled="saving" aria-label="下载这张图" data-testid="viewer-save" @click.stop="save">
           <span :class="saving ? 'i-lucide-loader-circle animate-spin' : 'i-lucide-download'" />
@@ -74,12 +93,27 @@ async function save() {
 </template>
 
 <style scoped>
+.viewer-label {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #fff;
+  text-align: center;
+  font-size: 13px;
+  text-shadow: 0 1px 4px #000;
+}
 .viewer-actions {
   position: fixed;
   left: 50%;
   bottom: calc(var(--safe-bottom, 0px) + 28px);
   transform: translateX(-50%);
   display: flex;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   pointer-events: auto;
 }

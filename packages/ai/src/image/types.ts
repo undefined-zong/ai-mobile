@@ -46,7 +46,7 @@ export interface ImageReference {
 
 /**
  * NovelAI 的 Vibe Transfer（V4 起）：参考图先用 /ai/encode-vibe 编码一次（花点数），编码按模型和信息提取量各算一份；
- * 之后出图只带编码，不再花点数，同一张参考图画出来的人一直像同一个人
+ * 之后出图复用编码。参考影响整张图的视觉特征，不按人物分配，也不保证身份一致。
  */
 export interface ImageVibe {
   /** encode-vibe 返回的编码（base64） */
@@ -138,3 +138,6 @@ export interface ImageResult {
   /** 实际发出去的参数（相册里"用同样参数重画"） */
   params: Record<string, unknown>;
 }
+
+/** 已完成的 NovelAI 场景图参数，供同一连接、同一模型的 Vibe 开关对比使用。 */
+export type VibeComparisonSource = Pick<ImageResult, 'model' | 'prompt' | 'negative' | 'params'> & { connectionId: string };

@@ -162,7 +162,7 @@ export interface Persona extends SyncMeta {
 
 /**
  * "你"的生图设置：约会这类场景里你入画时用（生图预设里的 {{user_appearance}}），陪伴学习画你那边时也用；
- * 能像角色一样让 AI 写外观 tags、画一张立绘，立绘编码成 Vibe 以后入画时带上，长相一直和立绘一样
+ * 能像角色一样让 AI 写外观 tags、画一张立绘；开启 Vibe 时把立绘作为整张画面的视觉参考。
  */
 export interface PersonaImage {
   /** NovelAI 外观 tags（人数和性别放最前面：1boy / 1girl，再写发型、发色、瞳色、体型……） */

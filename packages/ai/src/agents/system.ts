@@ -5,7 +5,8 @@ import { embedTexts, type EmbedPurpose, type EmbedResult } from '../embedding/cl
 import { modelFamily, vectorSpace } from '../embedding/vector.ts';
 import { augmentImage, encodeVibe, generateImage } from '../image/client.ts';
 import { applyImageStyle } from '../image/style.ts';
-import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeEncodeRequest } from '../image/types.ts';
+import { novelaiCompareVibe } from '../image/novelai.ts';
+import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeComparisonSource, VibeEncodeRequest } from '../image/types.ts';
 import { chatOnce } from '../llm/client.ts';
 import { applyFilters, compileFilters, DEFAULT_OUTPUT_FILTERS } from '../llm/filter.ts';
 import { textOf } from '../llm/messages.ts';
@@ -305,6 +306,18 @@ export class AgentSystem {
     const started = Date.now();
     const { value, attempt, fellBack } = await this.router.run(attempts, (ep) => generateImage(ep, merged), this.failover('image', opts));
     return { ...value, ...this.meta(attempt, fellBack, started) };
+  }
+
+  /** Vibe 开关对比沿用原图的连接和模型，跳过当前风格设置与提示词生成。 */
+  async compareVibe(source: VibeComparisonSource, opts: AgentCallOptions = {}): Promise<ImageResult & CallMeta> {
+    return this.track('image', async () => {
+      const attempts = this.router.attempts('image', { model: source.model })
+        .filter((a) => a.endpoint.connectionId === source.connectionId && a.endpoint.kind === 'novelai')
+        .map((a) => ({ ...a, endpoint: { ...a.endpoint, model: source.model } }));
+      const started = Date.now();
+      const { value, attempt, fellBack } = await this.router.run(attempts, (ep) => novelaiCompareVibe(ep, source, opts.signal));
+      return { ...value, ...this.meta(attempt, fellBack, started) };
+    });
   }
 
   /**
