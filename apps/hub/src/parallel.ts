@@ -57,7 +57,7 @@ export async function generateParallelNote(
   context: ParallelContext, credentials: ProactiveCredentials, id: string, date: string, now: number, her: SocialDay | null, mine: ParallelEntry[] | null,
 ): Promise<{ note: ParallelNote; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent characters.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
   const built = parallelRequest(context, now, her, mine);
   const { value, result } = await system.json('parallel', built.request, parseParallelPost, { signal: AbortSignal.timeout(150_000) });
   const about = resolveParallelRef(value.about, built.her, built.mine);

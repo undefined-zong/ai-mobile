@@ -5,6 +5,7 @@ import type { Lorebook } from './lorebook.ts';
 import type { Preset } from './preset.ts';
 import type { ProactiveRule, Touchpoint, NotificationPreview } from './proactive.ts';
 import type { EnvironmentSettings } from './settings.ts';
+import type { TextObfuscationSettings } from './obfuscation.ts';
 import type { World } from '../locations.ts';
 import type { RhythmDay, RhythmPerson, RhythmSettings, RhythmTemplate } from './rhythm.ts';
 
@@ -57,6 +58,8 @@ export interface ProactiveCredentials {
   routes: AgentRoute[];
   keys: Record<string, string>;
   outputFilters: string[];
+  /** 旧客户端未上传时保持关闭。 */
+  textObfuscation?: TextObfuscationSettings;
 }
 
 export interface HubTouchpoint extends Touchpoint {

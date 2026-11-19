@@ -35,7 +35,7 @@ async function consolidateOne(env: Env, row: ContextRow, credentials: ProactiveC
   if (!claim) return;
   try {
     const system = new AgentSystem({
-      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null },
+      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
     });
     const { ops, errors } = await run(system, ctx, { signal: AbortSignal.timeout(LEASE_MS - 30_000) });

@@ -10,6 +10,7 @@ import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeCom
 import { chatOnce } from '../llm/client.ts';
 import { applyFilters, compileFilters, DEFAULT_OUTPUT_FILTERS } from '../llm/filter.ts';
 import { textOf } from '../llm/messages.ts';
+import { obfuscateChatRequest } from '../llm/obfuscation.ts';
 import type { ChatOptions, ChatRequest, ChatResult } from '../llm/types.ts';
 import { synthesize, ttsCacheKey } from '../tts/client.ts';
 import type { TtsAudio, TtsRequest } from '../tts/types.ts';
@@ -190,7 +191,7 @@ export class AgentSystem {
   private async chatOnce(role: AgentRole, req: ChatRequest, opts: AgentChatOptions): Promise<AgentChatResult> {
     const route = this.router.route(role);
     const p = route?.params ?? {};
-    const merged: ChatRequest = {
+    const merged = obfuscateChatRequest({
       ...req,
       temperature: req.temperature ?? p.temperature,
       topP: req.topP ?? p.topP,
@@ -198,7 +199,7 @@ export class AgentSystem {
       reasoningEffort: p.reasoningEffort && p.reasoningEffort !== 'auto' ? p.reasoningEffort : req.reasoningEffort,
       includeReasoning: req.includeReasoning ?? p.includeReasoning,
       extraBody: route?.extra ? { ...route.extra, ...(req.extraBody ?? {}) } : req.extraBody,
-    };
+    }, this.opts.config.textObfuscation?.());
     const inputTokens = merged.messages.reduce((n, m) => n + estimateTokens(textOf(m.content)), 0);
     this.checkBudget(role, inputTokens);
     const attempts = this.router.attempts(role);

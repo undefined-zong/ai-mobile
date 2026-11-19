@@ -363,6 +363,7 @@ export const useHubStore = defineStore('hub', () => {
       routes: ai.routes.filter((r) => chain.includes(r.role)),
       keys: Object.fromEntries([apiKeyId(source), apiKeyId(source, true)].map((id) => [id, ai.keyOf(id) ?? ''])),
       outputFilters: ai.outputFilters,
+      textObfuscation: ai.textObfuscation,
     });
     const fingerprint = await hash(credentials);
     const key = role === 'rhythm' ? 'rhythmApiHash' : role === 'consolidate' ? 'memoryApiHash' : role === 'social' ? 'socialApiHash' : role === 'planner' ? 'plannerApiHash' : role === 'parallel' ? 'parallelApiHash' : role === 'health' ? 'healthApiHash' : 'apiHash';
@@ -968,7 +969,7 @@ export const useHubStore = defineStore('hub', () => {
     navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data?.type === 'hub-inbox') void syncNow(); });
     watch(() => config.preview, () => { void save(); });
     let debounce: ReturnType<typeof setTimeout>;
-    watch(() => [contexts(), rhythmContexts(), socialContexts(), communityContexts(), plannerContexts(), parallelContexts(), parallelPlanCloudContexts(), healthContexts(), useAiStore().routes, useAiStore().outputFilters,
+    watch(() => [contexts(), rhythmContexts(), socialContexts(), communityContexts(), plannerContexts(), parallelContexts(), parallelPlanCloudContexts(), healthContexts(), useAiStore().routes, useAiStore().outputFilters, useAiStore().textObfuscation,
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('planner'))),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('planner'), true)),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('proactive'))),

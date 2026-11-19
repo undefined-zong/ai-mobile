@@ -26,7 +26,7 @@ export function socialRequest(context: SocialContext, now: number, day: SocialDa
 
 export async function generateMoment(context: SocialContext, credentials: ProactiveCredentials, id: string, now: number, day: SocialDay | null): Promise<{ moment: Moment; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent characters.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
   const { value, result } = await system.json('social', socialRequest(context, now, day), parseMomentDraft, { signal: AbortSignal.timeout(150_000) });
   const moment: Moment = {
     id, authorId: context.character.id, text: value.text,

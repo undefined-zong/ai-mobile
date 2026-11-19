@@ -17,6 +17,7 @@ export * from './core/endpoint.ts';
 export { hashString, parseJsonLoose, randomSeed } from './core/util.ts';
 
 export * from './llm/types.ts';
+export * from './llm/obfuscation.ts';
 export { chatOnce, canChat } from './llm/client.ts';
 export { readAIStream } from './llm/stream.ts';
 export { fromOpenAIBody, normalizeTurns, postProcessMessages, START_PLACEHOLDER, toClaude, toGemini } from './llm/messages.ts';

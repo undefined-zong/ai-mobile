@@ -95,7 +95,7 @@ export async function healthFor(env: Env, row: ContextRow, credentials: Proactiv
   if (!claim) return null;
   try {
     const system = new AgentSystem({
-      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null },
+      config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
     });
     const signal = AbortSignal.timeout(LEASE_MS - 30_000);

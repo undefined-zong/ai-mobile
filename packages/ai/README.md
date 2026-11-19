@@ -39,6 +39,14 @@ src/connection.ts  拉取模型列表、测试连接（失败时给完整报错�
 - **回复修剪**（`llm/filter.ts`，SleepTogether 的全局正则）：所有文本智能体的回复过一遍正则，默认去掉 `<think>…</think>`、只剩结束标签的半截思考、`<!-- consider: … -->`；流式时每次更新都修剪。修剪完是空的算失败。
 - **流式兼容**：有的中转在流里给 `message.content` 或 `text` 而不是 `delta.content`，都认。
 
+## 全局文本混淆
+
+App 在「我的 → 混淆设置」提供总开关，默认关闭。开启后，`AgentSystem.chat/json` 在路由重试前统一处理消息的文字副本，覆盖所有文本角色，包括视觉理解中的文字、生图提示词和云端主动任务；原始聊天记录、预设、图片内容及协议参数保持原样。流式回退和备用 API 复用本次处理结果，语音合成、语音识别、实际绘图、向量化不经过此处理。
+
+- `llm/obfuscation.ts` 提供分段散布、同音替换、同音替换后散布、随机穿插、仅包裹五种方式；设置页预览也使用相同函数。
+- 分段载体思路及同音词库参考用户提供的「输入法候选面板 v8.0.8」文件，只提取数据，不运行原脚本。同音字按不区分声调的读音匹配，多音单字保留；词语优先匹配，支持自定义词条和替换比例。代码、标签、占位符、URL 和 JSON 字段名不做同音替换。
+- 默认参数、载体与还原说明集中在 `llm/obfuscation.json`，词库在 `llm/homophones.json`；用户可在设置页修改。配置自动保存并参与设备同步，同时随云端凭据更新传给所有云端文本任务。
+
 ## DeepSeek（同 math-reader 的 deepseek 渠道）
 
 - 地址填 `https://api.deepseek.com/v1/chat/completions`（同 math-reader，原样使用）或 `https://api.deepseek.com`；模型名原样发（`deepseek-chat` / `deepseek-reasoner`，不改名）。

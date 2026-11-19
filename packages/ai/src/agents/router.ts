@@ -1,4 +1,4 @@
-import { AGENT_META, apiKeyId, followOf, type AgentRole, type AgentRoute, type Capability, type ConnectionKind, type FeatureApi } from '@app/shared';
+import { AGENT_META, apiKeyId, followOf, type AgentRole, type AgentRoute, type Capability, type ConnectionKind, type FeatureApi, type TextObfuscationSettings } from '@app/shared';
 import { apiLabel, kindOf, needsKey } from '../channels.ts';
 import type { Endpoint } from '../core/endpoint.ts';
 import { AiError, annotateError, errorText, shouldFailover } from '../core/errors.ts';
@@ -17,6 +17,8 @@ import { canTranscribe } from '../stt/client.ts';
 
 export interface AgentConfig {
   routes(): AgentRoute[];
+  /** 按调用读取全局混淆设置；本机和云端使用同一处理入口。 */
+  textObfuscation?(): TextObfuscationSettings | undefined;
   /** 这台设备上保存的 Key（键见 apiKeyId）；没有返回 null */
   keyOf(id: string): string | null;
 }
