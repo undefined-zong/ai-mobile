@@ -147,6 +147,7 @@ export const useServicesStore = defineStore('services', () => {
     secrets,
     hydrate,
     setSecret,
+    flushSecrets: secretSaver.flush,
     neteaseBase,
     neteaseCookie,
     musicReady,

@@ -60,8 +60,25 @@ export function wereadConnection(): Connection {
 async function withWeread<T>(run: (call: (tool: string, args?: Record<string, unknown>) => Promise<string>, client: McpClient) => Promise<T>): Promise<T> {
   const c = wereadConnection();
   if (!c.ok) throw new Error(c.reason);
+  const svc = useServicesStore();
+  const builtin = svc.weread.source === 'hub';
+  // 每次发送都读当前 Cookie：上一章更新后，下一章和重开 App 都继续使用新会话。
+  const sessionFetch: typeof fetch = async (input, init) => {
+    const before = svc.secrets[SECRET_IDS.wereadCookie] ?? '';
+    const headers = new Headers(init?.headers);
+    if (before) headers.set(WEREAD_HEADERS.cookie, before);
+    else headers.delete(WEREAD_HEADERS.cookie);
+    const response = await fetch(input, { ...init, headers });
+    const cookie = response.headers.get(WEREAD_HEADERS.cookie);
+    // 用户手动换 Cookie 或另一个请求先更新了会话时，不拿旧请求的结果盖回去。
+    if (cookie !== null && cookie !== before && (svc.secrets[SECRET_IDS.wereadCookie] ?? '') === before) {
+      svc.setSecret(SECRET_IDS.wereadCookie, cookie);
+      await svc.flushSecrets();
+    }
+    return response;
+  };
   // 每章正文和笔记都要访问多个接口：单次工具调用多等一会儿
-  const client = new McpClient({ url: c.url, credentials: new McpCredentials({ url: c.url, headers: c.headers }), timeoutMs: 120_000 });
+  const client = new McpClient({ url: c.url, credentials: new McpCredentials({ url: c.url, headers: c.headers }), ...(builtin ? { fetch: sessionFetch } : {}), timeoutMs: 120_000 });
   try {
     return await run(async (tool, args = {}) => {
       const r = await client.callTool(tool, args);

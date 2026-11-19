@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { errorText } from '@app/ai';
-import { ref, toRef } from 'vue';
+import { ref, toRef, watch } from 'vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import PageHeader from '@/layouts/PageHeader.vue';
 import { testWeread, wereadConnection } from '@/services/weread';
@@ -24,18 +24,22 @@ const SOURCES: { value: WereadSource; label: string }[] = [
 ];
 
 const cookieDraft = ref(svc.secrets[SECRET_IDS.wereadCookie] ?? '');
+watch(() => svc.secrets[SECRET_IDS.wereadCookie] ?? '', (cookie, previous) => {
+  if (cookieDraft.value === previous) cookieDraft.value = cookie;
+});
 const ccPasswordDraft = ref(svc.secrets[SECRET_IDS.cookieCloudPassword] ?? '');
 const headerDraft = ref(svc.secrets[SECRET_IDS.wereadHeader] ?? '');
-function saveSecrets() {
+async function saveSecrets() {
   svc.setSecret(SECRET_IDS.wereadCookie, cookieDraft.value);
   svc.setSecret(SECRET_IDS.cookieCloudPassword, ccPasswordDraft.value);
   svc.setSecret(SECRET_IDS.wereadHeader, headerDraft.value);
+  await svc.flushSecrets();
 }
 
 const test = ref<{ ok: boolean; text: string } | null>(null);
 const testing = ref(false);
 async function runTest() {
-  saveSecrets();
+  await saveSecrets();
   test.value = null;
   const c = wereadConnection();
   if (!c.ok) {
@@ -104,7 +108,7 @@ async function runTest() {
         接上以后，在书架的"微信读书"页签点一本书，就会按目录逐章取全书正文，连同你的划线、想法和几条热门书评放上我们的书架。导入时会显示已取好的章节数；以前只导入了笔记的书，可以在更多操作里点"从微信读书获取全书正文"。书存在这台设备上，陪读时只把当前读到的段落交给Ta。
       </p>
       <p class="note" v-if="weread.source === 'hub'">
-        Cookie：电脑浏览器登录 weread.qq.com，F12 →「Network / 网络」，刷新，点一个 weread.qq.com 的请求，复制请求头里 Cookie 的整段。Cookie 过一阵会失效；装 CookieCloud 浏览器插件（同步域名填 weread，保活填 https://weread.qq.com）再填上面三项，云端每次去取最新的，就不用反复复制。
+        Cookie：电脑浏览器登录 weread.qq.com，F12 →「Network / 网络」，刷新，点一个 weread.qq.com 的请求，复制请求头里 Cookie 的整段。更新 Hub 后，读取书架、目录和正文时会自动保存微信读书返回的新 Cookie，重开 App 继续使用。登录被撤销或长时间不用仍可能需要重新登录。也可装 CookieCloud 浏览器插件（同步域名填 weread，保活填 https://weread.qq.com），再填上面三项，让 Hub 取浏览器同步的 Cookie。
         Cookie 和 CookieCloud 密码只存在这台设备、不进同步，用的时候随请求发给你自己的 Hub，Hub 不存。
       </p>
       <p class="note" v-else>

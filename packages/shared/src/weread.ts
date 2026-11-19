@@ -12,7 +12,7 @@ export const WEREAD_TOOLS = {
   chapter: 'get_book_chapter',
 } as const;
 
-/** 云端 Hub 内置的微信读书 MCP 认的请求头：直接给 Cookie，或者给 CookieCloud 让 Hub 每次去取最新的 */
+/** 云端 Hub 的微信读书请求头；cookie 也用作响应头，把更新后的会话交回客户端保存。 */
 export const WEREAD_HEADERS = {
   cookie: 'X-WeRead-Cookie',
   cookieCloudUrl: 'X-CookieCloud-Url',
