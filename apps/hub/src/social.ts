@@ -73,10 +73,13 @@ async function postOne(env: Env, row: ContextRow, slot: number, dueAt: number, d
   const lease = crypto.randomUUID();
   // Each character/date/slot has its own atomic claim. Other characters start immediately.
   const claim = await env.DB.prepare(`INSERT INTO social_posts(character_id, date, slot, due_at, lease, lease_until, attempts)
-    VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(character_id, date, slot) DO UPDATE SET
+    SELECT ?, ?, ?, ?, ?, ?, 1 WHERE EXISTS (
+      SELECT 1 FROM social_contexts c WHERE c.character_id = ? AND c.revision = ?
+      AND NOT EXISTS (SELECT 1 FROM sync_records r WHERE r.kind = 'characters' AND r.parent = '' AND r.id = c.character_id AND r.deleted = 1)
+    ) ON CONFLICT(character_id, date, slot) DO UPDATE SET
       due_at = excluded.due_at, lease = excluded.lease, lease_until = excluded.lease_until, attempts = social_posts.attempts + 1
     WHERE social_posts.data IS NULL AND social_posts.lease_until <= ? AND social_posts.retry_at <= ? RETURNING attempts`)
-    .bind(id, date, slot, dueAt, lease, now + LEASE_MS, now, now).first<{ attempts: number }>();
+    .bind(id, date, slot, dueAt, lease, now + LEASE_MS, id, row.revision, now, now).first<{ attempts: number }>();
   if (!claim) return;
   let used = 0;
   try {
@@ -98,7 +101,8 @@ async function postOne(env: Env, row: ContextRow, slot: number, dueAt: number, d
     // A settings change/removal during the call invalidates the output, without blocking any other role.
     const saved = await env.DB.prepare(`UPDATE social_posts SET data = ?, lease = NULL, lease_until = 0, retry_at = 0, last_error = NULL, done_at = ?
       WHERE character_id = ? AND date = ? AND slot = ? AND lease = ?
-      AND EXISTS (SELECT 1 FROM social_contexts WHERE character_id = ? AND revision = ?)`)
+      AND EXISTS (SELECT 1 FROM social_contexts c WHERE c.character_id = ? AND c.revision = ?
+        AND NOT EXISTS (SELECT 1 FROM sync_records r WHERE r.kind = 'characters' AND r.parent = '' AND r.id = c.character_id AND r.deleted = 1))`)
       .bind(JSON.stringify(result.moment), Date.now(), id, date, slot, lease, id, row.revision).run();
     if (!saved.meta.changes) throw new Error('生成期间朋友圈设置更新');
     // 通知发一次就好：发不出去不重发（朋友圈打开 App 就能看到），也不算这一条失败
@@ -127,6 +131,15 @@ function dueSlots(context: SocialContext, now: number): { date: string; slot: nu
 /** 每 5 分钟的 Cron 里跑；和主动消息的总开关无关，手机没开也发 */
 export async function runSocialScheduled(env: Env, now = Date.now(), generate: MomentGenerator = generateMoment) {
   try {
+    // 删除记录来自任意设备；即使这台设备没上传过上下文，也要注销角色的云端任务。
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM social_contexts WHERE character_id IN (
+        SELECT id FROM sync_records WHERE kind = 'characters' AND parent = '' AND deleted = 1
+      )`),
+      env.DB.prepare(`DELETE FROM social_posts WHERE data IS NULL AND character_id IN (
+        SELECT id FROM sync_records WHERE kind = 'characters' AND parent = '' AND deleted = 1
+      )`),
+    ]);
     const rows = await env.DB.prepare('SELECT character_id, revision, data, updated_at FROM social_contexts').all<ContextRow>();
     if (!rows.results.length) { await setMeta(env, 'lastSocialError', null); return; }
     const due = rows.results.flatMap((row) => dueSlots(JSON.parse(row.data) as SocialContext, now).map((s) => ({ row, ...s })));
