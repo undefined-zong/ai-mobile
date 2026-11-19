@@ -1,4 +1,4 @@
-import { IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_SECTION_DOCS, IMAGE_PROMPT_SECTIONS } from './imageTags.ts';
+import { ACTION_TAG_PREFIXES, IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_SECTION_DOCS, IMAGE_PROMPT_SECTIONS } from './imageTags.ts';
 import { characterPronoun } from './pronouns.ts';
 import type { Character } from './types/character.ts';
 import type { Lorebook } from './types/lorebook.ts';
@@ -206,6 +206,8 @@ const OUTPUT_NOTES: Partial<Record<PresetCategory, string>> = {
     '【生图预设的输出】不是 JSON，是几段"名字###内容###"，程序读了再拼成生图请求（标题、画幅、长相、衣服都由程序加）：',
     ...IMAGE_PROMPT_SECTIONS.map((k) => `- ${k}###…###：${IMAGE_PROMPT_SECTION_DOCS[k]}`),
     `- char / user 后面空一格写 ${IMAGE_PROMPT_MODIFIERS.filter((m) => m !== 'negative').join(' / ')} 是位置（例如 char left###…###），写 negative 是只针对这个人的负面 tags（例如 char negative###…###）`,
+    `- 两个人之间的动作写在各自那一份里，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出发起、承受、相互（char###girl, source#hug### 和 user###boy, target#hug###）；NovelAI V4 起分人物时认，单人图和不分人物的接口程序会去掉前缀`,
+    '- 每个人的那一份（char###、user###、| 后面的每段）各自带各自的负面 tags：Ta的是角色卡的负面 tags + char negative###，你的是人设的 + user negative###，别的人是 negative### 里同一个位置的那段',
     '旧写法（{"caption", "tags", "negative", "size"} 的 JSON、characters 字段）程序不再读：照参照预设的输出格式那块换成这种写法，规则里讲到 negative、size、characters 的句子也跟着换成 negative###、size###、char### / user###。',
   ].join('\n'),
   device: [

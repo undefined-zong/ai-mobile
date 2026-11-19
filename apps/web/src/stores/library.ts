@@ -184,7 +184,7 @@ function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
  *   也只做一次，之后你再改、再删都不会被覆盖。
  * - patched：强制改句子。列出的块里出现这些原句就换成新句，不管这块别的地方你改没改过（只动这几句，整块别的内容不动）；
  *   块的 identifier 写 "*" 是所有块。也只做一次。
- * - categories：不按文件、按分类：这几类的所有预设（自带的、复制的、导入的）都做 patched（只认原句，原句不在就不动）。
+ * - categories：不按文件、按分类：这几类里复制、导入的预设（没有 seedFile；自带的按文件升级）做 patched（只认原句，原句不在就不动）。
  * 除了 categories，复制出来的、导入的预设不动；想整份回到文件的样子用"恢复成预设文件"。
  */
 interface SeedUpgrade {
@@ -679,7 +679,8 @@ function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);
-    if (u.categories && u.patched) for (const p of list) if (u.categories.includes(p.category) && patchBlocks(p, u.patched)) changed.add(p);
+    // 自带的已经按文件升级过（原句换过一遍），这里只管复制、导入的（没有 seedFile）
+    if (u.categories && u.patched) for (const p of list) if (!p.seedFile && u.categories.includes(p.category) && patchBlocks(p, u.patched)) changed.add(p);
   }
   // 已保存的自带、导入和复制预设也调整位置，保留内容、开关和预设正文。
   const contextUpgrade = 'app-context:before-history';

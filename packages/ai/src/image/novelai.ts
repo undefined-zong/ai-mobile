@@ -3,6 +3,7 @@ import { joinUrl, transportOf, trimUrl, type Endpoint } from '../core/endpoint.t
 import { AiError, httpError, responseContext } from '../core/errors.ts';
 import { readBytes, readText, request, sleep } from '../core/http.ts';
 import { randomSeed } from '../core/util.ts';
+import { flattenCharacters } from './characters.ts';
 import { extractImage, sniffImageMime } from './extract.ts';
 import { isNovelaiV5, joinTags, NOVELAI_DEFAULT_MODEL, NOVELAI_QUALITY_TAGS, NOVELAI_UC_PRESETS, novelaiGeneration, novelaiInpaintModel, resolveSize, supportsCharacterReference, supportsVibeTransfer } from './presets.ts';
 import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeComparisonSource, VibeEncodeRequest } from './types.ts';
@@ -47,10 +48,12 @@ export function buildNovelaiPayload(baseModel: string, req: ImageRequest): { bod
   const { width, height } = resolveSize(req.size);
   const seed = req.seed ?? randomSeed();
   const quality = req.quality === true;
-  const prompt = quality ? joinTags(req.prompt, NOVELAI_QUALITY_TAGS[baseModel]) : joinTags(req.prompt);
+  // V3 不能分人物写：每个人的那一份并进整体提示词；V4 起整体和每个人分开发
+  const flat = gen === 'v4' ? { prompt: req.prompt, negative: req.negative ?? '' } : flattenCharacters(req);
+  const prompt = quality ? joinTags(flat.prompt, NOVELAI_QUALITY_TAGS[baseModel]) : joinTags(flat.prompt);
   const preset = req.ucPreset ?? (quality ? 'heavy' : 'none');
   const ucBase = preset === 'none' ? '' : (NOVELAI_UC_PRESETS[baseModel]?.[preset] ?? '');
-  const negative = joinTags(ucBase, req.negative);
+  const negative = joinTags(ucBase, flat.negative);
   const ucPreset = preset === 'light' ? 1 : 0;
   const common = {
     width,

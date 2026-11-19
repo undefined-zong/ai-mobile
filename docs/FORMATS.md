@@ -97,7 +97,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 
 | 自带预设 | 用途 | 块 | 发送时机 | 字段 |
 | --- | --- | --- | --- | --- |
-| image*.json（11 个） | image、image:*、community-image、game-workshop-image | 输出格式 | 每次 | 不是 JSON：`image###tags###`，可选 `negative###…###`、`size###…###`；画面里有你时多 `char###…###`、`user###…###`（位置 `char left###…###`，只针对一人的负面 `char negative###…###`）。标题、画幅、长相由程序拼 |
+| image*.json（11 个） | image、image:*、community-image、game-workshop-image | 输出格式 | 每次 | 不是 JSON：`image###tags###`，可选 `negative###…###`、`size###…###`；画面里有你时多 `char###…###`、`user###…###`（位置 `char left###…###`，只针对一人的负面 `char negative###…###`）；还有别的人时用 NovelAI 的 `|`：`image###整体 \| 一个人 \| …###`，`negative###` 按同样的顺序隔开；人物那几份里的动作用 `source#` / `target#` / `mutual#`。标题、画幅、长相由程序拼 |
 | summary.json | summary | 输出格式 | 每次 | summary、slices（title、text、from、to、mood、special、important）、memories（type、content、importance、dueAt、supersedes、lines、entities）、relationship（affectionDelta、mood、nicknames） |
 | theater.json | theater | 输出格式 | 每次 | title、story、time、place、mood、people、hook、cg |
 | consolidate.json | consolidate | 合并重复的记忆 / 合并时间线 / 过期的待跟进改时态 / 修改画像卡 | merge / rollup / tense / profile | merges（ids、content、type、importance）/ text / updates（id、content、type、dueAt）/ ops（op、section、text、id） |
