@@ -13,7 +13,7 @@ import { useLibraryStore } from '@/stores/library';
 /**
  * 预设按用途分类（PRESET_CATEGORY_ORDER，?cat= 选哪一类）。每一类上面是"用在哪"：
  * - 对话：每个角色选自己的对话预设；
- * - 其他：每个用途（一起吃饭、主动消息、番外、总结、配图、陪伴学习时画的图、节律……）选一个这一类的预设，
+ * - 其他：每个用途（一起吃饭、主动消息、番外、总结、配图、陪伴学习时画的图、节律……）可选任意分类的预设，
  *   一起做事、主动消息可以选"跟随对话预设"，一起做事时画的图可以选"跟随配图"。
  * 下面是这一类的所有预设。App 自带的预设来自预设文件，和导入的一样能改、能删、能复制、能导出。
  * "新建"：照模板（src/presets/templates/ 里这一类能用的）新建，或者空白的（只放这一类的程序块）。
@@ -43,7 +43,7 @@ function useLine(u: PresetUse): string {
 }
 /** 一个预设现在用在哪 */
 function usedBy(id: string): string {
-  const people = cat.value === 'chat' ? chars.list.filter((c) => lib.chatPresetFor(c)?.id === id).map((c) => c.name) : [];
+  const people = chars.list.filter((c) => lib.chatPresetFor(c)?.id === id).map((c) => c.name);
   return [...people, ...lib.usesOf(id).map((u) => u.label)].join('、');
 }
 
@@ -81,7 +81,7 @@ function create(template?: string) {
 
 <template>
   <div class="page" data-page="presets">
-    <PageHeader title="预设" :subtitle="`按用途分 ${PRESET_CATEGORY_ORDER.length} 类；每一类都能新建、导入、复制、改、删`" fallback="/me">
+    <PageHeader title="预设" subtitle="分类方便整理，每个场景都能选用任意预设" fallback="/me">
       <template #right>
         <button type="button" class="icon-btn" aria-label="新建预设" data-testid="preset-create" @click="createOpen = true"><span class="i-lucide-plus text-[21px]" /></button>
         <RouterLink to="/import" class="icon-btn" aria-label="导入预设"><span class="i-lucide-file-down text-[20px]" /></RouterLink>
@@ -163,6 +163,7 @@ function create(template?: string) {
         <div class="sheet-title">{{ picking.kind === 'use' ? picking.use.label : `${picking.character.name} · 对话预设` }}</div>
         <p class="text-[12.5px] text-ink-3 mt-1 mb-3 leading-relaxed">{{ picking.kind === 'use' ? picking.use.desc : '平时聊天用这套；一起做事时用各自的功能预设。' }}</p>
         <PresetPicker
+          :key="picking.kind === 'use' ? picking.use.id : picking.character.id"
           :model-value="pickValue"
           :category="picking.kind === 'use' ? picking.use.category : 'chat'"
           :follow="picking.kind === 'use' && !!picking.use.follow"

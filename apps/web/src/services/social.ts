@@ -1,6 +1,6 @@
 import { buildSocialMessages, errorText, isAbortError, samplerRequest, socialCharacterFill, socialNowFill, socialPostInput } from '@app/ai';
 import {
-  AGENT_META, getLocation, hubMomentId, isMomentsPreset, MOMENT_USER, momentDueTimes, momentMemory, momentText, parseMomentDraft, parseMomentReaction, shiftDate, socialDayOf, socialDayText, socialPerDay, zonedDateKey,
+  AGENT_META, getLocation, hubMomentId, MOMENT_USER, momentDueTimes, momentMemory, momentText, parseMomentDraft, parseMomentReaction, shiftDate, socialDayOf, socialDayText, socialPerDay, zonedDateKey,
   type Character, type Moment, type MomentImage, type Preset, type SocialContext, type SocialDay,
 } from '@app/shared';
 import { putAsset } from './assets';
@@ -224,10 +224,9 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
 
 export type SocialResult = { ok: true; moment: Moment } | { ok: false; reason: string };
 
-/** 朋友圈用的预设："朋友圈"那个用途选的，得是朋友圈的预设（选成了社群的、被删了时为空，调用方说清楚缺什么） */
+/** 使用"朋友圈"用途选中的预设。 */
 export function momentsPreset(character?: Character): Preset | undefined {
-  const preset = useLibraryStore().presetForUse('social', character);
-  return isMomentsPreset(preset) ? preset : undefined;
+  return useLibraryStore().presetForUse('social', character);
 }
 
 /** "社媒"的 API 能不能调；不能时说明原因（朋友圈和社群共用这个 API） */

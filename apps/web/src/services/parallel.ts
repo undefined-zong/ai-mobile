@@ -7,7 +7,6 @@ import {
   getLocation,
   herEntries,
   hubParallelNoteId,
-  isParallelPlanPreset,
   locationResolver,
   myDayEntries,
   nowDayMinute,
@@ -244,10 +243,9 @@ export function restoreEntry(persona: Persona, key: string) {
 
 // —— 整理你的一天：每天到点把日程计划、家务、健康计划（有几份用几份）整理成平行时空里你的一份计划 ——
 
-/** 整理你的一天用的预设（选成了别的、被删了时为空） */
+/** 使用"整理你的一天"用途选中的预设。 */
 export function planPreset(): Preset | undefined {
-  const p = useLibraryStore().presetForUse('parallel-plan');
-  return p?.category === 'parallel' && isParallelPlanPreset(p) ? p : undefined;
+  return useLibraryStore().presetForUse('parallel-plan');
 }
 
 /** 能不能整理（API 接通了、有"平行时空 · 整理你的一天"预设）；不能时说明原因、去哪改 */
@@ -434,10 +432,9 @@ export function parallelLines(persona: Persona): string {
 
 export type ParallelResult = { ok: true; note: ParallelNote } | { ok: false; reason: string };
 
-/** 平行时空用的预设（选成了别的分类、被删了时为空） */
+/** 使用"平行时空"用途选中的预设。 */
 export function parallelPreset(character?: Character): Preset | undefined {
-  const p = useLibraryStore().presetForUse('parallel', character);
-  return p?.category === 'parallel' ? p : undefined;
+  return useLibraryStore().presetForUse('parallel', character);
 }
 
 /** 能不能调模型（API 接通了、有平行时空预设）；不能时说明原因 */

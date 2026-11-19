@@ -34,7 +34,7 @@ const roster = computed(() => store.fighters.filter(f => f.ownerKind === 'charac
 const you = computed(() => store.byId(selection.value) ?? store.byId(brawlId('persona', personas.defaultPersona.id))!);
 const her = computed(() => store.byId(brawlId('character', opponent.value.id))!);
 const preset = computed(() => lib.presetForUse('game-brawl', opponent.value));
-const presets = computed(() => lib.presetsOf('feature').filter(isBrawlPreset));
+const presets = computed(() => [...lib.presets].sort((a, b) => Number(isBrawlPreset(b)) - Number(isBrawlPreset(a))));
 const connected = computed(() => ai.status('companion').live);
 const stage = ref<HTMLElement | null>(null), canvas = ref<HTMLCanvasElement | null>(null), screen = ref<HTMLElement | null>(null), layer = ref<HTMLElement | null>(null);
 /**
@@ -187,7 +187,7 @@ function visibility() { if (document.hidden) { pause(); cancelAnimationFrame(fra
 function blur() { pause(); }
 
 async function say(task: 'brawl-open' | 'brawl-end', input: string, id: string) {
-  if (!connected.value || !isBrawlPreset(preset.value) || !roundChatId) return;
+  if (!connected.value || !preset.value || !roundChatId) return;
   lineRequest?.abort(); const controller = new AbortController(); lineRequest = controller;
   const targetChat = roundChatId;
   const response = await chat.sceneJson(targetChat, { name: task, input }, value => {
@@ -236,7 +236,7 @@ function fullscreen() { if (theater.value) exitTheater(); else enterTheater(); }
 
 async function generate(f: BrawlFighter) {
   if (generating.value) return;
-  if (!isBrawlPreset(preset.value)) { message.value = '先选择「一起游戏 · 大乱斗」预设，再生成专属招式。'; return; }
+  if (!preset.value) { message.value = '先选择一个预设，再生成专属招式。'; return; }
   const controller = new AbortController(); request = controller;
   generating.value = f.id; message.value = '';
   const targetChat = chatId.value || chat.startChat(opponent.value).id;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
-import { isWorkshopPreset, type MessagePart, type PresetUseId } from '@app/shared';
+import type { MessagePart, PresetUseId } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -51,7 +51,7 @@ const router = useRouter();
 const her = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
 const chatId = computed(() => chat.chatOfCharacter(her.value.id)?.id ?? '');
 const userName = computed(() => personaOf(chat.chatById(chatId.value)).name);
-const presetReady = computed(() => isWorkshopPreset(lib.presetForUse(USE, her.value)));
+const presetReady = computed(() => !!lib.presetForUse(USE, her.value));
 
 const openNovel = ref<string | null>(null);
 const busy = ref(false);
@@ -238,7 +238,7 @@ async function talk() {
   <div class="workshop" data-game="workshop">
     <div v-if="!presetReady" class="warn">
       <span class="i-lucide-triangle-alert shrink-0" />
-      <span class="flex-1 min-w-0">"一起游戏 · 创意工坊"选的预设里没有创意工坊的几步，{{ her.pronoun }}看作品时可能不知道要做什么</span>
+      <span class="flex-1 min-w-0">给"一起游戏 · 创意工坊"选择一个预设</span>
       <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/presets')">去看看</button>
     </div>
 

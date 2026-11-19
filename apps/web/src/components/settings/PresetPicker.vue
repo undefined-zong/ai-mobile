@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { PRESET_CATEGORIES, type Preset, type PresetCategory } from '@app/shared';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useLibraryStore } from '@/stores/library';
 
 /**
- * 选预设：只列这一类的预设；点一行选它，右边"编辑"进预设编辑页。
+ * 选预设：所有分类都能选，当前用途的分类优先；点一行选它，右边"编辑"进预设编辑页。
  * follow：多一个"跟随…"（选它时值是 null）：一起做事、主动消息跟随对话预设，一起做事时画的图跟随配图（followTitle 改标题）。
  * 聊天页的"⋯ → 预设"、角色编辑页的"预设"、预设页里每个用途的选择、心跳里的预设共用
  */
@@ -19,15 +19,18 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ 'update:modelValue': [id: string | null]; edit: [id: string] }>();
 const lib = useLibraryStore();
+const query = ref('');
 const list = computed(() => {
-  const all = lib.presetsOf(props.category);
+  const q = query.value.trim().toLowerCase();
+  const all = lib.presets.filter((p) => !q || `${p.name} ${p.description}`.toLowerCase().includes(q));
   const first = props.first;
-  return first ? [...all.filter((p) => first(p)), ...all.filter((p) => !first(p))] : all;
+  return all.sort((a, b) => Number(!!first?.(b)) - Number(!!first?.(a)) || Number(b.category === props.category) - Number(a.category === props.category));
 });
 </script>
 
 <template>
   <div class="grid gap-2" role="radiogroup" :aria-label="`${PRESET_CATEGORIES[category].label}预设`">
+    <input v-model="query" class="input" type="search" placeholder="搜索所有预设" aria-label="搜索所有预设" autocomplete="off" />
     <div v-if="follow" class="row" :class="{ on: modelValue === null }" data-preset="follow">
       <button type="button" role="radio" :aria-checked="modelValue === null" class="main" @click="emit('update:modelValue', null)">
         <span class="dot"><span v-if="modelValue === null" class="i-lucide-check" /></span>
@@ -44,6 +47,7 @@ const list = computed(() => {
           <span class="block text-[14.5px] font-600 truncate">{{ p.name }}</span>
           <span v-if="p.description" class="block text-[12px] text-ink-3 leading-normal mt-0.5 line-clamp-2">{{ p.description }}</span>
           <span class="flex flex-wrap gap-1 mt-1.5">
+            <span class="tag">{{ PRESET_CATEGORIES[p.category].label }}</span>
             <span class="tag">{{ p.blocks.length }} 块</span>
             <span class="tag num">温度 {{ p.sampler.temperature }}</span>
             <span class="tag num">最长 {{ p.sampler.maxTokens }}</span>
@@ -53,7 +57,7 @@ const list = computed(() => {
       <RouterLink :to="`/me/presets/${p.id}`" class="edit" :aria-label="`编辑预设「${p.name}」`" @click="emit('edit', p.id)">编辑</RouterLink>
     </div>
     <p v-if="!list.length" class="text-[13px] text-ink-3 m-0 leading-relaxed">
-      还没有{{ PRESET_CATEGORIES[category].label }}预设：在"我的 → 预设"里导入预设文件，或者把别的预设复制过来。
+      {{ query ? '没有找到匹配的预设' : '还没有预设：在“我的 → 预设”里新建或导入一个。' }}
     </p>
   </div>
 </template>

@@ -120,7 +120,7 @@ export interface RegexScript {
 }
 
 /**
- * 预设分类：一个预设给哪类 AI 调用用。
+ * 预设分类：用于整理、默认模板和编辑提示，不限制给哪个场景使用。
  * - chat 对话：主对话（聊天气泡、剧场模式），每个角色选一个；
  * - feature 功能：和她一起做事时的对话（一起吃饭、健身、共同的家……），每件事选一个；
  * - proactive 主动消息：她先开口的那条；
@@ -136,7 +136,7 @@ export interface RegexScript {
  * - sprite 立绘：给没有立绘的角色用 NovelAI 画立绘（写外观 tags、各个表情和动作的 tags、出图参数）；
  * - social 社媒：朋友圈（她发朋友圈、回应你的朋友圈和评论）和社群（按关键字建社群、网友发帖和回应、加入社群的角色发帖和回应）；
  * - assistant 助手："我的 → 助手"检测、修改预设和世界书的格式，做角色卡、补全设定。
- * 前三类是角色扮演，程序填充块和 SillyTavern 的对话预设一样（角色卡、世界书、聊天记录……），可以互相复制；
+ * 前三类默认使用角色扮演的程序填充块，和 SillyTavern 的对话预设一样（角色卡、世界书、聊天记录……）；
  * 后几类是一次性的任务，程序填充块是这件任务的输入（要整理的聊天、要画的画面、她的世界……）。
  */
 export type PresetCategory = 'chat' | 'feature' | 'proactive' | 'theater' | 'summary' | 'image' | 'rhythm' | 'health' | 'planner' | 'parallel' | 'device' | 'novel' | 'sprite' | 'social' | 'assistant';
@@ -189,7 +189,7 @@ export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: st
 
 export const PRESET_CATEGORY_ORDER: PresetCategory[] = ['chat', 'feature', 'proactive', 'social', 'theater', 'summary', 'image', 'rhythm', 'health', 'planner', 'parallel', 'device', 'novel', 'sprite', 'assistant'];
 
-/** 角色扮演类的预设（程序填充块相同，可以互相复制） */
+/** 默认提供角色扮演编辑选项的分类（所有分类都可以互相复制）。 */
 export const ROLEPLAY_CATEGORIES: PresetCategory[] = ['chat', 'feature', 'proactive'];
 
 export function isRoleplayCategory(c: PresetCategory): boolean {

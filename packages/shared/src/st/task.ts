@@ -1,4 +1,4 @@
-import type { Preset, PromptBlock } from '../types/preset.ts';
+import { markerName, type Preset, type PromptBlock } from '../types/preset.ts';
 import { substituteMacros, type MacroContext } from './macros.ts';
 import { estimateTokens } from './tokens.ts';
 
@@ -7,6 +7,7 @@ import { estimateTokens } from './tokens.ts';
  * 普通块替换宏（{{char}} {{user}} {{time}}……），程序填充块填这次任务的输入；
  * 相邻的同角色块合成一条（中间空一行），所以默认的预设拼出来是"一条系统说明 + 一条输入"。
  * 任务没有聊天记录，块的"插在聊天记录倒数第几条"不起作用。
+ * 没放进预设的任务输入按 fills 的顺序补在最后；已有块（包括关闭或有触发条件的）仍按预设控制。
  */
 
 export interface TaskPromptInput {
@@ -42,8 +43,13 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
   const ctx: MacroContext = input.macros ?? { char: '', user: '' };
   const messages: TaskPromptResult['messages'] = [];
   const blocks: TaskBlockReport[] = [];
-  const types = new Set((Array.isArray(input.type) ? input.type : [input.type]).filter((t): t is string => !!t));
-  for (const b of input.preset.blocks) {
+  const types = new Set(['normal', ...(Array.isArray(input.type) ? input.type : [input.type])].filter((t): t is string => !!t));
+  const supplied = new Set(input.preset.blocks.filter((b) => b.marker).map((b) => b.identifier));
+  const inputs: PromptBlock[] = Object.keys(input.fills).filter((identifier) => !supplied.has(identifier)).map((identifier) => ({
+    identifier, name: markerName(identifier) ?? identifier, role: 'user', content: '', marker: true, enabled: true,
+    injection: { position: 'relative', depth: 0 }, origin: 'app',
+  }));
+  for (const b of [...input.preset.blocks, ...inputs]) {
     const known = !b.marker || b.identifier in input.fills;
     const content = (b.marker ? (input.fills[b.identifier] ?? '') : substituteMacros(b.content, ctx)).replace(/\r/g, '');
     const report: TaskBlockReport = { identifier: b.identifier, name: b.name, role: b.role, enabled: b.enabled, marker: b.marker, content, tokens: estimateTokens(content), sent: false };
@@ -57,7 +63,7 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
       continue;
     }
     if (!content.trim()) {
-      report.note = known ? '这一次内容为空，不发送' : '这类预设没有这块内容（程序不认识这个程序填充块）';
+      report.note = known ? '这一次内容为空，不发送' : '这次任务没有提供这块内容';
       continue;
     }
     report.sent = true;

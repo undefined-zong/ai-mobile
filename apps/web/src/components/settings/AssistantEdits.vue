@@ -13,13 +13,14 @@ const props = defineProps<{ message: AssistantMessage }>();
 const store = useAssistantStore();
 
 const applied = computed(() => props.message.applied ?? null);
+const merge = computed(() => store.mergeOf(props.message));
 // 没应用的按对象现在的样子算；应用过的用当时记下的
-const plan = computed(() => (applied.value || !props.message.ops?.length ? null : planOps(props.message.ops)));
+const plan = computed(() => (applied.value || !props.message.ops?.length ? null : planOps(props.message.ops, undefined, merge.value)));
 const picked = ref<Set<string> | null>(null);
 const keys = computed(() => (plan.value?.changes ?? []).map((c) => c.key!));
 const selected = computed(() => new Set(keys.value.filter((key) => picked.value === null || picked.value.has(key))));
 const allSelected = computed(() => !!keys.value.length && selected.value.size === keys.value.length);
-const selectedPlan = computed(() => plan.value ? planOps(props.message.ops!, selected.value) : null);
+const selectedPlan = computed(() => plan.value ? planOps(props.message.ops!, selected.value, merge.value) : null);
 const changes = computed<EditChange[]>(() => {
   if (applied.value) return applied.value.changes;
   const previews = new Map(selectedPlan.value?.changes.map((c) => [c.key, c]));
@@ -54,7 +55,7 @@ function toggleAll() {
 async function apply() {
   const m = props.message;
   if (!m.ops?.length || m.applied) return;
-  const p = planOps(m.ops, selected.value);
+  const p = planOps(m.ops, selected.value, merge.value);
   if (!p.changes.length) return showToast('没有能做成的修改');
   const texts = p.changes.filter((c) => c.textChanged).length;
   if (texts) {

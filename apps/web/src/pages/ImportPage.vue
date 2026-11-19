@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PRESET_CATEGORIES, ROLEPLAY_CATEGORIES, type PresetCategory } from '@app/shared';
+import { PRESET_CATEGORIES, PRESET_CATEGORY_ORDER, type PresetCategory } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
@@ -49,7 +49,7 @@ const done = ref<ImportDone | null>(null);
 const error = ref('');
 const busy = ref(false);
 const presetId = ref<string | null>(null);
-/** SillyTavern 预设当哪一类用（它本来是对话预设，也能当功能或主动消息） */
+/** SillyTavern 预设放在哪个分类；任何场景都能选用。 */
 const category = ref<PresetCategory>('chat');
 const resultEl = ref<HTMLElement | null>(null);
 watch(() => route.query.character, (id) => {
@@ -161,16 +161,16 @@ const TITLE: Record<PendingImport['kind'], string> = { card: '角色卡', preset
         <template v-if="pending.kind === 'card'">
           <div class="text-[12.5px] text-ink-3 mt-3 mb-1.5">聊天用哪个对话预设（之后在聊天右上角 ⋯ → 预设，或角色设定 → 预设 里都能换）</div>
           <div class="flex flex-wrap gap-1.5">
-            <button v-for="p in lib.presetsOf('chat')" :key="p.id" type="button" class="chip-btn" :class="{ on: presetId === p.id }" @click="presetId = p.id">
+            <button v-for="p in lib.presets" :key="p.id" type="button" class="chip-btn" :class="{ on: presetId === p.id }" @click="presetId = p.id">
               {{ p.name }}
             </button>
           </div>
           <p class="text-[12px] text-ink-3 mt-2.5 mb-0 leading-relaxed">导入以后可以接着建Ta的小世界（作息、衣柜，地图上才有Ta）、让 AI 写外观 tags、用 NovelAI 画透明底的立绘和各个表情，导入完成后有入口。</p>
         </template>
         <template v-if="pending.kind === 'preset' && !pending.appFile">
-          <div class="text-[12.5px] text-ink-3 mt-3 mb-1.5">当哪一类预设用（之后在预设页能复制成别的类）</div>
+          <div class="text-[12.5px] text-ink-3 mt-3 mb-1.5">放在哪个分类（每个场景都能选用，之后可以改）</div>
           <div class="flex flex-wrap gap-1.5" data-testid="import-category">
-            <button v-for="cat in ROLEPLAY_CATEGORIES" :key="cat" type="button" class="chip-btn" :class="{ on: category === cat }" @click="category = cat">
+            <button v-for="cat in PRESET_CATEGORY_ORDER" :key="cat" type="button" class="chip-btn" :class="{ on: category === cat }" @click="category = cat">
               {{ PRESET_CATEGORIES[cat].label }}
             </button>
           </div>
