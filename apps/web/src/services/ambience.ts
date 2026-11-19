@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { audioContext, playbackSession } from './audio';
+import { acquireAudioContext, type AudioContextLease } from './audio';
 
 /**
  * 哄睡的白噪音：雨声、炉火、海浪、风扇（设计文档 §9.4）。
@@ -319,7 +319,8 @@ class Ambience {
   private mix: NoiseMix = { rain: 60, fire: 20, waves: 0, fan: 10 };
   private breath: BreathSetting = { kind: null, volume: 50 };
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
-  private releaseSession: (() => void) | null = null;
+  /** 用着共用的 AudioContext（连带 playback 的音频会话）：停下时还回去 */
+  private lease: AudioContextLease | null = null;
 
   /** 在点击里调用。重复调用没关系（已经在放时只更新音量）。breath：要不要叠一层呼吸声（不给按上次的） */
   async start(mix: NoiseMix, breath?: BreathSetting): Promise<void> {
@@ -332,16 +333,15 @@ class Ambience {
       return;
     }
     this.state.error = '';
-    let ctx: AudioContext;
     try {
       // 必须在任何 await 之前拿到并恢复 AudioContext：Safari 只认点击当下的调用
-      ctx = audioContext();
+      this.lease ??= acquireAudioContext('playback');
     } catch {
       this.state.error = '这个浏览器不支持网页音频，放不了白噪音';
       return;
     }
+    const ctx = this.lease.ctx;
     const resumed = ctx.resume().catch(() => undefined);
-    this.releaseSession ??= playbackSession();
     this.ctx = ctx;
     this.state.loading = !this.buffers.size;
     try {
@@ -349,6 +349,8 @@ class Ambience {
       if (!this.buffers.size) await new Promise((r) => setTimeout(r, 16));
       for (const kind of NOISE_KINDS) this.loopBuffer(ctx, kind);
       await resumed;
+      // 等的时候停了（AudioContext 已经还回去）
+      if (this.ctx !== ctx) return;
       if (ctx.state !== 'running') throw new Error('浏览器没有允许出声：再点一下播放试试');
       this.stopChannels();
       const master = ctx.createGain();
@@ -492,8 +494,9 @@ class Ambience {
     this.stopChannels();
     this.state.playing = false;
     this.state.fading = false;
-    this.releaseSession?.();
-    this.releaseSession = null;
+    this.lease?.release();
+    this.lease = null;
+    this.ctx = null;
   }
 
   private stopChannels() {

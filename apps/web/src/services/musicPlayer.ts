@@ -1,7 +1,7 @@
 import { lrcIndexAt, parseLrc, type LrcLine } from '@app/shared';
 import { reactive } from 'vue';
 import { platform } from '@/pwa';
-import { audioContext, playbackSession, resumeAudioContext } from './audio';
+import { acquireAudioContext, playbackSession, resumeAudioContext, type AudioContextLease } from './audio';
 import { services } from './index';
 import type { MusicClient, SongInfo } from './types';
 
@@ -75,6 +75,7 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  * 这些设备上歌接进 Web Audio，后面接一个增益节点调这首歌的音量。接进去要求音频地址允许跨域：
  * 网易云的音频 CDN（m7 / m8 / m10 / m701 / m801.music.126.net）都回 access-control-allow-origin: *。
  * 锁屏接着放靠 audioSession = playback（iOS 17 起 Web Audio 也算播放，不算环境音）。
+ * 用的 AudioContext 要在设好 playback 会话之后才建（acquireAudioContext）：先建好再改会话的，iPhone 上放着却没声音。
  */
 let elementVolumeLocked = platform() === 'ios';
 try {
@@ -171,6 +172,8 @@ export function createMusicPlayer(opts: PlayerOptions) {
   let gain: GainNode | null = null;
   /** 碰到过不让跨域的音频地址：这个播放器之后不接 Web Audio（这时 iPhone 上音量只归侧面的按键） */
   let unrouted = false;
+  /** 接进 Web Audio 时借着的 AudioContext（连带 playback 会话）：接着的 <audio> 换掉时还回去 */
+  let lease: AudioContextLease | null = null;
   let primed = false;
   let url = '';
   let expiresAt = 0;
@@ -217,7 +220,8 @@ export function createMusicPlayer(opts: PlayerOptions) {
   function route(a: HTMLAudioElement): boolean {
     if (!elementVolumeLocked || unrouted) return false;
     try {
-      const ctx = audioContext();
+      lease ??= acquireAudioContext('playback');
+      const ctx = lease.ctx;
       a.crossOrigin = 'anonymous';
       const g = ctx.createGain();
       g.gain.value = clamp01(player.volume * duckGain * fadeGain);
@@ -227,7 +231,28 @@ export function createMusicPlayer(opts: PlayerOptions) {
     } catch {
       // 不支持网页音频：照常放
       a.removeAttribute('crossorigin');
+      lease?.release();
+      lease = null;
       return false;
+    }
+  }
+
+  /**
+   * 换掉接进 Web Audio 的 <audio>（接过的再也不能直接出声）：断开增益节点、还回 AudioContext，下次 el() 重建、prime() 重新解锁。
+   * 停下时也换掉：AudioContext 一直借着会让 iPhone 的音频会话一直占着（别的 App 的音乐接不回来）
+   */
+  function dropRouted() {
+    const old = audio;
+    gain?.disconnect();
+    gain = null;
+    audio = null;
+    primed = false;
+    lease?.release();
+    lease = null;
+    if (old) {
+      old.pause();
+      old.removeAttribute('src');
+      old.load();
     }
   }
 
@@ -335,17 +360,8 @@ export function createMusicPlayer(opts: PlayerOptions) {
 
   /** 不接 Web Audio 了：换一个普通的 <audio>，从刚才的位置接着放这首 */
   async function playUnrouted(mine: number) {
-    const old = audio;
-    gain?.disconnect();
-    gain = null;
     unrouted = true;
-    audio = null;
-    primed = false;
-    if (old) {
-      old.pause();
-      old.removeAttribute('src');
-      old.load();
-    }
+    dropRouted();
     const a = el();
     a.src = url;
     a.currentTime = player.posMs / 1000;
@@ -683,8 +699,9 @@ export function createMusicPlayer(opts: PlayerOptions) {
     clearInterval(duckTimer);
     duckTimer = undefined;
     duckGain = duckTarget = 1;
-    audio?.pause();
-    if (audio) {
+    if (gain) dropRouted();
+    else if (audio) {
+      audio.pause();
       audio.removeAttribute('src');
       audio.load();
     }
