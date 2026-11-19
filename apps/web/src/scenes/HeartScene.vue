@@ -359,7 +359,7 @@ let repliesSinceArt = 0;
 let autoNoted = false;
 
 function captionFor(moment: 'open' | 'now'): string {
-  const how = mode.value === 'visit' ? `${userName.value}在${her.value.pronoun}身边` : `${her.value.name}在${herWhere.value}，和${userName.value}连线`;
+  const how = mode.value === 'visit' ? `${userName.value}坐在${her.value.pronoun}旁边` : `${her.value.name}在${herWhere.value}，和${userName.value}连线`;
   if (moment === 'open') return `${userName.value}刚来，${her.value.name}在等${userName.value}；${how}`;
   const heat = toys.intensity >= 60 ? '；气氛正浓，心跳很快' : toys.intensity > 0 ? '；气氛渐渐升温' : '';
   return `${her.value.name}此刻的样子（按最近的对话）；${how}${heat}`;
@@ -384,6 +384,8 @@ async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
     recent: chatId.value ? chat.recentLines(chatId.value, 6) : [],
     size: 'portrait',
     lockOutfit: false,
+    // 连线画她一个人，坐在她旁边画两个人同框
+    withUser: mode.value === 'visit',
   });
   if (r.ok) {
     art.value = r.item;
@@ -392,12 +394,14 @@ async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
     repliesSinceArt = 0;
   } else if (!r.busy) artIssue.value = { text: `没画出来：${r.reason}`, settings: /没接通/.test(r.reason) };
 }
-/** 进来时：今天在同一个地方画过的直接用，没有就画一张"开场" */
-function ensureArt() {
-  const found = gallery.find(her.value.id, 'heart', { today: true, locationId: location.value?.id ?? null, size: 'portrait' })[0];
+/** 进来时：今天在同一个地方画过的（单人 / 双人对得上）直接用，没有就画一张"开场" */
+function ensureArt(moment: 'open' | 'now' = 'open') {
+  const found = gallery.find(her.value.id, 'heart', { today: true, locationId: location.value?.id ?? null, size: 'portrait', withUser: mode.value === 'visit' })[0];
   if (found) art.value = found;
-  else void drawMoment('open', 'auto');
+  else void drawMoment(moment, 'auto');
 }
+// 右上角在连线和坐在她旁边之间切换：单人图、双人图跟着换
+watch(mode, () => ensureArt('now'));
 function drawNow() {
   if (drawingNow.value?.priority === 'user') {
     showToast('正在画上一张，等一下');

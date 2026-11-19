@@ -560,6 +560,8 @@ async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string):
     expression: chars.expression[her.value.id],
     recent: chatId.value ? chat.recentLines(chatId.value, 4) : [],
     size: m === 'reward' ? 'portrait' : artShape.value,
+    // 连线画她一个人，坐在她旁边画两个人同框
+    withUser: mode.value === 'visit',
   });
   if (r.ok) {
     placeArt(r.item);
@@ -576,11 +578,12 @@ async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string):
  */
 function ensureArt(): boolean {
   const size = artShape.value;
+  const duo = mode.value === 'visit';
   const have = size === 'portrait' ? togetherArt.value : soloArt.value;
-  if (have && shapeOf(have) === size) return false;
+  if (have && shapeOf(have) === size && !!have.withUser === duo) return false;
   const outfit = rhythm.outfitFor(her.value.id, 'study')?.name ?? null;
   const found = gallery
-    .find(her.value.id, 'study', { today: true, locationId: location.value?.id ?? null, outfit, size })
+    .find(her.value.id, 'study', { today: true, locationId: location.value?.id ?? null, outfit, size, withUser: duo })
     .find((i) => i.moment === 'peek' || i.moment === 'seat');
   if (found) {
     placeArt(found);
@@ -612,6 +615,10 @@ function toggleAutoDraw() {
   showToast(gallery.autoDraw ? '自动画图开了：专注开始画一张、之后每个番茄偷拍一张、学完一张' : '自动画图关了：点"看一眼"时才画');
   if (gallery.autoDraw && (phase.value === 'focus' || phase.value === 'break') && !drawingNow.value) ensureArt();
 }
+// 右上角在连线和坐在她旁边之间切换：专注中的单人图、双人图跟着换
+watch(mode, () => {
+  if (phase.value === 'focus' || phase.value === 'break') ensureArt();
+});
 /** 这次画的图：点一张从它开始翻 */
 async function previewSession(start: number) {
   const { images, start: at } = await shotViewerImages(sessionArt.value, start);

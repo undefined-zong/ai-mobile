@@ -152,9 +152,10 @@ export function imagePromptMacros(input: ImagePromptInput): Record<string, strin
   };
 }
 
-/** 这一次的类型：画什么（scene / portrait / face / background）+ 场景里的时刻 */
+/** 这一次的类型：画什么（scene / portrait / face / background）+ 场景里的时刻；"你"入画（双人图）时多一个 duo，预设里只在双人时发的块按它发 */
 export function imagePromptTypes(input: ImagePromptInput): string[] {
-  return [input.mode ?? 'scene', ...(input.moment ? [input.moment] : [])];
+  const mode = input.mode ?? 'scene';
+  return [mode, ...(input.moment ? [input.moment] : []), ...(input.withUser && mode === 'scene' ? ['duo'] : [])];
 }
 
 /** 按"生图"预设拼写 tags 的提示词；"画什么"那几块、场景时刻那几块按这次的类型只发对应的 */

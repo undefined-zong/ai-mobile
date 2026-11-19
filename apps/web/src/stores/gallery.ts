@@ -114,11 +114,11 @@ export const useGalleryStore = defineStore('gallery', () => {
 
   const key = (characterId: string, sceneId: string) => `${characterId}:${sceneId}`;
 
-  /** 这个角色在这个场景里画过的，最新的在前（today：只要今天的；locationId + outfit：同一个地方、同一身衣服；size：同一种画幅） */
+  /** 这个角色在这个场景里画过的，最新的在前（today：只要今天的；locationId + outfit：同一个地方、同一身衣服；size：同一种画幅；withUser：双人图 / 单人图） */
   function find(
     characterId: string,
     sceneId: string,
-    opts: { moment?: string; today?: boolean; locationId?: string | null; outfit?: string | null; size?: ImageShape } = {},
+    opts: { moment?: string; today?: boolean; locationId?: string | null; outfit?: string | null; size?: ImageShape; withUser?: boolean } = {},
   ): GalleryItem[] {
     const day = rhythmDate(new Date());
     return items.value
@@ -130,7 +130,8 @@ export const useGalleryStore = defineStore('gallery', () => {
           (!opts.today || i.day === day) &&
           (opts.locationId === undefined || i.locationId === opts.locationId) &&
           (opts.outfit === undefined || i.outfit === opts.outfit) &&
-          (!opts.size || shapeOf(i) === opts.size),
+          (!opts.size || shapeOf(i) === opts.size) &&
+          (opts.withUser === undefined || !!i.withUser === opts.withUser),
       )
       .sort((a, b) => b.at - a.at);
   }
