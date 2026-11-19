@@ -356,7 +356,7 @@ function chatText(history: AssistantMessage[]): string {
     const who = m.role === 'user' ? '用户' : '你';
     const text = m.text.length > 1500 ? `${m.text.slice(0, 1500)}…` : m.text;
     const ops = m.ops?.length ? `（给了 ${m.ops.length} 项修改，${m.applied ? '用户点了应用' : '用户还没应用'}）` : '';
-    return `${who}：${text || '（没写字）'}${ops}`;
+    return `${who}：${text || '（没写字）'}${ops}${m.merge ? `\n${mergeText(m.merge)}` : ''}`;
   };
   return `最近的对话：\n${recent.map(line).join('\n\n')}`;
 }
@@ -365,11 +365,13 @@ function chatText(history: AssistantMessage[]): string {
 function mergeText(merge: AssistantMerge | undefined): string {
   if (!merge) return '';
   const lib = useLibraryStore();
+  const source = lib.presetById(merge.source);
   const name = (id: string) => {
     const p = lib.presetById(id);
     return p ? `「${p.name}」（${PRESET_CATEGORIES[p.category].label}预设，id ${id}）` : `（找不到 id 是 ${id} 的预设）`;
   };
-  return `用户要融合两个预设：底子是${name(merge.base)}，功能来源是${name(merge.source)}。照底子新建一个预设，把功能来源里的功能缝进去，底子和功能来源都不改。`;
+  const destination = source ? `新预设归入功能来源的「${PRESET_CATEGORIES[source.category].label}」分类（category: ${source.category}）。` : '';
+  return `用户要融合两个预设：底子是${name(merge.base)}，功能来源是${name(merge.source)}。照底子新建一个预设，把功能来源里的功能缝进去，底子和功能来源都不改。${destination}`;
 }
 
 function askText(ask: string, mode: AssistantMode | undefined, subjects: Subject[], merge?: AssistantMerge): string {
@@ -441,7 +443,7 @@ export function userName(): string {
 // —— 修改：预览、应用、撤销 ——
 
 /** 按对象现在的样子算出改之后的样子（预览、应用都用它） */
-export function planOps(ops: AssistantOp[], selected?: ReadonlySet<string>): EditPlan {
+export function planOps(ops: AssistantOp[], selected?: ReadonlySet<string>, merge?: AssistantMerge): EditPlan {
   const lib = useLibraryStore();
   return planEdits(ops, {
     presets: lib.presets,
@@ -451,6 +453,7 @@ export function planOps(ops: AssistantOp[], selected?: ReadonlySet<string>): Edi
     newId: (prefix) => uid(prefix),
     now: Date.now(),
     defaultPresetId: defaultPresetId(),
+    newPresetCategory: merge ? lib.presetById(merge.source)?.category : undefined,
   }, selected);
 }
 

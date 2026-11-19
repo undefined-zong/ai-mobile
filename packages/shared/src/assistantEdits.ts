@@ -254,6 +254,8 @@ export interface PlanContext {
   now: number;
   /** 新建角色用哪个对话预设 */
   defaultPresetId: string | null;
+  /** 预设融合时，新预设存到功能来源的分类 */
+  newPresetCategory?: PresetCategory;
 }
 
 /** 选中一项时一起选它的前置项；取消前置项时一起取消依赖它的项。 */
@@ -868,14 +870,14 @@ function planCharacter(c: Character, op: AssistantOp, changes: EditChange[], sel
  * 照修改项算出改之后的样子（不动传进来的对象，改的是副本）。
  * 找不到的对象、块、条目、要换的那段记进 errors，其余照常算。
  */
-/** 照一个预设复制出新预设（预设融合）：名字、说明、分类按 op 写的。 */
+/** 照底子复制新预设；融合时分类跟随功能来源，其余新建按 op 或底子的分类。 */
 function createPreset(op: AssistantOp, ctx: PlanContext, presetOf: (id: string) => Preset | undefined): { preset: Preset; label: string } | string {
   const f = fieldsOf(op.raw, ['preset', 'op']);
   const fromId = str(f.from)?.trim();
   const base = fromId ? presetOf(fromId) : undefined;
   if (!base) return fromId ? `没有 id 是「${fromId}」的预设，新预设没法照它复制` : '新预设要写 from：照哪个预设复制（底子的 id）';
   const want = str(f.category)?.trim() as PresetCategory | undefined;
-  const category = want && PRESET_CATEGORIES[want] ? want : base.category;
+  const category = ctx.newPresetCategory ?? (want && PRESET_CATEGORIES[want] ? want : base.category);
   const { seedFile: _seed, ...rest } = clone(base);
   const preset: Preset = {
     ...rest,
@@ -886,7 +888,7 @@ function createPreset(op: AssistantOp, ctx: PlanContext, presetOf: (id: string) 
     description: str(f.description) ?? base.description,
     category,
   };
-  const label = `新建${PRESET_CATEGORIES[category].label}预设「${preset.name}」（照「${base.name}」复制${want && want !== category ? `；分类「${want}」换不了，还是${PRESET_CATEGORIES[category].label}` : ''}）`;
+  const label = `新建${PRESET_CATEGORIES[category].label}预设「${preset.name}」（照「${base.name}」复制${ctx.newPresetCategory ? '；分类跟随功能来源' : ''}）`;
   return { preset, label };
 }
 

@@ -106,6 +106,13 @@ export const useAssistantStore = defineStore('assistant', () => {
     return messages.value.find((m) => m.id === id);
   }
 
+  /** 旧回复没存融合对象时，沿用它前一条用户消息里的选择。 */
+  function mergeOf(message: AssistantMessage): AssistantMerge | undefined {
+    return message.merge ?? messages.value
+      .slice(0, messages.value.findIndex((m) => m.id === message.id))
+      .reverse().find((m) => m.role === 'user')?.merge;
+  }
+
   /** 记下应用过；更早的应用只留"应用过"，不留改之前的样子 */
   function markApplied(id: string, changes: EditChange[], undo: AssistantUndo, errors: string[]) {
     const m = byId(id);
@@ -137,5 +144,5 @@ export const useAssistantStore = defineStore('assistant', () => {
     messages.value = [];
   }
 
-  return { messages, targets, lastScanAt, hydrate, add, byId, markApplied, markUndone, hasTarget, toggleTarget, setTargets, clear };
+  return { messages, targets, lastScanAt, hydrate, add, byId, mergeOf, markApplied, markUndone, hasTarget, toggleTarget, setTargets, clear };
 });

@@ -148,7 +148,7 @@ async function send(text = said.value, m: AssistantMode | null = mode.value, mer
     });
     const r = parseAssistantReply(raw);
     const opErrors = r.pending ? [...r.errors, '<edits> 没写完，后面的修改没读到：回复可能被截断了，可以在"助手"预设的采样参数里调大"回复最长"再问一次'] : r.errors;
-    store.add({ role: 'assistant', text: r.text || (r.ops.length ? '' : '（没说什么）'), ...(r.ops.length ? { ops: r.ops } : {}), ...(opErrors.length ? { opErrors } : {}) });
+    store.add({ role: 'assistant', text: r.text || (r.ops.length ? '' : '（没说什么）'), ...(merge ? { merge } : {}), ...(r.ops.length ? { ops: r.ops } : {}), ...(opErrors.length ? { opErrors } : {}) });
   } catch (e) {
     if (isAbortError(e)) {
       if (replying.value?.trim()) store.add({ role: 'assistant', text: `${replying.value.trim()}…（停下了）` });
@@ -192,6 +192,7 @@ async function clearChat() {
 const mergeOpen = ref(false);
 const mergeSlot = ref<keyof AssistantMerge>('base');
 const merging = ref<{ base: string | null; source: string | null }>({ base: null, source: null });
+const mergeCategory = computed(() => merging.value.source ? lib.presetById(merging.value.source)?.category : undefined);
 const MERGE_SLOTS: { value: keyof AssistantMerge; label: string }[] = [
   { value: 'base', label: '底子' },
   { value: 'source', label: '功能来源' },
@@ -396,6 +397,9 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
         <p class="text-[12px] text-ink-3 mt-2 mb-0 leading-relaxed">
           {{ mergeSlot === 'base' ? '底子：新预设照它复制，文风、规矩、程序块都按它。' : '功能来源：助手从里面找出功能（状态栏、生图、选项、某个玩法的规则和输出格式……）和配套的正则，复制进新预设。' }}
           两个原来的预设都不改。想只要某几个功能，在下面输入框里写上再点"开始融合"。
+        </p>
+        <p class="text-[12px] text-accent-ink mt-2 mb-0" aria-live="polite">
+          {{ mergeCategory ? `新预设将保存到「${PRESET_CATEGORIES[mergeCategory].label}」分类。` : '新预设将保存到功能来源的分类。' }}
         </p>
         <div class="p-list">
           <PresetChooser :model-value="merging[mergeSlot]" @update:model-value="pickMerge" />
