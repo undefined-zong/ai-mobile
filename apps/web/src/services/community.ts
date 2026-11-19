@@ -334,7 +334,8 @@ export async function drawPostImage(postId: string, index = 0, priority: 'user' 
   try {
     const out = await services.image.illustrate(
       {
-        characterId: author?.id ?? '', caption: img.caption, use: 'community-image', moment,
+        // 社群的配图始终参考节律里的衣着（不看服装参考开关）
+        characterId: author?.id ?? '', caption: img.caption, use: 'community-image', moment, outfitRef: true,
         ...(author ? {} : { free: true, authorName: communityNames()(p.authorId) }),
         ...(recent ? { recent: [`这一帖：${recent.slice(0, 300)}`] } : {}),
       },

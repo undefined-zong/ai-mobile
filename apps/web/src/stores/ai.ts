@@ -347,6 +347,14 @@ export const useAiStore = defineStore('ai', () => {
     return routes.value.find((r) => r.role === role) as AgentRoute;
   }
 
+  /**
+   * 服装参考（生图设置，默认开）：关着时节律里今天穿的那套、你常穿的那套都不给模型（生图、聊天、约会），
+   * 不然聊天里写进 [cg:] 的还是那一套，衣服永远只有一身。朋友圈、社群始终参考衣着，不看这个开关
+   */
+  function outfitRef(): boolean {
+    return routeOf('image')?.imageStyle?.outfitRef !== false;
+  }
+
   /** 实际提供 API 的设置（跟随主对话时是主对话的） */
   function effectiveRoute(role: AgentRole): AgentRoute {
     return routeOf(system.router.source(role));
@@ -415,6 +423,7 @@ export const useAiStore = defineStore('ai', () => {
     system,
     hydrate,
     routeOf,
+    outfitRef,
     effectiveRoute,
     keyOf,
     setKey,
