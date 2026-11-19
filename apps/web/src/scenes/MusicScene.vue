@@ -228,6 +228,7 @@ onBeforeUnmount(offPlayer);
 // —— 跟她说一句 ——
 const talk = ref('');
 const talking = ref(false);
+const talkError = ref('');
 const suggestion = ref<{ title: string; artist: string } | null>(null);
 async function sendTalk() {
   const text = talk.value.trim();
@@ -235,6 +236,9 @@ async function sendTalk() {
   if (!text || talking.value || !chatId.value) return;
   talk.value = '';
   talking.value = true;
+  talkError.value = '';
+  herLine.value = '';
+  comment.value = null;
   const lyric = player.lines[lineIdx.value]?.text ?? '';
   const r = await chat.sceneReply(chatId.value, {
     task: 'music-chat',
@@ -248,10 +252,11 @@ async function sendTalk() {
     userText: text,
     cue: s ? `《${s.title}》${clock(player.posMs / 1000)}` : undefined,
     allowedTags: ['expr', 'music'],
+    onText: (text) => { herLine.value = text; },
   });
   talking.value = false;
   if (!r.ok) {
-    showToast(r.notConnected ? `${r.reason}（${characterPronoun(her.value)}要接通「陪伴 · 快速」才能回你）` : `${her.value.name}没回上：${r.reason}`);
+    talkError.value = r.notConnected ? `${r.reason}（${characterPronoun(her.value)}要接通「陪伴 · 快速」才能回你）` : `${her.value.name}没回上：${r.reason}`;
     return;
   }
   say(r.message.text || '……', r.message.expression ?? undefined, true);
@@ -403,6 +408,7 @@ const MODE = {
 } as const;
 
 const line = computed(() => {
+  if (talking.value) return herLine.value;
   if (comment.value) return '';
   if (herLine.value) return herLine.value;
   if (!song.value) return real.value ? '想听什么？搜一首，我们一起听。' : '这首歌，我们一起听吧。';
@@ -481,8 +487,9 @@ const subtitle = computed(() => {
     </button>
     <form class="talk" @submit.prevent="sendTalk">
       <input v-model="talk" class="field" :placeholder="`边听边跟${her.name}说…`" :aria-label="`跟${her.name}说`" enterkeyhint="send" />
-      <button type="submit" class="send" :disabled="!talk.trim() || talking" aria-label="发送"><span class="i-lucide-send-horizontal" /></button>
+      <button type="submit" class="send" :disabled="!talk.trim() || talking" :aria-label="talking ? `${her.name}正在回复` : '发送'"><span :class="talking ? 'i-lucide-loader-circle spin-icon' : 'i-lucide-send-horizontal'" /></button>
     </form>
+    <ErrorDetails v-if="talkError" :detail="talkError" title="回复失败" max-height="120px" />
     <p v-if="notConnected && !player.demo" class="hint">{{ her.name }}不会发弹幕：{{ notConnected }}</p>
     <p v-else-if="planning" class="hint">{{ her.name }}在听这首歌的歌词……</p>
 

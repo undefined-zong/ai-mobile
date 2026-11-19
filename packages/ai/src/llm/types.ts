@@ -49,7 +49,8 @@ export interface ChatRequest {
   /** 覆盖连接里的消息整理方式（OpenAI 兼容） */
   processing?: PromptProcessing;
   /**
-   * 最简请求（参考 SleepTogether 的副 API）：只发模型、消息、temperature、输出上限，不带思考、惩罚、种子等参数。
+   * 最简请求（参考 SleepTogether 的副 API）：只发模型、消息、temperature、输出上限，不带惩罚、种子等参数。
+   * Gemini 保留显式推理强度；仍被拒绝时再去掉，避免重试悄悄恢复默认思考。
    * 换到备用 API 时用，换取最大的兼容性
    */
   minimal?: boolean;
