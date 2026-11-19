@@ -1,0 +1,7 @@
+{
+  "chest": { "top": 0.177, "bottom": 0.158, "height": 0.235, "y": 0.568, "arc": 2.5 },
+  "collar": { "radius": 0.075, "height": 0.075, "y": 0.751 },
+  "panels": { "count": 6, "rows": 3, "radius": 0.184, "width": 0.128, "height": 0.075, "step": 0.058, "y": 0.381, "depth": 0.014, "bevel": 0.008 },
+  "shoulder": { "width": 0.125, "height": 0.11, "depth": 0.154, "y": -0.01 },
+  "stitches": { "radius": 0.007, "color": "#c19a68" }
+}

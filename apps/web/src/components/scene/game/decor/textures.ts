@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import type { Avatar } from './avatar';
 import { WALL_H } from './model';
+import { drawEyeArtwork, eyeArtworkReady } from './eyeArtwork';
+import settings from './avatar-data/studio.json';
 
 /**
- * 装修小屋用的材质和贴图：全部用代码画（Canvas），没有图片素材。
+ * 装修小屋用的材质和贴图：Canvas 花纹与可换色的原创眼睛图集。
  * - 三阶的卡通明暗（MeshToonMaterial），同一个颜色共用一份材质；
  * - 墙纸、地板的花纹按底色画深浅；
  * - 小人的脸（眼睛、嘴、腮红）画在一张贴图上，眨眼、表情换一张。
@@ -422,13 +424,19 @@ export const FACE_H = 320;
 
 /** 脸的贴图（同样的脸共用一张） */
 export function faceTexture(a: Avatar, st: FaceState = {}): THREE.CanvasTexture {
-  const key = JSON.stringify([a.eyes, a.eyeColor, a.mouth, a.blush, a.skin, a.hairColor, st]);
+  const key = JSON.stringify([a.eyes, a.brows, a.eyeColor, a.mouth, a.blush, a.skin, a.hairColor, a.eyeScale, a.eyeSpacing, st]);
   const hit = faceCache.get(key);
   if (hit) return hit;
   const [c, g] = canvas(FACE_W, FACE_H);
   drawFace(g, a, st);
   const t = texture(c);
   faceCache.set(key, t);
+  void eyeArtworkReady.then(() => {
+    if (faceCache.get(key) !== t) return;
+    g.clearRect(0, 0, FACE_W, FACE_H);
+    drawFace(g, a, st);
+    t.needsUpdate = true;
+  });
   return t;
 }
 
@@ -436,23 +444,29 @@ function drawFace(g: CanvasRenderingContext2D, a: Avatar, st: FaceState) {
   const eyes = st.closed ? 'closed' : (st.eyes ?? a.eyes);
   const mouth = st.mouth ?? a.mouth;
   const ink = '#3a2a2e';
-  const ey = 124;
+  const layout = settings.faceLayout;
+  const ey = layout.eyeY;
   for (const side of [-1, 1]) {
-    const ex = FACE_W / 2 + side * 92;
-    drawEye(g, eyes, ex, ey, a.eyeColor, ink, side);
+    const ex = FACE_W / 2 + side * layout.eyeX * a.eyeSpacing;
+    g.save();
+    g.translate(ex, ey);
+    g.scale(a.eyeScale, a.eyeScale);
+    drawEye(g, eyes, 0, 0, a.eyeColor, ink, side);
+    g.restore();
   }
-  // 眉毛（只有生气、难过时画）
-  if (st.brows) {
+  // 细眉跟随表情，平静时也保留五官层次。
+  {
+    const brows = settings.brows.find((b) => b.id === a.brows) ?? settings.brows[0]!;
     g.strokeStyle = shade(a.hairColor, -0.1);
-    g.lineWidth = 7;
+    g.lineWidth = brows.weight;
     g.lineCap = 'round';
     for (const side of [-1, 1]) {
-      const ex = FACE_W / 2 + side * 92;
+      const ex = FACE_W / 2 + side * layout.eyeX * a.eyeSpacing;
       g.beginPath();
-      const inner = st.brows === 'angry' ? 38 : 50;
-      const outer = st.brows === 'angry' ? 54 : 40;
+      const inner = st.brows === 'angry' ? 23 : st.brows === 'sad' ? 46 : brows.inner;
+      const outer = st.brows === 'angry' ? 46 : st.brows === 'sad' ? 23 : brows.outer;
       g.moveTo(ex - side * 34, ey - inner);
-      g.lineTo(ex + side * 30, ey - outer);
+      g.quadraticCurveTo(ex, ey - inner - brows.arch, ex + side * 38, ey - outer);
       g.stroke();
     }
   }
@@ -460,26 +474,34 @@ function drawFace(g: CanvasRenderingContext2D, a: Avatar, st: FaceState) {
   if (blush > 0) {
     for (const side of [-1, 1]) {
       const bx = FACE_W / 2 + side * 128;
-      const grad = g.createRadialGradient(bx, 196, 2, bx, 196, 46);
+      const grad = g.createRadialGradient(bx, layout.blushY, 2, bx, layout.blushY, 46);
       grad.addColorStop(0, `rgba(240,120,140,${blush})`);
       grad.addColorStop(1, 'rgba(240,120,140,0)');
       g.fillStyle = grad;
       g.beginPath();
-      g.ellipse(bx, 196, 50, 30, 0, 0, Math.PI * 2);
+      g.ellipse(bx, layout.blushY, 50, 30, 0, 0, Math.PI * 2);
       g.fill();
       if (blush > 0.6) {
         g.strokeStyle = `rgba(220,90,110,${blush * 0.7})`;
         g.lineWidth = 3;
         for (let i = -1; i <= 1; i += 1) {
           g.beginPath();
-          g.moveTo(bx + i * 14 - 5, 204);
-          g.lineTo(bx + i * 14 + 5, 188);
+          g.moveTo(bx + i * 14 - 5, layout.blushY + 8);
+          g.lineTo(bx + i * 14 + 5, layout.blushY - 8);
           g.stroke();
         }
       }
     }
   }
-  drawMouth(g, mouth, FACE_W / 2, 222, ink);
+  // A small nose mark reads at portrait scale without turning into a separate sphere.
+  g.strokeStyle = shade(a.skin, -0.2);
+  g.lineWidth = 3;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(FACE_W / 2 - 2, layout.noseY);
+  g.quadraticCurveTo(FACE_W / 2 - 5, layout.noseY + 6, FACE_W / 2 + 3, layout.noseY + 5);
+  g.stroke();
+  drawMouth(g, mouth, FACE_W / 2, layout.mouthY, ink);
   if (st.sweat) {
     g.fillStyle = 'rgba(140,190,240,0.9)';
     g.beginPath();
@@ -495,79 +517,75 @@ function drawEye(g: CanvasRenderingContext2D, style: string, x: number, y: numbe
   g.lineJoin = 'round';
   if (style === 'closed' || style === 'smile') {
     g.strokeStyle = ink;
-    g.lineWidth = 10;
+    g.lineWidth = 6;
     g.beginPath();
-    if (style === 'smile') g.arc(x, y + 16, 32, Math.PI * 1.15, Math.PI * 1.85);
-    else g.arc(x, y - 6, 34, Math.PI * 0.15, Math.PI * 0.85);
+    g.moveTo(x - 39, y + 6);
+    g.quadraticCurveTo(x, y + (style === 'smile' ? -38 : 24), x + 39, y + 6);
     g.stroke();
     return;
   }
-  if (style === 'sleepy') {
-    g.fillStyle = ink;
+  if (drawEyeArtwork(g, style, x, y, iris, side)) return;
+  const wide = style === 'cat' ? 54 : 49;
+  const tall = style === 'sparkle' ? 47 : style === 'cat' ? 35 : 41;
+  const sleepy = style === 'sleepy';
+  const tilt = style === 'cat' ? side * -7 : side * -2;
+  const outline = new Path2D();
+  outline.moveTo(x - wide, y - tilt);
+  outline.bezierCurveTo(x - wide * 0.65, y - tall, x + wide * 0.55, y - tall - 5, x + wide, y + tilt);
+  outline.bezierCurveTo(x + wide * 0.8, y + tall, x - wide * 0.7, y + tall, x - wide, y - tilt);
+  g.save();
+  g.clip(outline);
+  if (sleepy) {
     g.beginPath();
-    g.ellipse(x, y + 8, 31, 28, 0, 0, Math.PI);
-    g.fill();
-    g.fillStyle = iris;
-    g.beginPath();
-    g.ellipse(x, y + 12, 20, 17, 0, 0, Math.PI);
-    g.fill();
-    g.strokeStyle = ink;
-    g.lineWidth = 9;
-    g.beginPath();
-    g.moveTo(x - 38, y + 6);
-    g.lineTo(x + 38, y + 6);
-    g.stroke();
-    return;
+    g.rect(x - wide, y - 7, wide * 2, tall * 2);
+    g.clip();
   }
-  const big = style === 'sparkle';
-  const rx = big ? 38 : 32;
-  const ry = big ? 50 : 42;
-  // 眼眶
-  g.fillStyle = ink;
+  g.fillStyle = '#fff9f3';
+  g.fillRect(x - wide, y - tall - 5, wide * 2, tall * 2 + 10);
+  const gradient = g.createLinearGradient(0, y - tall, 0, y + tall);
+  gradient.addColorStop(0, shade(iris, -0.35));
+  gradient.addColorStop(0.52, iris);
+  gradient.addColorStop(1, shade(iris, 0.32));
+  g.fillStyle = gradient;
   g.beginPath();
-  if (style === 'cat') {
-    const k = 1.3;
-    g.moveTo(x - 32 * k * side, y + 4 * k);
-    g.quadraticCurveTo(x - 6 * k * side, y - 40 * k, x + 30 * k * side, y - 14 * k);
-    g.quadraticCurveTo(x + 22 * k * side, y + 30 * k, x - 4 * k * side, y + 32 * k);
-    g.quadraticCurveTo(x - 26 * k * side, y + 26 * k, x - 32 * k * side, y + 4 * k);
-  } else g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  g.ellipse(x + side * 2, y + 3, wide * 0.62, tall * 0.92, 0, 0, Math.PI * 2);
   g.fill();
-  // 瞳
-  const grad = g.createLinearGradient(0, y - ry, 0, y + ry);
-  grad.addColorStop(0, shade(iris, -0.18));
-  grad.addColorStop(1, shade(iris, 0.16));
-  g.fillStyle = grad;
+  g.fillStyle = shade(iris, -0.42);
   g.beginPath();
-  g.ellipse(x, y + 4, rx - 7, ry - 8, 0, 0, Math.PI * 2);
+  g.ellipse(x + side * 2, y + 1, wide * 0.25, tall * 0.58, 0, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = shade(iris, -0.3);
-  g.beginPath();
-  if (style === 'cat') g.ellipse(x, y + 4, 5, ry - 14, 0, 0, Math.PI * 2);
-  else g.ellipse(x, y + 4, rx * 0.4, ry * 0.42, 0, 0, Math.PI * 2);
-  g.fill();
-  // 高光
   g.fillStyle = '#ffffff';
   g.beginPath();
-  g.ellipse(x - side * 2 - 10, y - ry * 0.38, big ? 13 : 11, big ? 15 : 12, 0, 0, Math.PI * 2);
+  g.ellipse(x - 11, y - tall * 0.42, 10, 12, -0.2, 0, Math.PI * 2);
   g.fill();
+  g.globalAlpha = 0.85;
   g.beginPath();
-  g.arc(x + 11, y + ry * 0.35, big ? 7 : 5, 0, Math.PI * 2);
+  g.ellipse(x + 13, y + tall * 0.44, 5, 4, 0, 0, Math.PI * 2);
   g.fill();
-  if (big) {
-    g.globalAlpha = 0.8;
-    g.beginPath();
-    g.arc(x + 12, y - ry * 0.5, 4, 0, Math.PI * 2);
-    g.fill();
-    g.globalAlpha = 1;
-    // 睫毛
-    g.strokeStyle = ink;
-    g.lineWidth = 7;
-    g.beginPath();
-    g.moveTo(x + side * (rx - 4), y - ry + 10);
-    g.lineTo(x + side * (rx + 12), y - ry + 2);
-    g.stroke();
+  g.restore();
+  // One shaped upper lash, a fine lower lid and a short outer lash.
+  g.strokeStyle = ink;
+  g.lineWidth = 7;
+  g.beginPath();
+  if (sleepy) {
+    g.moveTo(x - wide, y - 7);
+    g.quadraticCurveTo(x, y - 12, x + wide, y - 7);
+  } else {
+    g.moveTo(x - wide, y - tilt);
+    g.bezierCurveTo(x - wide * 0.65, y - tall, x + wide * 0.55, y - tall - 5, x + wide, y + tilt);
   }
+  g.stroke();
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(x + side * (wide - 6), y + (sleepy ? -7 : -10));
+  g.lineTo(x + side * (wide + 9), y - (sleepy ? 12 : 22));
+  g.stroke();
+  g.strokeStyle = shade(iris, -0.12);
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(x - wide * 0.7, y + tall * 0.63);
+  g.quadraticCurveTo(x, y + tall * 0.99, x + wide * 0.68, y + tall * 0.65);
+  g.stroke();
 }
 
 function drawMouth(g: CanvasRenderingContext2D, style: string, x: number, y: number, ink: string) {

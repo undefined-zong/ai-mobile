@@ -1,0 +1,172 @@
+[
+  {
+    "id": "clear-sky",
+    "name": "晴空",
+    "note": "清爽短发 · 日常卫衣",
+    "avatar": {
+      "hair": "short",
+      "hairTop": "fluffy",
+      "bangs": "side",
+      "hairColor": "#493d42",
+      "eyes": "round",
+      "eyeColor": "#6c8b9b",
+      "top": "hoodie",
+      "topColor": "#9bb8d4",
+      "bottom": "pants",
+      "bottomColor": "#53637b",
+      "acc": []
+    }
+  },
+  {
+    "id": "peach",
+    "name": "蜜桃",
+    "note": "双马尾 · 软糯针织",
+    "avatar": {
+      "hair": "twin",
+      "hairTop": "flat",
+      "bangs": "straight",
+      "hairColor": "#ac796c",
+      "eyes": "sparkle",
+      "eyeColor": "#b8796b",
+      "faceShape": "round",
+      "top": "sweater",
+      "topColor": "#e6b8b8",
+      "bottom": "skirt",
+      "bottomColor": "#f1e8db",
+      "acc": [
+        "bow"
+      ],
+      "accColor": "#cc8c95"
+    }
+  },
+  {
+    "id": "woodland",
+    "name": "松间",
+    "note": "轻盈短发 · 鼠尾草绿",
+    "avatar": {
+      "hair": "bob",
+      "hairTop": "flat",
+      "bangs": "parted",
+      "hairColor": "#675246",
+      "eyes": "cat",
+      "eyeColor": "#69816b",
+      "top": "shirt",
+      "topColor": "#a9bba6",
+      "bottom": "shorts",
+      "bottomColor": "#eee3cc",
+      "acc": [
+        "glasses"
+      ],
+      "accColor": "#796551"
+    }
+  },
+  {
+    "id": "morning",
+    "name": "初晴",
+    "note": "柔顺长发 · 花瓣裙摆",
+    "avatar": {
+      "hair": "long",
+      "hairTop": "flat",
+      "bangs": "side",
+      "hairColor": "#664a43",
+      "eyes": "sparkle",
+      "eyeColor": "#93676a",
+      "suit": "dress",
+      "suitColor": "#cfa6bc",
+      "suitColor2": "#f4e7dc",
+      "acc": [
+        "flower"
+      ],
+      "accColor": "#f0cfbb"
+    }
+  },
+  {
+    "id": "moon",
+    "name": "月白",
+    "note": "银色长发 · 浅蓝浴衣",
+    "avatar": {
+      "hair": "long",
+      "hairTop": "ahoge",
+      "bangs": "oneEye",
+      "hairColor": "#d4d3e1",
+      "hairColor2": "#a7a1bd",
+      "faceShape": "oval",
+      "eyes": "cat",
+      "eyeColor": "#8c7baa",
+      "suit": "yukata",
+      "suitColor": "#aab9d4",
+      "suitColor2": "#e8d9e0",
+      "acc": []
+    }
+  },
+  {
+    "id": "ink",
+    "name": "墨夜",
+    "note": "蓬松碎发 · 黑白衬衫",
+    "avatar": {
+      "hair": "spiky",
+      "hairTop": "messy",
+      "bangs": "parted",
+      "hairColor": "#34313e",
+      "faceShape": "oval",
+      "eyes": "sleepy",
+      "eyeColor": "#8e7b66",
+      "top": "shirt",
+      "topColor": "#ece9e6",
+      "bottom": "pants",
+      "bottomColor": "#42414f",
+      "acc": [
+        "neckphones"
+      ],
+      "accColor": "#6b758b"
+    }
+  },
+  {
+    "id": "half-up",
+    "name": "半扎长发",
+    "note": "Half updo · 自然披发",
+    "avatar": {
+      "hair": "halfUp",
+      "hairTop": "flat",
+      "bangs": "parted",
+      "hairColor": "#63463f",
+      "eyes": "round",
+      "eyeColor": "#947154",
+      "top": "sweater",
+      "topColor": "#ddd1c6",
+      "bottom": "skirt",
+      "bottomColor": "#786171",
+      "acc": []
+    }
+  },
+  {
+    "id": "madara",
+    "name": "宇智波斑",
+    "note": "层叠长发 · 遮眼刘海",
+    "avatar": {
+      "hair": "madara",
+      "hairTop": "spiky",
+      "bangs": "oneEye",
+      "hairColor": "#28262c",
+      "faceShape": "angular",
+      "eyes": "cat",
+      "eyeColor": "#9b3c3f",
+      "blush": false,
+      "mouth": "flat",
+      "top": "shirt",
+      "topColor": "#8b4349",
+      "bottom": "pants",
+      "bottomColor": "#343341",
+      "shoesColor": "#343341",
+      "acc": [],
+      "eyeScale": 1.12,
+      "eyeSpacing": 1.04,
+      "brows": "sharp",
+      "hairFlip": false,
+      "suit": "armor",
+      "suitColor": "#87424b",
+      "suitColor2": "#34303f",
+      "suitPattern": "plain"
+    }
+  }
+]
