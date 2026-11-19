@@ -55,12 +55,14 @@ export interface ParsedAssistantReply {
   ops: AssistantOp[];
   /** <edits> 里读不出来的项 */
   errors: string[];
-  /** 流式时：<edits> 还没写完 */
+  /** 有一段 <edits> 的 JSON 还没写完；此前完整的修改仍保留在 ops 里 */
   pending: boolean;
 }
 
-// 最里层的一对（说明文字里提到 <edits> 这个词时，不会把说明当成修改）
-const EDITS_RE = /<edits>((?:(?!<edits>)[\s\S])*?)<\/edits>/gi;
+/** <edits> 后面紧跟着 JSON（或者什么都还没有，流式时）的才是修改；说明文字里提到 <edits> 这个词的不算 */
+const OPEN_SOURCE = '<edits>\\s*(?:```(?:json)?\\s*)?(?=[[{]|$)';
+/** JSON 后面收尾的 ``` 和 </edits> */
+const CLOSE_RE = /^\s*(?:```\s*)?<\/edits>/i;
 const FENCE_JSON_RE = /```(?:json)?\s*\n([\s\S]*?)```/gi;
 
 /** 宽松地读 JSON：去掉代码块围栏、结尾多余的逗号 */
@@ -72,6 +74,39 @@ function looseJson(text: string): unknown {
     s = s.replace(/,\s*([\]}])/g, '$1');
     return JSON.parse(s);
   }
+}
+
+/**
+ * 从 start（[ 或 {）起，找 JSON 的结尾或字符串外的下一处编辑标签。
+ * 字符串里的括号和标签原样保留；遇到标签先结束当前段，让坏 JSON 不影响后面的修改。没写完返回 -1。
+ */
+function editBodyEnd(s: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inString = false;
+    } else if (c === '<' && /^<\/?edits>/i.test(s.slice(i, i + '</edits>'.length))) return i;
+    else if (c === '"') inString = true;
+    else if (c === '[' || c === '{') depth++;
+    else if ((c === ']' || c === '}') && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/** 收掉 JSON 后面的围栏和结束标签；流式收到一半的收尾也先藏起来。 */
+function editTailEnd(raw: string, end: number): number {
+  const rest = raw.slice(end);
+  const close = CLOSE_RE.exec(rest);
+  if (close) return end + close[0].length;
+  const fence = /^\s*```/.exec(rest);
+  const tail = rest.slice(fence?.[0].length ?? 0).trim().toLowerCase();
+  if ('```'.startsWith(rest.trim()) || '</edits>'.startsWith(tail)) return raw.length;
+  return end + (fence?.[0].length ?? 0);
 }
 
 function opOf(item: unknown, i: number, errors: string[]): AssistantOp | null {
@@ -110,26 +145,50 @@ function opsFrom(json: unknown, errors: string[]): AssistantOp[] {
 export function parseAssistantReply(raw: string): ParsedAssistantReply {
   const errors: string[] = [];
   const ops: AssistantOp[] = [];
-  let text = raw.replace(EDITS_RE, (_m, body: string) => {
+  let pending = false;
+  const kept: string[] = [];
+  const read = (body: string): string | null => {
     try {
       ops.push(...opsFrom(looseJson(body), errors));
+      return null;
     } catch (e) {
-      errors.push(`<edits> 不是有效的 JSON：${e instanceof Error ? e.message : String(e)}`);
+      return e instanceof Error ? e.message : String(e);
     }
-    return '';
-  });
-  let pending = false;
-  const open = text.toLowerCase().lastIndexOf('<edits>');
-  const rest = open >= 0 ? text.slice(open + 7) : '';
-  // 后面紧跟着 JSON（或者什么都还没有）的才是修改：写完了但忘了 </edits> 的照样读，没写完的（流式时）先藏起来
-  if (open >= 0 && /^\s*(?:```(?:json)?\s*)?(?:[[{]|$)/i.test(rest)) {
-    text = text.slice(0, open);
-    try {
-      ops.push(...opsFrom(looseJson(rest), errors));
-    } catch {
+  };
+  // 一段一段找 <edits>：JSON 的结尾按括号配对找（不是找第一个 </edits>），读出来的修改和 JSON 都不留在给人看的文字里
+  const open = new RegExp(OPEN_SOURCE, 'gi');
+  let pos = 0;
+  for (let m = open.exec(raw); m; m = open.exec(raw)) {
+    const start = m.index + m[0].length;
+    const end = start < raw.length ? editBodyEnd(raw, start) : -1;
+    const error = end > 0 ? read(raw.slice(start, end)) : 'JSON 没写完';
+    let next: number;
+    if (!error) next = editTailEnd(raw, end);
+    else if (end > 0 && !raw.slice(start, end).includes('"op"')) {
+      // 说明文字里举的例子（<edits>[…]</edits>），不是修改：原样留着
+      open.lastIndex = start;
+      continue;
+    } else if (end > 0) {
+      errors.push(`<edits> 不是有效的 JSON：${error}`);
+      next = editTailEnd(raw, end);
+    } else {
+      // 还没写完（流式时）或者回复被截断了：后面整段先藏起来
       pending = true;
+      next = raw.length;
     }
-  } else {
+    kept.push(raw.slice(pos, m.index));
+    pos = next;
+    open.lastIndex = next;
+  }
+  kept.push(raw.slice(pos));
+  let text = kept.join('');
+  // <edits> 后的代码围栏还没收齐（如 ```j），同样等后面的 JSON，不把协议露进气泡。
+  const unfinished = text.toLowerCase().lastIndexOf('<edits>');
+  if (unfinished >= 0 && '```json'.startsWith(text.slice(unfinished + '<edits>'.length).trim().toLowerCase())) {
+    text = text.slice(0, unfinished);
+    pending = true;
+  }
+  if (!pending) {
     // 半截的 "<edi"（流式时）先藏起来
     const lt = text.lastIndexOf('<');
     if (lt >= 0 && lt >= text.length - 7 && '<edits>'.startsWith(text.slice(lt).toLowerCase())) text = text.slice(0, lt);

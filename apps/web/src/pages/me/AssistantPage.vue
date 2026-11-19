@@ -147,7 +147,8 @@ async function send(text = said.value, m: AssistantMode | null = mode.value, mer
       },
     });
     const r = parseAssistantReply(raw);
-    store.add({ role: 'assistant', text: r.text || (r.ops.length ? '' : '（没说什么）'), ...(r.ops.length ? { ops: r.ops } : {}), ...(r.errors.length ? { opErrors: r.errors } : {}) });
+    const opErrors = r.pending ? [...r.errors, '<edits> 没写完，后面的修改没读到：回复可能被截断了，可以在"助手"预设的采样参数里调大"回复最长"再问一次'] : r.errors;
+    store.add({ role: 'assistant', text: r.text || (r.ops.length ? '' : '（没说什么）'), ...(r.ops.length ? { ops: r.ops } : {}), ...(opErrors.length ? { opErrors } : {}) });
   } catch (e) {
     if (isAbortError(e)) {
       if (replying.value?.trim()) store.add({ role: 'assistant', text: `${replying.value.trim()}…（停下了）` });

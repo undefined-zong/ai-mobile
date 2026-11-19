@@ -86,6 +86,11 @@ export interface AgentCallOptions {
   onFailover?(from: Attempt, to: Attempt, error: unknown): void;
 }
 
+export interface AgentChatOptions extends ChatOptions, AgentCallOptions {
+  /** 这次调用的输出修剪规则；不传沿用全局规则，空数组保留用于解析的原文 */
+  outputFilters?: readonly string[];
+}
+
 /** 分配里没写输出上限时的默认值（主对话由预设决定） */
 const DEFAULT_MAX_TOKENS: Partial<Record<AgentRole, number>> = {
   sidestory: 2000,
@@ -177,11 +182,11 @@ export class AgentSystem {
    * 主连接失败换备用时发最简请求（只有模型、消息、temperature、输出上限），换取兼容性；
    * 流式的每一段和最后的结果都过一遍输出修剪
    */
-  async chat(role: AgentRole, req: ChatRequest, opts: ChatOptions & AgentCallOptions = {}): Promise<AgentChatResult> {
+  async chat(role: AgentRole, req: ChatRequest, opts: AgentChatOptions = {}): Promise<AgentChatResult> {
     return this.track(role, () => this.chatOnce(role, req, opts));
   }
 
-  private async chatOnce(role: AgentRole, req: ChatRequest, opts: ChatOptions & AgentCallOptions): Promise<AgentChatResult> {
+  private async chatOnce(role: AgentRole, req: ChatRequest, opts: AgentChatOptions): Promise<AgentChatResult> {
     const route = this.router.route(role);
     const p = route?.params ?? {};
     const merged: ChatRequest = {
@@ -197,9 +202,10 @@ export class AgentSystem {
     this.checkBudget(role, inputTokens);
     const attempts = this.router.attempts(role);
     const started = Date.now();
+    const filters = opts.outputFilters === undefined ? this.filters : compileFilters(opts.outputFilters);
     const filtered: ChatOptions = {
       ...opts,
-      onDelta: opts.onDelta ? (text, thinking) => opts.onDelta?.(applyFilters(text, this.filters), thinking) : undefined,
+      onDelta: opts.onDelta ? (text, thinking) => opts.onDelta?.(applyFilters(text, filters), thinking) : undefined,
     };
     const { value, attempt, fellBack } = await this.router.run(
       attempts,
@@ -207,7 +213,7 @@ export class AgentSystem {
       this.failover(role, opts),
     );
     this.record(role, (value.usage?.inputTokens ?? inputTokens) + (value.usage?.outputTokens ?? estimateTokens(value.text + value.thinking)));
-    const text = applyFilters(value.text, this.filters);
+    const text = applyFilters(value.text, filters);
     if (!text.trim()) {
       throw new AiError('empty', `${attempt.endpoint.name} 的回复修剪后是空的（只有思考内容）`, {
         retryable: true,
