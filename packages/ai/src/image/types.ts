@@ -46,7 +46,7 @@ export interface ImageReference {
 
 /**
  * NovelAI 的 Vibe Transfer（V4 起）：参考图先用 /ai/encode-vibe 编码一次（花点数），编码按模型和信息提取量各算一份；
- * 之后出图只带编码，不再花点数，同一张参考图画出来的人一直像同一个人
+ * 之后出图复用编码，不再收编码费；参考影响整张图的视觉特征，不能绑定到某个人物槽
  */
 export interface ImageVibe {
   /** encode-vibe 返回的编码（base64） */
