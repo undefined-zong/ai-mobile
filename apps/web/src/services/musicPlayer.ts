@@ -68,6 +68,20 @@ export interface PlayerOptions {
 /** 她说话时音乐压到多少 */
 const DUCK_LEVEL = 0.35;
 
+/**
+ * 接进 Web Audio 的歌要真的听得到：歌往前走了这么多秒（按歌的进度，不按钟表），AudioContext 一直没在跑、或者进来的全是 0，
+ * 就当这次接进去没声，换回普通 <audio> 从刚才的位置接着放（这时音量只归侧面的按键）
+ */
+const SILENT_FALLBACK_S = 6;
+/** 比这个小的采样算没声音（约 -80 dB） */
+const SILENCE_FLOOR = 1e-4;
+/** 多久看一次有没有声音 */
+const WATCH_MS = 500;
+/** 看声音时一次取多少个采样 */
+const PROBE_SIZE = 2048;
+/** 解锁 <audio> 用的一小段静音 */
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==';
+
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 /**
@@ -174,6 +188,16 @@ export function createMusicPlayer(opts: PlayerOptions) {
   let unrouted = false;
   /** 接进 Web Audio 时借着的 AudioContext（连带 playback 会话）：接着的 <audio> 换掉时还回去 */
   let lease: AudioContextLease | null = null;
+  /** 接进 Web Audio 时看有没有声音的节点（在增益前面：音量调到 0 不算没声） */
+  let probe: AnalyserNode | null = null;
+  const probeBuf = new Float32Array(PROBE_SIZE);
+  let watchTimer: ReturnType<typeof setInterval> | undefined;
+  /** 这首接进去以后听到过声音 */
+  let heard = false;
+  /** 从歌的第几秒起一直没声（-1：现在有声） */
+  let silentSince = -1;
+  /** 在点击里解锁好的普通 <audio>：接进去没声、地址不让跨域时换它接着放，iPhone 上不用再点一下 */
+  let spare: HTMLAudioElement | null = null;
   let primed = false;
   let url = '';
   let expiresAt = 0;
@@ -225,8 +249,15 @@ export function createMusicPlayer(opts: PlayerOptions) {
       a.crossOrigin = 'anonymous';
       const g = ctx.createGain();
       g.gain.value = clamp01(player.volume * duckGain * fadeGain);
-      ctx.createMediaElementSource(a).connect(g).connect(ctx.destination);
+      const p = ctx.createAnalyser();
+      p.fftSize = PROBE_SIZE;
+      ctx.createMediaElementSource(a).connect(p).connect(g).connect(ctx.destination);
       gain = g;
+      probe = p;
+      heard = false;
+      silentSince = -1;
+      clearInterval(watchTimer);
+      watchTimer = setInterval(checkRouted, WATCH_MS);
       return true;
     } catch {
       // 不支持网页音频：照常放
@@ -243,6 +274,10 @@ export function createMusicPlayer(opts: PlayerOptions) {
    */
   function dropRouted() {
     const old = audio;
+    clearInterval(watchTimer);
+    watchTimer = undefined;
+    probe?.disconnect();
+    probe = null;
     gain?.disconnect();
     gain = null;
     audio = null;
@@ -256,6 +291,49 @@ export function createMusicPlayer(opts: PlayerOptions) {
     }
   }
 
+  /** 接进 Web Audio 的歌听不听得到（见 SILENT_FALLBACK_S）：听不到就换回普通 <audio> */
+  function checkRouted() {
+    const a = audio;
+    if (!probe || !gain || !a || a.paused || !isSong(a)) return;
+    const ctx = gain.context;
+    let silent: boolean;
+    if (ctx.state !== 'running') {
+      resumeAudioContext();
+      silent = true;
+    } else if (heard) silent = false;
+    else {
+      probe.getFloatTimeDomainData(probeBuf);
+      heard = probeBuf.some((v) => Math.abs(v) > SILENCE_FLOOR);
+      silent = !heard;
+    }
+    if (!silent) {
+      silentSince = -1;
+      return;
+    }
+    if (silentSince < 0) silentSince = a.currentTime;
+    else if (a.currentTime - silentSince >= SILENT_FALLBACK_S) void playUnrouted(token);
+  }
+
+  /** 在点击里解锁一个备用的普通 <audio>（只在接进 Web Audio 时需要） */
+  function unlockSpare() {
+    if (spare || unrouted) return;
+    const s = new Audio();
+    s.preload = 'auto';
+    s.setAttribute('playsinline', '');
+    s.muted = true;
+    s.src = SILENT_WAV;
+    spare = s;
+    s.play()
+      .then(() => {
+        if (s !== audio) s.pause();
+        s.muted = false;
+      })
+      .catch(() => {
+        s.muted = false;
+        if (spare === s) spare = null;
+      });
+  }
+
   /** 现在放的是不是真的歌（不是解锁用的那段静音，也不是换下来的旧 <audio>） */
   function isSong(a: HTMLAudioElement): boolean {
     return a === audio && !!url && a.src === url;
@@ -263,7 +341,9 @@ export function createMusicPlayer(opts: PlayerOptions) {
 
   function el(): HTMLAudioElement {
     if (audio) return audio;
-    const a = new Audio();
+    // 不接 Web Audio 时先用点击里解锁好的备用 <audio>：iPhone 上新建的要再点一下才能出声
+    const a = unrouted && spare ? spare : new Audio();
+    if (a === spare) spare = null;
     a.preload = 'auto';
     a.setAttribute('playsinline', '');
     if (!route(a)) a.volume = clamp01(player.volume * duckGain * fadeGain);
@@ -306,12 +386,15 @@ export function createMusicPlayer(opts: PlayerOptions) {
   function prime() {
     if (player.demo) return;
     const a = el();
-    if (gain) resumeAudioContext();
+    if (gain) {
+      resumeAudioContext();
+      unlockSpare();
+    }
     if (primed) return;
     primed = true;
     if (a.src) return;
     a.muted = true;
-    a.src = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==';
+    a.src = SILENT_WAV;
     a.play()
       .then(() => {
         // 这期间可能已经换成真的歌了：那就别停
@@ -339,6 +422,8 @@ export function createMusicPlayer(opts: PlayerOptions) {
         expiresAt = r.expiresAt;
         const a = el();
         a.src = url;
+        heard = false;
+        silentSince = -1;
         a.currentTime = at / 1000;
         await a.play();
         return;
@@ -477,6 +562,8 @@ export function createMusicPlayer(opts: PlayerOptions) {
       expiresAt = r.expiresAt;
       player.level = r.level ?? '';
       a.src = url;
+      heard = false;
+      silentSince = -1;
       applyVolume();
       try {
         await a.play();
