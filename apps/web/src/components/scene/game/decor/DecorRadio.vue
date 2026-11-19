@@ -160,7 +160,7 @@ input[type='range'] { flex: 1; min-width: 0; height: 28px; accent-color: var(--a
 .radio-tabs button { min-height: 44px; font-size: 14px; color: var(--ink-2); border-bottom: 2px solid transparent; }
 .radio-tabs button[aria-selected='true'] { color: var(--accent-ink); border-bottom-color: currentColor; font-weight: 600; }
 .radio-tabs span { font-size: 11px; margin-left: 5px; }
-input:not([type='range']) { width: 100%; min-width: 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); padding: 10px 12px; color: var(--ink); font-size: 13px; caret-color: var(--accent-ink); }
+input:not([type='range']) { width: 100%; min-width: 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); padding: 10px 12px; color: var(--ink); font-size: 16px; caret-color: var(--accent-ink); }
 input::placeholder { color: var(--ink-2); }
 .import-form label, .connect label { display: block; margin-bottom: 8px; font-size: 12px; color: var(--ink-2); }
 .import-form > div { display: flex; gap: 8px; }

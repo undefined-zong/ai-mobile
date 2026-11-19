@@ -1719,7 +1719,7 @@ const herPct = computed(() => Math.round(herProgress.value));
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .area {
   width: 100%;
@@ -1728,7 +1728,7 @@ const herPct = computed(() => Math.round(herProgress.value));
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
 }
 .diary {
@@ -2000,7 +2000,7 @@ const herPct = computed(() => Math.round(herProgress.value));
   border: 1px solid var(--glass-line);
   background: var(--glass-strong);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .pop-catcher {
   position: absolute;

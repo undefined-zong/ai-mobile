@@ -628,7 +628,7 @@ async function removeNovel() {
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   resize: none;
 }
@@ -646,7 +646,7 @@ async function removeNovel() {
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .sheet {
   padding: 18px 16px calc(var(--safe-bottom, 0px) + 16px);

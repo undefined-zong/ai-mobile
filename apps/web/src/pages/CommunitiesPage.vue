@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Community } from '@app/shared';
+import { COMMUNITY_LAYOUTS, type Community, type CommunityLayout } from '@app/shared';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Avatar from '@/components/common/Avatar.vue';
@@ -11,6 +11,7 @@ import { countText } from '@/utils/count';
 /**
  * 社媒 → 社群：你加入的社群和还没加入的。
  * 顶上搜关键字：边打边筛；回车（或点"搜索"）时一个对应的都没有，就让模型按这个关键字建一个（"社媒 · 社群"预设）。
+ * 右上角切换一行一个 / 一行两个（社群多了用一行两个，一屏看得更多），记在社群设置里。
  */
 const store = useCommunityStore();
 const router = useRouter();
@@ -27,6 +28,12 @@ const asked = ref('');
 const failure = computed(() => (asked.value === word.value ? store.failures.create : undefined));
 
 const open = (c: Community) => router.push(`/community/${encodeURIComponent(c.id)}`);
+
+const LAYOUT_KEYS = Object.keys(COMMUNITY_LAYOUTS) as CommunityLayout[];
+const LAYOUT_ICON: Record<CommunityLayout, string> = { list: 'i-lucide-layout-list', grid: 'i-lucide-layout-grid' };
+const grid = computed(() => store.settings.layout === 'grid');
+/** 点一下换成下一种摆法 */
+const nextLayout = computed(() => LAYOUT_KEYS[(LAYOUT_KEYS.indexOf(store.settings.layout) + 1) % LAYOUT_KEYS.length]!);
 
 async function create() {
   if (!word.value || creating.value) return;
@@ -45,6 +52,9 @@ function submit() {
 
 <template>
   <Teleport defer to="#social-actions">
+    <button type="button" class="icon-btn" :aria-label="`社群列表：${COMMUNITY_LAYOUTS[store.settings.layout]}（点一下换成${COMMUNITY_LAYOUTS[nextLayout]}）`" data-testid="community-layout" @click="store.settings.layout = nextLayout">
+      <span :class="LAYOUT_ICON[nextLayout]" class="text-[20px]" />
+    </button>
     <RouterLink class="icon-btn" to="/me?open=social" aria-label="社媒设置"><span class="i-lucide-settings-2 text-[20px]" /></RouterLink>
   </Teleport>
 
@@ -81,24 +91,42 @@ function submit() {
     <template v-for="group in [{ title: '我加入的', list: mine }, { title: word ? '还没加入的' : '发现', list: others }]" :key="group.title">
       <template v-if="group.list.length">
         <div class="group-title">{{ group.title }}</div>
-        <button v-for="c in group.list" :key="c.id" type="button" class="c-row press" :data-community="c.id" @click="open(c)">
-          <CommunityIcon :community="c" :size="50" />
-          <span class="flex-1 min-w-0">
-            <span class="flex items-center gap-1.5 min-w-0">
-              <span class="c-name truncate">{{ c.name }}</span>
+        <!-- 一行两个：图标在上，名字、两行简介、人数帖数往下排 -->
+        <div v-if="grid" class="c-grid">
+          <button v-for="c in group.list" :key="c.id" type="button" class="c-tile press" :data-community="c.id" @click="open(c)">
+            <span class="flex items-start justify-between w-full">
+              <CommunityIcon :community="c" :size="40" />
               <span v-if="store.unreadOf(c.id) && c.joined" class="badge num">{{ store.unreadOf(c.id) > 99 ? '99+' : store.unreadOf(c.id) }}</span>
             </span>
+            <span class="c-name truncate w-full">{{ c.name }}</span>
             <span class="c-desc line-clamp-2">{{ c.description }}</span>
-            <span class="c-meta">
-              <span>{{ countText(c.memberCount) }} 成员 · {{ store.timelineOf(c.id).length }} 帖</span>
-              <span v-if="membersOf(c).length" class="c-friends">
-                <Avatar v-for="m in membersOf(c)" :key="m.id" :character="m" :size="18" />
-                <span>互关</span>
+            <span class="c-meta">{{ countText(c.memberCount) }} 成员 · {{ store.timelineOf(c.id).length }} 帖</span>
+            <span v-if="membersOf(c).length" class="c-friends">
+              <Avatar v-for="m in membersOf(c)" :key="m.id" :character="m" :size="18" />
+              <span>互关</span>
+            </span>
+          </button>
+        </div>
+        <template v-else>
+          <button v-for="c in group.list" :key="c.id" type="button" class="c-row press" :data-community="c.id" @click="open(c)">
+            <CommunityIcon :community="c" :size="50" />
+            <span class="flex-1 min-w-0">
+              <span class="flex items-center gap-1.5 min-w-0">
+                <span class="c-name truncate">{{ c.name }}</span>
+                <span v-if="store.unreadOf(c.id) && c.joined" class="badge num">{{ store.unreadOf(c.id) > 99 ? '99+' : store.unreadOf(c.id) }}</span>
+              </span>
+              <span class="c-desc line-clamp-2">{{ c.description }}</span>
+              <span class="c-meta">
+                <span>{{ countText(c.memberCount) }} 成员 · {{ store.timelineOf(c.id).length }} 帖</span>
+                <span v-if="membersOf(c).length" class="c-friends">
+                  <Avatar v-for="m in membersOf(c)" :key="m.id" :character="m" :size="18" />
+                  <span>互关</span>
+                </span>
               </span>
             </span>
-          </span>
-          <span class="i-lucide-chevron-right text-ink-3 shrink-0" />
-        </button>
+            <span class="i-lucide-chevron-right text-ink-3 shrink-0" />
+          </button>
+        </template>
       </template>
     </template>
 
@@ -132,7 +160,7 @@ function submit() {
   border: 0;
   background: transparent;
   outline: none;
-  font-size: 14.5px;
+  font-size: 16px;
   appearance: none;
   -webkit-appearance: none;
 }
@@ -188,6 +216,32 @@ function submit() {
   background: var(--surface);
   border: 1px solid var(--border);
   text-align: left;
+}
+.c-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 12px 8px;
+}
+.c-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.c-tile .c-desc {
+  margin-top: 0;
+  /* 两行简介占满两行的高度：同一行的两格一样高、人数帖数对齐 */
+  min-height: 3em;
+}
+.c-tile .c-meta {
+  margin-top: auto;
 }
 .c-name {
   font-size: 15.5px;

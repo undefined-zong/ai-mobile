@@ -27,6 +27,8 @@ export type HomeTheme = 'classic' | 'pixel' | 'focus';
 export const HOME_THEME_LABEL: Record<HomeTheme, string> = { classic: '经典', pixel: '像素小镇', focus: '聚焦' };
 /** 各主题的首页 */
 const HOME_PATH: Record<HomeTheme, string> = { classic: '/chats', pixel: '/world', focus: '/focus' };
+/** 底部"地图"页签去哪：像素小镇是她的像素小镇，"我的世界"的真实地图仍是 /map（从像素小镇的切换面板进） */
+const MAP_PATH: Record<HomeTheme, string> = { classic: '/map', pixel: '/world', focus: '/map' };
 const HOME_THEME_KEY = 'ai-mobile:home-theme';
 
 function readHomeTheme(): HomeTheme {
@@ -103,6 +105,7 @@ export const useAppStore = defineStore('app', () => {
   const homeTheme = ref<HomeTheme>(readHomeTheme());
   /** 首页在哪：经典是消息页，像素小镇是世界页，聚焦是她 */
   const homePath = computed(() => HOME_PATH[homeTheme.value]);
+  const mapPath = computed(() => MAP_PATH[homeTheme.value]);
   function setHomeTheme(t: HomeTheme) {
     homeTheme.value = t;
     try {
@@ -137,6 +140,7 @@ export const useAppStore = defineStore('app', () => {
     setTheme,
     homeTheme,
     homePath,
+    mapPath,
     setHomeTheme,
     activeCharacterId,
     viewingChatId,

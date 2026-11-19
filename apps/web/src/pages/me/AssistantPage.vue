@@ -745,7 +745,7 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
   resize: none;
 }

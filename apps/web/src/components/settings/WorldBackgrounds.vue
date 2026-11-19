@@ -153,7 +153,7 @@ h4 { font-size: 13px; color: var(--ink-2); margin: 16px 0 8px; }
 .opt-meta { font-size: 11.5px; color: var(--ink-3); margin: 2px 4px 4px; }
 .opt-zoom { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: rgb(0 0 0 / 0.45); }
 .filters { display: flex; gap: 8px; margin-bottom: 10px; }
-.search { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; }
-.filters select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; }
+.search { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 16px; }
+.filters select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 16px; }
 .more { width: 100%; min-height: 40px; margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; color: var(--accent-ink); background: var(--surface); }
 </style>

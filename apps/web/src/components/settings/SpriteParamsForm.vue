@@ -217,7 +217,7 @@ const pixels = computed(() => p.width * p.height);
 }
 .mono {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 13px;
+  font-size: 16px;
 }
 .opt {
   height: 32px;

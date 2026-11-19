@@ -327,7 +327,7 @@ function remove() {
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   resize: none;
 }
@@ -373,7 +373,7 @@ function remove() {
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 16px;
 }
 .actions {
   display: flex;

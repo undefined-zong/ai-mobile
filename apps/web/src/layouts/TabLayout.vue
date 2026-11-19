@@ -36,9 +36,8 @@ const tabs = computed((): Tab[] => {
     { to: '/memories', label: '回忆', icon: 'i-lucide-book-heart', badge: 0, dot: true },
     { to: '/me', label: '我的', icon: 'i-lucide-user-round', badge: 0 },
   ];
-  // 主题（我的 → 主题）：三种主题页签顺序一样；像素小镇的"地图"是她的像素小镇（/world），
-  // "我的世界"的真实地图仍是 /map，从像素小镇的切换面板进
-  const map: Tab = { to: app.homeTheme === 'pixel' ? '/world' : '/map', label: '地图', icon: 'i-lucide-map', badge: 0 };
+  // 主题（我的 → 主题）：三种主题页签顺序一样；"地图"去哪见 app.mapPath
+  const map: Tab = { to: app.mapPath, label: '地图', icon: 'i-lucide-map', badge: 0 };
   // 聚焦：第一个页签是她（头像 + 名字），消息列表收在她页面的"换人"面板里，也算在这个页签下
   if (app.homeTheme === 'focus') {
     const her: Tab = { to: '/focus', label: focused.value?.name ?? '消息', icon: 'i-lucide-message-circle', badge: chat.totalUnread, avatar: focused.value, also: ['/chats'] };

@@ -93,7 +93,7 @@ function confirm() {
   border-radius: 99px;
   border: 1px solid var(--accent);
   background: var(--surface);
-  font-size: 13px;
+  font-size: 16px;
   outline: none;
 }
 </style>

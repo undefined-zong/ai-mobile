@@ -15,6 +15,7 @@ import { assetUrl } from '@/services';
 import { dateMusic } from '@/services/musicPlayer';
 import { dateSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
+import { leaveTo } from '@/router';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
@@ -32,8 +33,10 @@ import { uid } from '@/utils/id';
  * 她写了 [cg:] 的心动时刻画一张（隔几段才画），结束时画一张留念，也可以自己点"拍一张"；画好的铺满整屏。
  * 你可以入画（人设 → 生图里填了外观 tags）：到达只画她一个人，之后单人还是两个人同框由"生图 · 约会"预设按画面定，同框时带上你立绘的 Vibe。
  * 结束（或者直接离开）时把"约会回忆"卡片发进聊天：走了几段、每种回法选了几次、她最后说的话、这次画的图。
- * 右上角：音乐（网易云的歌单，播放器 dateMusic，放着的歌她也知道）、随机（从背景库里 roll 一个地方直接去约会）、
+ * 右边顶栏下面竖着一列：音乐（网易云的歌单，播放器 dateMusic，放着的歌她也知道）、随机（从背景库里 roll 一个地方直接去约会）、
  * 自己从背景库里选；约会中换过去就接着约，她下一段知道换到了哪（进出还算在原来的地点上，聊天里的分隔用新地方的名字）。
+ * 顶栏右边留自动画图和拍一张。
+ * 看完回忆去聊天、回地图时约会这一页不留在历史里：从那边返回不会回到约会、又开始一次。
  */
 const app = useAppStore();
 const chars = useCharacterStore();
@@ -122,9 +125,25 @@ function goTo(f: BackgroundFamily, how: 'roll' | 'pick') {
   if (showChoices.value) void ask('date-turn', [...contextLines(), '先用旁白写来到这里看到的景象，再接着约会']).then(afterTurn);
 }
 
-// —— 音乐：网易云的歌单（右上角；离开时停），放着的歌写进场景任务 ——
+// —— 音乐：网易云的歌单（右边那一列；离开时停），放着的歌写进场景任务 ——
 const musicOpen = ref(false);
 const musicPlaying = computed(() => dateMusic.state.playing && !dateMusic.state.fading);
+
+/** 右边竖着的一列：音乐、随机、从背景库选（选地点和约会中都有） */
+const sideTools = computed(() => [
+  {
+    key: 'music',
+    icon: dateMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying.value ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music',
+    label: musicPlaying.value ? `音乐：${dateMusic.current()?.title ?? '正在播放'}` : '音乐',
+    on: musicPlaying.value,
+    expanded: musicOpen.value,
+    disabled: false,
+    testId: 'date-music-btn',
+    run: () => (musicOpen.value = !musicOpen.value),
+  },
+  { key: 'roll', icon: 'i-lucide-dices', label: '随机：从背景库里 roll 一个地方去约会', on: false, expanded: undefined, disabled: !canMove.value, testId: 'date-roll', run: rollBg },
+  { key: 'pick', icon: 'i-lucide-images', label: '从背景库里选约会的地方', on: false, expanded: undefined, disabled: !canMove.value, testId: 'date-pick-bg', run: () => (libraryOpen.value = true) },
+]);
 
 // —— 四种回法 ——
 const KIND: Record<DateChoiceKind, { icon: string; tone: string }> = {
@@ -405,6 +424,14 @@ function again() {
   choices.value = [];
   failed.value = '';
 }
+/** 看完回忆去聊天 / 回地图：上一页就是那里时直接返回，否则替换掉约会这一页 */
+function toChat() {
+  leaveTo(`/chat/${chatId.value}`);
+}
+function toMap() {
+  // 地图页和像素小镇都算地图：从哪个进来的就回哪个
+  leaveTo(app.mapPath, ['/map', '/world']);
+}
 
 /** 约会回忆卡片：结束时发；直接离开时（离开页面就是结束）由 leaveNote 补发 */
 let cardRef: { chatId: string; messageId: string } | null = null;
@@ -607,31 +634,31 @@ onBeforeUnmount(() => {
     expression="smile"
     :line="`${raining ? '下雨了…' : '天气真好！'}去${recommended.name}好不好？`"
     :layout="{ left: 78, bottom: 56, height: 32 }"
+    class="date-shell"
   >
-    <template #actions>
-      <button
-        type="button"
-        class="pill-btn"
-        :class="{ on: musicPlaying }"
-        :aria-expanded="musicOpen"
-        :aria-label="musicPlaying ? `音乐：${dateMusic.current()?.title ?? '正在播放'}` : '音乐'"
-        data-testid="date-music-btn"
-        @click="musicOpen = !musicOpen"
-      >
-        <span :class="dateMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music'" />
-      </button>
-      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="随机：从背景库里 roll 一个地方去约会" data-testid="date-roll" @click="rollBg">
-        <span class="i-lucide-dices" />
-      </button>
-      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="从背景库里选约会的地方" data-testid="date-pick-bg" @click="libraryOpen = true">
-        <span class="i-lucide-images" />
-      </button>
-    </template>
-    <template v-if="musicOpen" #overlay>
-      <div class="pop-catcher" @click="musicOpen = false" />
-      <div class="music-pop" role="dialog" aria-label="音乐">
-        <PlaylistMusic :player="dateMusic" :searches="dateSearches" test-id="date-music" />
+    <template #overlay>
+      <div class="side-tools">
+        <button
+          v-for="t in sideTools"
+          :key="t.key"
+          type="button"
+          class="pill-btn"
+          :class="{ on: t.on }"
+          :disabled="t.disabled"
+          :aria-expanded="t.expanded"
+          :aria-label="t.label"
+          :data-testid="t.testId"
+          @click="t.run"
+        >
+          <span :class="t.icon" />
+        </button>
       </div>
+      <template v-if="musicOpen">
+        <div class="pop-catcher" @click="musicOpen = false" />
+        <div class="music-pop" role="dialog" aria-label="音乐">
+          <PlaylistMusic :player="dateMusic" :searches="dateSearches" test-id="date-music" />
+        </div>
+      </template>
     </template>
     <div class="text-[15px] font-600 mb-2.5">今天去哪儿约会？</div>
     <div class="grid grid-cols-4 gap-2">
@@ -659,25 +686,9 @@ onBeforeUnmount(() => {
     :layout="{ left: 50, bottom: 22, height: 66 }"
     :hide-figure="!!art || (phase === 'date' && titleOpen)"
     :drawing="drawingText"
+    class="date-shell"
   >
     <template #actions>
-      <button
-        type="button"
-        class="pill-btn"
-        :class="{ on: musicPlaying }"
-        :aria-expanded="musicOpen"
-        :aria-label="musicPlaying ? `音乐：${dateMusic.current()?.title ?? '正在播放'}` : '音乐'"
-        data-testid="date-music-btn"
-        @click="musicOpen = !musicOpen"
-      >
-        <span :class="dateMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music'" />
-      </button>
-      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="随机：从背景库里 roll 一个地方去约会" data-testid="date-roll" @click="rollBg">
-        <span class="i-lucide-dices" />
-      </button>
-      <button type="button" class="pill-btn" :disabled="!canMove" aria-label="从背景库里选约会的地方" data-testid="date-pick-bg" @click="libraryOpen = true">
-        <span class="i-lucide-images" />
-      </button>
       <button
         type="button"
         class="pill-btn"
@@ -702,6 +713,24 @@ onBeforeUnmount(() => {
         </Transition>
         <div class="shade top" aria-hidden="true" />
         <div class="shade bottom" aria-hidden="true" />
+
+        <!-- 右边：音乐、随机、选背景，竖着排在顶栏下面 -->
+        <div class="side-tools">
+          <button
+            v-for="t in sideTools"
+            :key="t.key"
+            type="button"
+            class="pill-btn"
+            :class="{ on: t.on }"
+            :disabled="t.disabled"
+            :aria-expanded="t.expanded"
+            :aria-label="t.label"
+            :data-testid="t.testId"
+            @click="t.run"
+          >
+            <span :class="t.icon" />
+          </button>
+        </div>
 
         <!-- 左上：在哪、几点、天气，和没接通之类的提示 -->
         <div class="info-col">
@@ -829,13 +858,16 @@ onBeforeUnmount(() => {
           </div>
           <p v-else-if="drawingText" class="text-[12.5px] text-ink-3 mt-2">{{ drawingText }}</p>
           <div class="flex gap-2.5 mt-3.5">
-            <van-button v-if="memoryArt" round size="small" icon="down" @click="save(memoryArt)">存图</van-button>
+            <van-button v-if="memoryArt" round block size="small" icon="down" @click="save(memoryArt)">存图</van-button>
             <van-button round block size="small" @click="again">再约一次</van-button>
-            <van-button type="primary" round block size="small" @click="router.push(`/chat/${chatId}`)">回聊天</van-button>
+          </div>
+          <div class="flex gap-2.5 mt-2.5">
+            <van-button round block size="small" icon="location-o" data-testid="date-to-map" @click="toMap">回地图</van-button>
+            <van-button type="primary" round block size="small" icon="chat-o" data-testid="date-to-chat" @click="toChat">回聊天</van-button>
           </div>
         </section>
 
-        <!-- 音乐：从右上角往下展开，点空白处收起 -->
+        <!-- 音乐：在右边那一列的左边展开，点空白处收起 -->
         <template v-if="musicOpen">
           <div class="pop-catcher" @click="musicOpen = false" />
           <div class="music-pop" role="dialog" aria-label="音乐">
@@ -908,6 +940,11 @@ onBeforeUnmount(() => {
   line-height: 16px;
 }
 
+/* 右边竖排按钮占的宽（按钮宽 38，两边各留 10）：左上的信息、记录、音乐面板和选地点时她的那句话都让出来 */
+.date-shell {
+  --side-room: 58px;
+  --companion-right: var(--side-room);
+}
 .date {
   position: absolute;
   inset: 0;
@@ -971,7 +1008,8 @@ onBeforeUnmount(() => {
   z-index: 9;
   top: calc(var(--safe-top) + 58px);
   left: 12px;
-  right: 12px;
+  /* 给右边竖排的按钮让出位置 */
+  right: var(--side-room);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1283,7 +1321,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 11;
   left: 12px;
-  right: 12px;
+  right: var(--side-room);
   top: calc(var(--safe-top) + 100px);
   bottom: calc(var(--safe-bottom) + 12px);
   overflow-y: auto;
@@ -1405,12 +1443,25 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 13;
 }
+/*
+ * 右边竖着的一列：在面板、记录之上，在开场标题卡（12）和点空白处收起音乐的那一层（13）之下，
+ * 音乐开着时再点一下按钮就是点到空白处、收起
+ */
+.side-tools {
+  position: absolute;
+  z-index: 11;
+  top: calc(var(--safe-top) + 56px);
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .music-pop {
   position: absolute;
   z-index: 14;
   top: calc(var(--safe-top) + 56px);
   left: 10px;
-  right: 10px;
+  right: var(--side-room);
   max-height: 60%;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1444,7 +1495,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 16px;
 }
 .lib-scroll {
   flex: 1;

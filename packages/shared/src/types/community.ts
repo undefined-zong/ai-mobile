@@ -101,6 +101,10 @@ export interface CommunityPost {
 export const COMMUNITY_SORTS = { active: '最近顶起', new: '最新发布' } as const;
 export type CommunitySort = keyof typeof COMMUNITY_SORTS;
 
+/** 社群列表怎么摆：list 一行一个（带简介）；grid 一行两个（社群多了一屏看得更多） */
+export const COMMUNITY_LAYOUTS = { list: '一行一个', grid: '一行两个' } as const;
+export type CommunityLayout = keyof typeof COMMUNITY_LAYOUTS;
+
 export interface CommunitySettings {
   /** 加入的社群每天最多更新几次：每天实际 1 到这么多次，时间随机 */
   perDay: number;
@@ -119,6 +123,8 @@ export interface CommunitySettings {
   /** 有新帖时云端发通知 */
   notify: boolean;
   sort: CommunitySort;
+  /** 社群列表一行一个还是一行两个 */
+  layout: CommunityLayout;
 }
 
 /** 各项设置能填的范围（界面的步进器、读本机设置、云端校验用同一份） */
@@ -131,7 +137,7 @@ export const COMMUNITY_LIMITS = {
   chatPosts: { min: 0, max: 10 },
 } as const satisfies Partial<Record<keyof CommunitySettings, { min: number; max: number }>>;
 
-export const DEFAULT_COMMUNITY_SETTINGS: CommunitySettings = { perDay: 2, batchSize: 3, memberPerDay: 1, autoImage: true, keep: 200, contextPosts: 8, chatPosts: 3, notify: false, sort: 'active' };
+export const DEFAULT_COMMUNITY_SETTINGS: CommunitySettings = { perDay: 2, batchSize: 3, memberPerDay: 1, autoImage: true, keep: 200, contextPosts: 8, chatPosts: 3, notify: false, sort: 'active', layout: 'list' };
 
 /** 到点以后多久之内还补发（超过的不补）：手机和云端用同一个 */
 export const COMMUNITY_CATCH_UP_MS = 3 * 3_600_000;

@@ -834,7 +834,7 @@ function onPageCount(n: number) {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .area {
   width: 100%;
@@ -843,7 +843,7 @@ function onPageCount(n: number) {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
 }
 .quote-preview {

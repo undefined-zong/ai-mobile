@@ -568,7 +568,7 @@ const sceneName = (sid: string) => SCENES.find((s) => s.id === sid)?.name ?? sid
 .tags {
   min-height: 0;
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 .mono {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;

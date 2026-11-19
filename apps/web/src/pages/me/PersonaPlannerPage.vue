@@ -587,7 +587,7 @@ function stepper(key: 'maxRounds' | 'maxCalls' | 'resultChars') {
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 .day-row {
   display: flex;

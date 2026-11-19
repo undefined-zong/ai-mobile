@@ -491,7 +491,7 @@ if (view.tab === 'weread' && !wr.books) void nextTick(() => loadWeread());
   appearance: none;
   background: none;
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .sort {
   flex: none;
@@ -501,7 +501,7 @@ if (view.tab === 'weread' && !wr.books) void nextTick(() => loadWeread());
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--ink-2);
-  font-size: 13px;
+  font-size: 16px;
 }
 .icon-btn {
   flex: none;
@@ -661,7 +661,7 @@ if (view.tab === 'weread' && !wr.books) void nextTick(() => loadWeread());
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .area {
   width: 100%;
@@ -670,7 +670,7 @@ if (view.tab === 'weread' && !wr.books) void nextTick(() => loadWeread());
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
 }
 .spin {

@@ -469,7 +469,7 @@ async function talk() {
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .area {
   width: 100%;
@@ -479,7 +479,7 @@ async function talk() {
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   resize: none;
 }

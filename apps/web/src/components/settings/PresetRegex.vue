@@ -339,7 +339,7 @@ const sampleOut = computed(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 textarea.mono {
-  font-size: 13px;
+  font-size: 16px;
 }
 .add {
   flex: 1;

@@ -452,6 +452,11 @@ const PERSONALITY = { clingy: '粘人', balanced: '适中', independent: '独立
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 13.5px;
 }
+/* 输入框小于 16px 时 iOS 聚焦会放大页面：.mono 的输入框用 16px，展示的文字照旧 */
+input.mono,
+textarea.mono {
+  font-size: 16px;
+}
 .pick {
   display: flex;
   align-items: center;

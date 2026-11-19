@@ -481,7 +481,7 @@ onBeforeUnmount(() => { clearInterval(sceneTimer); shortScreen.removeEventListen
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
 }
 .type-box::placeholder {

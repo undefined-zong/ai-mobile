@@ -53,9 +53,10 @@ button {
   touch-action: manipulation;
 }
 
-/* iOS 输入框小于 16px 会在聚焦时自动放大页面 */
+/* iOS 输入框、下拉框小于 16px 会在聚焦时自动放大页面 */
 input,
-textarea {
+textarea,
+select {
   font-size: 16px;
 }
 

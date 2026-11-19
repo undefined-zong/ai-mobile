@@ -658,7 +658,7 @@ function again() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
 }
 .field {
@@ -670,7 +670,7 @@ function again() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .btns :deep(.van-button) {
   padding: 0 6px;

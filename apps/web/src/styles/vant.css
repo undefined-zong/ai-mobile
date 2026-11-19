@@ -82,6 +82,8 @@
   --van-stepper-background: var(--panel);
   --van-stepper-button-icon-color: var(--ink);
   --van-stepper-input-text-color: var(--ink);
+  /* 步进器中间能直接打字：小于 16px 时 iOS 聚焦会放大页面 */
+  --van-stepper-input-font-size: 16px;
   --van-stepper-button-disabled-color: var(--panel);
   --van-stepper-button-disabled-icon-color: var(--ink-3);
 
