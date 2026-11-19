@@ -15,7 +15,6 @@ import {
 import {
   imageAppearance,
   isFandom,
-  isSpritePreset,
   joinTags,
   OUTFIT_KINDS,
   SPRITE_EXPR,
@@ -104,8 +103,7 @@ export interface SpriteStatus {
 
 /** 立绘预设（不给角色时是"立绘"用途选的那个：画"你"的立绘用） */
 export function spritePresetFor(c?: Character): Preset | undefined {
-  const p = useLibraryStore().presetForUse('sprite', c);
-  return p && isSpritePreset(p) ? p : undefined;
+  return useLibraryStore().presetForUse('sprite', c);
 }
 
 export function spriteStatus(c?: Character): SpriteStatus {

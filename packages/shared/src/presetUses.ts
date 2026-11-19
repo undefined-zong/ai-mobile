@@ -3,11 +3,11 @@ import type { Preset, PresetCategory, PromptBlock } from './types/preset.ts';
 import { SOCIAL_TASKS } from './types/social.ts';
 
 /**
- * 用预设的地方：每个调用 AI 的功能用哪一类预设。
+ * 用预设的地方：每个调用 AI 的功能独立选择预设，category 只决定设置页分组和推荐排序。
  * - 对话：每个角色自己选（Character.presetId），不在这张表里；
  * - 语音通话（call）：选一个对话预设（默认"通话 · 短句"），或者"跟随对话预设"；
- * - 一起做事的每件事（scene:meal 等）、主动消息：选一个对应分类的预设，或者"跟随对话预设"（用这个角色的对话预设）；
- * - 小剧场（番外）、总结、配图（image）、节律：选一个对应分类的预设；
+ * - 一起做事的每件事（scene:meal 等）、主动消息：选一个预设，或者"跟随对话预设"（用这个角色的对话预设）；
+ * - 小剧场（番外）、总结、配图（image）、节律：选一个预设；
  * - 一起做事时画的图（image:study 等）：选一个生图预设，或者"跟随配图"（用配图选的那个）；
  * - 心跳：打字聊用"心跳"（scene:heart），连麦用"心跳 · 语音"（heart-voice），玩具的控制指令用"控制指令"（device），背景图用 image:heart。
  * - 哄睡：连麦、故事、定时到点的晚安用"哄睡"（scene:sleep），"场景"模式（挑一个睡前的地方、像约会那样沉浸地陪你睡着）用"哄睡 · 场景"（sleep-scene），

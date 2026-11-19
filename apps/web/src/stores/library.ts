@@ -1,7 +1,7 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import {
   appContextBeforeHistory,
-  canBecome,
+  categoryMarkers,
   copyBlocks,
   markerBlock,
   markerChoices as categoryMarkerChoices,
@@ -865,7 +865,7 @@ export const useLibraryStore = defineStore('library', () => {
   /** 角色没选有效预设时用日常；不把通话等专用预设按文件顺序当成普通聊天。 */
   function chatPresetFor(character?: Pick<Character, 'presetId'> | null): Preset | undefined {
     const own = presetById(character?.presetId);
-    if (own?.category === 'chat') return own;
+    if (own) return own;
     const chats = presetsOf('chat');
     return chats.find((p) => p.id === 'preset-daily')
       ?? chats.find((p) => !SEEDS.some((s) => s.preset.id === p.id && s.defaultFor.length));
@@ -880,16 +880,16 @@ export const useLibraryStore = defineStore('library', () => {
     const v = uses[use];
     if (meta?.follow && (v === null || (v === undefined && meta.follow === 'image'))) return null;
     const picked = presetById(v ?? undefined);
-    if (picked && picked.category === meta?.category) return picked.id;
+    if (picked) return picked.id;
     const seed = SEEDS.find((s) => s.defaultFor.includes(use));
     const fallback = presetById(seed?.preset.id);
-    if (fallback?.category === meta?.category) return fallback?.id;
+    if (fallback) return fallback.id;
     return meta?.follow ? null : undefined;
   }
 
   /**
    * 这个用途这次用哪个预设。跟随时用对话预设 / 配图的预设；
-   * 这一类一个都没有时：能跟随对话的用对话预设，其余为空（调用方说清楚缺什么）
+   * 分类只用于整理预设；任何分类的已选预设都按原样使用。
    */
   function presetForUse(use: PresetUseId, character?: Pick<Character, 'presetId'> | null): Preset | undefined {
     const meta = presetUse(use);
@@ -918,7 +918,7 @@ export const useLibraryStore = defineStore('library', () => {
     return presets.value.at(-1) as Preset;
   }
 
-  /** 复制一份；角色扮演类的可以复制成另一类（例如把导入的对话预设复制成功能预设） */
+  /** 复制一份，可以放进任意分类；提示词块和参数原样保留。 */
   function duplicatePreset(id: string, category?: PresetCategory): Preset | undefined {
     const src = presetById(id);
     if (!src) return undefined;
@@ -969,9 +969,9 @@ export const useLibraryStore = defineStore('library', () => {
     return out;
   }
 
-  /** 这一类预设能加的程序块：程序按分类认的，加上这一类的自带预设里用到的 */
+  /** 所有用途的程序块都能添加，当前分类的排在前面。 */
   function markerChoices(category: PresetCategory): { identifier: string; name: string }[] {
-    return categoryMarkerChoices(category, seedMarkerBlocks(category));
+    return categoryMarkerChoices(category, PRESET_CATEGORY_ORDER.flatMap(seedMarkerBlocks));
   }
 
   /** 给预设加一块程序块（加在聊天记录前，没有聊天记录块就加在最后）；已经有了就不加 */
@@ -990,14 +990,15 @@ export const useLibraryStore = defineStore('library', () => {
     const from = presetById(fromId);
     const to = presetById(toId);
     if (!from || !to) return undefined;
-    const res = copyBlocks(to, from, blocks, { known: markerChoices(to.category).map((m) => m.identifier), newId: uid });
+    const res = copyBlocks(to, from, blocks, { newId: uid });
     if (res.added.length) to.updatedAt = Date.now();
     return res;
   }
 
-  /** 新建某一类时能选的模板 */
+  /** 任意分类都能用所有模板；当前分类的排在前面。 */
   function templatesFor(category: PresetCategory): { file: string; name: string; description: string }[] {
-    return TEMPLATES.filter((t) => canBecome(t.preset.category, category)).map((t) => ({ file: t.file, name: t.preset.name, description: t.preset.description }));
+    return [...TEMPLATES].sort((a, b) => Number(b.preset.category === category) - Number(a.preset.category === category))
+      .map((t) => ({ file: t.file, name: t.preset.name, description: t.preset.description }));
   }
 
   /**
@@ -1005,7 +1006,7 @@ export const useLibraryStore = defineStore('library', () => {
    * 采样参数和拼装设置照这一类的自带预设（没有自带预设时用预设文件的默认值）
    */
   function createPreset(category: PresetCategory, templateFile?: string): Preset {
-    const template = TEMPLATES.find((t) => t.file === templateFile && canBecome(t.preset.category, category))?.preset;
+    const template = TEMPLATES.find((t) => t.file === templateFile)?.preset;
     const ref = (SEEDS.find((s) => s.preset.category === category && s.defaultFor.length) ?? SEEDS.find((s) => s.preset.category === category))?.preset;
     const blocks = seedMarkerBlocks(category);
     const label = PRESET_CATEGORIES[category].label;
@@ -1017,7 +1018,7 @@ export const useLibraryStore = defineStore('library', () => {
         version: 1,
         category,
         name: label,
-        blocks: blocks.length ? blocks : categoryMarkerChoices(category).map((m) => markerBlock(m.identifier, m.name)),
+        blocks: blocks.length ? blocks : Object.entries(categoryMarkers(category)).map(([id, name]) => markerBlock(id, name)),
         ...(ref ? { sampler: ref.sampler, formats: ref.formats, worldInfoEnabled: ref.worldInfoEnabled } : {}),
       });
       data = { ...blank, description: '' };

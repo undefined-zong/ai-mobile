@@ -4,7 +4,6 @@ import {
   CAPTURE_DAYS,
   captureRefs,
   clockOf,
-  isParallelCapturePreset,
   nowDayMinute,
   parseParallelCapture,
   settleCapture,
@@ -33,10 +32,9 @@ import { uid } from '@/utils/id';
  * 调"平行时空"的 API。
  */
 
-/** AI 记一件事用的预设（选成了别的、被删了时为空） */
+/** 使用"AI 记一件事"用途选中的预设。 */
 export function capturePreset(): Preset | undefined {
-  const p = useLibraryStore().presetForUse('parallel-capture');
-  return p?.category === 'parallel' && isParallelCapturePreset(p) ? p : undefined;
+  return useLibraryStore().presetForUse('parallel-capture');
 }
 
 /** 能不能用 AI 记（API 接通了、有"平行时空 · AI 记一件事"预设）；不能时说明原因、去哪改 */

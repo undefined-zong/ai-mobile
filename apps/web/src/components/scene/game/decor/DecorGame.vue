@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
-import { expressionField, expressionMood, isDecorPreset, parseControlTags, type MessagePart, type PresetUseId } from '@app/shared';
+import { expressionField, expressionMood, parseControlTags, type MessagePart, type PresetUseId } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -93,7 +93,7 @@ decor.homeOf(her.value.id);
 const home = computed(() => decor.homes[her.value.id] ?? decor.homeOf(her.value.id));
 const rooms = computed(() => home.value.rooms);
 const room = computed(() => rooms.value[home.value.current] ?? rooms.value[0]!);
-const presetReady = computed(() => isDecorPreset(lib.presetForUse(USE, her.value)));
+const presetReady = computed(() => !!lib.presetForUse(USE, her.value));
 
 // —— 3D ——
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -696,7 +696,7 @@ const hint = computed(() =>
   <div class="decor" data-game="decor">
     <div v-if="!presetReady" class="warn">
       <span class="i-lucide-triangle-alert shrink-0" />
-      <span class="flex-1 min-w-0">"一起游戏 · 装修小屋"选的预设里没有装修的几步，{{ her.pronoun }}的布置方案会读不出来</span>
+      <span class="flex-1 min-w-0">给"一起游戏 · 装修小屋"选择一个预设</span>
       <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/presets')">去看看</button>
     </div>
 

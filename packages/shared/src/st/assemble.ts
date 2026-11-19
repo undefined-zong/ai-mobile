@@ -296,6 +296,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const lastCharacter = blocks.reduce((at, b, i) => characterSlots.includes(b.identifier) ? i : at, -1);
   addLoreSlot('worldInfoAfter', '世界书（角色后）', !!lore.after, lastCharacter < 0 ? before(['dialogueExamples', 'chatHistory']) : lastCharacter + 1);
   addLoreSlot('dialogueExamples', '示例对话', !!(lore.emTop.length || lore.emBottom.length), before(['chatHistory']));
+  addLoreSlot('chatHistory', '聊天历史', !!history.length, blocks.length);
 
   for (const b of blocks) {
     const report: BlockReport = {

@@ -1,7 +1,7 @@
 import { characterPronoun } from '@app/shared';
 import { buildCommunityMessages, communityFeedInput, communityMemberPostInput, communityMembersFill, errorText, isAbortError, samplerRequest, socialCharacterFill, socialNowFill, type CommunityPromptInput } from '@app/ai';
 import {
-  commentsFromDrafts, COMMUNITY_CATCH_UP_MS, communityFromDraft, communityInfoText, communityJobs, communityPostMemory, communityPostText, isCommunityPreset, isNetizen, MOMENT_USER, netizenName,
+  commentsFromDrafts, COMMUNITY_CATCH_UP_MS, communityFromDraft, communityInfoText, communityJobs, communityPostMemory, communityPostText, isNetizen, MOMENT_USER, netizenName,
   parseCommunityBatch, parseCommunityDraft, parseCommunityReaction, parseMemberReaction, postsFromDrafts, shiftDate, socialDayText, zonedDateKey,
   type Character, type Community, type CommunityContext, type CommunityImageMoment, type CommunityPost, type MomentImage, type Preset,
 } from '@app/shared';
@@ -110,10 +110,9 @@ export function communityBlock(character: Character): string {
 
 // —— 能不能调 ——
 
-/** 社群用的预设："社群"那个用途选的，得是社群的预设（选成了朋友圈的、被删了时为空，调用方说清楚缺什么） */
+/** 使用"社群"用途选中的预设。 */
 export function communityPreset(): Preset | undefined {
-  const preset = useLibraryStore().presetForUse('community');
-  return isCommunityPreset(preset) ? preset : undefined;
+  return useLibraryStore().presetForUse('community');
 }
 
 /** 社群能不能调模型（"社媒"的 API 接通了、有社群预设）；不能时说明原因 */

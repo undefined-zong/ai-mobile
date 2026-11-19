@@ -60,9 +60,9 @@ const userName = computed(() => personaOf(chat.chatById(chatId.value)).name);
 const herMark = computed(() => her.value.name.slice(0, 1));
 
 /** 棋盘预设：功能预设里有 fly- 开头触发条件的（自带的，和你复制、导入的） */
-const boards = computed(() => lib.presetsOf('feature').filter((p) => isFlightPreset(p)));
+const boards = computed(() => [...lib.presets].sort((a, b) => Number(isFlightPreset(b)) - Number(isFlightPreset(a))));
 const preset = computed(() => lib.presetForUse(USE, her.value));
-const presetReady = computed(() => isFlightPreset(preset.value));
+const presetReady = computed(() => !!preset.value);
 
 const cells = ref<(Cell | null)[]>([]);
 const pos = reactive<Record<Who, number>>({ you: 0, her: 0 });
@@ -431,7 +431,7 @@ function again() {
       </div>
     </div>
     <p v-if="!boards.length" class="warn">还没有棋盘预设：在"我的 → 预设"里导入一个，或者恢复自带的"飞行棋 · 甜蜜日常"。</p>
-    <p v-else-if="!presetReady" class="warn">现在用的预设不是棋盘，点一张棋盘换过来。</p>
+    <p v-else-if="!presetReady" class="warn">选择一个预设来设计棋盘。</p>
     <p class="rules">一共 {{ SIZE }} 格，你和{{ her.pronoun }}轮流掷骰子（1–6），走到哪一格就做那一格的任务，先到终点的赢。格子是开局时照选的棋盘现设计的；想要自己的棋盘，复制一张改"棋盘设计"那一块。</p>
     <van-button type="primary" round block class="!mt-3" :disabled="!presetReady" @click="start">开始</van-button>
   </template>

@@ -98,7 +98,7 @@ export function parsePresetFile(json: unknown, fileName = ''): ParsedPresetFile 
     ...(typeof s.seed === 'number' ? { seed: s.seed } : {}),
   };
   const regex: RegexScript[] = (Array.isArray(j.regex) ? j.regex : []).map((r, i) => normalizeRegexScript(r, i)).filter((r): r is RegexScript => !!r);
-  const defaultFor = (Array.isArray(j.defaultFor) ? j.defaultFor : []).filter((u): u is PresetUseId => PRESET_USES.some((x) => x.id === u && x.category === category));
+  const defaultFor = (Array.isArray(j.defaultFor) ? j.defaultFor : []).filter((u): u is PresetUseId => PRESET_USES.some((x) => x.id === u));
   const name = str(j.name).trim() || fileName.replace(/\.json$/i, '') || '预设';
   return {
     ...(typeof j.id === 'string' && j.id.trim() ? { id: j.id.trim() } : {}),

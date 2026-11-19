@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { expressionField, isTruthDarePreset, parseControlTags, presetLevels, TRUTH_DARE_LEVEL, type MessagePart, type PresetUseId, type TruthDareTally } from '@app/shared';
+import { expressionField, parseControlTags, presetLevels, TRUTH_DARE_LEVEL, type MessagePart, type PresetUseId, type TruthDareTally } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -81,7 +81,7 @@ const cue = computed(() => `第 ${rounds.value.length} 轮`);
 const finished = computed(() => rounds.value.filter((r) => r.done));
 const preset = computed(() => lib.presetForUse(USE, her.value));
 /** 选的预设里有没有真心话大冒险的块（换成别的功能预设时出题、选择的格式会不对） */
-const presetReady = computed(() => isTruthDarePreset(preset.value));
+const presetReady = computed(() => !!preset.value);
 const tdFirst = (p: { name: string }) => p.name.includes('真心话');
 
 /** 预设里的尺度，说明就是那一块的内容（开头的【…】标题不重复显示） */
@@ -458,7 +458,7 @@ function again() {
       <span class="flex-1 min-w-0 text-left truncate">预设：{{ preset?.name ?? '没有功能预设' }}</span>
       <span class="text-accent-ink shrink-0">换</span>
     </button>
-    <p v-if="!presetReady" class="warn">这个预设里没有真心话大冒险的块，出题、选择的格式可能不对；换成"一起游戏 · 真心话大冒险"或者从它复制一份。</p>
+    <p v-if="!presetReady" class="warn">选择一个预设来开始游戏。</p>
     <van-button type="primary" round block class="!mt-3" @click="start">转瓶子，开始</van-button>
   </template>
 

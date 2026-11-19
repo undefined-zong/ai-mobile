@@ -95,7 +95,7 @@ function boundTo(bookId: string): string[] {
 function presetUsedFor(p: Preset): string[] {
   const lib = useLibraryStore();
   const out = lib.usesOf(p.id).map((u) => u.label);
-  if (p.category === 'chat') for (const c of useCharacterStore().list) if (lib.chatPresetFor(c)?.id === p.id) out.push(`${c.name}的对话`);
+  for (const c of useCharacterStore().list) if (lib.chatPresetFor(c)?.id === p.id) out.push(`${c.name}的对话`);
   return out;
 }
 
@@ -451,7 +451,6 @@ export function planOps(ops: AssistantOp[], selected?: ReadonlySet<string>): Edi
     newId: (prefix) => uid(prefix),
     now: Date.now(),
     defaultPresetId: defaultPresetId(),
-    knownMarkers: (category) => lib.markerChoices(category).map((m) => m.identifier),
   }, selected);
 }
 

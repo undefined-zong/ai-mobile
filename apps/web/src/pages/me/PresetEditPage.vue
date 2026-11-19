@@ -19,7 +19,7 @@ import {
   momentLabel,
   PRESET_CATEGORIES,
   RHYTHM_TASKS,
-  ROLEPLAY_CATEGORIES,
+  PRESET_CATEGORY_ORDER,
   SCENES,
   blockLevel,
   POKE_LEVEL,
@@ -51,9 +51,9 @@ import { useLibraryStore } from '@/stores/library';
 /**
  * 编辑一个预设（自带的和导入的一样）：
  * - 提示词：每一块的名字、内容、角色、位置都能改，能加块、删块、开关；长按一块拖动调顺序（电脑上按住直接拖）；程序填充的块内容由程序填，其余都能改；
- *   "加程序块"从这一类程序认得的程序块里挑（角色卡、你的人设、场景、聊天记录……）；
- *   一块或者多选几块能复制一份、复制到别的预设（程序块目标里已经有、或者那一类用不了的会跳过）；
- * - 采样参数；正则（导入、改、拖动调顺序，见 components/settings/PresetRegex.vue）；名字、说明、分类（对话 / 功能 / 主动消息之间可以互换）；
+ *   "加程序块"可选所有用途的程序块（角色卡、你的人设、场景、聊天记录……）；
+ *   一块或者多选几块能复制一份、复制到别的预设（目标里已经有的程序块会跳过）；
+ * - 采样参数；正则（导入、改、拖动调顺序，见 components/settings/PresetRegex.vue）；名字、说明、分类（所有分类都能互换）；
  * - 右上角 ⋯：复制一份、导出成预设文件、恢复成预设文件里的样子（自带的）、删除。
  * 改了马上存在本机，下一次调用起生效。
  */
@@ -76,8 +76,7 @@ const roleplay = computed(() => !!preset.value && isRoleplayCategory(preset.valu
 const usedBy = computed(() => {
   const p = preset.value;
   if (!p) return '';
-  if (p.category === 'chat') return chars.list.filter((c) => lib.chatPresetFor(c)?.id === p.id).map((c) => c.name).join('、');
-  return lib.usesOf(p.id).map((u) => u.label).join('、');
+  return [...chars.list.filter((c) => lib.chatPresetFor(c)?.id === p.id).map((c) => c.name), ...lib.usesOf(p.id).map((u) => u.label)].join('、');
 });
 const hasSeed = computed(() => !!preset.value && !!lib.seedOf(preset.value.id));
 
@@ -210,11 +209,10 @@ function startCopyTo(blocks: PromptBlock[]) {
   editing.value = null;
   copying.value = blocks;
 }
-/** 选目标时提醒：这几块里有目标那一类用不了、或者目标已经有的程序块 */
+/** 选目标时提醒已有的程序块，避免重复复制。 */
 function copyNote(target: Preset): string {
-  const known = new Set(lib.markerChoices(target.category).map((m) => m.identifier));
-  const skip = (copying.value ?? []).filter((b) => b.marker && (!known.has(b.identifier) || target.blocks.some((x) => x.marker && x.identifier === b.identifier)));
-  return skip.length ? `${skip.length} 块程序块会跳过（那边已经有，或者${PRESET_CATEGORIES[target.category].label}预设用不了）` : '';
+  const skip = (copying.value ?? []).filter((b) => b.marker && target.blocks.some((x) => x.marker && x.identifier === b.identifier));
+  return skip.length ? `${skip.length} 块程序块会跳过（那边已经有）` : '';
 }
 async function copyTo(id: string) {
   const p = preset.value;
@@ -287,13 +285,13 @@ function setCategory(c: PresetCategory) {
   if (!p || p.category === c) return;
   p.category = c;
   touch();
-  showToast(`改成${PRESET_CATEGORIES[c].label}预设了；原来用它的地方会改用那一类的第一个`);
+  showToast(`已归入${PRESET_CATEGORIES[c].label}分类`);
 }
 
 // —— 右上角 ⋯ ——
 const moreOpen = ref(false);
 const actions = computed(() => [
-  { name: '复制一份', subname: roleplay.value ? '可以复制成对话、功能或主动消息预设' : '复制以后可以放心改', key: 'copy' },
+  { name: '复制一份', subname: '可以复制到任意分类', key: 'copy' },
   { name: '导出预设文件', subname: '.json，能在别的设备上导入，也能放进 src/presets 当自带预设', key: 'export' },
   ...(hasSeed.value ? [{ name: '恢复成预设文件里的样子', subname: preset.value?.seedFile ?? '', key: 'restore' }] : []),
   { name: '删除这个预设', color: 'var(--bad)', key: 'delete' },
@@ -302,8 +300,7 @@ const copyOpen = ref(false);
 function onAction(a: { key: string }) {
   moreOpen.value = false;
   if (a.key === 'copy') {
-    if (roleplay.value) copyOpen.value = true;
-    else copyAs();
+    copyOpen.value = true;
   } else if (a.key === 'export') exportFile();
   else if (a.key === 'restore') void restore();
   else if (a.key === 'delete') void remove();
@@ -495,12 +492,11 @@ const HINT: Record<PresetCategory, string> = {
         <label class="field-label" for="pe-desc">说明</label>
         <textarea id="pe-desc" v-model="preset.description" class="textarea" rows="3" @change="touch" />
         <div class="field-label">分类</div>
-        <div v-if="roleplay" class="flex flex-wrap gap-1.5">
-          <button v-for="c in ROLEPLAY_CATEGORIES" :key="c" type="button" class="opt" :class="{ on: preset.category === c }" @click="setCategory(c)">{{ PRESET_CATEGORIES[c].label }}</button>
+        <div class="flex flex-wrap gap-1.5">
+          <button v-for="c in PRESET_CATEGORY_ORDER" :key="c" type="button" class="opt" :class="{ on: preset.category === c }" @click="setCategory(c)">{{ PRESET_CATEGORIES[c].label }}</button>
         </div>
-        <div v-else class="text-[14px]">{{ PRESET_CATEGORIES[preset.category].label }}</div>
         <p class="text-[12px] text-ink-3 mt-1.5 mb-0 leading-relaxed">
-          {{ PRESET_CATEGORIES[preset.category].desc }}。{{ roleplay ? '对话、功能、主动消息的程序填充块一样，可以直接改分类。' : '这一类的程序填充块是这件任务专用的，换成别的类要从那一类复制。' }}
+          分类用来整理预设。每个场景都能选用任意分类的预设，改分类后原来的用途绑定继续生效。
         </p>
         <p class="text-[12px] text-ink-3 mt-3 mb-0 leading-relaxed">
           {{ preset.seedFile ? `自带的预设，来自预设文件 ${preset.seedFile}；改了、删了都可以，右上角 ⋯ 能恢复成文件里的样子。` : preset.source?.kind === 'sillytavern' ? `从 SillyTavern 导入（${preset.source.fileName ?? ''}）。` : '你导入或复制的预设。' }}
@@ -512,7 +508,7 @@ const HINT: Record<PresetCategory, string> = {
     <van-action-sheet
       v-model:show="copyOpen"
       title="复制成哪一类"
-      :actions="ROLEPLAY_CATEGORIES.map((c) => ({ name: `${PRESET_CATEGORIES[c].label}预设`, subname: PRESET_CATEGORIES[c].desc, key: c }))"
+      :actions="PRESET_CATEGORY_ORDER.map((c) => ({ name: `${PRESET_CATEGORIES[c].label}预设`, subname: PRESET_CATEGORIES[c].desc, key: c }))"
       cancel-text="取消"
       close-on-click-action
       @select="(a: { key: PresetCategory }) => copyAs(a.key)"
@@ -630,7 +626,7 @@ const HINT: Record<PresetCategory, string> = {
       <div class="sheet" data-testid="marker-picker">
         <div class="sheet-title">加程序块</div>
         <p class="text-[12.5px] text-ink-3 mt-1 mb-3 leading-relaxed">
-          {{ PRESET_CATEGORIES[preset.category].label }}预设的程序认得这些块，内容每次由程序填。已经有的点了打开那一块。
+          所有用途的程序块都能添加，内容由当前场景填充。已经有的点了打开那一块。
         </p>
         <div class="grid gap-1.5">
           <button v-for="m in markerRows" :key="m.identifier" type="button" class="marker-row press" :class="{ has: !!m.block }" :data-marker="m.identifier" @click="pickMarker(m)">
