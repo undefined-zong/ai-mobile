@@ -121,8 +121,10 @@ const unlock = () => {
   if (unlockAudio()) document.removeEventListener('pointerdown', unlock, true);
 };
 document.addEventListener('pointerdown', unlock, true);
-// 之后每次点屏幕顺手恢复被挂起的 AudioContext（切后台回来、iPhone 来电之后白噪音和通话的说话检测会停）
+// 之后每次点屏幕顺手恢复被挂起的 AudioContext（切后台回来、iPhone 来电之后白噪音和通话的说话检测会停）；
+// 切回前台时也恢复一次（iPhone 上接进 Web Audio 的音乐不用等你点屏幕）
 document.addEventListener('pointerdown', resumeAudioContext, true);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && resumeAudioContext());
 
 /** "一起""回忆"、地图默认陪着你的角色：最近聊过的那个（不是固定的第一个） */
 function followLatestChat() {

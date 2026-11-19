@@ -4,11 +4,13 @@ import { expressionField, lrcIndexAt, type MessagePart } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import FlyingDanmaku from '@/components/scene/FlyingDanmaku.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import { danmaku as demoDanmaku, songs as demoSongs } from '@/mock/music';
 import { services, type SongInfo, type SongList } from '@/services';
+import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseKind, type NoiseMix } from '@/services/ambience';
 import { extractId } from '@/services/music';
 import { isLiked as likedSong, musicLibrary, removeList as dropList, saveList, toggleLike as flipLike } from '@/services/musicLibrary';
 import {
@@ -33,14 +35,16 @@ import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { useServicesStore } from '@/stores/services';
-import { clock } from '@/utils/time';
+import { clock, listTime } from '@/utils/time';
 
 /**
  * 一起听歌：网易云音乐（同 SleepTogether：你自己部署的 Netease_url Worker，"我的 → 地图、天气、音乐"里填地址）。
  * - 搜歌、贴歌单 / 专辑链接导入、播放列表、单曲循环 / 随机；地址播放前现取，出错重取（services/musicPlayer.ts）；
  * - 歌词逐行滚动（带译文），点一行跳过去；
- * - 她按歌词发"弹幕"：每首歌开始时「陪伴 · 快速」按"一起听歌"预设的"批量写弹幕"一次写好几句，唱到那一行时出现，也记进聊天；
- * - 边听边跟她说一句，她回一句（可能用 [music:歌名-歌手] 推荐下一首，点一下就放）；
+ * - 她按歌词发"弹幕"：每首歌开始时「陪伴 · 快速」按"一起听歌"预设的"批量写弹幕"一次写好几句，唱到那一行时从右往左飘过唱片（FlyingDanmaku），也记进聊天；
+ * - 边听边跟她说一句，她回一句（可能用 [music:歌名-歌手] 推荐下一首，点一下就放），回的话也飘过去；
+ * - 右上角一列：音量（音乐的音量记在网易云的设置里，开着白噪音时一起调）、白噪音（本机合成，和歌叠着放，services/ambience.ts）、
+ *   这首歌的弹幕（从聊天记录里按歌名找，以前听这首时她说的也在）；
  * - 去聊天、打电话时歌还在放；离开这件事时停。
  * 没填 Worker 地址时是示例歌曲（虚构的歌、原创占位歌词、不出声）。
  */
@@ -67,7 +71,6 @@ const progress = computed({
 const isDemoSong = (s: SongInfo) => demoSongs.some((d) => d.id === s.id);
 
 onMounted(() => {
-  setVolume(svc.netease.volume);
   if (real.value && player.queue.some(isDemoSong)) clearQueue();
   // 还没有在放的：演示时把示例歌放进列表；带着 ?q= 进来（聊天里她分享的歌）就搜这首放
   const q = typeof route.query.q === 'string' ? route.query.q.trim() : '';
@@ -112,7 +115,7 @@ const plannedFor = ref('');
 const planning = ref(0);
 const notConnected = ref('');
 const herSaid: string[] = [];
-const comment = ref<{ id: number; text: string } | null>(null);
+const flyEl = ref<InstanceType<typeof FlyingDanmaku> | null>(null);
 const herLine = ref('');
 
 /** 作词作曲这类署名行不交给她 */
@@ -181,14 +184,11 @@ async function planReactions() {
 }
 watch(() => [song.value?.id, player.lyricState], () => void planReactions(), { immediate: true });
 
-/** 她说了一句：弹幕在唱片旁边飘过；回你的话（line）也留在上面那行 */
+/** 她说了一句：弹幕从右往左飘过唱片；回你的话（line）也留在上面那行 */
 function say(text: string, expr?: string, line = false) {
   if (line) herLine.value = text;
   herSaid.push(text);
-  comment.value = { id: Date.now(), text };
-  setTimeout(() => {
-    if (comment.value?.text === text) comment.value = null;
-  }, 4800);
+  flyEl.value?.push('her', text);
   if (expr) chars.setExpression(her.value.id, expr);
 }
 
@@ -238,7 +238,6 @@ async function sendTalk() {
   talking.value = true;
   talkError.value = '';
   herLine.value = '';
-  comment.value = null;
   const lyric = player.lines[lineIdx.value]?.text ?? '';
   const r = await chat.sceneReply(chatId.value, {
     task: 'music-chat',
@@ -407,9 +406,84 @@ const MODE = {
   shuffle: { icon: 'i-lucide-shuffle', label: '随机播放' },
 } as const;
 
+// —— 右上角一列：音量、白噪音、这首歌的弹幕（同出逃、戳戳乐：竖着排在顶栏下面，面板在左边展开，同一时间只开一个） ——
+type Pop = 'volume' | 'noise' | 'danmaku';
+const pop = ref<Pop | null>(null);
+function togglePop(p: Pop) {
+  pop.value = pop.value === p ? null : p;
+}
+
+/**
+ * 这首歌她发过的弹幕（唱到某一句时的、回你的话），新的在上面。弹幕和回话都记在聊天里，位置写成"《歌名》「那句歌词」"或"《歌名》02:13"，
+ * 按歌名从聊天记录里找：以前听这首时说的也在，聊天里删掉的这里也没了
+ */
+const songDanmaku = computed(() => {
+  const s = song.value;
+  if (!s || !chatId.value) return [];
+  const head = `《${s.title}》`;
+  return chat
+    .list(chatId.value)
+    .filter((m) => m.role === 'assistant' && m.meta.scene === 'music' && m.meta.cue?.startsWith(head) && !m.meta.error && m.text.trim())
+    .map((m) => ({ id: m.id, text: m.text, at: m.meta.cue!.slice(head.length), when: m.createdAt }))
+    .reverse();
+});
+
+/** 音乐的音量 0–100：记在网易云的设置里（跟着同步），进来就按它放 */
+const musicVolume = computed({
+  get: () => Math.round(svc.netease.volume * 100),
+  set: (v: number) => (svc.netease.volume = v / 100),
+});
+watch(() => svc.netease.volume, (v) => setVolume(v), { immediate: true });
+const volumeIcon = computed(() => {
+  const v = svc.netease.volume;
+  return v === 0 ? 'i-lucide-volume-x' : v < 0.5 ? 'i-lucide-volume-1' : 'i-lucide-volume-2';
+});
+
+/** 白噪音：选哪种、多响记在本机；开没开不记（浏览器要点一下才让出声）。第一次用是雨声，比歌小声 */
+const NOISE_SAVE = 'ai-mobile:music:noise';
+const NOISE_DEFAULT: { kind: NoiseKind; volume: number } = { kind: 'rain', volume: 40 };
+function readNoise(): { kind: NoiseKind; volume: number } {
+  try {
+    const v = JSON.parse(localStorage.getItem(NOISE_SAVE) ?? 'null') as { kind?: string; volume?: number } | null;
+    return {
+      kind: NOISE_KINDS.find((k) => k === v?.kind) ?? NOISE_DEFAULT.kind,
+      volume: typeof v?.volume === 'number' ? Math.max(0, Math.min(100, v.volume)) : NOISE_DEFAULT.volume,
+    };
+  } catch {
+    return { ...NOISE_DEFAULT };
+  }
+}
+const savedNoise = readNoise();
+const noise = ref<NoiseKind>(savedNoise.kind);
+const noiseVolume = ref(savedNoise.volume);
+watch([noise, noiseVolume], ([kind, volume]) => {
+  try {
+    localStorage.setItem(NOISE_SAVE, JSON.stringify({ kind, volume }));
+  } catch {
+    // 存不了：下次用默认的
+  }
+});
+const noisePlaying = computed(() => ambience.state.playing && !ambience.state.fading);
+const mixOf = (kind: NoiseKind, v: number) => Object.fromEntries(NOISE_KINDS.map((k) => [k, k === kind ? v : 0])) as NoiseMix;
+/** 在点击里调用（浏览器只允许点了以后出声）；null 是关掉 */
+function pickNoise(kind: NoiseKind | null) {
+  if (!kind) {
+    ambience.stop();
+    return;
+  }
+  noise.value = kind;
+  void ambience.start(mixOf(kind, noiseVolume.value));
+}
+watch(noiseVolume, (v) => {
+  if (noisePlaying.value) ambience.setMix(mixOf(noise.value, v));
+});
+// 离开这一页歌就停了（chat.leaveScene），白噪音也停
+onBeforeUnmount(() => ambience.stop());
+
 const line = computed(() => {
   if (talking.value) return herLine.value;
-  if (comment.value) return '';
+  // 她的弹幕正飘着：上面那行先收起来，不重复
+  if (flyEl.value?.count) return '';
   if (herLine.value) return herLine.value;
   if (!song.value) return real.value ? '想听什么？搜一首，我们一起听。' : '这首歌，我们一起听吧。';
   return `在听《${song.value.title}》……`;
@@ -422,7 +496,7 @@ const subtitle = computed(() => {
 </script>
 
 <template>
-  <SceneShell scene-id="music" hide-figure :line="line" :typing="talking">
+  <SceneShell class="music-shell" scene-id="music" hide-figure :line="line" :typing="talking">
     <template #actions>
       <button class="pill-btn" aria-label="搜歌" @click="openSearch"><span class="i-lucide-search" /></button>
       <button class="pill-btn" aria-label="播放列表和我们的歌单" @click="listOpen = true"><span class="i-lucide-list-music" /></button>
@@ -434,12 +508,81 @@ const subtitle = computed(() => {
           <img v-if="song?.cover" :src="`${song.cover}?param=300y300`" class="label-img" alt="" referrerpolicy="no-referrer" />
           <span v-else class="label" />
         </div>
-        <Transition name="dm">
-          <div v-if="comment" :key="comment.id" class="danmaku">
-            <Avatar :character="her" :size="24" live />
-            <span>{{ comment.text }}</span>
+      </div>
+      <!-- 她的弹幕：从右往左飘过唱片 -->
+      <div class="dm-zone">
+        <FlyingDanmaku ref="flyEl" :character="her" :top="0" :fill="1" />
+      </div>
+
+      <!-- 右上角一列：音量、白噪音、这首歌的弹幕，竖着排在顶栏下面；面板在这一列左边展开，点空白处收起 -->
+      <div class="side-tools">
+        <button type="button" class="pill-btn" :aria-expanded="pop === 'volume'" aria-label="音量" data-testid="music-volume-btn" @click="togglePop('volume')">
+          <span :class="volumeIcon" />
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          :class="{ on: noisePlaying }"
+          :aria-expanded="pop === 'noise'"
+          :aria-label="`白噪音：${noisePlaying ? NOISE_LABEL[noise].label : '关'}`"
+          data-testid="music-noise-btn"
+          @click="togglePop('noise')"
+        >
+          <span :class="ambience.state.loading ? 'i-lucide-loader-circle spin-icon' : noisePlaying ? NOISE_LABEL[noise].icon : 'i-lucide-audio-lines'" />
+        </button>
+        <button
+          type="button"
+          class="pill-btn relative"
+          :aria-expanded="pop === 'danmaku'"
+          :aria-label="`这首歌的弹幕：${songDanmaku.length} 条`"
+          data-testid="music-danmaku-btn"
+          @click="togglePop('danmaku')"
+        >
+          <span class="i-lucide-message-square-text" />
+          <span v-if="songDanmaku.length" class="badge num">{{ songDanmaku.length > 99 ? '99+' : songDanmaku.length }}</span>
+        </button>
+      </div>
+      <div v-if="pop" class="pop-catcher" @click="pop = null" />
+      <div v-if="pop === 'volume'" class="side-pop" role="dialog" aria-label="音量" data-testid="music-volume">
+        <div class="mix-row">
+          <span class="i-lucide-music-2 text-ink-3" />
+          <span class="mix-label">音乐</span>
+          <van-slider v-model="musicVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="音乐音量" />
+        </div>
+        <div v-if="noisePlaying" class="mix-row">
+          <span :class="NOISE_LABEL[noise].icon" class="text-ink-3" />
+          <span class="mix-label">{{ NOISE_LABEL[noise].label }}</span>
+          <van-slider v-model="noiseVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="白噪音音量" />
+        </div>
+      </div>
+      <div v-if="pop === 'noise'" class="side-pop" role="dialog" aria-label="白噪音" data-testid="music-noise">
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" class="chip" :class="{ on: !noisePlaying }" :aria-pressed="!noisePlaying" @click="pickNoise(null)"><span class="i-lucide-volume-x" />关</button>
+          <button v-for="k in NOISE_KINDS" :key="k" type="button" class="chip" :class="{ on: noisePlaying && noise === k }" :aria-pressed="noisePlaying && noise === k" :data-noise="k" @click="pickNoise(k)">
+            <span :class="NOISE_LABEL[k].icon" />{{ NOISE_LABEL[k].label }}
+          </button>
+        </div>
+        <div class="mix-row mt-2">
+          <span class="i-lucide-volume-2 text-ink-3" />
+          <van-slider v-model="noiseVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="白噪音音量" />
+        </div>
+        <p v-if="ambience.state.error" class="text-[12px] text-bad mt-2 mb-0">{{ ambience.state.error }}</p>
+        <p class="text-[11.5px] text-ink-3 mt-2 mb-0">和歌叠着放；在这台设备上合成，不联网、不用流量</p>
+      </div>
+      <div v-if="pop === 'danmaku'" class="side-pop" role="dialog" aria-label="这首歌的弹幕" data-testid="music-danmaku">
+        <div class="flex items-center gap-2 mb-1">
+          <Avatar :character="her" :size="22" />
+          <span class="flex-1 min-w-0 truncate text-[13.5px] font-600">{{ song ? `《${song.title}》的弹幕` : '弹幕' }}</span>
+          <span class="text-[12px] text-ink-3 shrink-0">{{ songDanmaku.length }} 条</span>
+        </div>
+        <p v-if="!songDanmaku.length" class="text-[12.5px] text-ink-3 py-3 m-0">{{ song ? `${her.name}还没给这首歌发过弹幕` : '还没在放歌' }}</p>
+        <div v-for="d in songDanmaku" :key="d.id" class="dm-row">
+          <div class="flex items-center gap-2 text-[11.5px] text-ink-3">
+            <span class="flex-1 min-w-0 truncate">{{ d.at }}</span>
+            <span class="num shrink-0">{{ listTime(d.when) }}</span>
           </div>
-        </Transition>
+          <div class="text-[14px] leading-snug break-words">{{ d.text }}</div>
+        </div>
       </div>
     </template>
 
@@ -644,6 +787,95 @@ const subtitle = computed(() => {
   -webkit-backdrop-filter: blur(14px);
   font-size: 17px;
 }
+.pill-btn.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+/* 她的那句话给右上角一列让出位置（按钮宽 38，两边各留 10） */
+.music-shell {
+  --companion-right: 58px;
+}
+.side-tools {
+  position: absolute;
+  /* 比点空白处收起面板的那一层高：面板开着时再点一下按钮就收起 */
+  z-index: 10;
+  top: calc(var(--safe-top) + 56px);
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 盖住她的那句话和底下的面板，不盖顶栏和这一列 */
+.pop-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+}
+.side-pop {
+  position: absolute;
+  z-index: 11;
+  top: calc(var(--safe-top) + 56px);
+  left: 10px;
+  right: 58px;
+  max-height: 60%;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: var(--shadow);
+}
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 10.5px;
+  line-height: 17px;
+  text-align: center;
+}
+.dm-row {
+  padding: 8px 2px;
+  border-top: 1px solid var(--glass-line);
+}
+.mix-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 4px;
+}
+.mix-label {
+  flex-shrink: 0;
+  width: 2.4em;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chip.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  outline: 1px solid var(--accent-line);
+}
 .vinyl-wrap {
   position: absolute;
   z-index: 7;
@@ -678,39 +910,15 @@ const subtitle = computed(() => {
 .vinyl.spin {
   animation: spin 14s linear infinite;
 }
-.danmaku {
+/* 弹幕飘过的那一条：右上角那一列下面（一列从 56 开始，三个 38 的按钮、两个 8 的间隔），唱片中下部，三道（FlyingDanmaku 一道 34px） */
+.dm-zone {
   position: absolute;
-  top: 62%;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 32px);
-  padding: 5px 12px 5px 5px;
-  border-radius: 99px;
-  background: var(--glass-strong);
-  border: 1px solid var(--accent-line);
-  font-size: 14px;
-  transform: translateX(-50%);
-}
-.danmaku > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dm-enter-active {
-  transition: all 0.6s var(--ease);
-}
-.dm-leave-active {
-  transition: all 0.5s;
-}
-.dm-enter-from {
-  opacity: 0;
-  transform: translate(-40%, 0);
-}
-.dm-leave-to {
-  opacity: 0;
-  transform: translate(-110%, 0);
+  z-index: 7;
+  top: calc(var(--safe-top) + 194px);
+  left: 0;
+  right: 0;
+  height: 102px;
+  pointer-events: none;
 }
 .notice {
   display: flex;
