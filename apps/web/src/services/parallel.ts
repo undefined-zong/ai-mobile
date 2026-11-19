@@ -400,15 +400,15 @@ function notesText(characterId: string, n = 6, except?: string): string {
   return parallel.notesOf(characterId).filter((x) => x.id !== except && x.date >= shiftDate(today, -1)).slice(-n).map((x) => parallelNoteText(x, names, timeZone, { replies: 4 })).join('\n');
 }
 
-/** 每次聊天都带着的"今天在平行时空里的留言"（接在长期记忆后面）：今天的最后 4 条 */
-export function parallelNotesBlock(character: Character): string {
+/** 今天最后 4 条平行时空留言候选，由记忆拼装器按相关性和总预算选择。 */
+export function parallelNotesLines(character: Character): { text: string; at: number }[] {
   const parallel = useParallelStore();
-  if (!parallel.ready) return '';
+  if (!parallel.ready) return [];
   const list = parallel.notesOf(character.id, parallelToday()).slice(-4);
-  if (!list.length) return '';
+  if (!list.length) return [];
   const names = namesFor(character.id);
   const timeZone = useEnvironmentStore().settings.timezone;
-  return `今天在平行时空里的留言（${character.name}和${names(PARALLEL_USER)}共用的时间线上；聊天时可以自然地接着说，不用复述）：\n${list.map((n) => parallelNoteText(n, names, timeZone, { replies: 4 })).join('\n')}`;
+  return list.map((n) => ({ text: parallelNoteText(n, names, timeZone, { replies: 4 }), at: n.at }));
 }
 
 /** "家务和健康"那一块里的平行时空：你自己记的今天的事、从今天拿掉的事（"写进聊天"关着、什么都没记时为空） */

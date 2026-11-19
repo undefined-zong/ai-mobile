@@ -1,16 +1,14 @@
 import { isAbortError, linkSignals, rankRecall, type EchoEntry, type RecallHit, type RecallReason } from '@app/ai';
-import { detectStates, estimateTokens, parseTimeQuery, todaySpecials, type Character, type Chat } from '@app/shared';
+import { detectStates, estimateTokens, parseTimeQuery, type Character, type Chat } from '@app/shared';
 import { reactive } from 'vue';
 import { useAiStore } from '@/stores/ai';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useMemoryStore } from '@/stores/memory';
+import { useMessageSettingsStore } from '@/stores/messageSettings';
 
 /**
- * 取记忆（设计文档 §6.1）：AI 回复完成后在后台搜一次，结果按聊天存起来；你发下一条时直接用存好的结果，不用等。
- * - 搜什么：本轮你的消息 + 她的回复（各取前 300 字）；纯寒暄沿用上一轮的结果；
- * - 你本轮发的内容要到下一轮才进入向量搜索；发送时只在本机用它按字面、按时间说法补一两条（几毫秒、不联网）；
- * - 重新生成时沿用那一轮原来用的结果；
- * - 向量化没接通或失败时只按字面搜。
+ * 发送前按本轮用户输入检索；同一查询的向量可以复用，结果每次从当前记忆库重新排名。
+ * 查看提示词保持同步：向量尚未就绪时按字面检索，不沿用其他话题的结果。
  */
 
 export interface RecallLine {
@@ -26,7 +24,7 @@ export interface RecallLine {
 }
 
 export interface RecallSnapshot {
-  /** 搜的时候最后一条消息（这份结果给它之后的那一轮用） */
+  /** 这次查询对应的用户消息 */
   afterMessageId: string | null;
   at: number;
   query: string;
@@ -47,8 +45,7 @@ const snapshots = reactive<Record<string, RecallSnapshot[]>>({});
 const used = new Map<string, RecallLine[]>();
 const running = new Map<string, AbortController>();
 
-const MAX_ITEMS = 8;
-const TOKEN_BUDGET = 900;
+const vectors = new Map<string, { query: string; vector: Float32Array; space: { model: string; dims: number } }>();
 const PHATIC = /^[\s\p{P}\p{S}]*(嗯+|嗯嗯|哦+|噢+|好+|好的|好呀|好哒|行|ok|okay|收到|晚安|早安|早|哈+|嘿+|呜+|啊+|在吗|在|谢谢|么么哒?|抱抱|亲亲|贴贴)?[\s\p{P}\p{S}]*$/iu;
 
 /** 只有寒暄、表情、标点 */
@@ -65,13 +62,44 @@ function linesOf(hits: RecallHit[], characterId: string): RecallLine[] {
     .map(({ key, kind, id, text, at, reason, score, dense, lexical }) => ({ key, kind, id, text, at, reason, score, dense, lexical }));
 }
 
-function cues(text: string, character: Character, now: number) {
+/** 只有日期和回顾用语时，允许按时间找；“昨天吃饭”仍须匹配吃饭。 */
+export function timeOnlyQuery(text: string, phrase: string | null): boolean {
+  if (!phrase) return false;
+  return !text.replace(phrase, '').replace(/发生|做|干|什么|事情|事|回顾|回忆|记得|还记得|我们|咱们|你|我|过|了|的|在|时候|都|有|吗|呢|[\s\p{P}\p{S}]/gu, '');
+}
+
+function cues(text: string, now: number) {
   const timeZone = useEnvironmentStore().settings.timezone;
+  const time = parseTimeQuery(text, now, timeZone);
   return {
-    time: parseTimeQuery(text, now, timeZone),
-    specials: todaySpecials({ now, timeZone, anniversaries: character.relationship.anniversaries, metAt: character.relationship.metAt }),
+    time,
+    timeOnly: timeOnlyQuery(text, time.phrase),
     states: detectStates(text),
   };
+}
+
+function rankForQuery(chat: Chat, character: Character, text: string, now: number) {
+  const mem = useMemoryStore();
+  const policy = useMessageSettingsStore().memoryOptions();
+  const cached = vectors.get(chat.id);
+  const vector = cached?.query === text ? cached : undefined;
+  const c = cues(text, now);
+  const prev = latestRecall(chat.id);
+  const out = rankRecall({
+    candidates: mem.candidates(character.id, vector?.space ?? null),
+    query: text,
+    queryVector: vector?.vector ?? null,
+    lexical: mem.lexical,
+    now,
+    time: c.time,
+    timeOnly: c.timeOnly,
+    states: c.states,
+    echo: prev?.query === text ? prev.echo : undefined,
+    quotas: { basic: policy.maxItems, important: 0, special: 0, state: policy.maxItems, time: policy.maxItems },
+    ...policy,
+    countTokens: estimateTokens,
+  });
+  return { ...out, cues: c, dense: !!vector, lines: linesOf(out.hits, character.id) };
 }
 
 /** 这条聊天最新的一份结果 */
@@ -79,75 +107,54 @@ export function latestRecall(chatId: string): RecallSnapshot | undefined {
   return snapshots[chatId]?.at(-1);
 }
 
-/**
- * AI 回复完成后调用：用本轮你的消息 + 她的回复在后台搜一次。query 由调用方从消息里取（各截 300 字）。
- * 同一条聊天上一次还没搜完的会被取消
- */
-export async function prefetchRecall(chat: Chat, character: Character, query: string, afterMessageId: string | null): Promise<RecallSnapshot | undefined> {
+/** 发送前或打开聊天时调用；只搜索用户输入，不把模型自己的回复当成下一轮主题。 */
+export async function prefetchRecall(chat: Chat, character: Character, query: string, afterMessageId: string | null, signal?: AbortSignal): Promise<RecallSnapshot | undefined> {
   const mem = useMemoryStore();
-  if (!mem.ready) return undefined;
   const text = query.trim();
-  const prev = latestRecall(chat.id);
-  if (!text || isPhatic(text)) return prev;
   running.get(chat.id)?.abort();
+  if (!mem.ready || !useMessageSettingsStore().memoryOptions().tokenBudget || !text || isPhatic(text)) return undefined;
   const abort = new AbortController();
   running.set(chat.id, abort);
   const ai = useAiStore();
-  const now = Date.now();
-  let queryVector: Float32Array | null = null;
-  let space: { model: string; dims: number } | null = null;
   let denseNote = '';
-  if (ai.isLive('embedding')) {
+  const cached = vectors.get(chat.id);
+  if (cached?.query !== text) vectors.delete(chat.id);
+  if (ai.isLive('embedding') && cached?.query !== text) {
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 15_000);
-    const linked = linkSignals(abort.signal, timeout.signal);
+    const linked = linkSignals(abort.signal, timeout.signal, signal);
     try {
       const r = await ai.system.embed([text], { purpose: 'query', signal: linked.signal });
-      queryVector = r.vectors[0] ?? null;
-      space = queryVector ? { model: r.model, dims: queryVector.length } : null;
+      const vector = r.vectors[0];
+      if (vector && !linked.signal.aborted) vectors.set(chat.id, { query: text, vector, space: { model: r.model, dims: vector.length } });
     } catch (e) {
-      if (abort.signal.aborted) return prev;
-      denseNote = isAbortError(e) ? '向量化超时，只按字面搜' : '向量化失败，只按字面搜（完整报错在"API 设置 → 向量化"）';
+      denseNote = isAbortError(e) ? '向量化超时，只按字面搜' : '向量化失败，只按字面搜（完整报错在“API 设置 → 向量化”）';
     } finally {
       clearTimeout(timer);
       linked.dispose();
     }
-  } else {
+  } else if (!ai.isLive('embedding')) {
+    vectors.delete(chat.id);
     const st = ai.status('embedding');
     denseNote = `向量化没接通${'reason' in st ? `：${st.reason}` : ''}`;
   }
-  if (abort.signal.aborted) return prev;
+  if (abort.signal.aborted || signal?.aborted) return undefined;
   running.delete(chat.id);
-
-  const c = cues(text, character, now);
-  const out = rankRecall({
-    candidates: mem.candidates(character.id, space),
-    query: text,
-    queryVector,
-    lexical: mem.lexical,
-    now,
-    time: c.time,
-    specials: c.specials,
-    states: c.states,
-    echo: prev?.echo,
-    maxItems: MAX_ITEMS,
-    tokenBudget: TOKEN_BUDGET,
-    countTokens: estimateTokens,
-  });
+  const now = Date.now();
+  const out = rankForQuery(chat, character, text, now);
   const snap: RecallSnapshot = {
     afterMessageId,
     at: now,
     query: text,
-    lines: linesOf(out.hits, character.id),
+    lines: out.lines,
     echo: out.echo,
-    dense: !!queryVector,
+    dense: out.dense,
     denseNote,
-    time: c.time.phrase,
-    specials: c.specials,
-    states: c.states,
+    time: out.cues.time.phrase,
+    specials: [],
+    states: out.cues.states,
   };
-  const list = [...(snapshots[chat.id] ?? []), snap].slice(-3);
-  snapshots[chat.id] = list;
+  snapshots[chat.id] = [...(snapshots[chat.id] ?? []), snap].slice(-3);
   return snap;
 }
 
@@ -160,42 +167,24 @@ export interface RecallForTurn {
   reused: boolean;
 }
 
-/**
- * 拼提示词时用（同步，不等网络）：
- * - 重新生成（targetId 有值）：沿用那条回复原来用的结果；
- * - 平常：用存好的最新一份，再用本轮你的消息在本机按字面和时间说法补最多 2 条
- */
+/** 拼提示词时按当前查询重新排名；重生成保留原选择，但读取当前仍有效的内容。 */
 export function recallForTurn(chat: Chat, character: Character, userText: string, targetId?: string): RecallForTurn {
-  if (targetId && used.has(targetId)) return { lines: used.get(targetId) as RecallLine[], snapshot: latestRecall(chat.id), added: 0, reused: true };
-  const snap = latestRecall(chat.id);
-  const lines = [...(snap?.lines ?? [])];
-  let added = 0;
   const text = userText.trim();
+  const latest = latestRecall(chat.id);
+  const snapshot = latest?.query === text ? latest : undefined;
   const mem = useMemoryStore();
-  if (mem.ready && text && !isPhatic(text)) {
-    const now = Date.now();
-    const c = cues(text, character, now);
-    const out = rankRecall({
-      candidates: mem.candidates(character.id, null),
-      query: text,
-      queryVector: null,
-      lexical: mem.lexical,
-      now,
-      time: c.time,
-      states: c.states,
-      quotas: { basic: 2, important: 0, special: 0, state: 1, time: 2 },
-      maxItems: 2,
-      tokenBudget: 300,
-      countTokens: estimateTokens,
+  if (targetId && used.has(targetId)) {
+    const candidates = new Map(mem.candidates(character.id, null).map((c) => [c.key, c]));
+    const lines = (used.get(targetId) ?? []).flatMap((l) => {
+      const c = candidates.get(l.key);
+      return c ? [{ ...l, text: c.text, at: c.at }] : [];
     });
-    const have = new Set(lines.map((l) => l.key));
-    for (const l of linesOf(out.hits, character.id)) {
-      if (have.has(l.key)) continue;
-      lines.push(l);
-      added += 1;
-    }
+    return { lines, snapshot, added: 0, reused: true };
   }
-  return { lines, snapshot: snap, added, reused: false };
+  if (!mem.ready || !text || isPhatic(text) || !useMessageSettingsStore().memoryOptions().tokenBudget) return { lines: [], snapshot, added: 0, reused: false };
+  const out = rankForQuery(chat, character, text, Date.now());
+  const have = new Set(snapshot?.lines.map((l) => l.key));
+  return { lines: out.lines, snapshot, added: out.lines.filter((l) => !have.has(l.key)).length, reused: false };
 }
 
 /** 这条回复生成时用了哪些记忆（重新生成时沿用）；被带进提示词的记一次"想起过" */
@@ -210,4 +199,5 @@ export function clearRecall(chatId: string) {
   delete snapshots[chatId];
   running.get(chatId)?.abort();
   running.delete(chatId);
+  vectors.delete(chatId);
 }

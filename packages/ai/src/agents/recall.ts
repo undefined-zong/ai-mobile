@@ -17,6 +17,8 @@ export interface RecallCandidate {
   text: string;
   /** 发生时间 */
   at: number;
+  /** 画像等没有事件日期的内容，不参与按日期召回。 */
+  timeless?: boolean;
   /** 1–10 */
   importance: number;
   memoryType?: MemoryType;
@@ -88,6 +90,8 @@ export interface RecallInput {
   countTokens?: (text: string) => number;
   /** 只按意思对上的条目，相似度至少要这么多，默认 0.3 */
   minSimilarity?: number;
+  /** 仅问某个时段发生了什么时，允许按时间召回；含具体话题时仍须相关。 */
+  timeOnly?: boolean;
 }
 
 export interface RecallOutput {
@@ -294,10 +298,14 @@ export function rankRecall(input: RecallInput): RecallOutput {
 
   const chosen: RecallHit[] = [];
   const taken = new Set<string>();
+  let usedTokens = 0;
   const take = (key: string, reason: RecallReason) => {
     if (taken.has(key) || chosen.length >= maxItems) return false;
     const c = byKey.get(key);
     if (!c) return false;
+    const tokens = input.countTokens?.(c.text) ?? 0;
+    if (input.tokenBudget !== undefined && usedTokens + tokens > input.tokenBudget) return false;
+    usedTokens += tokens;
     taken.add(key);
     chosen.push({ key, kind: c.kind, id: c.id, reason, score: scoreOf(key), dense: dense.get(key) ?? null, lexical: lex.get(key)?.score ?? null, at: c.at });
     return true;
@@ -307,14 +315,14 @@ export function rankRecall(input: RecallInput): RecallOutput {
   const time = input.time;
   if (time?.range) {
     const { from, to } = time.range;
-    const inRange = input.candidates.filter((c) => c.at >= from && c.at < to);
-    // 范围里有相关的先取相关的，否则按重要度、时间先后
+    const inRange = input.candidates.filter((c) => !c.timeless && c.at >= from && c.at < to && (input.timeOnly || relevant(c.key)));
+    // 时间范围不能绕过话题相关性；只有纯时间回顾可以按时间兜底。
     inRange
       .sort((a, b) => scoreOf(b.key) - scoreOf(a.key) || b.importance - a.importance || (time.order === 'earliest' ? a.at - b.at : b.at - a.at))
       .slice(0, quotas.time)
       .forEach((c) => take(c.key, 'time'));
   } else if (time?.order) {
-    const pool = scored.slice(0, 20).filter((s) => relevant(s.key));
+    const pool = scored.slice(0, 20).filter((s) => !s.c.timeless && relevant(s.key));
     pool.sort((a, b) => (time.order === 'earliest' ? a.c.at - b.c.at : b.c.at - a.c.at));
     if (pool[0]) take(pool[0].key, 'time');
   }
@@ -330,7 +338,7 @@ export function rankRecall(input: RecallInput): RecallOutput {
   let important = 0;
   for (const s of scored.slice(0, ECHO_TOP)) {
     if (important >= quotas.important) break;
-    if (isImportant(s.c) && take(s.key, 'important')) important += 1;
+    if (isImportant(s.c) && relevant(s.key) && take(s.key, 'important')) important += 1;
   }
 
   // 4. 今天的特殊日子、5. 上下文提到的状态：对上标签的片段，先按相关，再按时间新近
@@ -352,23 +360,13 @@ export function rankRecall(input: RecallInput): RecallOutput {
   const nextEcho = new Map<string, number>();
   for (const e of input.echo ?? []) {
     if (e.life <= 0 || !byKey.has(e.key)) continue;
-    if (top50.has(e.key)) take(e.key, 'echo');
+    if (top50.has(e.key) && relevant(e.key)) take(e.key, 'echo');
     // 不管这轮带没带上，都消耗一轮
     if (e.life - 1 > 0) nextEcho.set(e.key, e.life - 1);
   }
 
-  // 长度上限：按取的先后（时间说法 > 最相关 > 重要 > 日子 > 状态 > 回响），超出的从后往前去掉
-  let hits = chosen;
-  if (input.tokenBudget !== undefined && input.countTokens) {
-    let used = 0;
-    hits = [];
-    for (const h of chosen) {
-      const t = input.countTokens((byKey.get(h.key) as RecallCandidate).text);
-      if (used + t > input.tokenBudget && hits.length) continue;
-      used += t;
-      hits.push(h);
-    }
-  }
+  // take 已按优先级累计预算，超长条目不会占掉后续短条目的名额。
+  const hits = chosen;
 
   // 这轮新取的进回响池，满格
   for (const h of hits) {

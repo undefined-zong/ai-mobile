@@ -22,17 +22,24 @@ export interface MessageSettings {
   summaryEvery: number;
   hideSummarized: boolean;
   dropSummarized: boolean;
+  memoryTokens: number;
+  memoryItems: number;
+  memorySimilarity: number;
 }
 
-/** 三个数能取的范围 */
+/** 消息和记忆设置能取的范围 */
 export const MESSAGE_RANGES = {
   sendLast: { min: 0, max: 100 },
   showLast: { min: 1, max: 100 },
   frameLast: { min: 0, max: 50 },
   summaryEvery: { min: 1, max: 100 },
+  memoryTokens: { min: 0, max: 32000 },
+  memoryItems: { min: 1, max: 50 },
+  memorySimilarity: { min: 0, max: 100 },
 } as const;
 
-const DEFAULTS: MessageSettings = { sendLimit: false, sendLast: 20, showLimit: false, showLast: 50, html: true, frameLast: 5, summaryEvery: 30, hideSummarized: false, dropSummarized: false };
+const DEFAULTS: MessageSettings = { sendLimit: false, sendLast: 20, showLimit: false, showLast: 50, html: true, frameLast: 5, summaryEvery: 30, hideSummarized: false, dropSummarized: false,
+  memoryTokens: 2000, memoryItems: 8, memorySimilarity: 60 };
 
 function clampTo(key: keyof typeof MESSAGE_RANGES, v: unknown, fallback: number): number {
   const { min, max } = MESSAGE_RANGES[key];
@@ -62,6 +69,9 @@ export const useMessageSettingsStore = defineStore('messageSettings', () => {
       settings.sendLast = clampTo('sendLast', saved.sendLast, DEFAULTS.sendLast);
       settings.showLast = clampTo('showLast', saved.showLast, DEFAULTS.showLast);
       settings.frameLast = clampTo('frameLast', saved.frameLast, DEFAULTS.frameLast);
+      settings.memoryTokens = clampTo('memoryTokens', saved.memoryTokens, DEFAULTS.memoryTokens);
+      settings.memoryItems = clampTo('memoryItems', saved.memoryItems, DEFAULTS.memoryItems);
+      settings.memorySimilarity = clampTo('memorySimilarity', saved.memorySimilarity, DEFAULTS.memorySimilarity);
     }
   }
 
@@ -75,7 +85,16 @@ export const useMessageSettingsStore = defineStore('messageSettings', () => {
     return clampTo('summaryEvery', settings.summaryEvery, DEFAULTS.summaryEvery);
   }
 
-  return { settings, hydrate, sendCount, summaryEvery };
+  /** 摘要和长期记忆共用一个预算，0 表示不注入；相似度设置用百分数显示。 */
+  function memoryOptions() {
+    return {
+      tokenBudget: clampTo('memoryTokens', settings.memoryTokens, DEFAULTS.memoryTokens),
+      maxItems: clampTo('memoryItems', settings.memoryItems, DEFAULTS.memoryItems),
+      minSimilarity: clampTo('memorySimilarity', settings.memorySimilarity, DEFAULTS.memorySimilarity) / 100,
+    };
+  }
+
+  return { settings, hydrate, sendCount, summaryEvery, memoryOptions };
 });
 
 /**

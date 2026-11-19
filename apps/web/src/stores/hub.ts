@@ -5,7 +5,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { getOne, msgKey, write } from '@/db/idb';
 import { applyMemoryOps, packConsolidation } from '@/services/consolidate';
-import { alwaysOn, memoryBlock, summaryBlock } from '@/services/memoryBlocks';
+import { alwaysOn, memoryBlocks } from '@/services/memoryBlocks';
 import { personaOf } from '@/services/prompt';
 import { homeBlock, lifeFlags } from '@/services/homeBlock';
 import { settleSyncJobs } from '@/services/hubSync';
@@ -304,6 +304,7 @@ export const useHubStore = defineStore('hub', () => {
     return chars.list.flatMap((character) => {
       const chat = chats.chatOfCharacter(character.id);
       if (!chat || chats.streams[chat.id]) return [];
+      const blocks = memoryBlocks(chat, character, Date.now(), timeZone, { proactive: true });
       return [packProactiveContext({ character, chat, persona: personaOf(chat),
         preset: lib.presetForUse('proactive', character) ?? null,
         lorebooks: character.lorebookIds.map((id) => lib.lorebookById(id)).filter((b) => !!b),
@@ -316,8 +317,8 @@ export const useHubStore = defineStore('hub', () => {
         // 只传排期要用的待跟进、每次都带的和最重要的几十条，记忆再多也不会超长
         memories: cloudMemories(character.id),
         memoryBlocks: {
-          summary: summaryBlock(chat, character, timeZone).content,
-          memory: memoryBlock(character, [], Date.now(), timeZone, { proactive: true }).content,
+          summary: blocks.summary.content,
+          memory: blocks.memory.content,
           // 家务和健康：上传那一刻的（写着"截至几点"）；没开这两套系统时没有
           ...homeSnapshot(personaOf(chat)),
         },

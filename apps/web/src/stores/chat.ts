@@ -441,6 +441,8 @@ export const useChatStore = defineStore('chat', () => {
     try {
       // 拼提示词（真实发送：推进世界书粘性 / 冷却，保存 {{setvar}} 改过的变量）。
       // 预设按用途选：语音通话用"语音通话"的预设，在场景页里一起做某件事时用那件事的功能预设，聊天里用这个角色的对话预设；一个都选不到时报错
+      if (!target) await refreshRecall(chatId, history.at(-1)?.id, abort.signal);
+      abort.signal.throwIfAborted();
       const turn = { now, type: target ? 'swipe' as const : 'normal' as const, task: opts.task, targetId: target, flags: opts.flags };
       const prompt = assembleForChat(chat, character, history, { ...turn, agent, use: opts.use, allowedTags: mainTags, delegatedTags });
       // 不 await：主、副请求一起开始，副对话提前完成时也只暂存结果，不执行任何卡片。
@@ -593,9 +595,8 @@ export const useChatStore = defineStore('chat', () => {
         timeline.add(toySteps);
         timeline.setText(parsed.visible, true);
       }
-      // 回复完成后在后台取下一轮要带的记忆（本轮你的话 + 她的回复）；攒够了就在后台整理一段（"总结"预设）
+      // 回复完成后攒够了就在后台整理一段（"总结"预设）；记忆在发送前按用户输入取。
       setTimeout(() => {
-        void refreshRecall(chatId, id);
         void maybeSummarize(chatId);
       }, 0);
     } catch (e) {
@@ -667,6 +668,8 @@ export const useChatStore = defineStore('chat', () => {
     const status = ai.status(agent);
     if (!status.live) return { ok: false, reason: `「${AGENT_META[agent].label}」还没接通：${status.reason}`, notConnected: true };
     try {
+      await refreshRecall(chatId, undefined, signal);
+      signal?.throwIfAborted();
       const prompt = assembleForChat(chat, character, list(chatId), { agent, task, dryRun: true, use: tune.use, flags: tune.flags });
       lastPrompt[chatId] = { prompt, at: Date.now() };
       const req = fromOpenAIBody(prompt.request);
@@ -678,10 +681,10 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // —— 取记忆：AI 回复完成后在后台搜，下一轮直接带上（services/recall.ts） ——
+  // —— 取记忆：本轮用户输入检索，向量未接通时按字面搜（services/recall.ts） ——
 
-  /** 用 afterId 这条回复和它前面你的那条消息搜一次；afterId 不给时用这条聊天最后的一问一答 */
-  async function refreshRecall(chatId: string, afterId?: string) {
+  /** 搜索指定位置之前最后一条用户输入；不把 AI 的回复混入查询。 */
+  async function refreshRecall(chatId: string, afterId?: string, signal?: AbortSignal) {
     const chat = chatById(chatId);
     const character = useCharacterStore().byId(chat?.characterId);
     if (!chat || !character) return;
@@ -689,14 +692,13 @@ export const useChatStore = defineStore('chat', () => {
     const at = afterId ? msgs.findIndex((m) => m.id === afterId) : msgs.length - 1;
     if (at < 0) return;
     const upTo = msgs.slice(0, at + 1).filter((m) => !m.meta.error);
-    const reply = [...upTo].reverse().find((m) => m.role === 'assistant');
     const said = [...upTo].reverse().find((m) => m.role === 'user');
     const user = personaOf(chat).name;
-    const text = [said, reply].filter((m): m is Message => !!m).map((m) => messageToText(m, character, user).slice(0, 300)).join('\n');
+    const text = said ? messageToText(said, character, user) : '';
     try {
-      await prefetchRecall(chat, character, text, msgs[at]?.id ?? null);
+      await prefetchRecall(chat, character, text, said?.id ?? null, signal);
     } catch {
-      // 取记忆失败不影响聊天：下一轮沿用上一份结果
+      // 取记忆失败不影响聊天：拼提示词时仍按当前输入在本机检索
     }
   }
 

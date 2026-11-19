@@ -83,29 +83,27 @@ export function communityFeedText(communityId: string, opts: { except?: string; 
 }
 
 /**
- * 每次聊天都带着的"社群"（接在长期记忆、最近的朋友圈后面）：她在哪些社群里（和你互关），
- * 和每个社群最近三天的几帖（几帖按设置里的"聊天时带最近几帖"）——聊天时能提起"社群里有人发了…"
+ * 社群记忆候选：她在哪些社群里（和你互关），
+ * 和每个社群最近三天的几帖（几帖按设置里的"聊天时带最近几帖"）——由记忆拼装器按相关性和总预算选择
  */
-export function communityBlock(character: Character): string {
+export function communityMemoryLines(character: Character): { text: string; at: number | null }[] {
   const store = useCommunityStore();
   const mine = store.communitiesOf(character.id);
-  if (!mine.length) return '';
+  if (!mine.length) return [];
   const since = Date.now() - 3 * 86_400_000;
   const timeZone = useEnvironmentStore().settings.timezone;
   const names = communityNames(character.id);
-  const user = names(MOMENT_USER);
   const max = store.settings.chatPosts;
-  const parts = mine.map((c) => {
+  return mine.flatMap((c) => {
     const recent = max ? store.timelineOf(c.id).filter((p) => p.createdAt >= since) : [];
     // 你和她的帖优先（带回复）；不够这个数，用网友最新的补（只带一行）
     const ours = recent.filter((p) => !isNetizen(p.authorId)).slice(-max);
     const others = ours.length < max ? recent.filter((p) => isNetizen(p.authorId)).slice(ours.length - max) : [];
     const lines = [...others, ...ours]
       .sort((a, b) => a.createdAt - b.createdAt)
-      .map((p) => communityPostText(p, names, isNetizen(p.authorId) ? { timeZone, comments: 0, textMax: 80 } : { timeZone, comments: 4, textMax: 300 }));
-    return [`「${c.name}」：${c.description}`, ...lines].join('\n');
+      .map((p) => ({ text: `「${c.name}」：${communityPostText(p, names, isNetizen(p.authorId) ? { timeZone, comments: 0, textMax: 80 } : { timeZone, comments: 4, textMax: 300 })}`, at: p.createdAt }));
+    return [{ text: `「${c.name}」：${c.description}`, at: null }, ...lines];
   });
-  return `${character.name}加入的社群（${user}邀请的，${character.name}和${user}在里面互相关注；聊天时可以自然地提起，不用复述）：\n${parts.join('\n')}`;
 }
 
 // —— 能不能调 ——
