@@ -4,8 +4,9 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
 import { useLibraryStore } from './library';
-import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
+import { blockedReason, DEFAULT_INTIFACE_ADDRESS, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
 import { MissingPresetError } from '@/services/prompt';
+import { findRelay } from '@/services/relay';
 import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, type ToyCaps, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
 
 /**
@@ -14,6 +15,7 @@ import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, ty
  * - 强度上限、伸缩最快多快和范围、多久没有新指令就停、切到后台就停、打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）；
  * - 按了"停"全部停下，她下一条指令照常执行；断开时停下。
  * 连接留着（再进心跳不用重连），设置里"断开"才断。
+ * 套在 http 中转页里时（iPhone 上 https 页面连不了 ws://127.0.0.1）经过中转页连（services/relay.ts）。
  */
 
 export type CommandSource = 'separate' | 'inline' | 'off';
@@ -40,7 +42,7 @@ export interface ToySettings {
 const KEY = 'ai-mobile:toys';
 
 export const DEFAULT_TOY_SETTINGS: ToySettings = {
-  url: '127.0.0.1:12345',
+  url: DEFAULT_INTIFACE_ADDRESS,
   autoConnect: false,
   source: 'separate',
   caps: { ...DEFAULT_CAPS },
@@ -104,6 +106,9 @@ export const useToyStore = defineStore('toys', () => {
   );
 
   const status = ref<'idle' | 'connecting' | 'connected'>('idle');
+  /** 这个页面套在 http 中转页里时，中转页的来源（Intiface 经过它连）；不在时为空 */
+  const relay = ref('');
+  void findRelay().then((r) => (relay.value = r?.origin ?? ''));
   /** 连不上、断了、被浏览器拦下的原因 */
   const error = ref('');
   /** 指令没发出去（玩具断开、Intiface 报错）：最近一次 */
@@ -192,21 +197,26 @@ export const useToyStore = defineStore('toys', () => {
   /** 连上 Intiface Central（在点击里调用；自动连也走这里） */
   async function connect(): Promise<boolean> {
     if (status.value !== 'idle') return status.value === 'connected';
-    const target = normalizeIntifaceUrl(settings.url);
-    if ('error' in target) {
-      error.value = target.error;
-      return false;
-    }
-    const blocked = blockedReason(target);
-    if (blocked) {
-      error.value = blocked;
+    const parsed = normalizeIntifaceUrl(settings.url);
+    if ('error' in parsed) {
+      error.value = parsed.error;
       return false;
     }
     status.value = 'connecting';
     error.value = '';
     sendError.value = '';
+    // 套在中转页里时经过它连（刚打开时可能还在等中转页回话）
+    const via = await findRelay();
+    relay.value = via?.origin ?? '';
+    const target = { ...parsed, relay: via?.origin };
+    const blocked = blockedReason(target);
+    if (blocked) {
+      status.value = 'idle';
+      error.value = blocked;
+      return false;
+    }
     try {
-      await client.connect(target);
+      await client.connect(target, via ? (url) => via.open(url) : undefined);
       server.value = client.serverName;
       status.value = 'connected';
       settings.autoConnect = true;
@@ -383,6 +393,7 @@ export const useToyStore = defineStore('toys', () => {
   return {
     settings,
     status,
+    relay,
     error,
     sendError,
     server,

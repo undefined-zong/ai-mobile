@@ -12,6 +12,7 @@ import './styles/vant.css';
 import 'virtual:uno.css';
 import App from './App.vue';
 import { initPwa } from './pwa';
+import { findRelay } from './services/relay';
 import { router } from './router';
 import { splitMsgKey } from './db/idb';
 import { resumeAudioContext, unlockAudio } from './services/audio';
@@ -70,6 +71,9 @@ try {
 
 // 装成 App：正式构建注册 Service Worker（断网也能打开），接住浏览器的"可以安装"事件（单文件预览版不注册）
 initPwa(import.meta.env.PROD && import.meta.env.MODE !== 'preview');
+
+// 套在 Intiface 中转页里时（iPhone 上经过它连 Intiface）：先和外层握手，配色、名字、图标跟过去
+void findRelay();
 
 const app = createApp(App).use(createPinia()).use(router);
 

@@ -4,7 +4,7 @@ import { SCALAR_KINDS, TOY_KIND_LABEL, type ScalarKind, type ToyKind } from '@ap
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
-import type { ToyDevice } from '@/services/intiface';
+import { DEFAULT_INTIFACE_ADDRESS, type ToyDevice } from '@/services/intiface';
 import { useAiStore } from '@/stores/ai';
 import { useToyStore, type CommandSource } from '@/stores/toys';
 
@@ -58,6 +58,8 @@ function featureLine(d: ToyDevice): string {
 }
 
 const helpOpen = ref(false);
+/** 自己放中转页时 ?app= 后面写的：这个 App 的地址 */
+const appUrl = `${location.origin}${location.pathname}`;
 async function toggleConnect() {
   if (toys.status === 'connected') await toys.disconnect();
   else await toys.connect();
@@ -74,15 +76,20 @@ async function toggleConnect() {
     <div v-if="helpOpen" class="help">
       <p>1. 装 Intiface Central（电脑、安卓、iPhone 都有），打开蓝牙，在 Devices 里连上玩具。</p>
       <p>2. 点 Start Server（默认端口 12345）。</p>
-      <p>3. Intiface 和这个页面在同一台设备上：地址填 127.0.0.1:12345。在别的电脑上：Intiface 设置里打开"所有网卡"，地址填那台电脑的 IP；这个页面是 https 时浏览器只让连 wss://，要给 Intiface 套一层 https（例如 Caddy、cloudflared）。</p>
-      <p>4. 浏览器问要不要允许访问本地网络设备时选允许。</p>
+      <p>3. Intiface 和这个页面在同一台设备上：地址填 {{ DEFAULT_INTIFACE_ADDRESS }}。在别的电脑上：Intiface 设置里打开"所有网卡"，地址填那台电脑的 IP；这个页面是 https 时浏览器只让连 wss://，要给 Intiface 套一层 https（例如 Caddy、cloudflared），或者用下面的 http 中转页打开。</p>
+      <p>
+        4. iPhone、iPad：浏览器不让 https 页面连 ws://，127.0.0.1 也不行，要用 http 中转页打开这个 App——中转页放在最外层，全屏套着这个页面，替它连 Intiface。连了云端的：给 Worker 绑一个自己的域名（Cloudflare 里那个域名别开 Always Use HTTPS），打开 http://那个域名/relay；也可以把中转页（仓库里的 apps/hub/src/relay.html）放到任何能用 http 打开的地方，地址后面加
+        <span class="pick">?app={{ appUrl }}</span>。github.io、workers.dev 只能用 https 打开，放那里不行。套在中转页里时，这份 App 的数据和直接打开的分开存（可以用"云端与同步"同步过来），也不能连麦。
+      </p>
+      <p>5. 浏览器问要不要允许访问本地网络设备时选允许。</p>
     </div>
     <div class="flex gap-2 mt-2.5">
-      <input v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" placeholder="127.0.0.1:12345" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
+      <input v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" :placeholder="DEFAULT_INTIFACE_ADDRESS" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
       <van-button size="small" round :type="toys.status === 'connected' ? 'default' : 'primary'" :loading="toys.status === 'connecting'" loading-text="在连" data-testid="toy-connect" @click="toggleConnect">
         {{ toys.status === 'connected' ? '断开' : '连接' }}
       </van-button>
     </div>
+    <p v-if="toys.relay" class="hint">套在中转页 {{ toys.relay }} 里，经过它连 Intiface（这里的数据和直接打开的分开存，不能连麦）。</p>
     <p v-if="toys.error" class="err" role="alert">{{ toys.error }}</p>
     <p v-if="toys.sendError" class="err">{{ toys.sendError }}</p>
 
@@ -193,6 +200,12 @@ async function toggleConnect() {
 }
 .help p {
   margin: 0 0 4px;
+}
+.pick {
+  user-select: all;
+  -webkit-user-select: all;
+  word-break: break-all;
+  color: var(--ink);
 }
 .field {
   flex: 1;

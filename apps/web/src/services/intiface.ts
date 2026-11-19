@@ -9,6 +9,7 @@ import type { ScalarKind } from '@app/shared';
  *
  * 地址：Intiface Central 默认在 127.0.0.1:12345（设置里打开"所有网卡"才能从别的设备连）。
  * 页面是 https 时浏览器只让连 ws://127.0.0.1 / localhost 和 wss://（混合内容），连局域网别的电脑要 wss；
+ * iPhone、iPad 上的浏览器连 ws://127.0.0.1 也拦：这时用 http 中转页套着这个 App，经过中转页连（services/relay.ts）。
  * 连不上、被拦时把原因写清楚（见 blockedReason / connectError）。
  */
 
@@ -72,6 +73,29 @@ interface Pending {
 }
 
 const DEFAULT_PORT = '12345';
+/** Intiface Central 和这个页面在同一台设备上时的地址 */
+export const DEFAULT_INTIFACE_ADDRESS = `127.0.0.1:${DEFAULT_PORT}`;
+
+/** 要连的 Intiface：WebSocket 地址，和谁去开这条连接 */
+export interface IntifaceTarget {
+  url: string;
+  host: string;
+  loopback: boolean;
+  secure: boolean;
+  /** 经过外层的 http 中转页连时，中转页的来源（http://…）；直接连时没有 */
+  relay?: string;
+}
+
+/** IntifaceClient 用到的 WebSocket 的那几样：浏览器的 WebSocket，或者经过中转页的 RelaySocket（services/relay.ts） */
+export interface SocketLike {
+  readonly readyState: number;
+  onopen: ((ev: Event) => void) | null;
+  onerror: ((ev: Event) => void) | null;
+  onmessage: ((ev: MessageEvent) => void) | null;
+  onclose: ((ev: CloseEvent) => void) | null;
+  send(data: string): void;
+  close(code?: number): void;
+}
 
 function isLoopback(host: string): boolean {
   const h = host.replace(/^\[|\]$/g, '');
@@ -79,8 +103,8 @@ function isLoopback(host: string): boolean {
 }
 
 /** 你填的地址 → WebSocket 地址：127.0.0.1:12345 / 192.168.1.5 / ws://… / wss://…（没写端口时 ws 用 12345） */
-export function normalizeIntifaceUrl(input: string): { url: string; host: string; loopback: boolean; secure: boolean } | { error: string } {
-  let t = input.trim() || `127.0.0.1:${DEFAULT_PORT}`;
+export function normalizeIntifaceUrl(input: string): IntifaceTarget | { error: string } {
+  let t = input.trim() || DEFAULT_INTIFACE_ADDRESS;
   if (/^https?:\/\//i.test(t)) t = t.replace(/^http/i, 'ws');
   if (!/^wss?:\/\//i.test(t)) t = `ws://${t}`;
   let u: URL;
@@ -93,16 +117,30 @@ export function normalizeIntifaceUrl(input: string): { url: string; host: string
   return { url: u.toString().replace(/\/$/, ''), host: u.host, loopback: isLoopback(u.hostname), secure: u.protocol === 'wss:' };
 }
 
+/** 开这条连接的页面是不是 https：经过中转页时看中转页，否则看这个页面自己 */
+function openerIsHttps(target: IntifaceTarget): boolean {
+  if (target.relay) return target.relay.startsWith('https:');
+  return typeof location !== 'undefined' && location.protocol === 'https:';
+}
+
 /** 浏览器会不会直接拦下这个地址（https 页面连没加密的局域网地址）：会的话返回原因 */
-export function blockedReason(target: { host: string; loopback: boolean; secure: boolean }): string | null {
-  if (typeof location === 'undefined' || location.protocol !== 'https:' || target.secure || target.loopback) return null;
-  return `这个页面是 https，浏览器不让它连没加密的 ws://${target.host}。可以：在这台设备上开 Intiface Central（地址填 127.0.0.1:12345）；或者给 Intiface 套一层 https（例如 Caddy、cloudflared），地址填 wss://…`;
+export function blockedReason(target: IntifaceTarget): string | null {
+  if (!openerIsHttps(target) || target.secure || target.loopback) return null;
+  if (target.relay) return `中转页（${target.relay}）是 https，浏览器不让它连没加密的 ws://${target.host}：中转页要用 http:// 打开。`;
+  return `这个页面是 https，浏览器不让它连没加密的 ws://${target.host}。可以：用 http 中转页打开这个 App（见"怎么连"）；在这台设备上开 Intiface Central（地址填 ${DEFAULT_INTIFACE_ADDRESS}）；或者给 Intiface 套一层 https（例如 Caddy、cloudflared），地址填 wss://…`;
 }
 
 /** 连不上时说清楚可能是哪一步 */
-export function connectError(target: { url: string; loopback: boolean }, detail: string): string {
+export function connectError(target: IntifaceTarget, detail: string): string {
   const where = target.loopback ? '这台设备上的 Intiface Central' : `${target.url} 那边的 Intiface Central`;
-  return `连不上 ${target.url}（${detail}）。看看${where}开着没有、点了 Start Server 没有、端口是不是 12345${target.loopback ? '' : '，Intiface 设置里有没有打开"所有网卡"'}；浏览器问要不要允许访问本地网络设备时选允许。`;
+  // https 页面连 ws://：Chrome 放行回环地址，iPhone、iPad 上的浏览器连回环地址也拦
+  const https =
+    target.secure || !openerIsHttps(target)
+      ? ''
+      : target.relay
+        ? '中转页要用 http:// 打开，https 的中转页在 iPhone、iPad 上一样连不了 ws://。'
+        : 'iPhone、iPad 上的浏览器不让 https 页面连 ws://，要用 http 中转页打开这个 App（见"怎么连"）。';
+  return `连不上 ${target.url}（${detail}${target.relay ? `，经过中转页 ${target.relay}` : ''}）。${https}看看${where}开着没有、点了 Start Server 没有、端口是不是 ${DEFAULT_PORT}${target.loopback ? '' : '，Intiface 设置里有没有打开"所有网卡"'}；浏览器问要不要允许访问本地网络设备时选允许。`;
 }
 
 function parseDevice(raw: Obj): ToyDevice | null {
@@ -132,7 +170,7 @@ export interface IntifaceEvents {
 }
 
 export class IntifaceClient {
-  private ws: WebSocket | null = null;
+  private ws: SocketLike | null = null;
   private seq = 0;
   private pending = new Map<number, Pending>();
   private pingTimer: ReturnType<typeof setInterval> | undefined;
@@ -148,13 +186,13 @@ export class IntifaceClient {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN && !!this.serverName;
   }
 
-  /** 连上并握手；失败时抛出写好原因的错误 */
-  async connect(target: { url: string; loopback: boolean }): Promise<void> {
+  /** 连上并握手；失败时抛出写好原因的错误。open：开连接的办法（默认浏览器的 WebSocket，经过中转页时是 RelaySocket） */
+  async connect(target: IntifaceTarget, open: (url: string) => SocketLike = (url) => new WebSocket(url)): Promise<void> {
     this.close();
     this.closing = false;
-    let ws: WebSocket;
+    let ws: SocketLike;
     try {
-      ws = new WebSocket(target.url);
+      ws = open(target.url);
     } catch (e) {
       throw new Error(connectError(target, e instanceof Error ? e.message : String(e)));
     }
@@ -174,7 +212,7 @@ export class IntifaceClient {
       };
       ws.onclose = (e) => {
         clearTimeout(timer);
-        reject(new Error(connectError(target, `连接关闭 ${e.code}`)));
+        reject(new Error(connectError(target, `连接关闭 ${e.code}${e.reason ? ` ${e.reason}` : ''}`)));
       };
     });
     ws.onmessage = (e) => this.receive(e.data);

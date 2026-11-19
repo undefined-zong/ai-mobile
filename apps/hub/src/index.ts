@@ -17,6 +17,7 @@ import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './
 import { bilibiliIds, searchBilibili } from './video.ts';
 import { wereadMcp } from './weread.ts';
 import { publicPage } from './publicPages.ts';
+import { relayPage } from './relay.ts';
 
 const body = <T>(request: Request): Promise<T> => readJson<T>(request);
 function https(value: string): boolean {
@@ -59,6 +60,7 @@ async function api(request: Request, env: Env): Promise<Response> {
   const path = url.pathname;
   if (path === '/health' && request.method === 'GET') return json({ ok: true });
   if (request.method === 'GET') {
+    if (path === '/relay') return relayPage(env);
     const page = publicPage(path, env);
     if (page) return page;
   }

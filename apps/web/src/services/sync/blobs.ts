@@ -1,4 +1,5 @@
 import { SYNC_BIN_REF, SYNC_BLOB_PART_CHARS, SYNC_BLOB_REF, syncBlobParts, type SyncBlobCheck, type SyncBlobInfo, type SyncBlobStore } from '@app/shared';
+import { sha256Hex } from '@/utils/sha256';
 
 /**
  * 同步用的大文件：图片、语音、Live2D 模型、书的原文件，和太大的记录（存成 gzip 过的 JSON）。
@@ -54,9 +55,8 @@ export function hasBinRef(v: unknown, depth = 0): boolean {
   return false;
 }
 
-export async function sha256(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+export function sha256(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): Promise<string> {
+  return sha256Hex(bytes);
 }
 
 function toBase64(bytes: Uint8Array): string {

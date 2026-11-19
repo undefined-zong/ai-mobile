@@ -1,3 +1,4 @@
+import { uid } from '@/utils/id';
 import { addItem, catalogItem, roomType, type DecorRoom, type Turn, type WallSide } from './model';
 
 export const HOME_ROOM_TYPES = ['master', 'second', 'living', 'kitchen', 'bath', 'study'] as const;
@@ -245,7 +246,7 @@ export function applyRoomStyle(room: DecorRoom, style: RoomStyle): { room: Decor
 export function applyHomeStyle(existing: readonly DecorRoom[], style: RoomStyle): DecorRoom[] {
   return HOME_ROOM_TYPES.map((type) => {
     const previous = existing.find((r) => r.type === type);
-    const room: DecorRoom = { id: previous?.id ?? crypto.randomUUID(), type, name: roomType(type).name, w: 6, d: 5, wall: style.wall, floor: style.floor, items: [] };
+    const room: DecorRoom = { id: previous?.id ?? uid(), type, name: roomType(type).name, w: 6, d: 5, wall: style.wall, floor: style.floor, items: [] };
     return applyRoomStyle(room, style).room;
   });
 }

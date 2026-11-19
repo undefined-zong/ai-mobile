@@ -182,6 +182,16 @@ pnpm --filter @app/hub exec wrangler deploy --config wrangler.deploy.json
 
 「云端与同步 → 从云端重新下载」清掉这台设备的同步记账，重新拉取全部（和云端不一样的以云端为准），这台设备独有的再传上去，Key 不受影响。
 
+## Intiface 中转页（iPhone 上连玩具）
+
+iPhone、iPad 上的浏览器不让 https 页面连 `ws://127.0.0.1`（心跳里连本机的 Intiface Central）。Worker 在 `GET /relay` 提供一个 http 中转页：放在最外层、全屏套着 `APP_URL`，替 App 连 Intiface，消息用 postMessage 转（页面在 `apps/hub/src/relay.html`）。
+
+1. workers.dev 只能用 https 打开（整个 `.dev` 强制 https），要给 Worker 绑一个自己的域名：Cloudflare 控制台里这个 Worker 的 Settings → Domains & Routes → Add → Custom Domain。
+2. 那个域名不开 Always Use HTTPS 和 HSTS（SSL/TLS → Edge Certificates），`http://<域名>/relay` 才不会被跳到 https。
+3. iPhone 上用 Safari 打开 `http://<域名>/relay`，可以加到主屏幕。中转页只套 `APP_URL`（`HUB_APP_URL` 改的就是它）。
+
+不用 Worker 时把 `apps/hub/src/relay.html` 放到任何能用 http 打开的地方，打开时加 `?app=<App 的地址>`（没加时页面先问）。套在中转页里的 App 不算安全上下文，数据和直接打开的那份分开存：用多设备同步连上同一个 Worker 带过去（Key 在这份里另填）；麦克风（连麦）、推送用不了。不需要新的数据库迁移。
+
 ## 持续部署
 
 `.github/workflows/hub.yml` 支持手动部署，以及配置好 GitHub 部署后 main 更新时自动部署。仓库 Secrets 设置 `CLOUDFLARE_API_TOKEN`（Worker 编辑 + D1 编辑）；Variables 设置 `CLOUDFLARE_ACCOUNT_ID`、`HUB_D1_ID`，自托管前端再设置 `HUB_APP_URL`。运行时秘密已用上述 secret bulk 写入，不随源码部署覆盖。

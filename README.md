@@ -195,6 +195,7 @@ pnpm build:preview  # 单文件预览页 → apps/web/artifact/index.html
   - 背景：进来时用今天在同一个地方画过的，没有就画一张"开场"；之后每 6 句换一张"这一刻"（设置 → 画面里改成 4 / 8 句或者不自动换），右上角魔杖马上画。衣服不锁，按对话画。生图预设在 设置 → 画面 里换：氛围（默认，画到暧昧为止）、第一视角、亲密（到了亲密的时候照实画，负面词固定排除显得年幼的内容），也能跟随配图。
   - 玩具（设置 → 玩具）：
     - 装 Intiface Central（电脑、安卓、iPhone 都有），连上玩具、点 Start Server；和这个页面在同一台设备上时地址填 127.0.0.1:12345。连 Intiface 用的是自己写的 Buttplug v3 客户端（`services/intiface.ts`），只连你填的地址。页面是 https 时浏览器只让连本机或 wss://，连局域网别的电脑要给 Intiface 套一层 https，连不上时写明是哪一步。连上过一次以后，进心跳自动连。
+    - iPhone、iPad 上的浏览器连 127.0.0.1 也拦（https 页面不让连 ws://），这时用 http 中转页打开 App：中转页放在最外层、全屏套着 App，替它连 Intiface。Worker 绑了自己的域名、能用 http 打开时，打开 `http://<域名>/relay`；或者把 `apps/hub/src/relay.html` 放到任何能用 http 打开的地方，地址后面加 `?app=<App 的地址>`。套在中转页里的 App 数据和直接打开的分开存（可以用多设备同步带过去），不能连麦。部署见 [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)。
     - 列出连着的玩具（能做什么、电量），每个能"试一下"。
     - 指令从哪来：单独生成（默认：她每说完一句，"控制指令"预设按这句话另写一份，读到 / 念到那几个字时执行；API 设置里的「控制指令」，默认跟随「陪伴 · 快速」）/ 她自己写（心跳功能预设里"她自己写指令"那一块，她在回复里写 `<device>…</device>`，不多花一次调用）/ 不控制。
     - 写法沿用 SillyTavern 的 Intiface 插件：`"VIBRATE": 40`、`"VIBRATE": [80, 30]`（每个马达）、`"VIBRATE": {"pattern": [20, 60], "interval": [800, 400], "loop": 3}`（变速）、`OSCILLATE` / `ROTATE` / `CONSTRICT` / `INFLATE` 同震动、`LINEAR` / `LINEAR_SPEED` / `LINEAR_PATTERN`（伸缩）、`"STOP": true`。只写玩具做得了的键，做不了的程序去掉。`<device>` 在聊天里不显示、语音不念。

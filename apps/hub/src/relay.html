@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!--
+  Intiface 中转页：用 http 打开、放在最外层，全屏 iframe 套着 App，替它连 ws://（Intiface Central），消息用 postMessage 来回转。
+  iPhone、iPad 上的浏览器不让 https 页面连 ws://127.0.0.1；这一页是 http，不算混合内容。
+  反过来在 https 页面里嵌 http 的 iframe 会被拦；开弹窗的话，切过去以后原来的标签页一进后台就被挂起，所以只能放最外层。
+  App 那边的协议见 apps/web/src/services/relay.ts。
+  - Worker 提供这一页（GET /relay，apps/hub/src/relay.ts）时把 APP_URL 写进下面的 relay-app，只套这个地址；
+  - 放到别处时 relay-app 留空：打开时地址后面加 ?app=<App 的地址>，没加时先问一次。
+  不写 viewport-fit=cover：iframe 里的页面拿不到安全区，整页排在安全区以内，状态栏和底部横条那两截由系统用底色填上。
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="relay-app" content="">
+<meta name="color-scheme" content="light dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>中转页</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg, Canvas); color: CanvasText; }
+  [hidden] { display: none !important; }
+  iframe { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: 0; display: block; }
+  form { box-sizing: border-box; max-width: 440px; margin: 0 auto; padding: 48px 20px; font: 15px/1.7 -apple-system, system-ui, "PingFang SC", sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  p { margin: 8px 0; opacity: 0.75; }
+  label { display: block; margin-top: 20px; font-size: 13px; }
+  input { box-sizing: border-box; width: 100%; margin-top: 6px; padding: 10px 12px; font-size: 16px; border-radius: 10px; border: 1px solid GrayText; }
+  button { margin-top: 12px; padding: 9px 22px; font-size: 16px; border-radius: 99px; border: 0; background: CanvasText; color: Canvas; }
+</style>
+</head>
+<body>
+<iframe id="app" hidden allow="autoplay; fullscreen; microphone; camera; geolocation; clipboard-write; screen-wake-lock; accelerometer; gyroscope"></iframe>
+<form id="ask" method="get" hidden>
+  <h1>Intiface 中转页</h1>
+  <p>这一页用 http 打开，全屏套着 App，替它连这台设备上的 Intiface Central（iPhone、iPad 上的浏览器不让 https 页面连 ws://127.0.0.1）。</p>
+  <label for="app-url">要套住的 App 地址</label>
+  <input id="app-url" name="app" type="url" required placeholder="https://…" autocapitalize="off" autocomplete="url" spellcheck="false">
+  <button>打开</button>
+  <p>之后直接打开带着 ?app= 的这个地址就行，也可以加到主屏幕。</p>
+</form>
+<script>
+(function () {
+  'use strict';
+  // 和 App 约好的频道名、版本（apps/web/src/services/relay.ts）
+  var CHANNEL = 'ai-mobile-relay';
+  var VERSION = 1;
+  var frame = document.getElementById('app');
+
+  // Worker 提供的这一页只套它自己的 APP_URL，不认 ?app=（不让别人拿你的域名套别的页面）
+  var address = document.querySelector('meta[name="relay-app"]').getAttribute('content') || new URLSearchParams(location.search).get('app') || '';
+  var app = null;
+  try {
+    app = address ? new URL(address, location.href) : null;
+  } catch (e) {
+    app = null;
+  }
+  if (!app || (app.protocol !== 'https:' && app.protocol !== 'http:')) {
+    var ask = document.getElementById('ask');
+    document.getElementById('app-url').value = address;
+    ask.hidden = false;
+    return;
+  }
+
+  var origin = app.origin;
+  /** 这一页替 App 开着的连接：id（App 起的）→ WebSocket */
+  var sockets = new Map();
+
+  function post(msg) {
+    msg.ch = CHANNEL;
+    // 指定来源：iframe 跳到别的页面（授权页之类）时消息不会发过去
+    if (frame.contentWindow) frame.contentWindow.postMessage(msg, origin);
+  }
+
+  // App 刷新了、跳走了：之前的连接都是旧页面开的，先摘掉回调再关（不给新页面发旧连接的事；Intiface 只认一个客户端，断开时玩具也停）
+  function closeAll() {
+    sockets.forEach(function (ws) {
+      ws.onopen = ws.onerror = ws.onmessage = ws.onclose = null;
+      try {
+        ws.close();
+      } catch (e) {
+        // 已经关了
+      }
+    });
+    sockets.clear();
+  }
+
+  function open(id, url) {
+    var ws;
+    try {
+      var target = new URL(url);
+      if (target.protocol !== 'ws:' && target.protocol !== 'wss:') throw new Error('只能连 ws:// 或 wss://');
+      ws = new WebSocket(target.href);
+    } catch (e) {
+      post({ type: 'close', id: id, code: 1006, reason: '中转页开不了这个连接：' + ((e && e.message) || e) });
+      return;
+    }
+    sockets.set(id, ws);
+    ws.onopen = function () {
+      post({ type: 'open', id: id });
+    };
+    ws.onerror = function () {
+      post({ type: 'error', id: id });
+    };
+    ws.onmessage = function (e) {
+      if (typeof e.data === 'string') post({ type: 'message', id: id, data: e.data });
+    };
+    ws.onclose = function (e) {
+      if (sockets.get(id) === ws) sockets.delete(id);
+      post({ type: 'close', id: id, code: e.code, reason: e.reason });
+    };
+  }
+
+  /** App 的配色、名字、图标：状态栏那一截的底色、加到主屏幕时的名字和图标跟着 App */
+  function applyMeta(m) {
+    if (typeof m.theme === 'string' && m.theme) {
+      document.documentElement.style.setProperty('--bg', m.theme);
+      tag('meta', 'name', 'theme-color').setAttribute('content', m.theme);
+    }
+    if (typeof m.title === 'string' && m.title) frame.title = document.title = m.title.slice(0, 60);
+    if (typeof m.icon === 'string' && /^https?:\/\//.test(m.icon)) tag('link', 'rel', 'apple-touch-icon').setAttribute('href', m.icon);
+  }
+
+  function tag(name, key, value) {
+    var el = document.head.querySelector(name + '[' + key + '="' + value + '"]');
+    if (!el) {
+      el = document.createElement(name);
+      el.setAttribute(key, value);
+      document.head.appendChild(el);
+    }
+    return el;
+  }
+
+  addEventListener('message', function (e) {
+    var m = e.data;
+    if (e.origin !== origin || !m || m.ch !== CHANNEL) return;
+    // App 走的时候（pagehide）发的 bye 到这里时那个页面已经没了，source 是 null：只看来源（bye 只会关连接）
+    if (m.type === 'bye') {
+      closeAll();
+      return;
+    }
+    if (e.source !== frame.contentWindow) return;
+    var ws = typeof m.id === 'string' ? sockets.get(m.id) : undefined;
+    switch (m.type) {
+      case 'hello':
+        closeAll();
+        post({ type: 'ready', v: VERSION });
+        break;
+      case 'connect':
+        if (typeof m.id === 'string' && typeof m.url === 'string' && !ws) open(m.id, m.url);
+        break;
+      case 'send':
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(String(m.data));
+        // 这边没有这条连接（中转页刷新过之类）：告诉 App 断了，别让它一直等回复
+        else if (!ws && typeof m.id === 'string') post({ type: 'close', id: m.id, code: 1006, reason: '中转页没有这条连接' });
+        break;
+      case 'close':
+        if (ws) ws.close();
+        break;
+      case 'meta':
+        applyMeta(m);
+        break;
+    }
+  });
+
+  document.title = app.host;
+  frame.hidden = false;
+  // 先听消息再加载：App 启动时的 hello 一定收得到
+  frame.src = app.href;
+})();
+</script>
+</body>
+</html>

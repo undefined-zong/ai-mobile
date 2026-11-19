@@ -30,6 +30,7 @@ import { usePersonaStore } from './personas';
 import { usePlannerStore } from './planner';
 import { localSecret, localToken, saveLocalToken } from '@/services/mcp';
 import { configureSync, runSync, syncState, type SyncApi } from '@/services/sync';
+import { sha256Hex } from '@/utils/sha256';
 
 /** Worker 回的错误（带 HTTP 状态：409 是别的设备先更新了同一份上下文） */
 class HubError extends Error {
@@ -273,9 +274,8 @@ export const useHubStore = defineStore('hub', () => {
     if (connected.value && !status.value) await refreshStatus().catch(() => undefined);
   }
 
-  async function hash(value: unknown): Promise<string> {
-    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
-    return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+  function hash(value: unknown): Promise<string> {
+    return sha256Hex(new TextEncoder().encode(JSON.stringify(value)));
   }
 
   /** 云端主动消息要的记忆：待跟进（排期）、置顶和到期的、最重要的 30 条 */
