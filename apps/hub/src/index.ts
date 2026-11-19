@@ -1,5 +1,5 @@
 import { AgentSystem, discoverOAuth, exchangeOAuthCode, openMcpSession, registerOAuthClient } from '@app/ai';
-import { communitySettingsValid, normalizeMcpServer, WEREAD_HEADERS, normalizePlanner, PARALLEL_PER_DAY_MAX, shiftDate, SOCIAL_PER_DAY_MAX, zonedParts, type CommunityContext, type ParallelContext, type ParallelNote, type ParallelPlan, type ParallelPlanContext, type HealthPlanContext, type HealthRunResult, type McpOAuthToken, type McpServerSecret, type PlannerContext, type PlannerRunResult, type CommunityPost, type MemoryConsolidationContext, type MemoryJobResult, type Moment, type ProactiveContext, type ProactiveCredentials, type RhythmContext, type SocialContext, type Touchpoint } from '@app/shared';
+import { communitySettingsValid, normalizeMcpServer, TOY_RELAY_API, WEREAD_HEADERS, normalizePlanner, PARALLEL_PER_DAY_MAX, shiftDate, SOCIAL_PER_DAY_MAX, zonedParts, type CommunityContext, type ParallelContext, type ParallelNote, type ParallelPlan, type ParallelPlanContext, type HealthPlanContext, type HealthRunResult, type McpOAuthToken, type McpServerSecret, type PlannerContext, type PlannerRunResult, type CommunityPost, type MemoryConsolidationContext, type MemoryJobResult, type Moment, type ProactiveContext, type ProactiveCredentials, type RhythmContext, type SocialContext, type Touchpoint } from '@app/shared';
 import { digest, equalSecret, seal } from './crypto.ts';
 import { assert, HttpError, json, readJson } from './http.ts';
 import { syncApi, syncStatus } from './sync.ts';
@@ -17,6 +17,9 @@ import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './
 import { bilibiliIds, searchBilibili } from './video.ts';
 import { wereadMcp } from './weread.ts';
 import { publicPage } from './publicPages.ts';
+import { toyRelayApi, toyRelayPublic } from './toyRelay.ts';
+
+export { ToyRelay } from './toyRelay.ts';
 
 const body = <T>(request: Request): Promise<T> => readJson<T>(request);
 function https(value: string): boolean {
@@ -63,6 +66,8 @@ async function api(request: Request, env: Env): Promise<Response> {
     if (page) return page;
   }
   if (path === '/v1/auth/login' && request.method === 'POST') return login(request, env);
+  // 心跳的玩具中转里不用登录的：WebSocket 本身（凭票）、电脑上的桥接页换票（凭桥接链接里的密钥）
+  if (path === TOY_RELAY_API.relay || path === TOY_RELAY_API.bridgeTicket) return toyRelayPublic(request, env, url);
   const token = request.headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1];
   if (!token) throw new HttpError(401, '需要登录');
   const device = await env.DB.prepare('SELECT id FROM devices WHERE token_hash = ? AND expires_at > ?').bind(await digest(token), Date.now()).first<{ id: string }>();
@@ -99,6 +104,9 @@ async function api(request: Request, env: Env): Promise<Response> {
   // 一起看书：内置的微信读书 MCP（书架、笔记和章节正文；微信读书的登录信息在请求头里，Hub 不存）
   if (path === '/v1/weread/mcp') return wereadMcp(request);
 
+  // 心跳的玩具中转：App 换票、看 / 换电脑上桥接页的链接
+  if (path === TOY_RELAY_API.ticket || path === TOY_RELAY_API.bridgeKey) return toyRelayApi(request, env, path);
+
   // 多设备同步：聊天、朋友圈、社群、记忆、角色、设置……（按条推拉），图片和文件按哈希存
   if (path.startsWith('/v1/sync/')) return syncApi(request, env, url, device.id);
 
@@ -128,7 +136,7 @@ async function api(request: Request, env: Env): Promise<Response> {
       memoryConfigured: !!memoryConfigured, lastMemoryError, socialConfigured: !!socialConfigured, lastSocialError, lastCommunityError,
       plannerConfigured: !!plannerConfigured, lastPlannerError, plannerMcp: plannerMcp.results.map((r) => r.server_id),
       parallelConfigured: !!parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured: !!healthConfigured, lastHealthError, mapsConfigured: !!mapsConfigured,
-      weread: true, mcpCall: true, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
+      weread: true, mcpCall: true, toyRelay: true, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
   }
   if (path === '/v1/proactive/enabled' && request.method === 'PUT') {
     const { enabled } = await body<{ enabled: boolean }>(request);
@@ -719,6 +727,8 @@ export default {
         : e instanceof PushDeliveryError ? json({ error: e.message }, 502)
         : json({ error: 'Worker 操作失败，请检查云端配置和日志' }, 500);
     }
+    // 玩具中转的 WebSocket（101）原样交回：它的响应头不能再改
+    if (response.webSocket) return response;
     if (origin) response.headers.set('Access-Control-Allow-Origin', origin);
     response.headers.set('Vary', 'Origin');
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');

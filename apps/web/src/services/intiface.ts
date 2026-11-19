@@ -1,4 +1,5 @@
-import type { ScalarKind } from '@app/shared';
+import { readToyRelay, TOY_RELAY_API, TOY_RELAY_CLOSE, type ScalarKind, type ToyRelayMessage } from '@app/shared';
+import { platform } from '@/pwa';
 
 /**
  * Intiface Central 的客户端（心跳用，设计文档 §9.14）：Buttplug 协议 v3，JSON 走 WebSocket。
@@ -9,6 +10,8 @@ import type { ScalarKind } from '@app/shared';
  *
  * 地址：Intiface Central 默认在 127.0.0.1:12345（设置里打开"所有网卡"才能从别的设备连）。
  * 页面是 https 时浏览器只让连 ws://127.0.0.1 / localhost 和 wss://（混合内容），连局域网别的电脑要 wss；
+ * iPhone / iPad 上的浏览器（都是 WebKit）和 Mac 上的 Safari 连本机的 ws:// 也拦，Intiface 又只有 ws://，这时经云端中转：
+ * 电脑上开桥接页连本机的 Intiface，手机连自己 Worker 上的中转（wss），Buttplug 消息原样转（apps/hub/src/toyRelay.ts、services/toyBridge.ts）。
  * 连不上、被拦时把原因写清楚（见 blockedReason / connectError）。
  */
 
@@ -72,6 +75,20 @@ interface Pending {
 }
 
 const DEFAULT_PORT = '12345';
+/** 没填地址时连的：这台设备上的 Intiface Central */
+export const DEFAULT_INTIFACE_ADDRESS = `127.0.0.1:${DEFAULT_PORT}`;
+/** 经云端中转时，等电脑上的桥接页连好 Intiface 最多多久（它自己连 Intiface 最多等 6 秒） */
+const RELAY_READY_MS = 12_000;
+
+/** 连到哪：normalizeIntifaceUrl 给的直连地址，或者 relayTarget 给的中转地址 */
+export interface IntifaceTarget {
+  url: string;
+  host: string;
+  loopback: boolean;
+  secure: boolean;
+  /** 经云端中转：连上以后先等电脑上的桥接页连好 Intiface，再握手 */
+  relay?: boolean;
+}
 
 function isLoopback(host: string): boolean {
   const h = host.replace(/^\[|\]$/g, '');
@@ -79,8 +96,8 @@ function isLoopback(host: string): boolean {
 }
 
 /** 你填的地址 → WebSocket 地址：127.0.0.1:12345 / 192.168.1.5 / ws://… / wss://…（没写端口时 ws 用 12345） */
-export function normalizeIntifaceUrl(input: string): { url: string; host: string; loopback: boolean; secure: boolean } | { error: string } {
-  let t = input.trim() || `127.0.0.1:${DEFAULT_PORT}`;
+export function normalizeIntifaceUrl(input: string): IntifaceTarget | { error: string } {
+  let t = input.trim() || DEFAULT_INTIFACE_ADDRESS;
   if (/^https?:\/\//i.test(t)) t = t.replace(/^http/i, 'ws');
   if (!/^wss?:\/\//i.test(t)) t = `ws://${t}`;
   let u: URL;
@@ -93,17 +110,57 @@ export function normalizeIntifaceUrl(input: string): { url: string; host: string
   return { url: u.toString().replace(/\/$/, ''), host: u.host, loopback: isLoopback(u.hostname), secure: u.protocol === 'wss:' };
 }
 
+/** 经云端中转时连的地址：自己 Worker 上的中转（https → wss），带上刚换来的票 */
+export function relayTarget(hub: string, ticket: string): IntifaceTarget {
+  const u = new URL(TOY_RELAY_API.relay, hub);
+  u.protocol = u.protocol === 'http:' ? 'ws:' : 'wss:';
+  u.searchParams.set('ticket', ticket);
+  return { url: u.toString(), host: u.host, loopback: false, secure: u.protocol === 'wss:', relay: true };
+}
+
+/** 这个页面是 https、地址是没加密的 ws://，而浏览器是 WebKit（iPhone / iPad 上的所有浏览器、Mac 上的 Safari）：连本机也会被拦 */
+function webkitBlocks(target: { secure: boolean }): boolean {
+  if (typeof location === 'undefined' || location.protocol !== 'https:' || target.secure) return false;
+  const ua = navigator.userAgent;
+  return platform() === 'ios' || (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua));
+}
+
 /** 浏览器会不会直接拦下这个地址（https 页面连没加密的局域网地址）：会的话返回原因 */
 export function blockedReason(target: { host: string; loopback: boolean; secure: boolean }): string | null {
   if (typeof location === 'undefined' || location.protocol !== 'https:' || target.secure || target.loopback) return null;
-  return `这个页面是 https，浏览器不让它连没加密的 ws://${target.host}。可以：在这台设备上开 Intiface Central（地址填 127.0.0.1:12345）；或者给 Intiface 套一层 https（例如 Caddy、cloudflared），地址填 wss://…`;
+  return `这个页面是 https，浏览器不让它连没加密的 ws://${target.host}。可以：连接方式改成"经云端中转"（电脑上开桥接页）；在这台设备上开 Intiface Central（地址填 ${DEFAULT_INTIFACE_ADDRESS}）；或者给 Intiface 套一层 https（例如 Caddy、cloudflared），地址填 wss://…`;
 }
 
-/** 连不上时说清楚可能是哪一步 */
-export function connectError(target: { url: string; loopback: boolean }, detail: string): string {
+/**
+ * 连不上时说清楚可能是哪一步。
+ * webkitFix：浏览器是 WebKit、会拦 ws:// 时怎么办（默认是手机上改用经云端中转；电脑上的桥接页换一个浏览器）
+ */
+export function connectError(
+  target: { url: string; loopback: boolean; secure: boolean },
+  detail: string,
+  webkitFix = '连接方式改成"经云端中转"，在装着 Intiface Central 的电脑上用 Chrome / Edge / Firefox 开桥接页。',
+): string {
   const where = target.loopback ? '这台设备上的 Intiface Central' : `${target.url} 那边的 Intiface Central`;
-  return `连不上 ${target.url}（${detail}）。看看${where}开着没有、点了 Start Server 没有、端口是不是 12345${target.loopback ? '' : '，Intiface 设置里有没有打开"所有网卡"'}；浏览器问要不要允许访问本地网络设备时选允许。`;
+  const steps = `看看${where}开着没有、点了 Start Server 没有、端口对不对（默认 ${DEFAULT_PORT}）${target.loopback ? '' : '，Intiface 设置里有没有打开"所有网卡"'}；浏览器问要不要允许访问本地网络设备时选允许。`;
+  const webkit = webkitBlocks(target) ? `iPhone / iPad 上的浏览器和 Mac 上的 Safari 不让 https 页面连 ws://，连本机也不行（多半就是这个原因）：${webkitFix}` : '';
+  return `连不上 ${target.url}（${detail}）。${webkit}${steps}`;
 }
+
+/** new WebSocket 抛出来的：浏览器直接拒绝（SecurityError）时说明是浏览器拦的 */
+export function socketThrown(e: unknown): string {
+  if (e instanceof DOMException && e.name === 'SecurityError') return '浏览器不让这个 https 页面连没加密的 ws://';
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** 经云端中转时，连不上中转本身 */
+function relayError(detail: string): string {
+  return `连不上自己 Worker 上的玩具中转（${detail}）：看看网络，以及 Worker 是不是最新的（推到 main 会自动部署）。`;
+}
+
+/** 连的时候电脑上的桥接页没开 */
+const BRIDGE_DOWN = '电脑上的桥接页没开：在装着 Intiface Central 的电脑上用 Chrome / Edge / Firefox 打开桥接链接（心跳设置 → 玩具 → 经云端中转 → 复制），页面开着别关。';
+/** 连着的时候电脑上的桥接页断了 */
+const BRIDGE_LOST = '电脑上的桥接页断开了（页面关了、电脑睡着了或者断网了），再点一次连接';
 
 function parseDevice(raw: Obj): ToyDevice | null {
   const index = typeof raw.DeviceIndex === 'number' ? raw.DeviceIndex : null;
@@ -127,7 +184,7 @@ export interface IntifaceEvents {
   onDeviceAdded?(d: ToyDevice): void;
   onDeviceRemoved?(index: number): void;
   onScanningFinished?(): void;
-  /** 连接断了（不是你点的断开）：原因 */
+  /** 连接断了（不是你点的断开）：原因（一整句，直接显示） */
   onClose?(reason: string): void;
 }
 
@@ -137,6 +194,10 @@ export class IntifaceClient {
   private pending = new Map<number, Pending>();
   private pingTimer: ReturnType<typeof setInterval> | undefined;
   private closing = false;
+  /** 这次是经云端中转连的 */
+  private relay = false;
+  /** 经云端中转：在等电脑上的桥接页连好 Intiface */
+  private relayWait: { resolve(): void; reject(e: Error): void } | null = null;
   serverName = '';
   readonly events: IntifaceEvents;
 
@@ -148,20 +209,22 @@ export class IntifaceClient {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN && !!this.serverName;
   }
 
-  /** 连上并握手；失败时抛出写好原因的错误 */
-  async connect(target: { url: string; loopback: boolean }): Promise<void> {
+  /** 连上并握手（经云端中转时先等桥接页连好 Intiface）；失败时抛出写好原因的错误 */
+  async connect(target: IntifaceTarget): Promise<void> {
     this.close();
     this.closing = false;
+    this.relay = !!target.relay;
+    const fail = (detail: string) => new Error(target.relay ? relayError(detail) : connectError(target, detail));
     let ws: WebSocket;
     try {
       ws = new WebSocket(target.url);
     } catch (e) {
-      throw new Error(connectError(target, e instanceof Error ? e.message : String(e)));
+      throw fail(socketThrown(e));
     }
     this.ws = ws;
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(connectError(target, '6 秒没有回应')));
+        reject(fail('6 秒没有回应'));
         ws.close();
       }, 6000);
       ws.onopen = () => {
@@ -170,16 +233,22 @@ export class IntifaceClient {
       };
       ws.onerror = () => {
         clearTimeout(timer);
-        reject(new Error(connectError(target, '连接被拒绝或中断')));
+        reject(fail('连接被拒绝或中断'));
       };
       ws.onclose = (e) => {
         clearTimeout(timer);
-        reject(new Error(connectError(target, `连接关闭 ${e.code}`)));
+        reject(fail(`连接关闭 ${e.code}`));
       };
     });
     ws.onmessage = (e) => this.receive(e.data);
     ws.onerror = null;
-    ws.onclose = (e) => this.dropped(e.code === 1000 ? '' : `连接断了（${e.code}${e.reason ? ` ${e.reason}` : ''}）`);
+    ws.onclose = (e) => this.dropped(this.closeReason(e));
+    if (target.relay) {
+      await this.bridgeReady().catch((e: unknown) => {
+        this.close();
+        throw e;
+      });
+    }
     const info = await this.request('RequestServerInfo', { ClientName: 'ai-mobile 心跳', MessageVersion: 3 }, 8000).catch((e: unknown) => {
       this.close();
       throw new Error(`Intiface 没有完成握手：${e instanceof Error ? e.message : String(e)}`);
@@ -189,6 +258,49 @@ export class IntifaceClient {
     if (maxPing > 0) this.pingTimer = setInterval(() => void this.request('Ping', {}).catch(() => undefined), Math.max(200, Math.floor(maxPing / 2)));
   }
 
+  /** 经云端中转：等电脑上的桥接页说连好 Intiface 了（没开、连不上、不回应都抛出原因） */
+  private bridgeReady(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => this.settleRelay(new Error(`电脑上的桥接页 ${RELAY_READY_MS / 1000} 秒没有回应：看看那个页面还开着没有、电脑是不是睡着了。`)), RELAY_READY_MS);
+      this.relayWait = {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      };
+    });
+  }
+
+  /** 结束"等桥接页"：带 error 时是失败；没在等时返回 false */
+  private settleRelay(error?: Error): boolean {
+    const w = this.relayWait;
+    if (!w) return false;
+    this.relayWait = null;
+    if (error) w.reject(error);
+    else w.resolve();
+    return true;
+  }
+
+  /** 中转自己说的话：桥接页在不在、连好 Intiface 没有 */
+  private relayControl(m: ToyRelayMessage) {
+    let failed = '';
+    if (m.relay === 'bridge' && !m.up) failed = this.relayWait ? BRIDGE_DOWN : BRIDGE_LOST;
+    else if (m.relay === 'error') failed = `电脑上的桥接页连不上 Intiface Central：${m.message}`;
+    // 已经握过手又来一次 ready：电脑上换了桥接页、重新连了 Intiface，这边的会话作废了
+    else if (m.relay === 'ready' && !this.settleRelay()) failed = '电脑上的桥接页重新连了一次 Intiface Central，这边要重新连接';
+    if (failed && !this.settleRelay(new Error(failed))) this.dropped(failed);
+  }
+
+  private closeReason(e: CloseEvent): string {
+    if (e.code === 1000) return '';
+    if (this.relay && e.code === TOY_RELAY_CLOSE.replaced) return '另一台设备连上了玩具中转，这台先断开了';
+    return `${this.relay ? '玩具中转' : 'Intiface'} 的连接断了（${e.code}${e.reason ? ` ${e.reason}` : ''}）`;
+  }
+
   /** 你点的断开：先让玩具都停下 */
   async disconnect(): Promise<void> {
     if (!this.ws) return;
@@ -196,7 +308,7 @@ export class IntifaceClient {
     this.close();
   }
 
-  private close() {
+  private close(reason = '连接已关闭') {
     this.closing = true;
     clearInterval(this.pingTimer);
     this.pingTimer = undefined;
@@ -211,13 +323,14 @@ export class IntifaceClient {
         // 已经关了
       }
     }
-    this.rejectAll('连接已关闭');
+    this.settleRelay(new Error(reason));
+    this.rejectAll(reason);
   }
 
   private dropped(reason: string) {
     const was = this.closing;
-    this.close();
-    if (!was) this.events.onClose?.(reason || '连接关了');
+    this.close(reason || '连接已关闭');
+    if (!was) this.events.onClose?.(reason || `${this.relay ? '玩具中转' : 'Intiface'} 的连接关了`);
   }
 
   private rejectAll(reason: string) {
@@ -251,14 +364,15 @@ export class IntifaceClient {
   }
 
   private receive(data: unknown) {
-    if (typeof data !== 'string') return;
-    let list: unknown;
-    try {
-      list = JSON.parse(data);
-    } catch {
+    const got = readToyRelay(data);
+    if (!got) return;
+    if ('control' in got) {
+      if (this.relay) this.relayControl(got.control);
       return;
     }
-    for (const m of Array.isArray(list) ? (list as Msg[]) : []) {
+    // 经云端中转：桥接页说连好之前来的 Buttplug 消息是上一次会话剩下的，不收
+    if (this.relayWait) return;
+    for (const m of got.buttplug as Msg[]) {
       const type = Object.keys(m ?? {})[0];
       if (!type) continue;
       const body = (m[type] ?? {}) as Obj;

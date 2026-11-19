@@ -17,6 +17,8 @@ import WorldPage from '@/pages/WorldPage.vue';
 import FocusPage from '@/pages/FocusPage.vue';
 import { useAppStore } from '@/stores/app';
 import ScenePage from '@/pages/ScenePage.vue';
+import ToyBridgePage from '@/pages/ToyBridgePage.vue';
+import { TOY_BRIDGE_ROUTE } from '@/services/toyBridge';
 import ApiPage from '@/pages/me/ApiPage.vue';
 import AppearancePage from '@/pages/me/AppearancePage.vue';
 import AssistantPage from '@/pages/me/AssistantPage.vue';
@@ -116,6 +118,8 @@ export const routes: RouteRecordRaw[] = [
   { path: '/me/assistant', component: AssistantPage, meta: { title: '助手' } },
   { path: '/me/backgrounds', component: () => import('@/pages/me/BackgroundLibraryPage.vue'), meta: { title: '场景素材库' } },
   { path: '/import', component: ImportPage, meta: { title: '导入' } },
+  // 电脑上的玩具桥接页：手机上的心跳经云端中转连这台电脑上的 Intiface Central（链接在心跳设置 → 玩具里复制）
+  { path: TOY_BRIDGE_ROUTE, component: ToyBridgePage, meta: { title: '玩具桥接' } },
   { path: '/:pathMatch(.*)*', redirect: () => useAppStore().homePath },
 ];
 

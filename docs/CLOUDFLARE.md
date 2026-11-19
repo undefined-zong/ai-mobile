@@ -182,6 +182,12 @@ pnpm --filter @app/hub exec wrangler deploy --config wrangler.deploy.json
 
 「云端与同步 → 从云端重新下载」清掉这台设备的同步记账，重新拉取全部（和云端不一样的以云端为准），这台设备独有的再传上去，Key 不受影响。
 
+## 心跳的玩具中转（iPhone 连 Intiface Central）
+
+iPhone / iPad 上的网页连不了 Intiface Central（苹果的浏览器不让 https 页面连 ws://，连本机也不行）。Worker 里有一个中转（Durable Object `ToyRelay`，`apps/hub/src/toyRelay.ts`）：手机和电脑上的桥接页都用 wss 连进来，Buttplug 消息原样转。部署新版 Worker 即可（`wrangler.jsonc` 里的 `v3-toy-relay` 迁移随部署生效，免费版能用，不需要新的数据库迁移）；`/v1/status` 带 `toyRelay: true` 的 Worker 才有。
+
+用法：心跳 → 设置 → 玩具 → 连接方式选"经云端中转"，把桥接链接发到装着 Intiface Central 的电脑上，用 Chrome / Edge / Firefox 打开，开着别关，然后在手机上点连接。接口：`POST /v1/toys/ticket`（登录的设备换票）、`GET` / `POST /v1/toys/bridge`（看 / 换桥接密钥）、`POST /v1/toys/bridge/ticket`（桥接页凭密钥换票，不用登录）、`GET /v1/toys/relay?ticket=`（WebSocket，票 60 秒内有效）。桥接密钥只能当桥用，存在这个 Durable Object 里；换一个以后旧链接打开的桥接页马上断开。
+
 ## 持续部署
 
 `.github/workflows/hub.yml` 支持手动部署，以及配置好 GitHub 部署后 main 更新时自动部署。仓库 Secrets 设置 `CLOUDFLARE_API_TOKEN`（Worker 编辑 + D1 编辑）；Variables 设置 `CLOUDFLARE_ACCOUNT_ID`、`HUB_D1_ID`，自托管前端再设置 `HUB_APP_URL`。运行时秘密已用上述 secret bulk 写入，不随源码部署覆盖。

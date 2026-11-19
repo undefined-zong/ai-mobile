@@ -194,7 +194,8 @@ pnpm build:preview  # 单文件预览页 → apps/web/artifact/index.html
   - 打字：主对话按"心跳 · 文字"回（进来时她先开口）；连麦：点左下角换成连麦，「陪伴 · 快速」按"心跳 · 语音"回，用她的声音念（和哄睡的连麦一样：说话检测 → 语音识别 → 边写边念；你安静久了她轻声说一句）。语音识别没接通时改成打字、她用声音回。两种各用各的预设，右上角 设置 → 预设 里换。
   - 背景：进来时用今天在同一个地方画过的，没有就画一张"开场"；之后每 6 句换一张"这一刻"（设置 → 画面里改成 4 / 8 句或者不自动换），右上角魔杖马上画。衣服不锁，按对话画。生图预设在 设置 → 画面 里换：氛围（默认，画到暧昧为止）、第一视角、亲密（到了亲密的时候照实画，负面词固定排除显得年幼的内容），也能跟随配图。
   - 玩具（设置 → 玩具）：
-    - 装 Intiface Central（电脑、安卓、iPhone 都有），连上玩具、点 Start Server；和这个页面在同一台设备上时地址填 127.0.0.1:12345。连 Intiface 用的是自己写的 Buttplug v3 客户端（`services/intiface.ts`），只连你填的地址。页面是 https 时浏览器只让连本机或 wss://，连局域网别的电脑要给 Intiface 套一层 https，连不上时写明是哪一步。连上过一次以后，进心跳自动连。
+    - 装 Intiface Central（电脑、安卓都行），连上玩具、点 Start Server；和这个页面在同一台设备上时直连，地址填 127.0.0.1:12345。连 Intiface 用的是自己写的 Buttplug v3 客户端（`services/intiface.ts`），只连你填的地址。页面是 https 时浏览器只让连本机或 wss://，连局域网别的电脑要给 Intiface 套一层 https，连不上时写明是哪一步。连上过一次以后，进心跳自动连。
+    - iPhone / iPad：苹果的浏览器（iPhone 上都是 WebKit）不让 https 页面连 ws://，连本机的也不行，iPhone 上装的 Intiface 连不上。连接方式选"经云端中转"：Intiface 装在电脑上，把设置里的桥接链接发到那台电脑上用 Chrome / Edge / Firefox 打开（`#/toy-bridge`，桥接页连本机的 Intiface），手机经自己 Worker 上的中转（Durable Object，`apps/hub/src/toyRelay.ts`）连过去，Buttplug 消息原样转。要先连上自己的 Worker；桥接链接只能当桥用，能在设置里换一个（旧的马上失效）。手机断开或桥接页关掉时 Intiface 让玩具停下。
     - 列出连着的玩具（能做什么、电量），每个能"试一下"。
     - 指令从哪来：单独生成（默认：她每说完一句，"控制指令"预设按这句话另写一份，读到 / 念到那几个字时执行；API 设置里的「控制指令」，默认跟随「陪伴 · 快速」）/ 她自己写（心跳功能预设里"她自己写指令"那一块，她在回复里写 `<device>…</device>`，不多花一次调用）/ 不控制。
     - 写法沿用 SillyTavern 的 Intiface 插件：`"VIBRATE": 40`、`"VIBRATE": [80, 30]`（每个马达）、`"VIBRATE": {"pattern": [20, 60], "interval": [800, 400], "loop": 3}`（变速）、`OSCILLATE` / `ROTATE` / `CONSTRICT` / `INFLATE` 同震动、`LINEAR` / `LINEAR_SPEED` / `LINEAR_PATTERN`（伸缩）、`"STOP": true`。只写玩具做得了的键，做不了的程序去掉。`<device>` 在聊天里不显示、语音不念。
