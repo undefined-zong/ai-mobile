@@ -1,4 +1,7 @@
 import { parseColor } from './model';
+import studioData from './avatar-data/studio.json';
+import looks from './avatar-data/looks.json';
+import hairData from './avatar-data/hair.json';
 
 /**
  * 捏人：Q 版小人的样子（不碰 three.js：编辑器、存档、给模型的选项都在这里）。
@@ -9,6 +12,9 @@ import { parseColor } from './model';
  */
 export interface Avatar {
   skin: string;
+  faceShape: string;
+  eyeScale: number;
+  eyeSpacing: number;
   hair: string;
   /** 发顶 */
   hairTop: string;
@@ -19,6 +25,7 @@ export interface Avatar {
   /** 发梢渐变成这个颜色；空着是不渐变 */
   hairColor2: string;
   eyes: string;
+  brows: string;
   eyeColor: string;
   mouth: string;
   blush: boolean;
@@ -61,6 +68,8 @@ export const HAIR_STYLES: Option[] = [
   { id: 'pony', name: '高马尾' },
   { id: 'bun', name: '丸子头' },
   { id: 'spiky', name: '刺猬头' },
+  { id: 'halfUp', name: '半扎长发' },
+  { id: 'madara', name: '宇智波斑' },
 ];
 export const HAIR_TOPS: Option[] = [
   { id: 'flat', name: '服帖' },
@@ -95,6 +104,7 @@ export const SUITS: Option[] = [
   { id: 'dress', name: '连衣裙' },
   { id: 'yukata', name: '浴衣' },
   { id: 'bathrobe', name: '浴袍' },
+  { id: 'armor', name: '轻甲' },
 ];
 export const TOPS: Option[] = [
   { id: 'tee', name: 'T 恤' },
@@ -173,6 +183,9 @@ export const CLOTH_COLORS: Swatch[] = [
 ];
 
 export const DEFAULT_AVATAR: Avatar = {
+  faceShape: studioData.faceShapes[0]!.id,
+  eyeScale: studioData.proportions.find((p) => p.key === 'eyeScale')!.default,
+  eyeSpacing: studioData.proportions.find((p) => p.key === 'eyeSpacing')!.default,
   skin: '#f6d2b8',
   hair: 'short',
   hairTop: 'flat',
@@ -181,6 +194,7 @@ export const DEFAULT_AVATAR: Avatar = {
   hairColor: '#5a3d2e',
   hairColor2: '',
   eyes: 'round',
+  brows: studioData.brows[0]!.id,
   eyeColor: '#2d2a33',
   mouth: 'smile',
   blush: true,
@@ -201,7 +215,15 @@ export const DEFAULT_AVATAR: Avatar = {
   height: 1,
 };
 
-type Group = 'face' | 'hair' | 'clothes' | 'more';
+export type AvatarGroup = 'face' | 'hair' | 'clothes' | 'more';
+export type ProportionKey = 'head' | 'height' | 'eyeScale' | 'eyeSpacing';
+export const AVATAR_PROPORTIONS = studioData.proportions as { key: ProportionKey; label: string; group: AvatarGroup; min: number; max: number; step: number; default: number }[];
+export interface AvatarLook { id: string; name: string; note: string; avatar: Partial<Avatar> }
+export const AVATAR_LOOKS: AvatarLook[] = looks;
+
+export function applyAvatarLook(look: AvatarLook, base: Avatar): Avatar {
+  return { ...DEFAULT_AVATAR, skin: base.skin, head: base.head, height: base.height, ...look.avatar, acc: [...(look.avatar.acc ?? [])] };
+}
 
 /**
  * 编辑器里一项一项列出来。一项是这几种里的一种：
@@ -213,7 +235,7 @@ type Group = 'face' | 'hair' | 'clothes' | 'more';
 export interface AvatarField {
   key: keyof Avatar;
   label: string;
-  group: Group;
+  group: AvatarGroup;
   options?: Option[];
   multi?: boolean;
   colors?: Swatch[];
@@ -226,8 +248,10 @@ const suited = (a: Avatar) => a.suit !== 'none';
 const unsuited = (a: Avatar) => a.suit === 'none';
 
 export const AVATAR_FIELDS: AvatarField[] = [
+  { key: 'faceShape', label: '脸型', options: studioData.faceShapes, group: 'face' },
   { key: 'skin', label: '肤色', colors: SKINS, group: 'face' },
   { key: 'eyes', label: '眼睛', options: EYES, group: 'face' },
+  { key: 'brows', label: '眉形', options: studioData.brows, group: 'face' },
   { key: 'eyeColor', label: '瞳色', colors: EYE_COLORS, group: 'face' },
   { key: 'mouth', label: '嘴巴', options: MOUTHS, group: 'face' },
   { key: 'blush', label: '腮红', toggle: ['有', '没有'], group: 'face' },
@@ -298,36 +322,18 @@ export function seededAvatar(seed: string): Avatar {
   };
 }
 
+/** Hairstyles with a distinct silhouette start with matching bangs; every part remains editable. */
+export function selectAvatarOption(base: Avatar, key: keyof Avatar, id: string): Avatar {
+  const parts = key === 'hair' ? hairData.defaults[id as keyof typeof hairData.defaults] : undefined;
+  return { ...base, ...parts, [key]: id };
+}
+
 export function randomAvatar(base: Avatar): Avatar {
-  const suit = Math.random() < 0.3 ? pickRandom(SUITS.slice(1)).id : 'none';
-  // 花纹别太多：大多是纯色
-  const pattern = () => (Math.random() < 0.3 ? pickRandom(PATTERNS.slice(1)).id : 'plain');
-  const acc = ACCESSORIES.filter(() => Math.random() < 0.16).map((o) => o.id);
+  const look = applyAvatarLook(pickRandom(AVATAR_LOOKS), base);
   return {
-    ...base,
-    hair: pickRandom(HAIR_STYLES).id,
-    hairTop: Math.random() < 0.5 ? 'flat' : pickRandom(HAIR_TOPS).id,
-    hairColor: pickRandom(HAIR_COLORS).hex,
-    hairColor2: Math.random() < 0.2 ? pickRandom(HAIR_COLORS).hex : '',
+    ...selectAvatarOption(look, 'hair', pickRandom(HAIR_STYLES).id),
     hairFlip: Math.random() < 0.5,
-    bangs: pickRandom(BANGS).id,
     eyes: pickRandom(EYES).id,
-    eyeColor: pickRandom(EYE_COLORS).hex,
-    mouth: pickRandom(MOUTHS).id,
-    blush: Math.random() < 0.7,
-    suit,
-    suitColor: pickRandom(CLOTH_COLORS).hex,
-    suitColor2: pickRandom(CLOTH_COLORS).hex,
-    suitPattern: pattern(),
-    top: pickRandom(TOPS).id,
-    topColor: pickRandom(CLOTH_COLORS).hex,
-    topPattern: pattern(),
-    bottom: pickRandom(BOTTOMS).id,
-    bottomColor: pickRandom(CLOTH_COLORS).hex,
-    bottomPattern: pattern(),
-    shoesColor: pickRandom(CLOTH_COLORS).hex,
-    acc,
-    accColor: pickRandom(CLOTH_COLORS).hex,
   };
 }
 
@@ -369,9 +375,9 @@ export function parseAvatar(v: unknown, base: Avatar = DEFAULT_AVATAR): Avatar {
     out.suit = 'dress';
     if (o.suitColor === undefined) out.suitColor = out.topColor;
   }
-  for (const key of ['head', 'height'] as const) {
+  for (const { key, min, max } of AVATAR_PROPORTIONS) {
     const n = Number(o[key]);
-    if (Number.isFinite(n) && o[key] !== undefined && o[key] !== null && o[key] !== '') out[key] = Math.min(1.15, Math.max(0.85, n));
+    if (Number.isFinite(n) && o[key] !== undefined && o[key] !== null && o[key] !== '') out[key] = Math.min(max, Math.max(min, n));
   }
   return out;
 }
@@ -386,7 +392,7 @@ export function describeAvatarOptions(): string {
   });
   return [
     ...opts,
-    'head（头的大小）、height（身高）：0.85–1.15，1 是标准',
+    ...AVATAR_PROPORTIONS.map((p) => `${p.key}（${p.label}）：${p.min}–${p.max}，${p.default} 是标准`),
     '穿套装时（suit 不是 none）不用写上衣和下装；不穿套装时 suit 写 none',
   ].join('\n');
 }

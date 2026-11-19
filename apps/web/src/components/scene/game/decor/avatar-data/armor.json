@@ -1,0 +1,65 @@
+{
+  "chest": {
+    "top": 0.177,
+    "bottom": 0.158,
+    "height": 0.235,
+    "y": 0.568,
+    "arc": 2.5,
+    "offset": 0.014,
+    "depthScale": 0.86,
+    "sections": [
+      { "id": "chest", "angle": 0 },
+      { "id": "back", "angle": 1 }
+    ]
+  },
+  "belt": {
+    "radius": 0.167,
+    "height": 0.07,
+    "y": 0.429,
+    "depthScale": 0.86
+  },
+  "collar": {
+    "radius": 0.075,
+    "height": 0.075,
+    "y": 0.751
+  },
+  "panels": {
+    "pieces": [
+      {
+        "id": "front",
+        "angle": 0,
+        "width": 0.23
+      },
+      {
+        "id": "left",
+        "angle": -0.5,
+        "width": 0.15
+      },
+      {
+        "id": "right",
+        "angle": 0.5,
+        "width": 0.15
+      }
+    ],
+    "radius": 0.184,
+    "height": 0.195,
+    "y": 0.323,
+    "depth": 0.014,
+    "bevel": 0.008
+  },
+  "shoulder": {
+    "width": 0.125,
+    "height": 0.11,
+    "depth": 0.154,
+    "y": -0.01
+  },
+  "stitches": {
+    "radius": 0.007,
+    "color": "#c19a68",
+    "rows": [
+      -0.28,
+      0,
+      0.28
+    ]
+  }
+}

@@ -1,0 +1,222 @@
+{
+  "historyLimit": 40,
+  "thumbnailSize": 192,
+  "lighting": {
+    "sky": "#fff9f4",
+    "ground": "#bda3a4",
+    "ambient": 1.4,
+    "key": "#fff2e5",
+    "keyIntensity": 1.8,
+    "keyPosition": [
+      2,
+      4,
+      5
+    ],
+    "fill": "#f5eaf4",
+    "fillIntensity": 0.8,
+    "fillPosition": [
+      -3,
+      2,
+      1
+    ],
+    "rim": "#fff5e9",
+    "rimIntensity": 1.1,
+    "rimPosition": [
+      0,
+      3,
+      -3
+    ],
+    "platform": "#e7dce9"
+  },
+  "framing": {
+    "body": {
+      "target": 0.76,
+      "height": 1.95
+    },
+    "face": {
+      "target": 1.07,
+      "height": 1.08
+    },
+    "clothes": {
+      "target": 0.43,
+      "height": 1.12
+    },
+    "thumbnail": {
+      "body": 1.8,
+      "face": 1.05,
+      "clothes": 1.08
+    },
+    "horizontalPadding": 0.12
+  },
+  "faceShapes": [
+    {
+      "id": "soft",
+      "name": "\u67d4\u548c\u8138",
+      "width": 1.0,
+      "height": 1.01,
+      "depth": 0.78,
+      "jaw": 0.27,
+      "cheek": 0.025
+    },
+    {
+      "id": "round",
+      "name": "\u5706\u5706\u8138",
+      "width": 1.04,
+      "height": 0.98,
+      "depth": 0.8,
+      "jaw": 0.15,
+      "cheek": 0.04
+    },
+    {
+      "id": "oval",
+      "name": "\u9e45\u86cb\u8138",
+      "width": 0.97,
+      "height": 1.04,
+      "depth": 0.78,
+      "jaw": 0.35,
+      "cheek": 0.015
+    },
+    {
+      "id": "angular",
+      "name": "\u5229\u843d\u8138",
+      "width": 1.03,
+      "height": 1.0,
+      "depth": 0.8,
+      "jaw": 0.18,
+      "cheek": 0.015
+    }
+  ],
+  "proportions": [
+    {
+      "key": "eyeScale",
+      "label": "\u773c\u775b\u5927\u5c0f",
+      "group": "face",
+      "min": 0.8,
+      "max": 1.2,
+      "step": 0.01,
+      "default": 1
+    },
+    {
+      "key": "eyeSpacing",
+      "label": "\u773c\u95f4\u8ddd",
+      "group": "face",
+      "min": 0.85,
+      "max": 1.15,
+      "step": 0.01,
+      "default": 1
+    },
+    {
+      "key": "head",
+      "label": "\u5934\u8eab\u6bd4\u4f8b",
+      "group": "more",
+      "min": 0.85,
+      "max": 1.15,
+      "step": 0.01,
+      "default": 1
+    },
+    {
+      "key": "height",
+      "label": "\u8eab\u9ad8",
+      "group": "more",
+      "min": 0.85,
+      "max": 1.15,
+      "step": 0.01,
+      "default": 1
+    }
+  ],
+  "figure": {
+    "headRadius": 0.32,
+    "neckHeight": 0.78,
+    "outlineWidth": 0.0016,
+    "torsoProfile": [
+      [
+        0.145,
+        -0.25
+      ],
+      [
+        0.16,
+        -0.21
+      ],
+      [
+        0.135,
+        -0.08
+      ],
+      [
+        0.145,
+        0.07
+      ],
+      [
+        0.185,
+        0.145
+      ],
+      [
+        0.17,
+        0.18
+      ],
+      [
+        0.09,
+        0.235
+      ],
+      [
+        0.066,
+        0.25
+      ]
+    ],
+    "shoulderX": 0.175,
+    "collar": [
+      [
+        -0.064,
+        0.733,
+        0.125
+      ],
+      [
+        -0.018,
+        0.682,
+        0.158
+      ],
+      [
+        -0.067,
+        0.647,
+        0.154
+      ],
+      [
+        -0.111,
+        0.702,
+        0.131
+      ]
+    ]
+  },
+  "faceLayout": {
+    "eyeY": 190,
+    "eyeX": 98,
+    "blushY": 241,
+    "noseY": 245,
+    "mouthY": 282
+  },
+  "brows": [
+    {
+      "id": "soft",
+      "name": "\u67d4\u7709",
+      "inner": 39,
+      "outer": 36,
+      "arch": 8,
+      "weight": 4
+    },
+    {
+      "id": "straight",
+      "name": "\u5e73\u7709",
+      "inner": 36,
+      "outer": 36,
+      "arch": 2,
+      "weight": 5
+    },
+    {
+      "id": "sharp",
+      "name": "\u5251\u7709",
+      "inner": 23,
+      "outer": 46,
+      "arch": 2,
+      "weight": 7
+    }
+  ]
+}
