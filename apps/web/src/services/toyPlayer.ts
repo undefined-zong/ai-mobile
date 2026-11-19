@@ -19,7 +19,7 @@ export interface ToyCaps {
   inflate: number;
   /** 伸缩：从 0 到 100 走一下最快多少毫秒（幅度小时按比例） */
   strokeMs: number;
-  /** 伸缩的范围（0–100）：指令里的 0–100 按比例落在这中间 */
+  /** 伸缩的范围（0–100）：只截断超出范围的位置，不按比例缩放 */
   posMin: number;
   posMax: number;
 }
@@ -71,15 +71,20 @@ export class ToyPlayer {
   private timers: Partial<Record<ToyKind, ReturnType<typeof setTimeout>>> = {};
   /** 上一次发给每个能力的值（一样就不再发） */
   private sent = new Map<string, number>();
+  /** 保留原始值，调整上限时重发当前这一档，不改变 AI 的指令或波形进度 */
+  private current: Partial<Record<ScalarKind, { step: number | number[]; clockwise?: boolean }>> = {};
+  private linearTarget: { position: number; duration: number } | null = null;
   private towardTo = true;
   readonly levels: ToyLevels;
   private readonly out: ToyOutput;
   private readonly caps: () => ToyCaps;
+  private readonly featureCap: (device: ToyDevice, feature: ToyFeature) => number;
 
-  constructor(levels: ToyLevels, out: ToyOutput, caps: () => ToyCaps) {
+  constructor(levels: ToyLevels, out: ToyOutput, caps: () => ToyCaps, featureCap: (device: ToyDevice, feature: ToyFeature) => number) {
     this.levels = levels;
     this.out = out;
     this.caps = caps;
+    this.featureCap = featureCap;
   }
 
   /** 有没有哪一种在动 */
@@ -104,8 +109,19 @@ export class ToyPlayer {
     for (const t of Object.values(this.timers)) clearTimeout(t);
     this.timers = {};
     this.sent.clear();
+    this.current = {};
+    this.linearTarget = null;
     this.out.stopAll();
     Object.assign(this.levels, emptyLevels());
+  }
+
+  /** 已经持续输出的数值也立即跟随新上限，下一档仍按原来的时间播放 */
+  refreshCaps(): void {
+    for (const kind of SCALAR_KINDS) {
+      const current = this.current[kind];
+      if (current) this.setLevel(kind, current.step, current.clockwise);
+    }
+    if (this.linearTarget) this.sendLinear(this.linearTarget.position, this.linearTarget.duration);
   }
 
   private clear(kind: ToyKind) {
@@ -119,17 +135,18 @@ export class ToyPlayer {
 
   /** 给这一种设一个强度（一个数是所有马达，数组是每个马达各自的），不超过上限 */
   private setLevel(kind: ScalarKind, step: number | number[], clockwise?: boolean) {
-    const cap = clamp(this.caps()[kind], 0, 100);
+    this.current[kind] = { step, clockwise };
     const pick = (i: number) => clamp(Math.round(Array.isArray(step) ? (step[i] ?? step.at(-1) ?? 0) : step), 0, 100);
     const feats = this.featuresOf(kind);
-    if (kind === 'vibrate') {
-      const n = feats.length || (Array.isArray(step) ? step.length : 1);
-      this.levels.vibrate = Array.from({ length: n }, (_, i) => Math.min(pick(i), cap));
-    } else this.levels[kind] = Math.min(pick(0), cap);
+    const values = feats.length
+      ? feats.map(({ device, feature }, i) => Math.min(pick(i), this.featureCap(device, feature)))
+      : Array.from({ length: Array.isArray(step) ? step.length : 1 }, (_, i) => Math.min(pick(i), this.caps()[kind]));
+    if (kind === 'vibrate') this.levels.vibrate = values;
+    else this.levels[kind] = Math.max(0, ...values);
     const byDevice = new Map<number, { scalars: ScalarSub[]; rotations: RotateSub[] }>();
     feats.forEach(({ device, feature }, i) => {
-      const v = Math.min(pick(i), cap) / 100;
-      const scalar = Math.round(v * feature.steps) / feature.steps;
+      // 协议使用 0–1；保持截断后的数值，避免按设备档位四舍五入后越过上限。
+      const scalar = values[i]! / 100;
       const key = `${device.index}:${feature.via}:${feature.index}${feature.via === 'rotate' ? `:${clockwise !== false}` : ''}`;
       if (this.sent.get(key) === scalar) return;
       this.sent.set(key, scalar);
@@ -177,10 +194,6 @@ export class ToyPlayer {
   private runLinear(l: ToyLinear) {
     this.clear('linear');
     this.levels.doing.linear = describeCommand({ linear: l });
-    const caps = this.caps();
-    const lo = clamp(Math.min(caps.posMin, caps.posMax), 0, 100);
-    const hi = clamp(Math.max(caps.posMin, caps.posMax), 0, 100);
-    const mapPos = (p: number) => lo + ((hi - lo) * clamp(p, 0, 100)) / 100;
     let seg = 0;
     let loop = 0;
     let k = 0;
@@ -198,6 +211,7 @@ export class ToyPlayer {
         }
         delete this.timers.linear;
         delete this.levels.doing.linear;
+        this.linearTarget = null;
         this.levels.pace = 0;
         return;
       }
@@ -214,10 +228,12 @@ export class ToyPlayer {
       }
       guard = 0;
       const target = this.towardTo ? s.to : s.from;
-      const span = Math.abs(mapPos(s.to) - mapPos(s.from));
+      const caps = this.caps();
+      const feats = this.featuresOf('linear');
+      const limits = feats.length ? feats.map(({ device, feature }) => this.featureCap(device, feature)) : [caps.posMax];
+      const span = Math.max(...limits.map((cap) => Math.abs(this.linearPosition(s.to, cap) - this.linearPosition(s.from, cap))));
       const ms = Math.round(Math.max(s.durations[k] ?? 1000, MIN_TOY_STROKE, (caps.strokeMs * span) / 100));
-      this.sendLinear(mapPos(target), ms);
-      this.levels.position = clamp(Math.round(target), 0, 100);
+      this.sendLinear(target, ms);
       // 多快：一下 200 毫秒算最快，2 秒以上算很慢
       this.levels.pace = span < 3 ? 0 : clamp(Math.round(100 - ((ms - 200) / 1800) * 90), 10, 100);
       this.towardTo = !this.towardTo;
@@ -227,10 +243,19 @@ export class ToyPlayer {
     move();
   }
 
+  private linearPosition(pos: number, cap: number): number {
+    return clamp(Math.round(pos), Math.min(this.caps().posMin, cap), cap);
+  }
+
   private sendLinear(pos: number, ms: number) {
-    for (const { device, feature } of this.featuresOf('linear')) {
-      if (feature.via === 'linear') this.out.linear(device.index, [{ Index: feature.index, Duration: ms, Position: Math.round(pos) / 100 }]);
-      else this.out.scalar(device.index, [{ Index: feature.index, Scalar: Math.round(pos) / 100, ActuatorType: feature.actuator || 'Position' }]);
+    this.linearTarget = { position: pos, duration: ms };
+    const feats = this.featuresOf('linear');
+    const positions = feats.map(({ device, feature }) => this.linearPosition(pos, this.featureCap(device, feature)));
+    this.levels.position = feats.length ? Math.max(...positions) : this.linearPosition(pos, this.caps().posMax);
+    for (const [i, { device, feature }] of feats.entries()) {
+      const position = positions[i]! / 100;
+      if (feature.via === 'linear') this.out.linear(device.index, [{ Index: feature.index, Duration: ms, Position: position }]);
+      else this.out.scalar(device.index, [{ Index: feature.index, Scalar: position, ActuatorType: feature.actuator || 'Position' }]);
     }
   }
 }
