@@ -15,6 +15,7 @@ import { assetUrl } from '@/services';
 import { dateMusic } from '@/services/musicPlayer';
 import { dateSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
+import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -488,11 +489,14 @@ async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority:
     if (part?.type === 'date') part.images = [...(part.images ?? []), cardImage(r.item)];
   }
 }
-/** 到达：今天在同一个地方、穿同一身画过的不再画（也不拿出来盖住立绘），没有就画一张 */
+/**
+ * 到达：今天在同一个地方、穿同一身画过的不再画（也不拿出来盖住立绘），没有就画一张。
+ * 服装参考关着时每次都画：衣服由模型按这一刻设计，不然同一天的约会一直是那一身的立绘
+ */
 function ensureArt() {
   const outfit = rhythm.outfitFor(her.value.id, 'date')?.name ?? null;
   const p = spot.value;
-  if (gallery.find(her.value.id, 'date', { moment: 'arrive', today: true, locationId: p.id, outfit, size: 'portrait' }).length) return;
+  if (useAiStore().outfitRef() && gallery.find(her.value.id, 'date', { moment: 'arrive', today: true, locationId: p.id, outfit, size: 'portrait' }).length) return;
   void drawMoment('arrive', 'auto', `${her.value.name}和${userName.value}刚到${p.name}约会${raining.value ? (p.indoor ? '，外面在下雨' : '，在下雨') : ''}${p.blurb ? `；${p.blurb}` : ''}`);
 }
 function snap() {

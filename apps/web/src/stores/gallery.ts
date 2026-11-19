@@ -229,7 +229,8 @@ export const useGalleryStore = defineStore('gallery', () => {
     if (!c) return { ok: false, reason: '找不到这个角色' };
     const status = useAiStore().status('image');
     if (!status.live) return { ok: false, reason: `生图 API 还没接通：${status.reason}` };
-    const outfit = useRhythmStore().outfitFor(c.id, req.sceneId);
+    // 服装参考关着时衣服由模型设计，不记成节律那一身
+    const outfit = useAiStore().outfitRef() ? useRhythmStore().outfitFor(c.id, req.sceneId) : undefined;
     const locationId = req.locationId ?? c.locationId;
     drawing[k] = { moment: req.moment, stage: 'queued', priority: req.priority };
     delete failures[k];
