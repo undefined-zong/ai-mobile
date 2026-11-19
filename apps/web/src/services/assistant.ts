@@ -423,7 +423,12 @@ export async function askAssistant(opts: AskOptions): Promise<string> {
   const r = await useAiStore().system.chat(
     'assistant',
     { messages, ...samplerRequest(preset.sampler) },
-    { signal: opts.signal, ...(stream ? { onDelta: (t: string) => opts.onText?.(parseAssistantReply(t).text) } : {}) },
+    {
+      signal: opts.signal,
+      // 修改项会引用思考标签和正则，不能对编辑协议做正文修剪；接口的思考分离仍由读流层处理。
+      outputFilters: [],
+      ...(stream ? { onDelta: (t: string) => opts.onText?.(parseAssistantReply(t).text) } : {}),
+    },
   );
   return r.text;
 }
