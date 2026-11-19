@@ -17,7 +17,7 @@ import { useRhythmStore } from '@/stores/rhythm';
 /**
  * 所有场景共用的外壳：背景 + 立绘 + 顶栏 + 她的一句话 + 底部场景面板（插槽）。
  * 场景只需要写面板，并告诉外壳用什么服装、姿势、表情；背景和标题默认跟着地图上的地点走。
- * 点她的那句话 → 去你们的聊天（离开了场景页，这件事就结束了）。
+ * 回复留在场景里阅读；顶栏的聊天记录入口沿用聊天里选择的显示模式。
  * art：这一刻画好的图（生图）。有图时盖在背景和立绘上面、淡入；还没画好时照常显示立绘（设计文档 §10.3）。点图看大图。
  * drawing：正在画（顶栏右边转圈，文字给读屏和长按提示）。
  * bare：外壳只给背景、立绘和顶栏，她的话、面板、画好的图都由场景自己在 overlay 里摆（陪伴学习的分屏和专注画面）。
@@ -66,7 +66,7 @@ const chat = useChatStore();
 const scene = computed(() => getScene(props.sceneId));
 const location = inject(SCENE_LOCATION, ref(null));
 const character = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
-const chatLink = computed(() => `/chat/${chat.chatOfCharacter(character.value.id)?.id}?mode=stage`);
+const chatLink = computed(() => `/chat/${chat.chatOfCharacter(character.value.id)?.id}`);
 
 /** 怎么在一起：连线（你在你那儿）/ 去她那（坐她旁边）/ 带她来（她在你那边） */
 const real = useRealWorldStore();
@@ -138,26 +138,27 @@ function openArt() {
           <span class="truncate">{{ modeText }}</span>
         </button>
         <span v-if="drawing" class="pill drawing" role="status" :aria-label="drawing" :title="drawing"><span class="i-lucide-loader-circle spin" /></span>
+        <RouterLink v-if="!bare" :to="chatLink" class="pill" :aria-label="`查看和${character.name}的聊天记录`" title="聊天记录"><span class="i-lucide-messages-square" /></RouterLink>
         <slot name="actions" />
       </header>
-      <RouterLink v-if="!bare && !fill && (line || typing)" :to="chatLink" class="companion" :aria-label="`去和${character.name}聊天`">
+      <div v-if="!bare && !fill && (line || typing)" class="companion" :aria-busy="typing">
         <Avatar :character="character" :size="30" live />
         <div class="say">
-          <span v-if="typing && !line" class="inline-flex gap-1 text-accent-ink"><span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" /></span>
-          <RichText v-else-if="line && hasMath(line)" :text="line" />
+          <RichText v-if="line && hasMath(line)" :text="line" />
           <template v-else>{{ line }}</template>
+          <span v-if="typing" class="inline-flex gap-1 text-accent-ink" role="status" :aria-label="`${character.name}正在回复`"><span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" /></span>
         </div>
-      </RouterLink>
+      </div>
       <slot name="overlay" />
       <section v-if="!bare" class="panel" :class="{ fill }">
-        <RouterLink v-if="fill && (line || typing)" :to="chatLink" class="companion in-panel" :aria-label="`去和${character.name}聊天`">
+        <div v-if="fill && (line || typing)" class="companion in-panel" :aria-busy="typing">
           <Avatar :character="character" :size="26" live />
           <div class="say">
-            <span v-if="typing && !line" class="inline-flex gap-1 text-accent-ink"><span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" /></span>
-            <RichText v-else-if="line && hasMath(line)" :text="line" />
+            <RichText v-if="line && hasMath(line)" :text="line" />
             <template v-else>{{ line }}</template>
+            <span v-if="typing" class="inline-flex gap-1 text-accent-ink" role="status" :aria-label="`${character.name}正在回复`"><span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" /></span>
           </div>
-        </RouterLink>
+        </div>
         <slot />
       </section>
     </StageView>
@@ -272,6 +273,10 @@ function openArt() {
 }
 .say {
   max-width: calc(100% - 40px);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
   padding: 8px 12px;
   border-radius: 6px 16px 16px 16px;
   background: var(--glass-strong);

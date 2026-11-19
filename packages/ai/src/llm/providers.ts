@@ -218,7 +218,6 @@ export async function geminiGenerate(ep: Endpoint, req: ChatRequest, call: Provi
   const minimal = !!req.minimal;
   const { systemInstruction, contents } = toGemini(req.messages, req.names);
   const generationConfig: Record<string, unknown> = {};
-  let effort: { thinkingBudget?: number; thinkingLevel?: string } = {};
   if (req.temperature !== undefined) generationConfig.temperature = req.temperature;
   if (!minimal) {
     if (req.topP !== undefined) generationConfig.topP = req.topP;
@@ -228,20 +227,21 @@ export async function geminiGenerate(ep: Endpoint, req: ChatRequest, call: Provi
     if (req.presencePenalty) generationConfig.presencePenalty = req.presencePenalty;
     if (req.frequencyPenalty) generationConfig.frequencyPenalty = req.frequencyPenalty;
     if (req.json) generationConfig.responseMimeType = 'application/json';
-    // 思考：要不要返回思考内容（默认流式时要）；推理强度换成 thinkingBudget / thinkingLevel
-    const include = (req.includeReasoning ?? call.stream) && GEMINI_THINKS.test(model);
-    effort = geminiHasThinkingConfig(model) ? geminiThinking(model, req.maxTokens, req.reasoningEffort) : {};
-    if (effort.thinkingLevel && t.upperLevel) effort.thinkingLevel = effort.thinkingLevel.toUpperCase();
-    if (include || effort.thinkingBudget !== undefined || effort.thinkingLevel) {
-      generationConfig.thinkingConfig = { ...(include && effort.thinkingBudget !== 0 ? { includeThoughts: true } : {}), ...effort };
-    }
+  }
+  // 采样参数被拒后仍保留推理强度，避免最简重试恢复模型默认思考、占满短回复的输出预算。
+  const include = !minimal && (req.includeReasoning ?? call.stream) && GEMINI_THINKS.test(model);
+  const effort = geminiHasThinkingConfig(model) ? geminiThinking(model, req.maxTokens, req.reasoningEffort) : {};
+  if (effort.thinkingLevel && t.upperLevel) effort.thinkingLevel = effort.thinkingLevel.toUpperCase();
+  if (include || effort.thinkingBudget !== undefined || effort.thinkingLevel) {
+    generationConfig.thinkingConfig = { ...(include && effort.thinkingBudget !== 0 ? { includeThoughts: true } : {}), ...effort };
   }
   // 同 math-reader 的 doGeminiRequest：contents / systemInstruction / generationConfig，不带 safetySettings
   const body: Record<string, unknown> = { contents, generationConfig };
   if (systemInstruction) body.systemInstruction = systemInstruction;
 
   const fixes = [
-    dropField(generationConfig, 'thinkingConfig', /think|thought/i),
+    // 最简请求仍被拒时才尝试去掉推理配置；普通请求只在错误明确提到思考时去掉。
+    dropField(generationConfig, 'thinkingConfig', minimal ? /[\s\S]/ : /think|thought/i),
     dropField(generationConfig, 'responseMimeType', /mime|json/i),
     dropField(generationConfig, 'topK', /top_?k/i),
     dropField(generationConfig, 'seed', /seed/i),
