@@ -1,89 +1,22 @@
 <script setup lang="ts">
 import { characterPronoun, type Character } from '@app/shared';
 import { SCALAR_KINDS, TOY_KIND_LABEL, type ScalarKind, type ToyKind } from '@app/shared';
-import { showConfirmDialog } from 'vant';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
-import { DEFAULT_INTIFACE_ADDRESS, type ToyDevice } from '@/services/intiface';
+import type { ToyDevice } from '@/services/intiface';
 import { useAiStore } from '@/stores/ai';
-import { useHubStore } from '@/stores/hub';
-import { useToyStore, type CommandSource, type ToyLink } from '@/stores/toys';
-import { copyWithToast } from '@/utils/errors';
+import { useToyStore, type CommandSource } from '@/stores/toys';
 
 /**
- * 心跳设置里"玩具"那一页：连 Intiface Central（直连，或者经云端中转连电脑上的桥接页）、连着的玩具（能做什么、电量、试一下）、
- * 指令从哪来、强度上限、安全。设置存在本机（stores/toys.ts）；连接留着，点"断开"才断。
+ * 心跳设置里"玩具"那一页：连 Intiface Central、连着的玩具（能做什么、电量、试一下）、指令从哪来、强度上限、安全。
+ * 设置存在本机（stores/toys.ts）；连接留着，点"断开"才断。
  */
 const props = defineProps<{ character?: Character }>();
 const toys = useToyStore();
 const ai = useAiStore();
-const hub = useHubStore();
 const router = useRouter();
 const s = toys.settings;
-
-const LINKS = computed<{ value: ToyLink; label: string; disabled?: boolean }[]>(() =>
-  (['direct', 'relay'] as const).map((value) => ({ value, label: value === 'direct' ? '直连' : '经云端中转', disabled: toys.status !== 'idle' && s.link !== value })),
-);
-const LINK_HINT: Record<ToyLink, string> = {
-  direct: `直接连 Intiface Central：和这个页面在同一台设备上填 ${DEFAULT_INTIFACE_ADDRESS}；iPhone / iPad 上的浏览器连不了 ws://（连本机也不行），用"经云端中转"。`,
-  relay:
-    '手机经你自己的 Worker 连电脑上的桥接页，桥接页连那台电脑上的 Intiface Central（iPhone 用这个）。把下面的桥接链接发到装着 Intiface 的电脑上，用 Chrome / Edge / Firefox 打开，开着别关。',
-};
-/** 经云端中转时还差什么（没连 Worker、Worker 太旧） */
-const relayBlocked = computed(() => {
-  if (!hub.connected) return 'none';
-  if (hub.status && !hub.supportsToyRelay) return 'old';
-  return '';
-});
-const hubHost = computed(() => {
-  try {
-    return new URL(hub.config.url).host;
-  } catch {
-    return '';
-  }
-});
-const linkError = ref('');
-const linkBusy = ref(false);
-const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
-
-async function fetchLink(rotate = false) {
-  linkBusy.value = true;
-  linkError.value = '';
-  try {
-    await toys.loadBridgeLink(rotate);
-  } catch (e) {
-    linkError.value = `取不到桥接链接：${e instanceof Error ? e.message : String(e)}`;
-  } finally {
-    linkBusy.value = false;
-  }
-}
-// 选了经云端中转、Worker 也支持时取一次桥接链接（显示出来，复制、分享时不用再等网络）
-watch(
-  () => s.link === 'relay' && !relayBlocked.value && !toys.bridgeLink,
-  (need) => {
-    if (need && !linkBusy.value) void fetchLink();
-  },
-  { immediate: true },
-);
-async function rotateLink() {
-  const ok = await showConfirmDialog({
-    title: '换一个桥接链接？',
-    message: '旧链接马上失效，用旧链接打开的桥接页会断开。之后把新链接发到电脑上重新打开。',
-    confirmButtonText: '换一个',
-  }).then(
-    () => true,
-    () => false,
-  );
-  if (ok) await fetchLink(true);
-}
-async function shareLink() {
-  try {
-    await navigator.share({ title: '玩具桥接', url: toys.bridgeLink });
-  } catch {
-    // 取消了
-  }
-}
 
 const SOURCES = computed<{ value: CommandSource; label: string }[]>(() => [
   { value: 'separate', label: '单独生成' },
@@ -105,9 +38,8 @@ const SAFETY = [
 
 const deviceStatus = computed(() => ai.status('device'));
 const statusText = computed(() => {
-  const via = s.link === 'relay' ? '（经云端中转）' : '';
-  if (toys.status === 'connecting') return `正在连 Intiface Central${via}…`;
-  if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${via}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
+  if (toys.status === 'connecting') return '正在连 Intiface Central…';
+  if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
   return '没连';
 });
 /** 上限：连着的玩具有的那几种；没连时都列出来 */
@@ -140,46 +72,17 @@ async function toggleConnect() {
       <button type="button" class="text-[12.5px] text-accent-ink shrink-0" @click="helpOpen = !helpOpen">{{ helpOpen ? '收起' : '怎么连' }}</button>
     </div>
     <div v-if="helpOpen" class="help">
-      <p>1. 装 Intiface Central（电脑、安卓都行），打开蓝牙，在 Devices 里连上玩具，点 Start Server。</p>
-      <p>2. Intiface 和这个页面在同一台设备上（电脑、安卓）：直连，地址填 {{ DEFAULT_INTIFACE_ADDRESS }}；浏览器问要不要允许访问本地网络设备时选允许。</p>
-      <p>3. 这个页面开在 iPhone / iPad 上：苹果的浏览器不让 https 页面连 ws://，连本机的 Intiface 也不行（iPhone 上装 Intiface 连不上）。把 Intiface 装在电脑上，连接方式选"经云端中转"，把桥接链接发到那台电脑上用 Chrome / Edge / Firefox 打开（要先在 我的 → 云端与同步 连上自己的 Worker）。</p>
-      <p>4. 也可以给 Intiface 套一层 https（例如 Caddy、cloudflared），直连填 wss://…。</p>
+      <p>1. 装 Intiface Central（电脑、安卓、iPhone 都有），打开蓝牙，在 Devices 里连上玩具。</p>
+      <p>2. 点 Start Server（默认端口 12345）。</p>
+      <p>3. Intiface 和这个页面在同一台设备上：地址填 127.0.0.1:12345。在别的电脑上：Intiface 设置里打开"所有网卡"，地址填那台电脑的 IP；这个页面是 https 时浏览器只让连 wss://，要给 Intiface 套一层 https（例如 Caddy、cloudflared）。</p>
+      <p>4. 浏览器问要不要允许访问本地网络设备时选允许。</p>
     </div>
-    <Segmented v-model="s.link" :options="LINKS" class="mt-2.5" />
     <div class="flex gap-2 mt-2.5">
-      <input
-        v-if="s.link === 'direct'"
-        v-model.trim="s.url"
-        class="field"
-        :disabled="toys.status !== 'idle'"
-        :placeholder="DEFAULT_INTIFACE_ADDRESS"
-        aria-label="Intiface Central 的地址"
-        autocapitalize="off"
-        spellcheck="false"
-      />
-      <span v-else class="field relay">{{ hub.connected ? `经 ${hubHost} 中转` : '还没连上自己的 Worker' }}</span>
+      <input v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" placeholder="127.0.0.1:12345" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
       <van-button size="small" round :type="toys.status === 'connected' ? 'default' : 'primary'" :loading="toys.status === 'connecting'" loading-text="在连" data-testid="toy-connect" @click="toggleConnect">
         {{ toys.status === 'connected' ? '断开' : '连接' }}
       </van-button>
     </div>
-    <p class="hint">{{ LINK_HINT[s.link] }}</p>
-    <template v-if="s.link === 'relay'">
-      <p v-if="relayBlocked === 'none'" class="err">
-        先在 我的 → 云端与同步 连上自己的 Worker<button type="button" class="text-accent-ink ml-2" @click="router.push('/me/sync')">去设置</button>
-      </p>
-      <p v-else-if="relayBlocked === 'old'" class="err">云端的 Worker 还没有玩具中转：重新部署一次 Worker（推到 main 会自动部署）。</p>
-      <template v-else>
-        <div class="link" data-testid="toy-bridge-link">
-          <span class="flex-1 min-w-0 truncate text-[12.5px] text-ink-2">{{ toys.bridgeLink || (linkBusy ? '正在取桥接链接…' : '还没有桥接链接') }}</span>
-          <button type="button" class="mini" :disabled="!toys.bridgeLink" @click="copyWithToast(toys.bridgeLink)">复制</button>
-          <button v-if="canShare" type="button" class="mini" :disabled="!toys.bridgeLink" @click="shareLink">分享</button>
-        </div>
-        <p v-if="linkError" class="err">
-          {{ linkError }}<button type="button" class="text-accent-ink ml-2" @click="fetchLink()">再试一次</button>
-        </p>
-        <button type="button" class="text-[12px] text-ink-3 mt-1.5" :disabled="linkBusy" @click="rotateLink">换一个桥接链接（旧链接打开的桥接页会断开）</button>
-      </template>
-    </template>
     <p v-if="toys.error" class="err" role="alert">{{ toys.error }}</p>
     <p v-if="toys.sendError" class="err">{{ toys.sendError }}</p>
 
@@ -304,24 +207,6 @@ async function toggleConnect() {
 }
 .field:disabled {
   opacity: 0.6;
-}
-.field.relay {
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--ink-2);
-  font-size: 13px;
-}
-.link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: var(--panel);
 }
 .err {
   margin: 8px 2px 0;

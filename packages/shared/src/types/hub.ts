@@ -111,8 +111,6 @@ export interface HubStatus {
   mcpCall?: boolean;
   /** 有多设备同步（/v1/sync/*）；旧版 Worker 没有这个字段 */
   sync?: boolean;
-  /** 有心跳的玩具中转（/v1/toys/*：手机经云端连电脑上桥接页开着的 Intiface Central）；旧版 Worker 没有这个字段 */
-  toyRelay?: boolean;
   /** 同步的大文件存在哪：r2（绑了 SYNC_BUCKET）/ d1（base64 分块，免费版整个数据库 500 MB） */
   syncBlobs?: import('./sync.ts').SyncBlobStore;
   /** 存在 D1 里的同步大文件最多占多少字节（绑了 R2 时没有） */

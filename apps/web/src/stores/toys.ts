@@ -3,16 +3,13 @@ import { describeCommand, parseDeviceSteps, SCALAR_KINDS, TOY_KIND_KEYS, TOY_KIN
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
-import { useHubStore } from './hub';
 import { useLibraryStore } from './library';
-import { blockedReason, DEFAULT_INTIFACE_ADDRESS, IntifaceClient, normalizeIntifaceUrl, relayTarget, type IntifaceTarget, type ToyDevice } from '@/services/intiface';
+import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
 import { MissingPresetError } from '@/services/prompt';
-import { toyBridgeLink } from '@/services/toyBridge';
 import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, type ToyCaps, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
 
 /**
  * 心跳里的玩具（设计文档 §9.14）：连 Intiface Central、列出连着的玩具、把指令放上去、按设置守着上限和安全时间。
- * - 怎么连（link）：直连填的地址（默认）/ 经云端中转（iPhone 上的浏览器连不了 ws://：电脑上开桥接页连 Intiface，这边经自己的 Worker 连过去）；
  * - 指令从哪来（source）：单独生成（"控制指令"预设按她的话写，默认）/ 她自己写（心跳的功能预设里"她自己写指令"那一块，她在回复里写 <device>）/ 不控制；
  * - 强度上限、伸缩最快多快和范围、多久没有新指令就停、切到后台就停、打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）；
  * - 按了"停"全部停下，她下一条指令照常执行；断开时停下。
@@ -20,12 +17,9 @@ import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, ty
  */
 
 export type CommandSource = 'separate' | 'inline' | 'off';
-/** 怎么连 Intiface Central：直连填的地址 / 经云端中转（电脑上的桥接页连着 Intiface） */
-export type ToyLink = 'direct' | 'relay';
 
 export interface ToySettings {
-  link: ToyLink;
-  /** 直连时 Intiface Central 的地址：127.0.0.1:12345、ws://…、wss://… */
+  /** Intiface Central 的地址：127.0.0.1:12345、ws://…、wss://… */
   url: string;
   /** 进心跳时自动连（连上过一次以后打开，点"断开"时关） */
   autoConnect: boolean;
@@ -46,8 +40,7 @@ export interface ToySettings {
 const KEY = 'ai-mobile:toys';
 
 export const DEFAULT_TOY_SETTINGS: ToySettings = {
-  link: 'direct',
-  url: DEFAULT_INTIFACE_ADDRESS,
+  url: '127.0.0.1:12345',
   autoConnect: false,
   source: 'separate',
   caps: { ...DEFAULT_CAPS },
@@ -76,7 +69,6 @@ function load(): ToySettings {
   if (legacy && raw.safetyMin === 10) delete raw.safetyMin;
   if (legacy && raw.stopOnHide === true) delete raw.stopOnHide;
   return {
-    link: raw.link === 'relay' ? 'relay' : DEFAULT_TOY_SETTINGS.link,
     url: typeof raw.url === 'string' && raw.url.trim() ? raw.url.trim() : DEFAULT_TOY_SETTINGS.url,
     autoConnect: raw.autoConnect === true,
     source: raw.source === 'inline' || raw.source === 'off' ? raw.source : 'separate',
@@ -152,7 +144,7 @@ export const useToyStore = defineStore('toys', () => {
       server.value = '';
       devices.value = [];
       scanning.value = false;
-      error.value = reason;
+      error.value = `Intiface ${reason}`;
       player.stop();
     },
   });
@@ -197,30 +189,24 @@ export const useToyStore = defineStore('toys', () => {
     }, 15_000);
   }
 
-  /** 这一次连哪：直连填的地址；经云端中转时先在自己的 Worker 上换一张票 */
-  async function target(): Promise<IntifaceTarget> {
-    if (settings.link === 'relay') {
-      const hub = useHubStore();
-      if (!hub.connected) throw new Error('经云端中转要先连上自己的 Worker：我的 → 云端与同步');
-      await hub.ensureStatus();
-      if (hub.status && !hub.supportsToyRelay) throw new Error('云端的 Worker 还没有玩具中转：重新部署一次 Worker（推到 main 会自动部署）');
-      return relayTarget(hub.config.url, await hub.toyRelayTicket());
-    }
-    const direct = normalizeIntifaceUrl(settings.url);
-    if ('error' in direct) throw new Error(direct.error);
-    const blocked = blockedReason(direct);
-    if (blocked) throw new Error(blocked);
-    return direct;
-  }
-
   /** 连上 Intiface Central（在点击里调用；自动连也走这里） */
   async function connect(): Promise<boolean> {
     if (status.value !== 'idle') return status.value === 'connected';
+    const target = normalizeIntifaceUrl(settings.url);
+    if ('error' in target) {
+      error.value = target.error;
+      return false;
+    }
+    const blocked = blockedReason(target);
+    if (blocked) {
+      error.value = blocked;
+      return false;
+    }
     status.value = 'connecting';
     error.value = '';
     sendError.value = '';
     try {
-      await client.connect(await target());
+      await client.connect(target);
       server.value = client.serverName;
       status.value = 'connected';
       settings.autoConnect = true;
@@ -244,17 +230,6 @@ export const useToyStore = defineStore('toys', () => {
     server.value = '';
     devices.value = [];
     scanning.value = false;
-  }
-
-  /** 电脑上桥接页的链接（经云端中转用）：第一次要时从 Worker 取，记着是哪个 Worker 的（换了 Worker 要重新取） */
-  const bridge = ref<{ hub: string; link: string } | null>(null);
-  const bridgeLink = computed(() => (bridge.value?.hub === useHubStore().config.url ? bridge.value.link : ''));
-  /** 取桥接链接；rotate 时换一个，旧链接打开的桥接页马上断开 */
-  async function loadBridgeLink(rotate = false): Promise<string> {
-    const hub = useHubStore().config.url;
-    const link = toyBridgeLink(location.href, hub, await useHubStore().toyBridgeKey(rotate));
-    bridge.value = { hub, link };
-    return link;
   }
 
   /** 试一下：这个玩具轻轻动一下（不经过她，也不管按没按停） */
@@ -418,7 +393,6 @@ export const useToyStore = defineStore('toys', () => {
     notice,
     lastCommand,
     lastWritten,
-    bridgeLink,
     ready,
     live,
     wanted,
@@ -426,7 +400,6 @@ export const useToyStore = defineStore('toys', () => {
     kinds,
     connect,
     disconnect,
-    loadBridgeLink,
     scan,
     test,
     apply,

@@ -1,5 +1,5 @@
 import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
-import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, TOY_RELAY_API, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
+import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
   type Character, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
@@ -98,8 +98,6 @@ export const useHubStore = defineStore('hub', () => {
   const supportsMcpCall = computed(() => status.value?.mcpCall === true);
   /** 云端有多设备同步（聊天、朋友圈、社群、记忆、角色、设置……连着同一个 Worker 的设备都一样） */
   const supportsSync = computed(() => status.value?.sync === true);
-  /** 云端有心跳的玩具中转（手机经 Worker 连电脑上桥接页开着的 Intiface Central） */
-  const supportsToyRelay = computed(() => status.value?.toyRelay === true);
   const upgradeRequired = computed(() => !!status.value && (!supportsRhythm.value || !supportsMemory.value));
   const syncing = ref(false);
   let started = false;
@@ -949,16 +947,6 @@ export const useHubStore = defineStore('hub', () => {
     if (!connected.value) throw new Error('还没连云端 Hub');
     return request<{ aid: number; cid: number }>(`/v1/video/ids?id=${encodeURIComponent(id)}&p=${page}`);
   }
-  /** 心跳的玩具中转：换一张连中转的票（60 秒内有效） */
-  async function toyRelayTicket(): Promise<string> {
-    if (!connected.value) throw new Error('还没连云端 Hub（我的 → 云端与同步）');
-    return (await request<{ ticket: string }>(TOY_RELAY_API.ticket, 'POST')).ticket;
-  }
-  /** 电脑上桥接页的链接密钥；rotate 时换一个（旧链接打开的桥接页马上断开） */
-  async function toyBridgeKey(rotate = false): Promise<string> {
-    if (!connected.value) throw new Error('还没连云端 Hub（我的 → 云端与同步）');
-    return (await request<{ key: string }>(TOY_RELAY_API.bridgeKey, rotate ? 'POST' : 'GET')).key;
-  }
   /** 直接连 Hub 上的一个端点（例如内置的微信读书 MCP）：地址和登录用的请求头 */
   function endpoint(path: string): { url: string; headers: Record<string, string> } | null {
     return connected.value ? { url: `${config.url}${path}`, headers: { Authorization: `Bearer ${token.value}` } } : null;
@@ -997,6 +985,6 @@ export const useHubStore = defineStore('hub', () => {
       clearTimeout(debounce); debounce = setTimeout(() => void syncNow(), 500);
     }, { deep: true });
   }
-  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, supportsToyRelay, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, toyRelayTicket, toyBridgeKey, endpoint,
+  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, endpoint,
     ensureStatus, pushMcpSecret, syncPlannerNow, runPlanner, mcpCall, plannerTools, oauthDiscover, oauthRegister, oauthToken, start };
 });

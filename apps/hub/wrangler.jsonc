@@ -3,9 +3,7 @@
   "name": "ai-mobile-hub",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-11",
-  "migrations": [{ "tag": "v1-bilibili-relay", "new_sqlite_classes": ["BilibiliRelay"] }, { "tag": "v2-remove-bilibili-relay", "deleted_classes": ["BilibiliRelay"] }, { "tag": "v3-toy-relay", "new_sqlite_classes": ["ToyRelay"] }],
-  // 心跳的玩具中转：iPhone 连不了 ws:// 的 Intiface Central，经这里转给电脑上的桥接页（src/toyRelay.ts）
-  "durable_objects": { "bindings": [{ "name": "TOY_RELAY", "class_name": "ToyRelay" }] },
+  "migrations": [{ "tag": "v1-bilibili-relay", "new_sqlite_classes": ["BilibiliRelay"] }, { "tag": "v2-remove-bilibili-relay", "deleted_classes": ["BilibiliRelay"] }],
   // Includes local 04:00 in each saved IANA zone; later ticks retry missing daily rhythms.
   "triggers": { "crons": ["*/5 * * * *"] },
   "observability": { "enabled": true },
