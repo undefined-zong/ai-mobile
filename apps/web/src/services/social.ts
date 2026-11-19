@@ -74,12 +74,10 @@ export function recentMomentsLines(character: Character): { text: string; at: nu
 
 // —— 发朋友圈要的输入 ——
 
-/** 她今天的节律（地点换成名字）；没有节律（没建世界）时为空。服装参考关着时不写穿什么（配图的衣服由模型自己设计） */
+/** 她今天的节律（地点换成名字）；没有节律（没建世界）时为空 */
 export function dayOf(characterId: string): SocialDay | null {
   const day = useRhythmStore().todayOf(characterId);
-  if (!day) return null;
-  const out = socialDayOf(day, (id) => getLocation(id)?.name ?? id);
-  return useAiStore().outfitRef() ? out : { ...out, outfit: '' };
+  return day ? socialDayOf(day, (id) => getLocation(id)?.name ?? id) : null;
 }
 
 /** 她醒着的时段：节律里今天第一件不是睡觉的事开始，到最后一件结束；没有节律按你的作息 */
@@ -115,7 +113,6 @@ export function socialContextOf(c: Character, preset: Preset | null, opts: { /**
     settings: { enabled: opts.enabled ?? true, perDay: socialPerDay(useSocialStore().characterSettings(c.id)) },
     awake: awakeOf(day),
     day,
-    ...(useAiStore().outfitRef() ? {} : { outfitFree: true as const }),
     memories: memoriesText(c, userName),
     recent: chat ? useChatStore().recentLines(chat.id, 12).join('\n') : '',
     feed: feedText(c.id),
@@ -199,7 +196,8 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
   delete img.error;
   try {
     const out = await services.image.illustrate(
-      { characterId: c.id, caption: img.caption, use: 'image', place: m.location, recent: m.text ? [`${c.name}的朋友圈：${m.text}`] : undefined },
+      // 朋友圈的配图始终参考节律里的衣着（不看服装参考开关）
+      { characterId: c.id, caption: img.caption, use: 'image', place: m.location, outfitRef: true, recent: m.text ? [`${c.name}的朋友圈：${m.text}`] : undefined },
       { priority },
     );
     // await 之后按 id 重新取（期间这条可能被删、被替换）

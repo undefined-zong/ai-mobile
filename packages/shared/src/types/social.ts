@@ -106,8 +106,6 @@ export interface SocialContext {
   awake: { from: string; to: string };
   /** 手机上今天的节律（云端没有今天的时用它）；地点已经换成名字 */
   day: SocialDay | null;
-  /** 服装参考关着（生图设置）：云端排的今天也不写穿什么，配图的衣服由模型自己设计 */
-  outfitFree?: true;
   /** 她记得的关于你的事（画像卡 + 关系 + 最重要的记忆） */
   memories: string;
   /** 最近的聊天（最后十几句） */

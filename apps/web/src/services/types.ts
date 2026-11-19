@@ -97,6 +97,8 @@ export interface IllustrateRequest {
   sceneId?: string | null;
   /** 衣服锁成节律里今天这个场景该穿的那套（程序加 tags，同一天的图衣服一致）；不锁时只告诉模型她今天穿什么 */
   lockOutfit?: boolean;
+  /** 始终参考衣着（朋友圈、社群的配图）：不看生图设置里的"服装参考"开关 */
+  outfitRef?: true;
   place?: string;
   expression?: string | null;
   /** 最近几句对话，帮生图提示词智能体理解画面 */

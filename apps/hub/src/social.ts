@@ -44,7 +44,7 @@ export type MomentGenerator = typeof generateMoment;
  * 云端自己排的今天（每天变化的节律）；没有时用手机上传的那份。手机上改过今天的（节律页里改的、平行时空里你请她改的）以手机的为准。
  * 社群里角色发帖、平行时空里她留言时也用
  */
-export async function todayOf(env: Env, context: Pick<SocialContext, 'character' | 'timezone' | 'day' | 'outfitFree'>, now: number): Promise<SocialDay | null> {
+export async function todayOf(env: Env, context: Pick<SocialContext, 'character' | 'timezone' | 'day'>, now: number): Promise<SocialDay | null> {
   const id = context.character.id;
   const date = rhythmDate(new Date(now), context.timezone);
   if (context.day?.date === date && context.day.edited) return context.day;
@@ -54,9 +54,7 @@ export async function todayOf(env: Env, context: Pick<SocialContext, 'character'
   ]);
   if (!day || !world) return context.day?.date === date ? context.day : null;
   const locations = (JSON.parse(world.data) as RhythmContext).world.locations;
-  const out = socialDayOf(JSON.parse(day.data) as RhythmDay, (loc) => locations.find((l) => l.id === loc)?.name ?? loc);
-  // 服装参考关着：云端排的那份也不写穿什么（手机上传的那份已经去掉了）
-  return context.outfitFree ? { ...out, outfit: '' } : out;
+  return socialDayOf(JSON.parse(day.data) as RhythmDay, (loc) => locations.find((l) => l.id === loc)?.name ?? loc);
 }
 
 function notificationFor(context: SocialContext, moment: Moment): HubNotification {

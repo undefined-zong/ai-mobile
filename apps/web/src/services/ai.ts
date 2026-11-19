@@ -278,7 +278,7 @@ export class RoutedImage implements ImageClient {
     if (!c && !free) throw new AiError('no_route', '找不到这个角色');
     const now = new Date();
     // 服装参考（生图设置，默认开）：关着时她和你的衣服都不给，由模型按画面自己设计（预设里 outfit-free 那块）
-    const outfitRef = useAiStore().outfitRef();
+    const outfitRef = req.outfitRef || useAiStore().outfitRef();
     // 节律里今天这个场景该穿的那套：一起做事时锁定（同一天的图衣服一致），配图时只告诉模型；画"你"时不用她的衣服
     const outfit = !outfitRef || req.subject || !c || free ? undefined : useRhythmStore().outfitFor(c.id, req.sceneId ?? null);
     // 真实天气：画"你"、或者她在你这边真实的地方时用你那边的，否则用她那边的（她住在别的城市时是那里的）
