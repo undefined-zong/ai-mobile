@@ -4,12 +4,15 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
 import { useLibraryStore } from './library';
-import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
+import { useHubStore } from './hub';
+import { platform } from '@/pwa';
+import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type IntifaceEvents, type ToyDevice } from '@/services/intiface';
+import { KisstoyClient } from '@/services/kisstoy';
 import { MissingPresetError } from '@/services/prompt';
 import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, type ToyCaps, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
 
 /**
- * 心跳里的玩具（设计文档 §9.14）：连 Intiface Central、列出连着的玩具、把指令放上去、按设置守着上限和安全时间。
+ * 心跳里的玩具（设计文档 §9.14）：iOS 用 KISSTOY 分享遥控，其余平台连 Intiface Central；指令播放共用。
  * - 指令从哪来（source）：单独生成（"控制指令"预设按她的话写，默认）/ 她自己写（心跳的功能预设里"她自己写指令"那一块，她在回复里写 <device>）/ 不控制；
  * - 强度上限、伸缩最快多快和范围、多久没有新指令就停、切到后台就停、打字时读多快、没连玩具时也在界面上试：存在本机（ai-mobile:toys）；
  * - 按了"停"全部停下，她下一条指令照常执行；断开时停下。
@@ -21,6 +24,9 @@ export type CommandSource = 'separate' | 'inline' | 'off';
 export interface ToySettings {
   /** Intiface Central 的地址：127.0.0.1:12345、ws://…、wss://… */
   url: string;
+  /** iOS 的 KISSTOY 分享链接，只存在本机，不覆盖 Intiface 地址 */
+  kisstoyShareUrl: string;
+  kisstoyAutoConnect: boolean;
   /** 进心跳时自动连（连上过一次以后打开，点"断开"时关） */
   autoConnect: boolean;
   source: CommandSource;
@@ -41,6 +47,8 @@ const KEY = 'ai-mobile:toys';
 
 export const DEFAULT_TOY_SETTINGS: ToySettings = {
   url: '127.0.0.1:12345',
+  kisstoyShareUrl: '',
+  kisstoyAutoConnect: false,
   autoConnect: false,
   source: 'separate',
   caps: { ...DEFAULT_CAPS },
@@ -70,6 +78,8 @@ function load(): ToySettings {
   if (legacy && raw.stopOnHide === true) delete raw.stopOnHide;
   return {
     url: typeof raw.url === 'string' && raw.url.trim() ? raw.url.trim() : DEFAULT_TOY_SETTINGS.url,
+    kisstoyShareUrl: typeof raw.kisstoyShareUrl === 'string' ? raw.kisstoyShareUrl.trim() : '',
+    kisstoyAutoConnect: raw.kisstoyAutoConnect === true,
     autoConnect: raw.autoConnect === true,
     source: raw.source === 'inline' || raw.source === 'off' ? raw.source : 'separate',
     caps: {
@@ -78,6 +88,7 @@ function load(): ToySettings {
       rotate: num(c.rotate, 0, 100, d.rotate),
       constrict: num(c.constrict, 0, 100, d.constrict),
       inflate: num(c.inflate, 0, 100, d.inflate),
+      suction: num(c.suction, 0, 100, d.suction),
       strokeMs: num(c.strokeMs, 100, 3000, d.strokeMs),
       posMin: num(c.posMin, 0, 100, d.posMin),
       posMax: num(c.posMax, 0, 100, d.posMax),
@@ -91,7 +102,10 @@ function load(): ToySettings {
 }
 
 export const useToyStore = defineStore('toys', () => {
+  const connection = platform() === 'ios' ? 'kisstoy' : 'intiface';
+  const connectionName = connection === 'kisstoy' ? 'KISSTOY 分享遥控' : 'Intiface Central';
   const settings = reactive<ToySettings>(load());
+  const autoConnect = computed(() => connection === 'kisstoy' ? settings.kisstoyAutoConnect : settings.autoConnect);
   watch(
     () => JSON.stringify(settings),
     (v) => {
@@ -127,7 +141,8 @@ export const useToyStore = defineStore('toys', () => {
     sendError.value = `指令没发出去：${errorText(e)}`;
   }
 
-  const client = new IntifaceClient({
+  const events: IntifaceEvents & { onError(message: string): void } = {
+    onError: (message) => { sendError.value = message; },
     onDeviceAdded: (d) => {
       devices.value = [...devices.value.filter((x) => x.index !== d.index), d].sort((a, b) => a.index - b.index);
       void readBattery(d);
@@ -144,10 +159,13 @@ export const useToyStore = defineStore('toys', () => {
       server.value = '';
       devices.value = [];
       scanning.value = false;
-      error.value = `Intiface ${reason}`;
+      error.value = `${connectionName} ${reason}`;
       player.stop();
     },
-  });
+  };
+  const client = connection === 'kisstoy'
+    ? new KisstoyClient((action) => useHubStore().endpoint(`/v1/toys/kisstoy/${action}`), events)
+    : new IntifaceClient(events);
 
   const output: ToyOutput = {
     devices: () => (status.value === 'connected' ? devices.value : []),
@@ -174,6 +192,7 @@ export const useToyStore = defineStore('toys', () => {
   }
 
   async function scan() {
+    if (connection === 'kisstoy') return;
     if (!client.connected) return;
     scanning.value = true;
     clearTimeout(scanTimer);
@@ -189,27 +208,26 @@ export const useToyStore = defineStore('toys', () => {
     }, 15_000);
   }
 
-  /** 连上 Intiface Central（在点击里调用；自动连也走这里） */
+  /** 按平台连接（在点击里调用；自动连也走这里） */
   async function connect(): Promise<boolean> {
     if (status.value !== 'idle') return status.value === 'connected';
-    const target = normalizeIntifaceUrl(settings.url);
-    if ('error' in target) {
-      error.value = target.error;
-      return false;
-    }
-    const blocked = blockedReason(target);
-    if (blocked) {
-      error.value = blocked;
-      return false;
-    }
     status.value = 'connecting';
     error.value = '';
     sendError.value = '';
     try {
-      await client.connect(target);
+      if (client instanceof KisstoyClient) {
+        await client.connect(settings.kisstoyShareUrl);
+      } else {
+        const target = normalizeIntifaceUrl(settings.url);
+        if ('error' in target) throw new Error(target.error);
+        const blocked = blockedReason(target);
+        if (blocked) throw new Error(blocked);
+        await client.connect(target);
+      }
       server.value = client.serverName;
       status.value = 'connected';
-      settings.autoConnect = true;
+      if (connection === 'kisstoy') settings.kisstoyAutoConnect = true;
+      else settings.autoConnect = true;
       devices.value = (await client.deviceList().catch(() => [] as ToyDevice[])).sort((a, b) => a.index - b.index);
       for (const d of devices.value) void readBattery(d);
       void scan();
@@ -224,7 +242,8 @@ export const useToyStore = defineStore('toys', () => {
   async function disconnect() {
     player.stop();
     clearTimeout(scanTimer);
-    settings.autoConnect = false;
+    if (connection === 'kisstoy') settings.kisstoyAutoConnect = false;
+    else settings.autoConnect = false;
     await client.disconnect();
     status.value = 'idle';
     server.value = '';
@@ -381,6 +400,9 @@ export const useToyStore = defineStore('toys', () => {
   }
 
   return {
+    connection,
+    connectionName,
+    autoConnect,
     settings,
     status,
     error,

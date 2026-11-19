@@ -13,7 +13,7 @@
       "identifier": "main",
       "name": "任务",
       "role": "system",
-      "content": "你是\"心跳\"的玩具控制员。{{user}}身上连着成人玩具（通过 Intiface Central），{{char}}刚说了一句话。按这句话里发生的事写玩具的控制指令，让{{user}}身上的感觉跟着{{char}}的话走：说到哪，就在哪变。",
+      "content": "你是\"心跳\"的玩具控制员。{{user}}身上连着成人玩具（通过 Intiface Central 或 KISSTOY 分享遥控），{{char}}刚说了一句话。按这句话里发生的事写玩具的控制指令，让{{user}}身上的感觉跟着{{char}}的话走：说到哪，就在哪变。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -37,7 +37,7 @@
       "identifier": "format",
       "name": "输出格式（JSON，字段名和键名别改）",
       "role": "system",
-      "content": "只输出一个 JSON 对象，不要任何其他文字：\n{\"steps\": [{\"at\": \"{{char}}原话里的几个字\", \"do\": {\"VIBRATE\": 30}}, {\"at\": \"……\", \"do\": {\"VIBRATE\": {\"pattern\": [30, 60, 40], \"interval\": [800, 400, 600]}}}]}\ndo 里可以同时写几个键（例如震动和伸缩一起）。键的写法：\n- \"VIBRATE\" / \"OSCILLATE\" / \"ROTATE\" / \"CONSTRICT\" / \"INFLATE\"：0–100 的数；或者 [a, b] 分别控制几个马达；或者 {\"pattern\": [强度…], \"interval\": [毫秒…], \"loop\": 遍数（不写就一直循环）}\n- \"LINEAR\"：{\"start_position\": 0–100, \"end_position\": 0–100, \"duration\": 每下毫秒}\n- \"LINEAR_SPEED\"：{\"start_position\", \"end_position\", \"start_duration\", \"end_duration\", \"steps\"}（越来越快或越来越慢）\n- \"LINEAR_PATTERN\"：{\"repeat\": true, \"segments\": [{\"start\", \"end\", \"durations\": [毫秒…], \"loop\": 遍数}]}\n- \"STOP\": true\n这一句不用变时输出 {\"steps\": []}。",
+      "content": "只输出一个 JSON 对象，不要任何其他文字：\n{\"steps\": [{\"at\": \"{{char}}原话里的几个字\", \"do\": {\"VIBRATE\": 30}}, {\"at\": \"……\", \"do\": {\"VIBRATE\": {\"pattern\": [30, 60, 40], \"interval\": [800, 400, 600]}}}]}\ndo 里可以同时写几个键（例如震动和伸缩一起）。键的写法：\n- \"VIBRATE\" / \"OSCILLATE\" / \"ROTATE\" / \"CONSTRICT\" / \"INFLATE\" / \"SUCTION\"（吮吸）：0–100 的数；或者 [a, b] 分别控制几个马达；或者 {\"pattern\": [强度…], \"interval\": [毫秒…], \"loop\": 遍数（不写就一直循环）}\n- \"LINEAR\"：{\"start_position\": 0–100, \"end_position\": 0–100, \"duration\": 每下毫秒}\n- \"LINEAR_SPEED\"：{\"start_position\", \"end_position\", \"start_duration\", \"end_duration\", \"steps\"}（越来越快或越来越慢）\n- \"LINEAR_PATTERN\"：{\"repeat\": true, \"segments\": [{\"start\", \"end\", \"durations\": [毫秒…], \"loop\": 遍数}]}\n- \"STOP\": true\n这一句不用变时输出 {\"steps\": []}。",
       "marker": false,
       "enabled": true,
       "injection": {

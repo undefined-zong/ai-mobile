@@ -6,17 +6,20 @@ import { useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
 import type { ToyDevice } from '@/services/intiface';
 import { useAiStore } from '@/stores/ai';
+import { useHubStore } from '@/stores/hub';
 import { useToyStore, type CommandSource } from '@/stores/toys';
 
 /**
- * 心跳设置里"玩具"那一页：连 Intiface Central、连着的玩具（能做什么、电量、试一下）、指令从哪来、强度上限、安全。
+ * 心跳设置里"玩具"那一页：iOS 连 KISSTOY 分享遥控，其余平台连 Intiface Central；指令和强度设置共用。
  * 设置存在本机（stores/toys.ts）；连接留着，点"断开"才断。
  */
 const props = defineProps<{ character?: Character }>();
 const toys = useToyStore();
 const ai = useAiStore();
+const hub = useHubStore();
 const router = useRouter();
 const s = toys.settings;
+const kisstoy = toys.connection === 'kisstoy';
 
 const SOURCES = computed<{ value: CommandSource; label: string }[]>(() => [
   { value: 'separate', label: '单独生成' },
@@ -38,9 +41,9 @@ const SAFETY = [
 
 const deviceStatus = computed(() => ai.status('device'));
 const statusText = computed(() => {
-  if (toys.status === 'connecting') return '正在连 Intiface Central…';
-  if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
-  return '没连';
+  if (toys.status === 'connecting') return `正在连 ${toys.connectionName}…`;
+  if (toys.status === 'connected') return `已连上 ${toys.server || toys.connectionName}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
+  return kisstoy ? 'KISSTOY 分享遥控 · 没连' : '没连';
 });
 /** 上限：连着的玩具有的那几种；没连时都列出来 */
 const capKinds = computed<ScalarKind[]>(() => {
@@ -71,18 +74,27 @@ async function toggleConnect() {
       <span class="flex-1 min-w-0 text-[13.5px] truncate">{{ statusText }}</span>
       <button type="button" class="text-[12.5px] text-accent-ink shrink-0" @click="helpOpen = !helpOpen">{{ helpOpen ? '收起' : '怎么连' }}</button>
     </div>
-    <div v-if="helpOpen" class="help">
-      <p>1. 装 Intiface Central（电脑、安卓、iPhone 都有），打开蓝牙，在 Devices 里连上玩具。</p>
+    <div v-if="helpOpen && kisstoy" class="help">
+      <p>1. 在 KISSTOY App 里用蓝牙连好玩具，开启分享遥控并复制完整链接。</p>
+      <p>2. 在「我的 → 云端与同步」连好已更新的 Hub，然后把分享链接粘贴到下面，点「连接」。</p>
+      <p>3. 保持 KISSTOY App 与玩具连接。官方 App 切到后台可能断连；遇到这种情况，可用另一台手机保持官方 App 在前台。</p>
+      <p>添加到主屏幕后，在这个网页 App 里也能照常使用。链接失效时，在 KISSTOY App 重新生成后替换。</p>
+    </div>
+    <div v-else-if="helpOpen" class="help">
+      <p>1. 装 Intiface Central，打开蓝牙，在 Devices 里连上玩具。</p>
       <p>2. 点 Start Server（默认端口 12345）。</p>
       <p>3. Intiface 和这个页面在同一台设备上：地址填 127.0.0.1:12345。在别的电脑上：Intiface 设置里打开"所有网卡"，地址填那台电脑的 IP；这个页面是 https 时浏览器只让连 wss://，要给 Intiface 套一层 https（例如 Caddy、cloudflared）。</p>
       <p>4. 浏览器问要不要允许访问本地网络设备时选允许。</p>
     </div>
-    <div class="flex gap-2 mt-2.5">
-      <input v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" placeholder="127.0.0.1:12345" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
+    <div class="flex gap-2 mt-2.5" :class="{ 'kisstoy-connection': kisstoy }">
+      <input v-if="kisstoy" v-model.trim="s.kisstoyShareUrl" type="url" class="field" :disabled="toys.status !== 'idle'" placeholder="粘贴 KISSTOY 分享链接" aria-label="KISSTOY 分享遥控链接" autocapitalize="off" autocomplete="off" spellcheck="false" />
+      <input v-else v-model.trim="s.url" class="field" :disabled="toys.status !== 'idle'" placeholder="127.0.0.1:12345" aria-label="Intiface Central 的地址" autocapitalize="off" spellcheck="false" />
       <van-button size="small" round :type="toys.status === 'connected' ? 'default' : 'primary'" :loading="toys.status === 'connecting'" loading-text="在连" data-testid="toy-connect" @click="toggleConnect">
         {{ toys.status === 'connected' ? '断开' : '连接' }}
       </van-button>
     </div>
+    <p v-if="kisstoy" class="hint">由 KISSTOY App 连接玩具，请保持官方 App 与玩具连接。</p>
+    <p v-if="kisstoy && !hub.connected" class="hint">先连接云端 Hub，再使用分享遥控。<button type="button" class="text-accent-ink ml-2" @click="router.push('/me/sync')">去云端与同步</button></p>
     <p v-if="toys.error" class="err" role="alert">{{ toys.error }}</p>
     <p v-if="toys.sendError" class="err">{{ toys.sendError }}</p>
 
@@ -95,7 +107,7 @@ async function toggleConnect() {
         </span>
         <button type="button" class="mini" @click="toys.test(d)">试一下</button>
       </div>
-      <button type="button" class="scan" :disabled="toys.scanning" @click="toys.scan()">
+      <button v-if="!kisstoy" type="button" class="scan" :disabled="toys.scanning" @click="toys.scan()">
         <span :class="toys.scanning ? 'i-lucide-loader-circle spin' : 'i-lucide-radar'" />{{ toys.scanning ? '在找玩具…（Intiface 里配对过的会自己出现）' : toys.devices.length ? '再找找' : '找玩具' }}
       </button>
     </template>
@@ -207,6 +219,18 @@ async function toggleConnect() {
 }
 .field:disabled {
   opacity: 0.6;
+}
+.kisstoy-connection .field {
+  height: 44px;
+  font-size: 16px;
+}
+.kisstoy-connection :deep(.van-button) {
+  height: 44px;
+  min-width: 56px;
+}
+.kisstoy-connection .field:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
 }
 .err {
   margin: 8px 2px 0;

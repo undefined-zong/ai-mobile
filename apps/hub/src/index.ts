@@ -17,6 +17,7 @@ import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './
 import { bilibiliIds, searchBilibili } from './video.ts';
 import { wereadMcp } from './weread.ts';
 import { publicPage } from './publicPages.ts';
+import { kisstoyApi } from './kisstoy.ts';
 
 const body = <T>(request: Request): Promise<T> => readJson<T>(request);
 function https(value: string): boolean {
@@ -67,6 +68,12 @@ async function api(request: Request, env: Env): Promise<Response> {
   if (!token) throw new HttpError(401, '需要登录');
   const device = await env.DB.prepare('SELECT id FROM devices WHERE token_hash = ? AND expires_at > ?').bind(await digest(token), Date.now()).first<{ id: string }>();
   if (!device) throw new HttpError(401, '登录已过期');
+
+  // 心跳：iOS PWA 用 KISSTOY 分享遥控，其余平台仍由本机直连 Intiface。
+  if (request.method === 'POST') {
+    if (path === '/v1/toys/kisstoy/device') return kisstoyApi(request, env, 'device');
+    if (path === '/v1/toys/kisstoy/bind') return kisstoyApi(request, env, 'bind');
+  }
 
   // 一起观影：按片名搜 B 站的真实视频（聊天里的 [watch:片名] 卡片、逛 B 站的搜索）。
   // 填了 B 站 Cookie 时 App 用 POST { q, cookie }，Cookie 不放进网址

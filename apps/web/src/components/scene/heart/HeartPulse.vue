@@ -23,7 +23,7 @@ defineEmits<{ (e: 'stop'): void; (e: 'open'): void }>();
 
 /** 实心的心（lucide 只有空心的） */
 const HEART_PATH = 'M12 20.5C6 16 2.5 12.5 2.5 8.6 2.5 5.7 4.8 3.5 7.5 3.5c1.9 0 3.5 1.1 4.5 2.7 1-1.6 2.6-2.7 4.5-2.7 2.7 0 5 2.2 5 5.1 0 3.9-3.5 7.4-9.5 11.9z';
-const SHORT: Record<ToyKind, string> = { vibrate: '震', oscillate: '摆', rotate: '转', constrict: '缩', inflate: '气', linear: '伸' };
+const SHORT: Record<ToyKind, string> = { vibrate: '震', oscillate: '摆', rotate: '转', constrict: '缩', inflate: '气', suction: '吸', linear: '伸' };
 
 const beatMs = computed(() => Math.round(60_000 / Math.max(40, props.bpm)));
 

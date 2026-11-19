@@ -24,7 +24,7 @@
  * 读到 / 念到那个位置时执行，强度上限、安全时间由播放的那一边（apps/web 的 toyPlayer）管。
  */
 
-export const SCALAR_KINDS = ['vibrate', 'oscillate', 'rotate', 'constrict', 'inflate'] as const;
+export const SCALAR_KINDS = ['vibrate', 'oscillate', 'rotate', 'constrict', 'inflate', 'suction'] as const;
 /** 按强度控制的（Buttplug 的 ScalarCmd / RotateCmd） */
 export type ScalarKind = (typeof SCALAR_KINDS)[number];
 /** linear：伸缩（Buttplug 的 LinearCmd） */
@@ -36,6 +36,7 @@ export const TOY_KIND_LABEL: Record<ToyKind, string> = {
   rotate: '旋转',
   constrict: '收缩',
   inflate: '充气',
+  suction: '吮吸',
   linear: '伸缩',
 };
 
@@ -46,6 +47,7 @@ export const TOY_KIND_KEYS: Record<ToyKind, string[]> = {
   rotate: ['ROTATE'],
   constrict: ['CONSTRICT'],
   inflate: ['INFLATE'],
+  suction: ['SUCTION'],
   linear: ['LINEAR', 'LINEAR_SPEED', 'LINEAR_PATTERN'],
 };
 
@@ -90,6 +92,7 @@ export interface ToyCommand {
   rotate?: ToyWave;
   constrict?: ToyWave;
   inflate?: ToyWave;
+  suction?: ToyWave;
   linear?: ToyLinear;
   /** 全部停下（同一条里别的都不算） */
   stop?: boolean;
@@ -192,6 +195,7 @@ export function commandFromEntries(entries: Iterable<[string, unknown]>): ToyCom
       case 'OSCILLATE':
       case 'ROTATE':
       case 'CONSTRICT':
+      case 'SUCTION':
       case 'INFLATE': {
         const kind = key.toLowerCase() as ScalarKind;
         const w = toWave(v, kind === 'rotate');
@@ -214,7 +218,7 @@ export function commandFromEntries(entries: Iterable<[string, unknown]>): ToyCom
   return Object.keys(cmd).length ? cmd : null;
 }
 
-const KEY_NAMES = ['LINEAR_PATTERN', 'LINEAR_SPEED', 'LINEAR', 'VIBRATE', 'OSCILLATE', 'ROTATE', 'CONSTRICT', 'INFLATE', 'STOP'];
+const KEY_NAMES = ['LINEAR_PATTERN', 'LINEAR_SPEED', 'LINEAR', 'VIBRATE', 'OSCILLATE', 'ROTATE', 'CONSTRICT', 'INFLATE', 'SUCTION', 'STOP'];
 const KEY_SOURCE = `["'“”]?\\b(${KEY_NAMES.join('|')})\\b["'“”]?\\s*[:：]`;
 
 /** 宽松地读 JSON：全角标点、单引号、没加引号的键、多余的逗号 */
