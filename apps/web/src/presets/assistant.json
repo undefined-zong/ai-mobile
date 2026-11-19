@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-assistant",
   "category": "assistant",
+  "worldInfoEnabled": false,
   "name": "助手 · 格式与设定",
   "defaultFor": [
     "assistant"

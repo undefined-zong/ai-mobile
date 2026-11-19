@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-social-community",
   "category": "social",
+  "worldInfoEnabled": false,
   "name": "社媒 · 社群",
   "defaultFor": [
     "community"

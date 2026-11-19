@@ -104,7 +104,7 @@ export async function readImport(file: File): Promise<PendingImport> {
     const lines = [
       `预设文件 · ${PRESET_CATEGORIES[parsed.category].label}预设「${parsed.name}」`,
       `${parsed.blocks.length} 块（程序填充 ${markers} 块）${off.length ? ` · 关着的：${off.join('、')}` : ''}`,
-      `采样：温度 ${s.temperature} · 回复最长 ${s.maxTokens}${parsed.category === 'chat' || parsed.category === 'feature' || parsed.category === 'proactive' ? ` · 上下文 ${s.contextTokens.toLocaleString('zh-CN')}` : ''}`,
+      `采样：温度 ${s.temperature} · 最大回复 ${s.maxTokens} · 最长上下文 ${s.contextTokens.toLocaleString('zh-CN')}`,
     ];
     if (parsed.id && useLibraryStore().presetById(parsed.id)) lines.push('预设库里已经有同一个预设了，这次另存一份');
     return { kind: 'preset', fileName: file.name, parsed, appFile: true, lines, warnings: parsed.warnings };

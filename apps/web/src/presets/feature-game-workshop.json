@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-game-workshop",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起游戏 · 创意工坊",
   "defaultFor": [
     "game-workshop"

@@ -320,7 +320,8 @@ export class RoutedImage implements ImageClient {
       recent: req.recent,
     };
     // 写 tags 用这个用途的生图预设：配图（默认），一起做事时用这个场景的（没单独选时跟随配图）；一个生图预设都没有时直接用外观 tags + 画面描述
-    const preset = useLibraryStore().presetForUse(req.use ?? 'image', c) ?? null;
+    const lib = useLibraryStore();
+    const preset = lib.withLorebooks(lib.presetForUse(req.use ?? 'image', c), c) ?? null;
     const r = await illustrate(useAiStore().system, input, {
       signal: opts.signal,
       onStage: opts.onStage,
@@ -386,7 +387,8 @@ export async function writeSidestory(characterId: string, opts: { recentChat?: s
     return { ...(DEMO_SIDESTORIES[c.id] ?? genericSidestory(c)), characterId, demo: true, model: null, presetName: null, at: Date.now() };
   }
   // 番外用"小剧场"预设（预设页里"番外"选的那个）：提示词和温度、长度都按它
-  const preset = useLibraryStore().presetForUse('theater', c);
+  const lib = useLibraryStore();
+  const preset = lib.withLorebooks(lib.presetForUse('theater', c), c);
   if (!preset) throw new MissingPresetError('小剧场');
   const now = new Date();
   const own = hasOwnWorld(c.id);

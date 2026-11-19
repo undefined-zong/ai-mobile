@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-decor-life",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "小屋 · 角色生活",
   "defaultFor": [
     "decor-life"

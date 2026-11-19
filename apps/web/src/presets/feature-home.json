@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-home",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "共同的家",
   "defaultFor": [
     "scene:home"

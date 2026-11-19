@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-exercise",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "健身",
   "defaultFor": [
     "scene:exercise"

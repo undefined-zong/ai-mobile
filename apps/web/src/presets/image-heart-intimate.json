@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-heart-intimate",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 心跳 · 亲密",
   "defaultFor": [],
   "description": "心跳的背景：跟着对话走，到了亲密的时候照实画（会加 nsfw），没到时画暧昧。人物都是成年人，负面词里固定排除显得年幼的内容。",

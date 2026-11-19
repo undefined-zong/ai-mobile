@@ -96,13 +96,14 @@ export async function packConsolidation(characterId: string, now = Date.now()): 
     .map((m) => ({ content: m.content, type: m.type, at: m.happenedAt }));
   if (!mergeGroups.length && !rollups.length && !followups.length && !newMemories.length) return null;
   const profile = mem.profileOf(characterId);
+  const lib = useLibraryStore();
   return {
     characterId,
     chatId: chat?.id ?? null,
     character: { name: c.name, pronoun: c.pronoun },
     userName: personaOf(chat).name,
     timezone: useEnvironmentStore().settings.timezone,
-    preset: useLibraryStore().presetForUse('consolidate', c) ?? null,
+    preset: lib.withLorebooks(lib.presetForUse('consolidate', c), c) ?? null,
     packedAt: now,
     mergeGroups,
     rollups,

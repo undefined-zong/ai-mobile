@@ -1,12 +1,13 @@
-import type { Preset, SamplerParams } from '@app/shared';
+import type { Preset, SamplerParams, TaskPresetLike } from '@app/shared';
 import type { ChatRequest } from '../llm/types.ts';
 
 /**
  * 任务类智能体（番外、总结、生图提示词）的提示词全在预设里（分类：小剧场、总结、生图），调用方必须给预设：
  * 说明、规则、输出格式是预设里的普通块，这一次的输入由这里的 *Fills 填进程序填充块。
+ * 预设打开"使用世界书"时，调用方在 lorebooks 里带上这次角色绑定的世界书（assembleTaskPrompt 按输入扫描）。
  * App 自带的那几个预设是 apps/web/src/presets/ 里的预设文件。
  */
-export type TaskPreset = Pick<Preset, 'blocks' | 'sampler'>;
+export type TaskPreset = Pick<Preset, 'sampler'> & TaskPresetLike;
 
 /** 预设的采样参数 → 请求字段（以预设为准）。top_p 是 1、惩罚是 0 时不发，免得有的模型不收 */
 export function samplerRequest(s: SamplerParams): Pick<ChatRequest, 'temperature' | 'topP' | 'maxTokens' | 'frequencyPenalty' | 'presencePenalty'> {

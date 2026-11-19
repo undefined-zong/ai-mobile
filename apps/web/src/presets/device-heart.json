@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-device-heart",
   "category": "device",
+  "worldInfoEnabled": false,
   "name": "控制指令 · 心跳",
   "defaultFor": [
     "device"

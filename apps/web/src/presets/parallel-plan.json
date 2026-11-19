@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-parallel-plan",
   "category": "parallel",
+  "worldInfoEnabled": false,
   "name": "平行时空 · 整理你的一天",
   "defaultFor": [
     "parallel-plan"

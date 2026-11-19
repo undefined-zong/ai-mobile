@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-study",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 陪伴学习",
   "defaultFor": [
     "image:study"

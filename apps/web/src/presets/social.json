@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-social",
   "category": "social",
+  "worldInfoEnabled": false,
   "name": "社媒 · 朋友圈",
   "defaultFor": [
     "social"

@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-stage",
   "category": "chat",
+  "worldInfoEnabled": true,
   "name": "剧场 · 沉浸",
   "description": "旁白 + 对话，鼓励使用 [choice:] 和 [cg:]，适合剧场模式。",
   "blocks": [

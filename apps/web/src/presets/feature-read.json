@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-read",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起看书",
   "defaultFor": [
     "scene:read"

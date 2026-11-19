@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-community",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 社群",
   "defaultFor": [
     "community-image"

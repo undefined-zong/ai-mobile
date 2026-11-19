@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-theater",
   "category": "theater",
+  "worldInfoEnabled": false,
   "name": "小剧场 · 番外",
   "defaultFor": [
     "theater"

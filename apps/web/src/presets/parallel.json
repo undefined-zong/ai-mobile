@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-parallel",
   "category": "parallel",
+  "worldInfoEnabled": false,
   "name": "平行时空 · 留言和改日程",
   "defaultFor": [
     "parallel"

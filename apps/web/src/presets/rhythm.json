@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-rhythm",
   "category": "rhythm",
+  "worldInfoEnabled": false,
   "name": "节律 · 建世界、排今天、画小镇",
   "defaultFor": [
     "rhythm"

@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-heart-pov",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 心跳 · 第一视角",
   "defaultFor": [],
   "description": "心跳的背景：第一视角（pov），像你自己的眼睛看到的Ta，离得很近。可以画到你的手，不画你的脸；画到暧昧为止。",

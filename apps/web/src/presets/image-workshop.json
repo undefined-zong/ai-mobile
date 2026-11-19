@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-workshop",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 创意工坊",
   "defaultFor": [
     "game-workshop-image"

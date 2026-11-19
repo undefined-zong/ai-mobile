@@ -321,9 +321,10 @@ export const useRhythmStore = defineStore('rhythm', () => {
     const template = templateOf(characterId);
     if (!c || !template) return null;
     const cfg = configOf(characterId);
+    const lib = useLibraryStore();
     return { character: { id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, userName: userName(characterId),
       timezone: useEnvironmentStore().settings.timezone, settings: cfg.settings, template,
-      world: worldOf(characterId), people: cfg.people, preset: useLibraryStore().presetForUse('rhythm', c) ?? null,
+      world: worldOf(characterId), people: cfg.people, preset: lib.withLorebooks(lib.presetForUse('rhythm', c), c) ?? null,
       promises: promiseLines(characterId) };
   }
 
@@ -362,7 +363,8 @@ export const useRhythmStore = defineStore('rhythm', () => {
     if (!c) return { ok: false, reason: '找不到这个角色' };
     const status = ai.status('rhythm');
     if (!status.live) return { ok: false, reason: `「节律」还没接通：${status.reason}`, notConnected: true };
-    const preset = useLibraryStore().presetForUse('rhythm', c);
+    const lib = useLibraryStore();
+    const preset = lib.withLorebooks(lib.presetForUse('rhythm', c), c);
     if (!preset) return { ok: false, reason: '没有节律预设：去"我的 → 预设 → 节律"导入或恢复一个' };
     try {
       const messages = buildRhythmMessages({ task, outfitMode, characterName: c.name, pronoun: c.pronoun, userName: userName(characterId), fills }, preset);

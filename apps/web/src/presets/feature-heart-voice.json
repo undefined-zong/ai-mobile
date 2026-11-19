@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-heart-voice",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "心跳 · 语音",
   "defaultFor": [
     "heart-voice"

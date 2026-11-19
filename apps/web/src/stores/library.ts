@@ -952,6 +952,12 @@ export const useLibraryStore = defineStore('library', () => {
     return lorebooks.value.find((b) => b.id === id);
   }
 
+  /** 任务预设（生图、总结、社媒……）打开了"使用世界书"时，带上这个角色绑定的世界书，拼提示词时按这一次的输入扫描 */
+  function withLorebooks<P extends Preset>(preset: P | undefined, character?: Pick<Character, 'lorebookIds'> | null): (P & { lorebooks?: Lorebook[] }) | undefined {
+    if (!preset || preset.worldInfoEnabled !== true || !character?.lorebookIds?.length) return preset;
+    return { ...preset, lorebooks: character.lorebookIds.map(lorebookById).filter((b): b is Lorebook => !!b) };
+  }
+
   function addPreset(p: Preset) {
     presets.value.push(p);
     return presets.value.at(-1) as Preset;
@@ -1118,6 +1124,7 @@ export const useLibraryStore = defineStore('library', () => {
     setUse,
     usesOf,
     lorebookById,
+    withLorebooks,
     addPreset,
     duplicatePreset,
     seedOf,

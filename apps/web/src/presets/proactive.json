@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-proactive",
   "category": "proactive",
+  "worldInfoEnabled": true,
   "name": "主动消息 · 像发微信",
   "defaultFor": [
     "proactive"

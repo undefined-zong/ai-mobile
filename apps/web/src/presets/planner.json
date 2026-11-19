@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-planner",
   "category": "planner",
+  "worldInfoEnabled": false,
   "name": "计划 · 每周和每日计划",
   "defaultFor": [
     "planner"

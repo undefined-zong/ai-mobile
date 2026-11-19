@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-meal",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起吃饭",
   "defaultFor": [
     "scene:meal"

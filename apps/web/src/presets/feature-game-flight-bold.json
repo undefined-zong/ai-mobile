@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-scene-game-flight-bold",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "飞行棋 · 心跳挑战",
   "defaultFor": [],
   "description": "双人飞行棋的棋盘：开局时照\"棋盘设计\"那一块现设计 128 格的任务（越往后越大胆）；Ta走到的格子怎么做、你做完时Ta的反应、两回合之间聊两句、结束时的话，每一步一块，都可以改。复制一份改\"棋盘设计\"就是一张新棋盘。",

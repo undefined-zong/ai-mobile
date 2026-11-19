@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-summary",
   "category": "summary",
+  "worldInfoEnabled": false,
   "name": "总结 · 记忆",
   "defaultFor": [
     "summary"

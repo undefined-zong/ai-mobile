@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-feature-game-kingdom",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起游戏 · 王国模拟",
   "defaultFor": [
     "game-kingdom"

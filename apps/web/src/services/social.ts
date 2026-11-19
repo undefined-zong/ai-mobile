@@ -224,7 +224,8 @@ export type SocialResult = { ok: true; moment: Moment } | { ok: false; reason: s
 
 /** 使用"朋友圈"用途选中的预设。 */
 export function momentsPreset(character?: Character): Preset | undefined {
-  return useLibraryStore().presetForUse('social', character);
+  const lib = useLibraryStore();
+  return lib.withLorebooks(lib.presetForUse('social', character), character);
 }
 
 /** "社媒"的 API 能不能调；不能时说明原因（朋友圈和社群共用这个 API） */

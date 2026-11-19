@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-secondary",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "副对话 · 卡片与配图",
   "description": "与主对话并行：决定主动卡片、是否配图、用哪个生图模型与用途，并完成附加任务。结果等主回复结束后追加；不需要追加时返回空 append 和 null image。",
   "blocks": [

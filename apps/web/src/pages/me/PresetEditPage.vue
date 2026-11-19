@@ -397,9 +397,16 @@ const HINT: Record<PresetCategory, string> = {
       <Segmented ref="tabsEl" v-model="tab" sticky :options="tabs" />
 
       <div v-if="tab === 'blocks'" ref="listEl" class="px-4 grid gap-1.5" data-testid="preset-blocks">
-        <van-cell v-if="roleplay" title="使用世界书" label="控制角色绑定的全部世界书条目，包括按深度、示例前后和作者注位置。角色卡示例和预设正文按各自设置发送。" center class="!rounded-[14px]">
+        <van-cell
+          title="使用世界书"
+          :label="roleplay
+            ? '控制角色绑定的全部世界书条目，包括按深度、示例前后和作者注位置。角色卡示例和预设正文按各自设置发送。'
+            : '打开后按这一次的输入扫描角色绑定的世界书，常驻和命中的条目放进世界书程序块（预设里没有时放在第一个程序填充块前面）。没有绑定角色的任务不发。'"
+          center
+          class="!rounded-[14px]"
+        >
           <template #right-icon>
-            <van-switch :model-value="preset.worldInfoEnabled !== false" size="22px" aria-label="使用世界书" @update:model-value="preset.worldInfoEnabled = $event; touch()" />
+            <van-switch :model-value="preset.worldInfoEnabled ?? roleplay" size="22px" aria-label="使用世界书" @update:model-value="preset.worldInfoEnabled = $event; touch()" />
           </template>
         </van-cell>
         <div class="flex items-center gap-2 text-[12.5px] text-ink-3 px-1">
@@ -467,10 +474,10 @@ const HINT: Record<PresetCategory, string> = {
         <van-cell :title="`Top P ${preset.sampler.topP.toFixed(2)}`">
           <template #label><van-slider v-model="preset.sampler.topP" :min="0" :max="1" :step="0.01" class="!mt-3" bar-height="4px" button-size="16px" @change="touch" /></template>
         </van-cell>
-        <van-cell title="回复最长（token）" center>
+        <van-cell title="最大回复（token）" center>
           <template #right-icon><van-stepper v-model="preset.sampler.maxTokens" min="32" max="16000" step="32" @change="touch" /></template>
         </van-cell>
-        <van-cell v-if="roleplay" title="上下文预算（token）" label="聊天记录按它截断" center>
+        <van-cell title="最长上下文（token）" :label="roleplay ? '聊天记录按它截断' : '这一次的输入超过时，从最长的程序填充块开头截掉'" center>
           <template #right-icon><van-stepper v-model="preset.sampler.contextTokens" min="2000" max="200000" step="2000" @change="touch" /></template>
         </van-cell>
         <van-cell :title="`频率惩罚 ${preset.sampler.frequencyPenalty.toFixed(1)}`">

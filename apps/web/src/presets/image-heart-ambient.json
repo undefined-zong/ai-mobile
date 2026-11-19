@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-image-heart",
   "category": "image",
+  "worldInfoEnabled": false,
   "name": "生图 · 心跳 · 氛围",
   "defaultFor": [
     "image:heart"

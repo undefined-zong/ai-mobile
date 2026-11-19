@@ -20,7 +20,7 @@ export const NOTE_MARK = '【记进设定】';
 
 export interface NovelCallOptions {
   /** 她的名字（预设里的 {{char}}）和你的名字（{{user}}） */
-  character?: Pick<Character, 'name' | 'pronoun' | 'presetId'> | null;
+  character?: Pick<Character, 'name' | 'pronoun' | 'presetId' | 'lorebookIds'> | null;
   userName: string;
   signal?: AbortSignal;
   onText?(text: string): void;
@@ -113,7 +113,8 @@ export function parseChapter(raw: string): { title: string; text: string } {
 async function run(novel: Novel, task: NovelTask, ask: string, opts: NovelCallOptions, skip?: string): Promise<string> {
   const status = novelStatus();
   if (!status.live) throw new Error(status.reason);
-  const preset = useLibraryStore().presetForUse('novel', opts.character);
+  const lib = useLibraryStore();
+  const preset = lib.withLorebooks(lib.presetForUse('novel', opts.character), opts.character);
   if (!preset) throw new MissingPresetError('小说');
   const { messages } = assembleTaskPrompt({
     preset,

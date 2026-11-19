@@ -3,6 +3,7 @@
   "version": 1,
   "id": "preset-feature-game-brawl",
   "category": "feature",
+  "worldInfoEnabled": true,
   "name": "一起游戏 · 大乱斗",
   "defaultFor": [
     "game-brawl"
