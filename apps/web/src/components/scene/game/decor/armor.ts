@@ -22,32 +22,40 @@ function plate(width: number, height: number, color: string) {
 export function createArmor(color: string, under: string, height: number) {
   const group = new THREE.Group();
   const chest = design.chest;
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(chest.top, chest.bottom, chest.height * height, 28, 1, true, -chest.arc / 2, chest.arc), figureMaterial(color, { side: THREE.DoubleSide }));
-  shell.position.set(0, chest.y * height, 0.014);
-  shell.scale.z = 0.86;
-  group.add(shell);
+  for (const section of chest.sections) {
+    const angle = section.angle * Math.PI;
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(chest.top, chest.bottom, chest.height * height, 28, 1, true, angle - chest.arc / 2, chest.arc), figureMaterial(color, { side: THREE.DoubleSide }));
+    shell.name = `armor-${section.id}`;
+    shell.position.set(0, chest.y * height, Math.cos(angle) * chest.offset);
+    shell.scale.z = chest.depthScale;
+    group.add(shell);
+  }
+  const belt = design.belt;
+  const waist = new THREE.Mesh(new THREE.CylinderGeometry(belt.radius, belt.radius, belt.height * height, 28, 1, true), figureMaterial(color, { side: THREE.DoubleSide }));
+  waist.name = 'armor-belt';
+  waist.position.y = belt.y * height;
+  waist.scale.z = belt.depthScale;
+  group.add(waist);
   const collar = design.collar;
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(collar.radius, collar.radius, collar.height * height, 24, 1, true), figureMaterial(under, { side: THREE.DoubleSide }));
   neck.position.y = collar.y * height;
   group.add(neck);
   const p = design.panels;
-  for (let i = 0; i < p.count; i++) {
-    const angle = (i + 0.5) / p.count * Math.PI * 2;
-    const section = new THREE.Group();
-    section.rotation.y = angle;
-    section.position.set(Math.sin(angle) * p.radius, 0, Math.cos(angle) * p.radius * 0.86);
-    for (let row = 0; row < p.rows; row++) {
-      const panel = plate(p.width, p.height * height, row % 2 ? shade(color, -0.035) : color);
-      panel.position.set(0, (p.y - row * p.step) * height, row * p.depth / 2);
+  for (const piece of p.pieces) {
+    const angle = piece.angle * Math.PI;
+    const panel = plate(piece.width, p.height * height, color);
+    panel.name = `armor-${piece.id}`;
+    panel.rotation.y = angle;
+    panel.position.set(Math.sin(angle) * p.radius, p.y * height, Math.cos(angle) * p.radius * 0.86);
+    for (const row of design.stitches.rows) {
       for (const side of [-1, 1]) {
         const stitch = new THREE.Mesh(new THREE.SphereGeometry(design.stitches.radius, 8, 6), figureMaterial(design.stitches.color));
-        stitch.position.set(side * p.width * 0.33, p.height * 0.2, p.depth * 1.5);
+        stitch.position.set(side * piece.width * 0.33, row * p.height * height, p.depth * 1.5);
         stitch.scale.y = 1.8;
         panel.add(stitch);
       }
-      section.add(panel);
     }
-    group.add(section);
+    group.add(panel);
   }
   group.traverse((object) => { if (object instanceof THREE.Mesh) object.castShadow = true; });
   return group;

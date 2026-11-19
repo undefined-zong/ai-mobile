@@ -241,30 +241,23 @@ function sculptSignatureHair(avatar: Avatar, radius: number) {
   const kind = avatar.hair as keyof typeof sculptedHair.styles;
   const style = sculptedHair.styles[kind];
   group.add(cap(radius, avatar));
-  group.add(hairCurtain(radius, style.length, style.width, style.depth));
   const fringe = kind === 'madara' && avatar.bangs === 'oneEye' ? 'madara' : avatar.bangs;
   for (const part of sculptedHair.bangs[fringe as keyof typeof sculptedHair.bangs] ?? []) {
     group.add(lock(part.points, part.width, radius, 0.48));
   }
   if (kind === 'madara') {
     for (const layer of sculptedHair.rearLayers) {
-      for (let i = 0; i < layer.count; i++) {
-        const angle = THREE.MathUtils.lerp(layer.angleStart, layer.angleEnd, i / (layer.count - 1)) * Math.PI;
+      for (const [i, drop] of layer.tipOffsets.entries()) {
+        const angle = THREE.MathUtils.lerp(layer.angleStart, layer.angleEnd, i / (layer.tipOffsets.length - 1)) * Math.PI;
         const x = Math.cos(angle), z = -Math.sin(angle);
-        group.add(lock(layer.points.map(([rx, y, rz]) => [x * rx!, y!, z * rz!]), layer.width, radius, layer.depth, [x, 0, z]));
-      }
-    }
-    for (const side of [-1, 1]) {
-      for (const layer of sculptedHair.maneLayers) {
-        group.add(lock([
-          [side * 0.7, layer.rootY, -0.36],
-          [side * 1.05, layer.rootY + 0.05, -0.65],
-          [side * (layer.tipX - 0.12), layer.tipY + 0.14, -0.58],
-          [side * layer.tipX, layer.tipY, -0.42],
-        ], layer.width, radius, 0.6, [side, 0, -0.2]));
+        const points = layer.points.map(([rx, y, rz], index) => [
+          x * rx!, y! + drop * (index / (layer.points.length - 1)) ** 2, z * rz!,
+        ]);
+        group.add(lock(points, layer.width, radius, layer.depth, [x, 0, z], sculptedHair.rearWidthProfile));
       }
     }
   } else {
+    group.add(hairCurtain(radius, style.length, style.width, style.depth));
     const half = sculptedHair.halfUp;
     for (const side of [-1, 1]) {
       for (let i = 0; i < half.sweeps; i++) {
