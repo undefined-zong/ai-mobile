@@ -252,6 +252,29 @@ export class AgentSystem {
   }
 
   /**
+   * 按固定写法输出的文本智能体（生图提示词的 image###tags###、控制指令的 <device>）：去掉思考内容后交给 parse 读；
+   * 读不出来时把原输出和 retryHint（写法的提醒）发回去，再要一次
+   */
+  async text<T>(
+    role: AgentRole,
+    req: ChatRequest,
+    parse: (text: string) => T | null,
+    retryHint: string,
+    opts: AgentCallOptions & { retries?: number } = {},
+  ): Promise<{ value: T; result: AgentChatResult }> {
+    let messages = req.messages;
+    for (let tries = 0; ; tries += 1) {
+      const result = await this.chat(role, { ...req, messages, json: false }, { signal: opts.signal, onFailover: opts.onFailover });
+      const value = parse(result.text.replace(/<think>[\s\S]*?<\/think>/g, '').trim());
+      if (value !== null) return { value, result };
+      if (tries >= (opts.retries ?? 1)) {
+        throw new AiError('bad_response', `"${AGENT_META[role].label}"没有按要求的写法输出：${result.text.replace(/\s+/g, ' ').slice(0, 120)}`, { retryable: true });
+      }
+      messages = [...req.messages, { role: 'assistant', content: result.text }, { role: 'user', content: retryHint }];
+    }
+  }
+
+  /**
    * 语音合成：用"语音合成"功能的 API。角色可以单独填模型（音色在角色上）；音色 id 只在同一家服务商里有效，
    * 所以只会换到同一种协议的备用 API。同一句话按缓存的键复用音频。
    */

@@ -48,7 +48,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（1girl / 1boy / 2girls / no humans…）→ 构图与镜头（upper body, cowboy shot, full body, from above, close-up…）→ 人物的表情、动作、服装 → 场景与背景 → 光线、时段、天气 → 氛围和画风。\n- {{user}}写了画风（水彩、厚涂、像素、赛博朋克……）就加对应的 tags（watercolor, impasto, pixel art, cyberpunk…）；没写就不加画风 tags。\n- {{user}}的描述很短时，补上合适的构图、背景和光线，让画面完整；描述很长时抓住最重要的几样，tags 控制在 40 个以内。\n- 参考资料（\"最近的对话\"）里有小说的设定或片段时，用它补全人物的样子和场景，但以\"要画的画面\"为准。\n- 不要写质量词（masterpiece、best quality 之类），程序会加。",
+      "content": "规则：\n- tags 顺序：人数（1girl / 1boy / 2girls / no humans…）→ 构图与镜头（upper body, cowboy shot, full body, from above, close-up…）→ 人物的表情、动作、服装 → 场景与背景 → 光线、时段、天气 → 氛围和画风。\n- {{user}}写了画风（水彩、厚涂、像素、赛博朋克……）就加对应的 tags（watercolor, impasto, pixel art, cyberpunk…）；没写就不加画风 tags。\n- {{user}}的描述很短时，补上合适的构图、背景和光线，让画面完整；描述很长时抓住最重要的几样，tags 控制在 40 个以内。\n- 参考资料（\"最近的对话\"）里有小说的设定或片段时，用它补全人物的样子和场景，但以\"要画的画面\"为准。\n- 不要写质量词（masterpiece、best quality 之类），程序会加。\n- 画面里有两个以上的人时，image### 里用 | 隔开：第一段写整体画面（总人数如 2girls、1boy, 1girl，构图、场景、光线），后面每段写一个人（girl / boy / other 不带数字、长相、表情、动作、服装），每个人的特征就不会串；两个人之间的动作用 source# / target# / mutual# 写在各自那一段（例如 source#hug、target#hug，相互的两边都写 mutual#hug）；只针对某个人的负面 tags 在 negative### 里按同样的顺序用 | 隔开（第一段是整体的）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -60,7 +60,7 @@
       "identifier": "wsHer",
       "name": "画Ta（只在画{{char}}时发）",
       "role": "system",
-      "content": "这一次画的是{{char}}：{{char}}的长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。画面里没提到别人就只画{{char}}一个人（1girl 或 1boy 按{{char}}的性别）。",
+      "content": "这一次画的是{{char}}：{{char}}的长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。画面里没提到别人就只画{{char}}一个人（1girl 或 1boy 按{{char}}的性别）。画面里除了{{char}}还有别人时，{{char}}那一份另起一行写 char###…###（长相程序会加），别人照规则用 | 写在 image### 里。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -88,9 +88,9 @@
     },
     {
       "identifier": "format",
-      "name": "输出格式（JSON，字段名别改）",
+      "name": "输出格式（### 和它前面的英文词别改）",
       "role": "system",
-      "content": "只输出一个 JSON 对象，不要任何其他文字：\n{\"caption\": \"中文短标题（12 字以内）\", \"tags\": \"逗号分隔的英文 tags\", \"negative\": \"额外的负面 tags，可以为空字符串\", \"size\": \"portrait、square 或 landscape\"}",
+      "content": "只输出下面这样的一段，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\n需要额外的负面 tags 时另起一行写 negative###英文 tags###；不是竖图时另起一行写 size###landscape### 或 size###square###（程序给了\"画幅\"时照程序的）。",
       "marker": false,
       "enabled": true,
       "injection": {

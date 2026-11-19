@@ -3,7 +3,7 @@ import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
 import { errorText } from '@app/ai';
-import { DEVICE_INLINE_FLAG, getLocation, parseDeviceBlock, placeSteps, type ControlTagKind, type ParsedReply } from '@app/shared';
+import { DEVICE_INLINE_FLAG, getLocation, parseDeviceBlock, type ControlTagKind, type ParsedReply } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -14,10 +14,13 @@ import Segmented from '@/components/common/Segmented.vue';
 import HeartPulse from '@/components/scene/heart/HeartPulse.vue';
 import ToyPanel from '@/components/scene/heart/ToyPanel.vue';
 import { SCENE_LOCATION } from '@/components/scene/location';
+import PlaylistMusic from '@/components/scene/PlaylistMusic.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
 import StudyBubble from '@/components/scene/study/StudyBubble.vue';
 import PresetPicker from '@/components/settings/PresetPicker.vue';
 import { useMicLink } from '@/composables/useMicLink';
+import { heartMusic } from '@/services/musicPlayer';
+import { heartSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { ReplyTimeline, type TimedCommand } from '@/services/toyPlayer';
@@ -34,15 +37,16 @@ import { hhmm } from '@/utils/time';
 
 /**
  * 心跳（设计文档 §9.14）：只属于你们两个人的时间。画面照"陪伴学习 · 一起专注"的样子：背景图铺满整屏、是视觉中心，
- * 左上只放她的名字（和没接通之类的提示），你们说的话像字幕一样在下面三分之一（不挡脸），
- * 最下面是心跳（心率、心电图、玩具的强度、停）和打字 / 连麦。
+ * 左上是她的名字（和没接通之类的提示），她说的话挂在名字下面；你说的话在右下角、心跳那条上面；
+ * 最下面是心跳（心电图、每个头现在的数值、停）和打字 / 连麦；右上角是音乐（网易云的歌单，播放器 heartMusic，她念的时候压低）、魔杖、设置。
  *
  * - 背景：NovelAI 按"心跳"的生图预设画（氛围 / 第一视角 / 亲密，设置 → 画面里换），竖图铺满屏幕；
  *   进来时用今天在同一个地方画过的，没有就画一张"开场"；之后每几句换一张"这一刻"（可以关），右上角魔杖马上画。衣服不锁，按对话画。
  * - 打字：主对话按"心跳"功能预设（心跳 · 文字）回；连麦：「陪伴 · 快速」按"心跳 · 语音"预设回，用她的声音念
  *   （composables/useMicLink.ts，和哄睡的连麦一样：说话检测 → 语音识别 → 流式回复 → 按句合成）。两种的预设在设置 → 预设里换。
- * - 玩具：Intiface Central（stores/toys.ts）。指令默认由"控制指令"预设按她每一句话单独写（单独生成），也可以让她在回复里自己写 <device>；
- *   读到 / 念到那几个字时执行（services/toyPlayer.ts 的 ReplyTimeline），强度不超过你设的上限。
+ * - 玩具：Intiface Central（stores/toys.ts）。指令都写在 <device> 里：默认由"控制指令"预设把她每一句话照抄一遍、在要变的地方插 <device>（单独生成），
+ *   也可以让她在回复里自己写；读到 / 念到那几个字时执行（services/toyPlayer.ts 的 ReplyTimeline）。
+ *   强度照 0–100 写，写多少发多少，超过你给这个头设的上限时压到上限（双头玩具每个头各设各的）。
  *   "停"一下全部停下；切到后台时停（默认关）、很久没有新指令时停（默认不停），都在玩具设置里改。
  * - 动效：图慢慢推近、换图时淡入；心按心率跳，心电图一拍走一格；玩具动起来时屏幕边缘跟着心跳泛红、飘起小心心（系统设置了减少动态效果时都不动）。
  * 说的话都存进你们的聊天，离开时那一段写"心跳 N 分钟"。没接通时不出演示台词，写明原因。
@@ -151,7 +155,7 @@ async function direct(text: string, tl: ReplyTimeline | null) {
     const recent = chat.recentLines(chatId.value, 7).slice(0, -1);
     const steps = await toys.writeCommands({ character: her.value, userName: userName.value, line: text, recent, signal: ctrl.signal });
     if (ctrl.signal.aborted || timeline !== tl) return;
-    tl.add(placeSteps(steps, text));
+    tl.add(steps);
     deviceIssue.value = null;
   } catch (e) {
     if (ctrl.signal.aborted) return;
@@ -192,7 +196,7 @@ function toyLine(): string {
   const names = toys.ready ? toys.devices.map((d) => d.name).join('、') : '（没连真的玩具，只在界面上显示）';
   const line = `${userName.value}连着玩具：${names}；玩具现在：${toys.nowLine()}`;
   if (toys.settings.source !== 'inline') return line;
-  return `${line}\n能写的键：\n${toys.toysLine()}\n${toys.limitsLine()}`;
+  return `${line}\n能写的键：\n${toys.toysLine()}\n${toys.speedLine()}`;
 }
 
 async function herTurn(task: 'heart-open' | 'heart-chat') {
@@ -250,8 +254,10 @@ function newSpeech(o: { onSentence?(text: string, i: number): void } = {}): Spee
     },
   });
   speech = q;
+  heartMusic.duck(true);
   // 念完了：剩下的指令都执行；被打断、挂断了：这句剩下的不再执行
   void q.drained().then(() => {
+    if (speech === q) heartMusic.duck(false);
     if (timeline !== tl || !tl) return;
     if (q.stopped) tl.dispose();
     else tl.drained();
@@ -414,11 +420,12 @@ async function previewSession(start: number) {
   if (images.length) previewImages(images, { startPosition: at });
 }
 
-// —— 心跳：玩具越激烈跳得越快；她说话时快一点 ——
+// —— 心跳（只管心和心电图跳得多快，不显示数）：玩具越激烈跳得越快；她说话时快一点 ——
 const speaking = computed(() => link.state.her === 'speaking' || !!stream.value);
-const targetBpm = computed(() => Math.round(68 + (speaking.value ? 6 : 0) + toys.intensity * 0.9));
-const bpm = ref(68);
-let peak = 0;
+/** 平静时每分钟几下、她说话时快几下、玩具最激烈时再快几下 */
+const BEAT = { rest: 68, speaking: 6, toyMax: 90 };
+const targetBpm = computed(() => Math.round(BEAT.rest + (speaking.value ? BEAT.speaking : 0) + (toys.intensity * BEAT.toyMax) / 100));
+const bpm = ref(BEAT.rest);
 const beatMs = computed(() => Math.round(60_000 / Math.max(40, bpm.value)));
 /** 屏幕边缘泛红、底下的光晕多亮（0–1） */
 const glow = computed(() => Math.min(1, toys.intensity / 100 + (speaking.value ? 0.12 : 0)));
@@ -448,7 +455,6 @@ function stepClock() {
   const target = targetBpm.value;
   const next = bpm.value + Math.sign(target - bpm.value) * Math.max(1, Math.round(Math.abs(target - bpm.value) * 0.2));
   bpm.value = Math.abs(target - bpm.value) <= 1 ? target : next;
-  if (toys.intensity > 0) peak = Math.max(peak, bpm.value);
 }
 
 const pulseStatus = computed(() => {
@@ -478,6 +484,10 @@ const notices = computed(() => {
   }
   return out.slice(0, 3);
 });
+
+// —— 音乐：网易云的歌单（右上角；她念的时候压低，离开时停） ——
+const musicOpen = ref(false);
+const musicPlaying = computed(() => heartMusic.state.playing && !heartMusic.state.fading);
 
 // —— 设置：玩具 / 画面 / 预设 ——
 type Tab = 'toys' | 'art' | 'presets';
@@ -517,7 +527,7 @@ function summary(): string | undefined {
   const said = transcript.value.length;
   if (!said) return undefined;
   const min = Math.max(1, Math.round((Date.now() - startedAt) / 60_000));
-  return `心跳 ${min} 分钟${peak >= 90 ? ` · 最快 ${peak}` : ''}`;
+  return `心跳 ${min} 分钟`;
 }
 function onVisibility() {
   if (document.visibilityState === 'hidden' && toys.settings.stopOnHide && toys.live) toys.stopAll(toys.intensity > 0 ? '切到后台了，先停下了' : '');
@@ -542,6 +552,7 @@ onBeforeUnmount(() => {
   directCtrl?.abort();
   link.dispose();
   speech?.stop();
+  heartMusic.stop();
   if (chat.streams[chatId.value]) chat.stop(chatId.value);
 });
 
@@ -552,6 +563,17 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
 <template>
   <SceneShell scene-id="heart" bare pose="sit" :layout="figureLayout" :hide-figure="!!art" :drawing="drawingText">
     <template #actions>
+      <button
+        type="button"
+        class="pill-btn"
+        :class="{ on: musicPlaying }"
+        :aria-expanded="musicOpen"
+        :aria-label="musicPlaying ? `音乐：${heartMusic.current()?.title ?? '正在播放'}` : '音乐'"
+        data-testid="heart-music-btn"
+        @click="musicOpen = !musicOpen"
+      >
+        <span :class="heartMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music'" />
+      </button>
       <button type="button" class="pill-btn" :disabled="drawingNow?.priority === 'user'" aria-label="画这一刻" data-testid="heart-draw" @click="drawNow">
         <span :class="drawingNow?.priority === 'user' ? 'i-lucide-loader-circle spin' : 'i-lucide-wand-sparkles'" />
       </button>
@@ -579,8 +601,8 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
           </svg>
         </div>
 
-        <!-- 左上：她是谁、在哪，和没接通之类的提示（话放在下面，不挡脸） -->
-        <div class="her-col">
+        <!-- 左上：她是谁、在哪，没接通之类的提示，她说的话挂在下面（点开看这一次说过的） -->
+        <div v-if="!logOpen" class="her-col">
           <div class="her-card">
             <Avatar :character="her" :size="26" live />
             <span class="flex-1 min-w-0">
@@ -593,6 +615,15 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
             <span class="flex-1 min-w-0">{{ n.text }}</span>
             <button v-if="n.action" type="button" class="text-accent-ink shrink-0" @click="n.action.run()">{{ n.action.label }}</button>
           </div>
+          <StudyBubble
+            v-if="shownLine || herTyping"
+            side="her"
+            :text="shownLine"
+            :typing="herTyping"
+            label="看这一次说过的话"
+            data-testid="heart-her-line"
+            @click="logOpen = true"
+          />
         </div>
 
         <!-- 这一次说过的话 -->
@@ -610,27 +641,25 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
           </div>
         </Transition>
 
-        <!-- 下面三分之一：你刚说的、她的话（像字幕，点她的话看这一次说过的） -->
-        <div v-if="!logOpen" class="talk">
-          <StudyBubble v-if="shownMine" side="me" :text="shownMine" label="你刚说的" />
-          <StudyBubble
-            v-if="shownLine || herTyping"
-            side="her"
-            :text="shownLine"
-            :typing="herTyping"
-            label="看这一次说过的话"
-            data-testid="heart-her-line"
-            @click="logOpen = true"
-          />
+        <!-- 右下角：你刚说的（心跳那条上面） -->
+        <div v-if="!logOpen && shownMine" class="talk">
+          <StudyBubble side="me" :text="shownMine" label="你刚说的" />
         </div>
+
+        <!-- 音乐：从右上角往下展开，点空白处收起 -->
+        <template v-if="musicOpen">
+          <div class="pop-catcher" @click="musicOpen = false" />
+          <div class="music-pop" role="dialog" aria-label="音乐">
+            <PlaylistMusic :player="heartMusic" :searches="heartSearches" test-id="heart-music" />
+          </div>
+        </template>
 
         <!-- 心跳 -->
         <div class="dock">
           <HeartPulse
             :bpm="bpm"
             :intensity="toys.intensity"
-            :levels="toys.levels"
-            :kinds="toys.kinds"
+            :heads="toys.levels.heads"
             :status="pulseStatus"
             :live="toys.live"
             @stop="stopToys"
@@ -857,7 +886,7 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
   animation: float-heart var(--dur) ease-out forwards;
 }
 
-/* —— 左上她是谁；下面三分之一是你们说的话 —— */
+/* —— 左上她是谁、她说的话；右下角你说的话 —— */
 .her-col {
   position: absolute;
   top: calc(var(--safe-top) + 58px);
@@ -866,26 +895,45 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  width: min(72%, 300px);
+  width: min(78%, 330px);
+}
+.her-col :deep(.bubble.her) {
+  max-height: min(9.6em, 30vh);
+  cursor: pointer;
 }
 .talk {
   position: absolute;
-  left: 12px;
+  left: 22%;
   right: 12px;
   bottom: calc(var(--safe-bottom) + 128px);
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: flex-end;
 }
 .talk :deep(.bubble.me) {
-  max-width: 78%;
-  max-height: 3.3em;
+  max-height: 4.8em;
 }
-.talk :deep(.bubble.her) {
-  align-self: flex-start;
-  max-width: 90%;
-  max-height: min(8em, 24vh);
-  cursor: pointer;
+/* 音乐：在顶栏下面展开 */
+.pop-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+.music-pop {
+  position: absolute;
+  z-index: 5;
+  top: calc(var(--safe-top) + 56px);
+  left: 10px;
+  right: 10px;
+  max-height: 60%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 14px 14px;
+  border-radius: 18px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: var(--shadow);
 }
 .her-card {
   display: flex;
@@ -1030,7 +1078,6 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
   border: 1px solid var(--glass-line);
   background: var(--glass-strong);
   outline: none;
-  font-size: 14px;
 }
 .link-start {
   flex: 1;
@@ -1102,6 +1149,13 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
 }
 .pill-btn:disabled {
   opacity: 0.7;
+}
+.pill-btn.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.spin-slow {
+  animation: spin 4s linear infinite;
 }
 .online {
   position: absolute;

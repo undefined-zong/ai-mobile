@@ -3,6 +3,7 @@ import { AiError, httpError, responseContext } from '../core/errors.ts';
 import { readBytes, readText, request } from '../core/http.ts';
 import { randomSeed } from '../core/util.ts';
 import { dropField, sendFixing } from '../llm/retry.ts';
+import { flattenCharacters } from './characters.ts';
 import { extractImage, sniffImageMime } from './extract.ts';
 import { resolveSize } from './presets.ts';
 import type { GeneratedImage, ImageRequest, ImageResult } from './types.ts';
@@ -40,7 +41,9 @@ export async function openaiImages(ep: Endpoint, req: ImageRequest): Promise<Ima
   const seed = req.seed ?? randomSeed();
   const siliconflow = /siliconflow/i.test(base);
   const { quality, ...extra } = req.extra ?? {};
-  let prompt = req.prompt;
+  // 这些接口不分人物写：两个人同框时每个人的那一份并进整体提示词
+  const flat = flattenCharacters(req);
+  let prompt = flat.prompt;
   const body: Record<string, unknown> = { model };
   if (siliconflow) {
     body.image_size = `${width}x${height}`;
@@ -48,14 +51,14 @@ export async function openaiImages(ep: Endpoint, req: ImageRequest): Promise<Ima
     body.seed = seed;
     if (req.steps) body.num_inference_steps = req.steps;
     if (req.scale) body.guidance_scale = req.scale;
-    if (req.negative) body.negative_prompt = req.negative;
+    if (flat.negative) body.negative_prompt = flat.negative;
   } else {
     body.size = openaiSize(model, width, height);
     body.n = 1;
     const q = openaiQuality(model, quality);
     if (q) body.quality = q;
     if (/dall-e/i.test(model)) body.response_format = 'b64_json';
-    if (req.negative) prompt = `${prompt}\n\nAvoid: ${req.negative}`;
+    if (flat.negative) prompt = `${prompt}\n\nAvoid: ${flat.negative}`;
   }
   body.prompt = prompt;
   Object.assign(body, extra);
@@ -98,7 +101,7 @@ export async function openaiImages(ep: Endpoint, req: ImageRequest): Promise<Ima
     model,
     provider: ep.kind,
     prompt,
-    negative: req.negative ?? '',
+    negative: flat.negative,
     params: body,
   };
 }

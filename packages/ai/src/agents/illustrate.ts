@@ -1,12 +1,12 @@
 import type { ImageRequest, ImageVibe } from '../image/types.ts';
-import { buildImagePromptMessages, fallbackImagePrompt, hasUserInFrame, parseImagePrompt, toImageRequest, type ImagePromptInput, type ImagePromptOutput } from './imagePrompt.ts';
+import { buildImagePromptMessages, fallbackImagePrompt, hasUserInFrame, IMAGE_PROMPT_RETRY, parseImagePrompt, toImageRequest, type ImagePromptInput, type ImagePromptOutput } from './imagePrompt.ts';
 import type { AgentCallOptions, AgentSystem, CallMeta } from './system.ts';
 import { samplerRequest, type TaskPreset } from './taskPreset.ts';
 
 /**
  * 配图流水线（设计文档 §4.1：[cg:] → 生图提示词智能体 → 生图智能体 → 相册）。
  * 和 sleep-together 的生图轮次一样分阶段报告进度（写提示词 → 出图 → 完成），界面据此显示"正在构思""正在画"。
- * 生图提示词智能体没分配时，用外观 tags + 画面描述原文。
+ * 生图提示词智能体按"生图"预设输出 image###tags###（imagePrompt.ts 的 parseImagePrompt 读），标题、画幅、外观由程序拼；没分配时用外观 tags + 画面描述原文。
  * "你"的立绘有 Vibe 时：画面里真的有你（两个人同框，或者画的就是你）才带上，只画她时不带。
  */
 
@@ -40,7 +40,7 @@ export async function illustrate(
   let promptBy: IllustrateResult['promptBy'] = null;
   const preset = opts.preset;
   if (system.isLive('imagePrompt') && preset) {
-    const { value, result } = await system.json('imagePrompt', { messages: buildImagePromptMessages(input, preset), ...samplerRequest(preset.sampler) }, parseImagePrompt, opts);
+    const { value, result } = await system.text('imagePrompt', { messages: buildImagePromptMessages(input, preset), ...samplerRequest(preset.sampler) }, parseImagePrompt, IMAGE_PROMPT_RETRY, opts);
     prompt = value;
     promptBy = result;
   } else {

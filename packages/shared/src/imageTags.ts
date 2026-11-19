@@ -4,6 +4,37 @@ import type { Character } from './types/character.ts';
  * 生图 tags 的小工具：前端和 Worker 共用（@app/ai 的生图提示词智能体也用这里的 joinTags）。
  */
 
+/**
+ * 生图提示词输出里的几段（"名字###内容###"，@app/ai 的 parseImagePrompt 读）：
+ * image 画面的 tags、negative 额外的负面 tags、size 画幅、char / user 两个人同框时各自的一份
+ */
+export const IMAGE_PROMPT_SECTIONS = ['image', 'negative', 'size', 'char', 'user'] as const;
+/** char / user 后面能跟的：位置，和只针对这个人的负面 tags */
+export const IMAGE_PROMPT_MODIFIERS = ['left', 'right', 'center', 'negative'] as const;
+/** image### / negative### 里把整体画面和每个人隔开的符号（NovelAI 网页版的写法） */
+export const IMAGE_PROMPT_PERSON_SEPARATOR = '|';
+
+/** 每一段写什么（写给助手看的说明，也是预设里输出格式的依据） */
+export const IMAGE_PROMPT_SECTION_DOCS: Record<(typeof IMAGE_PROMPT_SECTIONS)[number], string> = {
+  image: `画面的英文 tags（必须有）；画面里有别的人时用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开（NovelAI 的写法）：第一段是整体画面（总人数、构图、场景、光线），后面每段一个人`,
+  negative: `额外的负面 tags（可以不写）；image### 用了 ${IMAGE_PROMPT_PERSON_SEPARATOR} 时也按同样的顺序隔开，第一段是整体的，后面每段只针对那个人`,
+  size: '画幅 portrait / landscape / square（可以不写：不写是竖图，程序给了画幅时照程序的）',
+  char: '两个人同框时Ta的那一份（人物类别 boy / girl / other、表情、动作、服装）',
+  user: '两个人同框时你的那一份',
+};
+
+/**
+ * NovelAI V4 起多人图的动作标签：写在人物那一份里，source# 发起、target# 承受、mutual# 相互（source#hug / target#hug）。
+ * 只在 NovelAI 分人物写时有用；单人图、整体那一份、不分人物的接口用 plainActionTags 去掉前缀
+ */
+export const ACTION_TAG_PREFIXES = ['source', 'target', 'mutual'] as const;
+const ACTION_PREFIX_RE = new RegExp(`^(?:${ACTION_TAG_PREFIXES.join('|')})#\\s*`, 'i');
+
+/** 去掉动作标签的 source# / target# / mutual# 前缀（source#hug → hug） */
+export function plainActionTags(tags: string): string {
+  return joinTags(...tags.split(/[,，\n]/).map((t) => t.trim().replace(ACTION_PREFIX_RE, '')));
+}
+
 /** 逗号分隔的 tags 合并：去掉空项和重复项（不区分大小写），保留第一次出现的顺序 */
 export function joinTags(...lists: (string | undefined | null)[]): string {
   const seen = new Set<string>();

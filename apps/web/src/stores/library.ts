@@ -1,5 +1,6 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import assistantMergeUpgrades from '@/migrations/presetAssistantMerge.json';
+import tagFormatUpgrades from '@/migrations/presetTagFormats.json';
 import {
   appContextBeforeHistory,
   categoryMarkers,
@@ -181,7 +182,10 @@ function upgradeBooks(list: Lorebook[], done: Set<string>): Lorebook[] {
  * - added：文件里新加的块。本机那份没有就照文件里的位置插进去（之后你删了不会再放回来）；
  * - forced：强制升级。列出的块不管你改没改过、删没删，都换成（放回）文件里现在的内容、开关和触发条件；description 为 true 时预设说明也换成文件里的。
  *   也只做一次，之后你再改、再删都不会被覆盖。
- * 复制出来的、导入的预设不动；想整份回到文件的样子用"恢复成预设文件"。
+ * - patched：强制改句子。列出的块里出现这些原句就换成新句，不管这块别的地方你改没改过（只动这几句，整块别的内容不动）；
+ *   块的 identifier 写 "*" 是所有块。也只做一次。
+ * - categories：不按文件、按分类：这几类里复制、导入的预设（没有 seedFile；自带的按文件升级）做 patched（只认原句，原句不在就不动）。
+ * 除了 categories，复制出来的、导入的预设不动；想整份回到文件的样子用"恢复成预设文件"。
  */
 interface SeedUpgrade {
   id: string;
@@ -195,6 +199,22 @@ interface SeedUpgrade {
   /** 回复长度：还是旧的默认值时换成新的 [旧, 新] */
   maxTokens?: [number, number];
   forced?: { blocks: string[]; description?: boolean };
+  patched?: Record<string, [string, string][]>;
+  categories?: PresetCategory[];
+}
+
+/** 强制改句子（SeedUpgrade.patched）：块里出现原句就换，返回改了没有 */
+function patchBlocks(p: Preset, patched: Record<string, [string, string][]>): boolean {
+  let touched = false;
+  for (const b of p.blocks) {
+    const pairs = [...(patched[b.identifier] ?? []), ...(patched['*'] ?? [])];
+    let content = b.content;
+    for (const [from, to] of pairs) if (from && content.includes(from)) content = content.split(from).join(to);
+    if (content === b.content) continue;
+    b.content = content;
+    touched = true;
+  }
+  return touched;
 }
 const SEED_UPGRADES: SeedUpgrade[] = [
   {
@@ -652,10 +672,15 @@ function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
       }
     }
   }
-  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[], ...assistantMergeUpgrades as SeedUpgrade[]]) {
+  // tagFormatUpgrades：生图的输出从 JSON 换成 image###tags###、控制指令从 JSON 换成照抄原话插 <device>：
+  // 输出格式那块强制整块换，别的块里讲到旧写法的那几句强制换句子（程序不再读旧写法）；复制、导入的同类预设按原句跟上
+
+  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[], ...assistantMergeUpgrades as SeedUpgrade[], ...tagFormatUpgrades as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);
+    // 自带的已经按文件升级过（原句换过一遍），这里只管复制、导入的（没有 seedFile）
+    if (u.categories && u.patched) for (const p of list) if (!p.seedFile && u.categories.includes(p.category) && patchBlocks(p, u.patched)) changed.add(p);
   }
   // 已保存的自带、导入和复制预设也调整位置，保留内容、开关和预设正文。
   const contextUpgrade = 'app-context:before-history';
@@ -732,6 +757,7 @@ function upgradeFile(list: Preset[], u: SeedUpgrade, file: string, changed: Set<
       p.description = seed.description;
       changed.add(p);
     }
+    if (u.patched && patchBlocks(p, u.patched)) changed.add(p);
   }
 }
 

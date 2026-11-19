@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { characterPronoun, type Character } from '@app/shared';
-import { SCALAR_KINDS, TOY_KIND_LABEL, type ScalarKind, type ToyKind } from '@app/shared';
+import { TOY_KIND_LABEL, type ToyKind } from '@app/shared';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
 import type { ToyDevice } from '@/services/intiface';
+import type { ToyHead } from '@/services/toyPlayer';
 import { useAiStore } from '@/stores/ai';
 import { useToyStore, type CommandSource } from '@/stores/toys';
 
 /**
- * 心跳设置里"玩具"那一页：连 Intiface Central、连着的玩具（能做什么、电量、试一下）、指令从哪来、强度上限、安全。
+ * 心跳设置里"玩具"那一页：连 Intiface Central、连着的玩具（能做什么、电量、试一下，每个头各自的上限）、指令从哪来、安全。
  * 设置存在本机（stores/toys.ts）；连接留着，点"断开"才断。
  */
 const props = defineProps<{ character?: Character }>();
@@ -42,13 +43,12 @@ const statusText = computed(() => {
   if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
   return '没连';
 });
-/** 上限：连着的玩具有的那几种；没连时都列出来 */
-const capKinds = computed<ScalarKind[]>(() => {
-  const have = new Set<ToyKind>(toys.kinds);
-  const list = SCALAR_KINDS.filter((k) => have.has(k));
-  return list.length ? list : ['vibrate', 'oscillate', 'rotate'];
-});
-const hasLinear = computed(() => toys.kinds.includes('linear') || !toys.ready);
+/** 这个玩具的每个头（上限各设各的） */
+function headsOf(d: ToyDevice): ToyHead[] {
+  return toys.heads.filter((h) => h.device?.index === d.index);
+}
+/** 伸缩的范围两头至少隔多少 */
+const MIN_SPAN = 10;
 
 function featureLine(d: ToyDevice): string {
   const by = new Map<ToyKind, number>();
@@ -87,14 +87,74 @@ async function toggleConnect() {
     <p v-if="toys.sendError" class="err">{{ toys.sendError }}</p>
 
     <template v-if="toys.status === 'connected'">
-      <div v-for="d in toys.devices" :key="d.index" class="device">
-        <span class="i-lucide-heart-handshake text-[18px] text-accent-ink shrink-0" />
-        <span class="flex-1 min-w-0">
-          <span class="block text-[14px] truncate">{{ d.name }}</span>
-          <span class="block text-[12px] text-ink-3 truncate">{{ featureLine(d) }}<template v-if="typeof toys.battery[d.index] === 'number'"> · 电量 {{ toys.battery[d.index] }}%</template></span>
-        </span>
-        <button type="button" class="mini" @click="toys.test(d)">试一下</button>
+      <div v-for="d in toys.devices" :key="d.index" class="device" :data-testid="`toy-device-${d.index}`">
+        <div class="flex items-center gap-2.5">
+          <span class="i-lucide-heart-handshake text-[18px] text-accent-ink shrink-0" />
+          <span class="flex-1 min-w-0">
+            <span class="block text-[14px] truncate">{{ d.name }}</span>
+            <span class="block text-[12px] text-ink-3 truncate">{{ featureLine(d) }}<template v-if="typeof toys.battery[d.index] === 'number'"> · 电量 {{ toys.battery[d.index] }}%</template></span>
+          </span>
+          <button type="button" class="mini" @click="toys.test(d)">试一下</button>
+        </div>
+        <template v-for="h in headsOf(d)" :key="h.key">
+          <div v-if="h.kind !== 'linear'" class="slide">
+            <span class="head-name" :title="h.name">{{ h.name }}</span>
+            <van-slider
+              :model-value="toys.headLimit(h).max"
+              class="flex-1"
+              :min="0"
+              :max="100"
+              bar-height="4px"
+              button-size="16px"
+              :aria-label="`${d.name} ${h.name}的上限`"
+              @update:model-value="(v: number) => toys.setHeadLimit(h, { max: v })"
+            />
+            <span class="num w-9 shrink-0 text-right text-[12.5px] text-ink-2">{{ toys.headLimit(h).max }}</span>
+          </div>
+          <template v-else>
+            <div class="slide">
+              <span class="head-name" :title="`${h.name}：从底到顶一下最快多少毫秒`">{{ h.name }}</span>
+              <van-slider
+                :model-value="toys.headLimit(h).strokeMs"
+                class="flex-1"
+                :min="150"
+                :max="1500"
+                :step="50"
+                bar-height="4px"
+                button-size="16px"
+                :aria-label="`${d.name} ${h.name}一下最快多少毫秒`"
+                @update:model-value="(v: number) => toys.setHeadLimit(h, { strokeMs: v })"
+              />
+              <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ toys.headLimit(h).strokeMs }}ms</span>
+            </div>
+            <div class="slide">
+              <span class="head-name">范围</span>
+              <van-slider
+                :model-value="toys.headLimit(h).posMin"
+                class="flex-1"
+                :min="0"
+                :max="Math.max(0, toys.headLimit(h).posMax - MIN_SPAN)"
+                bar-height="4px"
+                button-size="16px"
+                :aria-label="`${d.name} ${h.name}最低位置`"
+                @update:model-value="(v: number) => toys.setHeadLimit(h, { posMin: v })"
+              />
+              <van-slider
+                :model-value="toys.headLimit(h).posMax"
+                class="flex-1"
+                :min="Math.min(100, toys.headLimit(h).posMin + MIN_SPAN)"
+                :max="100"
+                bar-height="4px"
+                button-size="16px"
+                :aria-label="`${d.name} ${h.name}最高位置`"
+                @update:model-value="(v: number) => toys.setHeadLimit(h, { posMax: v })"
+              />
+              <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ toys.headLimit(h).posMin }}–{{ toys.headLimit(h).posMax }}</span>
+            </div>
+          </template>
+        </template>
       </div>
+      <p v-if="toys.devices.length" class="hint">每个头的上限各设各的：{{ characterPronoun(character) }}照 0–100 写，写多少发多少，超过上限的发给玩具时压到上限（上限 80 时写 100 发 80、写 60 还是 60）；伸缩的位置超出范围的压回范围里，不快于"一下最快"。</p>
       <button type="button" class="scan" :disabled="toys.scanning" @click="toys.scan()">
         <span :class="toys.scanning ? 'i-lucide-loader-circle spin' : 'i-lucide-radar'" />{{ toys.scanning ? '在找玩具…（Intiface 里配对过的会自己出现）' : toys.devices.length ? '再找找' : '找玩具' }}
       </button>
@@ -107,25 +167,7 @@ async function toggleConnect() {
       「控制指令」还没接通：{{ deviceStatus.reason }}<button type="button" class="text-accent-ink ml-2" @click="router.push('/me/api?feature=device')">去设置</button>
     </p>
 
-    <div class="label">强度上限（{{ characterPronoun(character) }}写得再重也不超过）</div>
-    <div v-for="k in capKinds" :key="k" class="slide">
-      <span class="w-10 shrink-0 text-[13px] text-ink-2">{{ TOY_KIND_LABEL[k] }}</span>
-      <van-slider v-model="s.caps[k]" class="flex-1" :min="0" :max="100" bar-height="4px" button-size="16px" :aria-label="`${TOY_KIND_LABEL[k]}上限`" />
-      <span class="num w-9 shrink-0 text-right text-[12.5px] text-ink-2">{{ s.caps[k] }}</span>
-    </div>
-    <template v-if="hasLinear">
-      <div class="slide">
-        <span class="w-10 shrink-0 text-[13px] text-ink-2" title="伸缩从底到顶一下最快多少毫秒">伸缩</span>
-        <van-slider v-model="s.caps.strokeMs" class="flex-1" :min="150" :max="1500" :step="50" bar-height="4px" button-size="16px" aria-label="伸缩一下最快多少毫秒" />
-        <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ s.caps.strokeMs }}ms</span>
-      </div>
-      <div class="slide">
-        <span class="w-10 shrink-0 text-[13px] text-ink-2">范围</span>
-        <van-slider v-model="s.caps.posMin" class="flex-1" :min="0" :max="Math.max(0, s.caps.posMax - 10)" bar-height="4px" button-size="16px" aria-label="伸缩最低位置" />
-        <van-slider v-model="s.caps.posMax" class="flex-1" :min="Math.min(100, s.caps.posMin + 10)" :max="100" bar-height="4px" button-size="16px" aria-label="伸缩最高位置" />
-        <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ s.caps.posMin }}–{{ s.caps.posMax }}</span>
-      </div>
-    </template>
+    <p v-if="toys.status !== 'connected' || !toys.devices.length" class="hint">连上玩具以后，每个头（双头玩具的每个马达、震动加伸缩的每一种）可以在上面单独设上限。</p>
 
     <div class="label">安全</div>
     <div class="text-[12.5px] text-ink-2 mb-1.5">多久没有新的指令就停下</div>
@@ -203,7 +245,6 @@ async function toggleConnect() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
 }
 .field:disabled {
   opacity: 0.6;
@@ -215,13 +256,19 @@ async function toggleConnect() {
   color: var(--bad);
 }
 .device {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin-top: 10px;
   padding: 9px 10px;
   border-radius: 14px;
   background: var(--panel);
+}
+.head-name {
+  flex-shrink: 0;
+  width: 5.5em;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .mini {
   flex-shrink: 0;

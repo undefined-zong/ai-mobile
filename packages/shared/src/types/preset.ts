@@ -319,7 +319,7 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
   },
   device: {
     deviceToys: '连着的玩具和能写的键',
-    deviceLimits: '强度上限和最快的速度',
+    deviceLimits: '最快的速度',
     deviceNow: '玩具现在在做什么',
     deviceRecent: '最近的对话',
     deviceLine: 'Ta这一句（要配指令的话）',

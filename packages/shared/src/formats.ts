@@ -1,3 +1,4 @@
+import { ACTION_TAG_PREFIXES, IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_SECTION_DOCS, IMAGE_PROMPT_SECTIONS } from './imageTags.ts';
 import { characterPronoun } from './pronouns.ts';
 import type { Character } from './types/character.ts';
 import type { Lorebook } from './types/lorebook.ts';
@@ -10,7 +11,7 @@ import { CONTROL_TAG_DOCS, CONTROL_TAG_KINDS, BLOCK_TAG_KINDS } from './tags.ts'
  * 特殊格式登记表：App 认的写法集中在这里（给人看的版本是 docs/FORMATS.md）。
  * - 模型回复里夹带的隐藏控制标签（tags.ts：[expr:] [cg:] <device>……）；
  * - 预设里的程序填充块、触发条件（任务名、尺度、生图的类型和时刻、立绘的构图 / 表情 / 动作）、App 自己加的宏；
- * - 各用途的输出格式（JSON 字段名、"# 标题"……）：以 App 自带的预设文件为准（apps/web/src/presets/），
+ * - 各用途的输出格式（JSON 字段名、"# 标题"、生图的 image###、控制指令的 <device>……）：以 App 自带的预设文件为准（apps/web/src/presets/），
  *   这里不另抄一份，检测时拿同一用途的自带预设当参照，从里面读字段名、任务、程序填充块；
  * - 别的 App / SillyTavern 预设和世界书里常见、App 不认的写法（另一套生图、表情、选项、状态栏、思考标签……）和对应的 App 写法。
  * "我的 → 助手"按它检测导入的预设、世界书、角色卡哪些不适配，也把相关的部分写进助手的提示词。
@@ -186,15 +187,41 @@ export function scanForeign(text: string): ForeignHit[] {
 // —— 三、输出格式：从自带预设里读 ——
 
 const JSON_KEY_RE = /"([A-Za-z_][A-Za-z0-9_]*)"\s*:/g;
+/** "名字###内容###"写法的段名（生图的 image###tags###；只认程序读的那几段，收尾的 ### 不算） */
+const SECTION_KEY_RE = new RegExp(`(?<![A-Za-z0-9_])(${IMAGE_PROMPT_SECTIONS.join('|')})(?:[ \\t_-]+(?:${IMAGE_PROMPT_MODIFIERS.join('|')}))*[ \\t]*###`, 'gi');
 
-/** 文字里 JSON 示例的字段名（按出现的顺序，不重复） */
+/** 文字里输出格式的字段名（按出现的顺序，不重复）：JSON 示例的字段名，和 image### 这种段名（带着 ###） */
 export function jsonKeysOf(text: string): string[] {
-  return [...new Set([...text.matchAll(JSON_KEY_RE)].map((m) => m[1]!))];
+  return [...new Set([...[...text.matchAll(JSON_KEY_RE)].map((m) => m[1]!), ...[...text.matchAll(SECTION_KEY_RE)].map((m) => `${m[1]!.toLowerCase()}###`)])];
 }
 
 function mentions(text: string, key: string): boolean {
+  if (key.endsWith('###')) return new RegExp(`(^|[^A-Za-z0-9_])${key.slice(0, -3)}(?:[ \\t_-]+(?:${IMAGE_PROMPT_MODIFIERS.join('|')}))*[ \\t]*###`, 'i').test(text);
   return new RegExp(`(^|[^A-Za-z0-9_])${key}($|[^A-Za-z0-9_])`).test(text);
 }
+
+/** 不是 JSON 的输出格式：写给助手的说明（只在看这一类预设时给） */
+const OUTPUT_NOTES: Partial<Record<PresetCategory, string>> = {
+  image: [
+    '【生图预设的输出】不是 JSON，是几段"名字###内容###"，程序读了再拼成生图请求（标题、画幅、长相、衣服都由程序加）：',
+    ...IMAGE_PROMPT_SECTIONS.map((k) => `- ${k}###…###：${IMAGE_PROMPT_SECTION_DOCS[k]}`),
+    `- char / user 后面空一格写 ${IMAGE_PROMPT_MODIFIERS.filter((m) => m !== 'negative').join(' / ')} 是位置（例如 char left###…###），写 negative 是只针对这个人的负面 tags（例如 char negative###…###）`,
+    `- 两个人之间的动作写在各自那一份里，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出发起、承受、相互（char###girl, source#hug### 和 user###boy, target#hug###）；NovelAI V4 起分人物时认，单人图和不分人物的接口程序会去掉前缀`,
+    '- 每个人的那一份（char###、user###、| 后面的每段）各自带各自的负面 tags：Ta的是角色卡的负面 tags + char negative###，你的是人设的 + user negative###，别的人是 negative### 里同一个位置的那段',
+    '旧写法（{"caption", "tags", "negative", "size"} 的 JSON、characters 字段）程序不再读：照参照预设的输出格式那块换成这种写法，规则里讲到 negative、size、characters 的句子也跟着换成 negative###、size###、char### / user###。',
+  ].join('\n'),
+  device: [
+    '【控制指令预设的输出】不是 JSON：把Ta那一句照抄一遍、在要变的地方插 <device>"VIBRATE": 40</device>（键的写法同隐藏标签 <device>），程序按抄的字放回原话的位置；可以只抄到最后一个 <device> 为止，这一句不用变时原样抄、不插。',
+    '强度照 0–100 写，写多少发多少：超过每个头上限的由程序压到上限，预设里不要让模型压在上限以内。',
+    '旧写法 {"steps": [{"at": "…", "do": {…}}]} 程序不再读：照参照预设的输出格式那块换成这种写法，规则里讲到 at、steps 的句子也跟着换。',
+  ].join('\n'),
+};
+
+/** 这一类预设里程序不再读的旧输出写法：查到就是不适配 */
+const LEGACY_OUTPUTS: { category: PresetCategory; re: RegExp; message: string }[] = [
+  { category: 'image', re: /"(?:caption|tags|characters)"\s*:/, message: '输出格式还是 JSON（caption、tags……）：程序现在读 image###英文 tags###，旧写法读不到，照参照预设的输出格式改' },
+  { category: 'device', re: /"(?:steps|at|do)"\s*:/, message: '输出格式还是 {"steps": [{"at", "do"}]}：程序现在读照抄原话、插在里面的 <device>，旧写法读不到，照参照预设的输出格式改' },
+];
 
 /** 触发条件是不是用户自己起名的那种（尺度、立绘的构图表情动作）或者开关（家务、健康），不算任务 */
 export function isNamedTrigger(t: string): boolean {
@@ -331,6 +358,12 @@ export function checkPreset(preset: Pick<Preset, 'category' | 'blocks' | 'regex'
     }
   }
 
+  // 2.5 程序不再读的旧输出写法
+  for (const l of LEGACY_OUTPUTS) {
+    if (l.category !== preset.category) continue;
+    for (const b of on) if (!b.marker && l.re.test(b.content)) issues.push({ level: 'error', code: 'output', where: b.identifier, whereLabel: blockLabel(b), message: l.message });
+  }
+
   // 3. 别的写法（角色扮演类）
   if (roleplay) {
     for (const b of on) {
@@ -440,6 +473,8 @@ export function formatGuide(opts: { categories: PresetCategory[]; lorebook?: boo
     );
   }
   for (const c of [...new Set(opts.categories)]) {
+    const note = OUTPUT_NOTES[c];
+    if (note) parts.push(note);
     const markers = categoryMarkers(c);
     if (Object.keys(markers).length) {
       parts.push(`【${c} 类预设的程序填充块】marker 为 true、content 为空，程序每次填：\n${Object.entries(markers).map(([id, name]) => `- ${id}：${name}`).join('\n')}`);
