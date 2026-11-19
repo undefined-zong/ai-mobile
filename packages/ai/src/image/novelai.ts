@@ -5,7 +5,7 @@ import { readBytes, readText, request, sleep } from '../core/http.ts';
 import { randomSeed } from '../core/util.ts';
 import { extractImage, sniffImageMime } from './extract.ts';
 import { isNovelaiV5, joinTags, NOVELAI_DEFAULT_MODEL, NOVELAI_QUALITY_TAGS, NOVELAI_UC_PRESETS, novelaiGeneration, novelaiInpaintModel, resolveSize, supportsCharacterReference, supportsVibeTransfer } from './presets.ts';
-import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeEncodeRequest } from './types.ts';
+import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeComparisonSource, VibeEncodeRequest } from './types.ts';
 import { isZip, unzipFirst } from './zip.ts';
 
 /**
@@ -72,8 +72,9 @@ export function buildNovelaiPayload(baseModel: string, req: ImageRequest): { bod
   };
   let parameters: Record<string, unknown>;
   if (gen === 'v4') {
-    const chars = req.characters ?? [];
-    const useCoords = chars.some((c) => !!c.center);
+    const chars = [...(req.characters ?? [])];
+    const useCoords = chars.length > 0 && chars.every((c) => !!c.center);
+    if (useCoords) chars.sort((a, b) => a.center!.y - b.center!.y || a.center!.x - b.center!.x);
     const v5 = isNovelaiV5(baseModel);
     parameters = {
       params_version: v5 ? 4 : 3,
@@ -247,6 +248,26 @@ export async function novelaiGenerate(ep: Endpoint, req: ImageRequest): Promise<
     prompt,
     negative,
     params: body.parameters as Record<string, unknown>,
+  };
+}
+
+/** 复用实际发出的场景图参数，只移除 Vibe；不重新套风格、质量词或生成种子。 */
+export async function novelaiCompareVibe(ep: Endpoint, source: VibeComparisonSource, signal?: AbortSignal): Promise<ImageResult> {
+  const parameters = {
+    ...source.params,
+    reference_image_multiple: [],
+    reference_information_extracted_multiple: [],
+    reference_strength_multiple: [],
+  };
+  const image = await postNovelai(ep, 'ai/generate-image', { input: source.prompt, model: source.model, action: 'generate', parameters }, signal);
+  return {
+    images: [image],
+    seed: (image.bytes && seedFromPng(image.bytes)) ?? (source.params.seed as number),
+    model: source.model,
+    provider: ep.kind,
+    prompt: source.prompt,
+    negative: source.negative,
+    params: parameters,
   };
 }
 

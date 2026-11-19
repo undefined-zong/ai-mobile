@@ -35,6 +35,7 @@ export interface GalleryItem {
   negative: string;
   seed: number | null;
   model: string;
+  vibeComparison?: IllustrateOutcome['vibeComparison'];
   locationId: string | null;
   outfit: string | null;
   /** 程序定的画幅（陪伴学习：一起专注竖图，各自专注上半屏方图或横图）；以前的图没记，都是竖图 */
@@ -176,6 +177,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       negative: out.negative,
       seed: out.seed,
       model: out.model,
+      vibeComparison: out.vibeComparison,
       locationId: r.locationId,
       outfit: r.outfit,
       ...(req.size ? { size: req.size } : {}),
@@ -207,7 +209,7 @@ export const useGalleryStore = defineStore('gallery', () => {
     const oldKey = item.assetKey;
     const oldUrl = item.url;
     const { out } = r;
-    Object.assign(item, { assetKey: out.assetKey, prompt: out.prompt, negative: out.negative, seed: out.seed, model: out.model, title: out.caption || item.title });
+    Object.assign(item, { assetKey: out.assetKey, prompt: out.prompt, negative: out.negative, seed: out.seed, model: out.model, vibeComparison: out.vibeComparison, title: out.caption || item.title });
     if (out.url) item.url = out.url;
     else delete item.url;
     return { ok: true, item, oldKey, oldUrl };

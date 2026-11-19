@@ -9,8 +9,12 @@ export interface ViewerImage {
   url: string;
   /** 下载时的文件名（不带扩展名） */
   name?: string;
+  /** 对比图的说明，显示在操作按钮上方。 */
+  label?: string;
   /** 重画这张：画好返回新图的链接（失败抛出原因） */
-  redraw?: () => Promise<string | null>;
+  redraw?: () => Promise<string | ViewerImage | null>;
+  /** 保留这一张，生成一张关闭 Vibe 的图并排在后面。 */
+  compareVibe?: () => Promise<ViewerImage | null>;
 }
 
 export const imageViewer = reactive({

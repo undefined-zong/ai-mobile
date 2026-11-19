@@ -618,6 +618,11 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     file: 'feature-date.json',
     forced: { blocks: ['sceneRule'] },
   },
+  {
+    id: 'image-date:duo-actions',
+    file: 'image-date.json',
+    added: ['duoRules'],
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */

@@ -78,7 +78,7 @@ export interface ImagePromptOutput {
   negative: string;
   size: 'portrait' | 'landscape' | 'square';
   /** 两个人同框时每个人单独的 tags（模型给出的动作），外观 tags 由程序补上 */
-  characters?: { who: 'char' | 'user'; tags: string; position?: 'left' | 'right' | 'center' }[];
+  characters?: { who: 'char' | 'user'; tags: string; negative?: string; position?: 'left' | 'right' | 'center' }[];
 }
 
 /** 衣服锁定时实际加进提示词的服装 tags */
@@ -99,7 +99,8 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
         ? [
             `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
             `画${c.name}和${withUser.name}两个人同框时：tags 只写整体画面（人数、构图、场景、光线），再加一个 characters 字段分别写每个人：`,
-            `"characters": [{"who": "char", "tags": "${c.name}的表情、动作、服装", "position": "left|right|center"}, {"who": "user", "tags": "${withUser.name}的表情、动作、服装", "position": "left|right|center"}]`,
+            `"characters": [{"who": "char", "tags": "${c.name}的人物类别（boy/girl/other）、表情、动作、服装", "negative": "只针对${c.name}的负面 tags"}, {"who": "user", "tags": "${withUser.name}的人物类别（boy/girl/other）、表情、动作、服装", "negative": "只针对${withUser.name}的负面 tags"}]`,
+            `人物类别按各自的外观与角色信息填写，不按 who 固定性别。位置明确时为对应人物添加 "position": "left"、"right" 或 "center"，不指定位置时省略。`,
             `只画${c.name}一个人时不写 characters。`,
           ].join('\n')
         : '',
@@ -181,13 +182,28 @@ export function parseImagePrompt(value: unknown): ImagePromptOutput | null {
     const chars = v.characters
       .map((x) => x as Record<string, unknown>)
       .filter((x) => (x.who === 'char' || x.who === 'user') && typeof x.tags === 'string')
-      .map((x) => ({ who: x.who as 'char' | 'user', tags: cleanTags(x.tags as string), ...(isPosition(x.position) ? { position: x.position } : {}) }));
+      .map((x) => ({
+        who: x.who as 'char' | 'user',
+        tags: cleanTags(x.tags as string),
+        negative: typeof x.negative === 'string' ? cleanTags(x.negative) : '',
+        ...(isPosition(x.position) ? { position: x.position } : {}),
+      }));
     if (chars.length) out.characters = chars;
   }
   return out;
 }
 
 const CENTERS = { left: { x: 0.3, y: 0.5 }, right: { x: 0.7, y: 0.5 }, center: { x: 0.5, y: 0.5 } } as const;
+
+/** 人物块去掉人数和 solo，保留人数标签里的人物类别。 */
+function characterTags(tags: string | undefined): string {
+  const { lead, rest } = leadCountTags(tags ?? '');
+  const subjects = lead.split(',').flatMap((tag) => {
+    const match = tag.trim().match(/^(?:\d+\+?|multiple\s+)(girl|boy|other)s?$/i);
+    return match ? [match[1]!.toLowerCase()] : [];
+  });
+  return joinTags(...subjects, rest);
+}
 
 /** 模型画了两个人同框（"你"可以入画、输出里有"你"的那一份） */
 export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput): boolean {
@@ -207,16 +223,17 @@ export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, 
   const negative = joinTags(input.character.negativeTags, out.negative);
   const outfit = lockedOutfit(input);
   if (hasUserInFrame(out, input)) {
-    const looks = (tags: string | undefined) => leadCountTags(tags ?? '').rest;
     return {
       prompt: out.tags,
-      negative,
+      negative: out.negative,
       size,
       seed,
       characters: (out.characters ?? []).map((c) => ({
-        prompt: c.who === 'char' ? joinTags(looks(input.character.appearanceTags), outfit, c.tags) : joinTags(looks(input.withUser?.appearanceTags), c.tags),
-        ...(c.who === 'user' && input.withUser?.negativeTags ? { negative: input.withUser.negativeTags } : {}),
-        center: CENTERS[c.position ?? 'center'],
+        prompt: c.who === 'char'
+          ? joinTags(characterTags(input.character.appearanceTags), outfit, characterTags(c.tags))
+          : joinTags(characterTags(input.withUser?.appearanceTags), characterTags(c.tags)),
+        negative: joinTags(c.who === 'char' ? input.character.negativeTags : input.withUser?.negativeTags, c.negative),
+        ...(c.position ? { center: CENTERS[c.position] } : {}),
       })),
     };
   }
