@@ -103,9 +103,16 @@ function pagesOf(c: BookChapter): { from: number; to: number }[] {
   });
   return out;
 }
-const pages = computed(() => (chapter.value ? pagesOf(chapter.value) : []));
+const chapterPages = computed(() => book.value?.chapters.map(pagesOf) ?? []);
+const pages = computed(() => chapterPages.value[book.value?.pos.chapter ?? 0] ?? []);
 const pageIndex = computed(() => Math.max(0, pages.value.findIndex((p) => book.value!.pos.para >= p.from && book.value!.pos.para < p.to)));
 const page = computed(() => pages.value[pageIndex.value]);
+/** 全书页码连续累加，不能把当前章的页数显示成全书页数。 */
+const textPageCount = computed(() => chapterPages.value.reduce((total, ps) => total + ps.length, 0));
+const textPageNumber = computed(() => chapterPages.value.slice(0, book.value?.pos.chapter ?? 0)
+  .reduce((total, ps) => total + ps.length, pageIndex.value + 1));
+const nextPageLabel = computed(() => view.value === 'text' && pageIndex.value === pages.value.length - 1
+  && book.value!.pos.chapter < book.value!.chapters.length - 1 ? '下一章' : '下一页');
 
 // —— 原版页面：按 PDF 的页翻 ——
 /** 这一段在 PDF 的第几页 */
@@ -245,7 +252,7 @@ function prevPage() {
   if (pageIndex.value > 0) return goPage(pageIndex.value - 1);
   if (b.pos.chapter > 0) {
     const ci = b.pos.chapter - 1;
-    setPos(ci, pagesOf(b.chapters[ci]!).at(-1)?.from ?? 0);
+    setPos(ci, chapterPages.value[ci]?.at(-1)?.from ?? 0);
     onShown();
   }
 }
@@ -623,19 +630,25 @@ function onPageCount(n: number) {
     <!-- 读 -->
     <template v-else>
       <div class="flex items-center gap-2 text-[12.5px] text-ink-3 flex-none">
-        <button type="button" class="truncate text-accent-ink min-w-0" @click="tocOpen = true">{{ chapter?.title }}</button>
-        <span class="shrink-0 num">
-          <template v-if="view === 'page'">第 {{ viewPage }} / {{ pageCount }} 页</template>
-          <template v-else>{{ pageIndex + 1 }} / {{ pages.length }}</template>
-          · {{ progress }}%
-        </span>
-        <span class="flex-1" />
+        <button type="button" class="flex items-center gap-1 flex-1 text-left text-accent-ink min-w-0" aria-label="打开目录" @click="tocOpen = true">
+          <span class="i-lucide-list shrink-0" aria-hidden="true" />
+          <span class="truncate">{{ chapter?.title }}</span>
+        </button>
+        <span class="shrink-0 num">{{ book.pos.chapter + 1 }} / {{ book.chapters.length }} 章</span>
         <span v-if="isPdf" class="views" role="tablist" aria-label="怎么看">
           <button type="button" role="tab" :aria-selected="view === 'page'" :class="{ on: view === 'page' }" @click="setView('page')">原版</button>
           <button type="button" role="tab" :aria-selected="view === 'text'" :class="{ on: view === 'text' }" @click="setView('text')">文字</button>
         </span>
         <button v-if="view === 'page'" type="button" class="shrink-0 num" aria-label="缩放" @click="cycleZoom">{{ zoom }}×</button>
         <button type="button" class="shrink-0" @click="closeBook">书架</button>
+      </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[12px] text-ink-2 num flex-none">
+        <span v-if="view === 'page'">第 {{ viewPage }} / {{ pageCount }} 页</span>
+        <template v-else>
+          <span>全书 {{ textPageNumber }} / {{ textPageCount }} 页</span>
+          <span>本章 {{ pageIndex + 1 }} / {{ pages.length }} 页</span>
+        </template>
+        <span>{{ progress }}%</span>
       </div>
 
       <!-- 原版页面 -->
@@ -679,7 +692,7 @@ function onPageCount(n: number) {
         <van-button v-if="speakingPara === null" size="small" round block @click="readAloud">读给我听</van-button>
         <van-button v-else size="small" round block @click="stopAloud">停</van-button>
         <van-button v-if="view === 'page'" size="small" round block @click="openNote(shown.from)">写批注</van-button>
-        <van-button size="small" type="primary" round block @click="nextPage">下一页</van-button>
+        <van-button size="small" type="primary" round block @click="nextPage">{{ nextPageLabel }}</van-button>
       </div>
       <div class="flex gap-2 mt-2 flex-none">
         <input v-model="chatText" class="field" :placeholder="view === 'page' ? `和${her.pronoun}聊聊这一页` : `和${her.pronoun}聊聊这本书（点一段可以写批注）`" aria-label="聊这本书" @keydown.enter="sendChat" />
@@ -704,7 +717,7 @@ function onPageCount(n: number) {
     </van-popup>
     <van-popup v-model:show="tocOpen" position="bottom" round :style="{ maxHeight: '70%' }">
       <div class="p-4">
-        <div class="text-[15px] font-600 mb-2">目录</div>
+        <div class="text-[15px] font-600 mb-2">目录 · 共 {{ book?.chapters.length ?? 0 }} 章</div>
         <button v-for="(c, i) in book?.chapters ?? []" :key="i" type="button" class="toc" :class="{ on: i === book?.pos.chapter }" @click="goChapter(i)">{{ c.title }}</button>
       </div>
     </van-popup>
