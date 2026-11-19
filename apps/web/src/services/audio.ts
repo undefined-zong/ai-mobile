@@ -11,8 +11,10 @@
 
 let el: HTMLAudioElement | null = null;
 let ctx: AudioContext | null = null;
-/** 正在用共用 AudioContext 的有几个（白噪音、通话时听你说话） */
+/** 正在用共用 AudioContext 的有几个（白噪音、通话时听你说话、iPhone 上调音量的歌） */
 let ctxUsers = 0;
+/** 其中正在出声的有几个：都没在出声时把 AudioContext 挂起（跑着的 AudioContext 会让 iPhone 用最小的音频缓冲，更费电） */
+let ctxActive = 0;
 let unlocked = false;
 let stopCurrent: (() => void) | null = null;
 
@@ -27,9 +29,18 @@ function element(): HTMLAudioElement | null {
 
 type AudioContextCtor = typeof AudioContext;
 
-/** 用户点屏幕时顺手恢复被挂起的 AudioContext（切后台回来、iPhone 来电之后） */
+/** 用户点屏幕时顺手恢复被挂起的 AudioContext（切后台回来、iPhone 来电之后）；没人要出声时让它挂着 */
 export function resumeAudioContext(): void {
-  if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => undefined);
+  if (ctx && ctxActive > 0 && ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => undefined);
+}
+
+/** 有人要出声就让 AudioContext 跑，都不出声就挂起 */
+function syncRunning() {
+  const c = ctx;
+  if (!c || c.state === 'closed') return;
+  if (ctxActive > 0) {
+    if (c.state !== 'running') void c.resume().catch(() => undefined);
+  } else if (c.state === 'running') void c.suspend().catch(() => undefined);
 }
 
 type SessionType = 'auto' | 'playback' | 'play-and-record' | 'ambient' | 'transient' | 'transient-solo';
@@ -80,6 +91,8 @@ export const recordSession = () => audioSession('record');
 
 export interface AudioContextLease {
   ctx: AudioContext;
+  /** 现在要不要出声：都不出声时 AudioContext 挂起，有人要出声时恢复（第一次在点击里跑起来过，之后恢复不用再点） */
+  setActive(on: boolean): void;
   /** 不用了（调多次只算一次）：最后一个不用的关掉 AudioContext，并松开音频会话 */
   release(): void;
 }
@@ -89,8 +102,9 @@ export interface AudioContextLease {
  * 先按用途设好 iPhone 的音频会话（playback / play-and-record），再建 AudioContext：iPhone 上 AudioContext 按它跑起来时的会话出声，
  * 先以 auto（环境音，静音键打开就没声）跑起来、之后才改成 playback 的，显示在跑却一直没声音。
  * 所以不再一点屏幕就建好它；都不用了就关掉，下次按那时的会话重新建。
+ * active：借的时候就要出声（白噪音、通话）；先借着备用的（iPhone 上调音量的歌）给 false，要出声时 setActive(true)。
  */
-export function acquireAudioContext(kind: 'record' | 'playback'): AudioContextLease {
+export function acquireAudioContext(kind: 'record' | 'playback', active = true): AudioContextLease {
   const releaseSession = audioSession(kind);
   if (!ctx || ctx.state === 'closed') {
     const Ctor = (globalThis.AudioContext ?? (globalThis as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext) as AudioContextCtor | undefined;
@@ -104,17 +118,32 @@ export function acquireAudioContext(kind: 'record' | 'playback'): AudioContextLe
   }
   const mine = ctx;
   ctxUsers += 1;
+  let on = active;
+  if (on) ctxActive += 1;
+  // 点击当下先让它跑起来一次（Safari 只认点击当下的）：之后挂起、恢复都不用再等点击；没人要出声就接着挂起
+  void mine
+    .resume()
+    .catch(() => undefined)
+    .then(() => ctx === mine && syncRunning());
   let released = false;
   return {
     ctx: mine,
+    setActive(v: boolean) {
+      if (released || v === on) return;
+      on = v;
+      ctxActive = Math.max(0, ctxActive + (v ? 1 : -1));
+      if (ctx === mine) syncRunning();
+    },
     release() {
       if (released) return;
       released = true;
+      if (on) ctxActive = Math.max(0, ctxActive - 1);
       ctxUsers = Math.max(0, ctxUsers - 1);
       if (!ctxUsers && ctx === mine) {
         ctx = null;
+        ctxActive = 0;
         void mine.close().catch(() => undefined);
-      }
+      } else if (ctx === mine) syncRunning();
       releaseSession();
     },
   };
