@@ -1078,7 +1078,6 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
   border: 1px solid var(--glass-line);
   background: var(--glass-strong);
   outline: none;
-  font-size: 14px;
 }
 .link-start {
   flex: 1;

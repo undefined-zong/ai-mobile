@@ -245,7 +245,6 @@ async function toggleConnect() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
 }
 .field:disabled {
   opacity: 0.6;
