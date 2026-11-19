@@ -293,7 +293,7 @@
       "identifier": "deviceInline",
       "name": "玩具：你自己写指令（连着玩具、指令选了\"Ta自己写\"时）",
       "role": "system",
-      "content": "【玩具：你自己写指令】{{user}}连着成人玩具（场景任务里写着能写哪些键、强度上限、现在在做什么）。说到身体上的动作、节奏变化时，在那一句后面紧接着写一个 <device>…</device>，{{user}}听到那里时玩具照着做：\n<device>\"VIBRATE\": 30</device>  强度 0–100\n<device>\"VIBRATE\": {\"pattern\": [20, 50, 30], \"interval\": [800, 400, 600]}</device>  变速：每一档的强度、每一档多少毫秒，一直循环（加 \"loop\": 3 只放 3 遍）\n<device>\"LINEAR\": {\"start_position\": 10, \"end_position\": 90, \"duration\": 800}</device>  伸缩：在两个位置之间来回，每一下多少毫秒\n<device>\"STOP\": true</device>  停下\n规则：只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近上限；先轻后重，和你说的话对得上；{{user}}说停、说难受时立刻写 STOP。一次回复里 1–3 个就够，不解释指令；{{user}}看不到标签里的东西，也不会念出来，别把指令的内容说出口。",
+      "content": "【玩具：你自己写指令】{{user}}连着成人玩具（场景任务里写着能写哪些键、指令范围、现在在做什么）。说到身体上的动作、节奏变化时，在那一句后面紧接着写一个 <device>…</device>，{{user}}听到那里时玩具照着做：\n<device>\"VIBRATE\": 30</device>  强度 0–100\n<device>\"VIBRATE\": {\"pattern\": [20, 50, 30], \"interval\": [800, 400, 600]}</device>  变速：每一档的强度、每一档多少毫秒，一直循环（加 \"loop\": 3 只放 3 遍）\n<device>\"LINEAR\": {\"start_position\": 10, \"end_position\": 90, \"duration\": 800}</device>  伸缩：在两个位置之间来回，每一下多少毫秒\n<device>\"STOP\": true</device>  停下\n规则：指令强度使用完整的 0–100，可以输出 100；每个通道的连接上限由程序发送时截断，不要预先降低或按比例缩放指令。只写场景任务里列出的键；轻抚 5–25，渐入 30–50，激烈 55–80，最激烈时才接近 100；先轻后重，和你说的话对得上；{{user}}说停、说难受时立刻写 STOP。一次回复里 1–3 个就够，不解释指令；{{user}}看不到标签里的东西，也不会念出来，别把指令的内容说出口。",
       "marker": false,
       "enabled": true,
       "injection": {

@@ -42,13 +42,22 @@ const statusText = computed(() => {
   if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
   return '没连';
 });
-/** 上限：连着的玩具有的那几种；没连时都列出来 */
+/** 没连时设置各类默认值；连接后按设备实际报告的通道分别设置 */
 const capKinds = computed<ScalarKind[]>(() => {
   const have = new Set<ToyKind>(toys.kinds);
   const list = SCALAR_KINDS.filter((k) => have.has(k));
   return list.length ? list : ['vibrate', 'oscillate', 'rotate'];
 });
 const hasLinear = computed(() => toys.kinds.includes('linear') || !toys.ready);
+const capDevices = computed(() => toys.devices.map((device) => ({
+  device,
+  features: device.features.map((feature) => {
+    const peers = device.features.filter((f) => f.kind === feature.kind);
+    const number = peers.length > 1 ? ` ${peers.indexOf(feature) + 1}` : '';
+    const label = `${TOY_KIND_LABEL[feature.kind]}${number}${feature.kind === 'linear' ? '位置' : ''}`;
+    return { feature, label, key: `${feature.via}:${feature.index}` };
+  }),
+})));
 
 function featureLine(d: ToyDevice): string {
   const by = new Map<ToyKind, number>();
@@ -107,12 +116,30 @@ async function toggleConnect() {
       「控制指令」还没接通：{{ deviceStatus.reason }}<button type="button" class="text-accent-ink ml-2" @click="router.push('/me/api?feature=device')">去设置</button>
     </p>
 
-    <div class="label">强度上限（{{ characterPronoun(character) }}写得再重也不超过）</div>
-    <div v-for="k in capKinds" :key="k" class="slide">
-      <span class="w-10 shrink-0 text-[13px] text-ink-2">{{ TOY_KIND_LABEL[k] }}</span>
-      <van-slider v-model="s.caps[k]" class="flex-1" :min="0" :max="100" bar-height="4px" button-size="16px" :aria-label="`${TOY_KIND_LABEL[k]}上限`" />
-      <span class="num w-9 shrink-0 text-right text-[12.5px] text-ink-2">{{ s.caps[k] }}</span>
-    </div>
+    <div class="label">连接数值上限</div>
+    <p class="hint">只截断发给玩具的数值，AI 仍可输出 0–100。上限 80 时，100 发 80，60 仍发 60。</p>
+    <template v-if="toys.ready">
+      <div v-for="{ device, features } in capDevices" :key="device.index" class="cap-device">
+        <div class="text-[13px] text-ink-2 break-words">{{ device.name }}</div>
+        <div v-for="{ feature, label, key } in features" :key="key" class="cap-feature">
+          <div class="text-[12.5px] text-ink-2 break-words">
+            {{ label }}<span v-if="feature.descriptor" class="text-ink-3"> · {{ feature.descriptor }}</span>
+          </div>
+          <div class="slide">
+            <van-slider :model-value="toys.featureCap(device, feature)" class="flex-1" :min="0" :max="100" bar-height="4px" button-size="16px" :aria-label="`${device.name} ${label}连接上限`" @update:model-value="toys.setFeatureCap(device, feature, $event as number)" />
+            <span class="num w-9 shrink-0 text-right text-[12.5px] text-ink-2">{{ toys.featureCap(device, feature) }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
+    <template v-else>
+      <p class="hint">这里设置默认上限；连接后可分别调整每个玩具的每个控制参数。</p>
+      <div v-for="k in capKinds" :key="k" class="slide">
+        <span class="w-10 shrink-0 text-[13px] text-ink-2">{{ TOY_KIND_LABEL[k] }}</span>
+        <van-slider v-model="s.caps[k]" class="flex-1" :min="0" :max="100" bar-height="4px" button-size="16px" :aria-label="`${TOY_KIND_LABEL[k]}默认上限`" />
+        <span class="num w-9 shrink-0 text-right text-[12.5px] text-ink-2">{{ s.caps[k] }}</span>
+      </div>
+    </template>
     <template v-if="hasLinear">
       <div class="slide">
         <span class="w-10 shrink-0 text-[13px] text-ink-2" title="伸缩从底到顶一下最快多少毫秒">伸缩</span>
@@ -120,10 +147,10 @@ async function toggleConnect() {
         <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ s.caps.strokeMs }}ms</span>
       </div>
       <div class="slide">
-        <span class="w-10 shrink-0 text-[13px] text-ink-2">范围</span>
-        <van-slider v-model="s.caps.posMin" class="flex-1" :min="0" :max="Math.max(0, s.caps.posMax - 10)" bar-height="4px" button-size="16px" aria-label="伸缩最低位置" />
-        <van-slider v-model="s.caps.posMax" class="flex-1" :min="Math.min(100, s.caps.posMin + 10)" :max="100" bar-height="4px" button-size="16px" aria-label="伸缩最高位置" />
-        <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ s.caps.posMin }}–{{ s.caps.posMax }}</span>
+        <span class="shrink-0 text-[13px] text-ink-2">{{ toys.ready ? '最低位置' : '范围' }}</span>
+        <van-slider v-model="s.caps.posMin" class="flex-1" :min="0" :max="toys.ready ? 100 : Math.max(0, s.caps.posMax - 10)" bar-height="4px" button-size="16px" aria-label="伸缩最低位置" />
+        <van-slider v-if="!toys.ready" v-model="s.caps.posMax" class="flex-1" :min="Math.min(100, s.caps.posMin + 10)" :max="100" bar-height="4px" button-size="16px" aria-label="伸缩默认最高位置" />
+        <span class="num w-16 shrink-0 text-right text-[12px] text-ink-2">{{ toys.ready ? s.caps.posMin : `${s.caps.posMin}–${s.caps.posMax}` }}</span>
       </div>
     </template>
 
@@ -203,7 +230,7 @@ async function toggleConnect() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .field:disabled {
   opacity: 0.6;
@@ -260,6 +287,12 @@ async function toggleConnect() {
   align-items: center;
   gap: 10px;
   min-height: 34px;
+}
+.cap-device {
+  margin-top: 16px;
+}
+.cap-feature {
+  margin-top: 8px;
 }
 .chip {
   display: inline-flex;

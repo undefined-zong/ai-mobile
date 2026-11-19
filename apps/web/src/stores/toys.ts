@@ -4,7 +4,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
 import { useLibraryStore } from './library';
-import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
+import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice, type ToyFeature } from '@/services/intiface';
 import { MissingPresetError } from '@/services/prompt';
 import { DEFAULT_CAPS, emptyLevels, intensityOf, OLD_DEFAULT_CAPS, ToyPlayer, type ToyCaps, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
 
@@ -25,6 +25,8 @@ export interface ToySettings {
   autoConnect: boolean;
   source: CommandSource;
   caps: ToyCaps;
+  /** 按连接地址、设备和控制通道分别保存的发送上限 */
+  featureCaps: Record<string, number>;
   /** 多久没有新指令就停下（分钟，0 = 一直放着） */
   safetyMin: number;
   /** 切到别的 App、锁屏时停下 */
@@ -44,6 +46,7 @@ export const DEFAULT_TOY_SETTINGS: ToySettings = {
   autoConnect: false,
   source: 'separate',
   caps: { ...DEFAULT_CAPS },
+  featureCaps: {},
   safetyMin: 0,
   stopOnHide: false,
   simulate: false,
@@ -62,6 +65,7 @@ function load(): ToySettings {
     // 读不出来就用默认的
   }
   const c = (raw.caps && typeof raw.caps === 'object' ? raw.caps : {}) as Partial<ToyCaps>;
+  const featureCaps = (raw.featureCaps ?? {}) as Record<string, number>;
   const d = DEFAULT_CAPS;
   // 旧版存的、还是旧默认值的（没调过）：换成现在的默认
   const legacy = raw.version !== DEFAULT_TOY_SETTINGS.version;
@@ -82,6 +86,7 @@ function load(): ToySettings {
       posMin: num(c.posMin, 0, 100, d.posMin),
       posMax: num(c.posMax, 0, 100, d.posMax),
     },
+    featureCaps: Object.fromEntries(Object.entries(featureCaps).map(([key, value]) => [key, num(value, 0, 100, 100)])),
     safetyMin: num(raw.safetyMin, 0, 120, DEFAULT_TOY_SETTINGS.safetyMin),
     stopOnHide: raw.stopOnHide === true,
     simulate: raw.simulate === true,
@@ -158,7 +163,25 @@ export const useToyStore = defineStore('toys', () => {
       if (client.connected) void client.stopAll().catch(() => undefined);
     },
   };
-  const player = new ToyPlayer(levels, output, () => settings.caps);
+  const endpoint = computed(() => {
+    const target = normalizeIntifaceUrl(settings.url);
+    return 'url' in target ? target.url : settings.url;
+  });
+
+  function featureKey(device: ToyDevice, feature: ToyFeature): string {
+    return JSON.stringify([endpoint.value, device.index, device.name, feature.via, feature.index, feature.kind]);
+  }
+
+  function featureCap(device: ToyDevice, feature: ToyFeature): number {
+    return settings.featureCaps[featureKey(device, feature)] ?? (feature.kind === 'linear' ? settings.caps.posMax : settings.caps[feature.kind]);
+  }
+
+  function setFeatureCap(device: ToyDevice, feature: ToyFeature, value: number) {
+    settings.featureCaps[featureKey(device, feature)] = value;
+  }
+
+  const player = new ToyPlayer(levels, output, () => settings.caps, featureCap);
+  watch(() => JSON.stringify([settings.caps, settings.featureCaps]), () => player.refreshCaps());
 
   /** 连着、有玩具 */
   const ready = computed(() => status.value === 'connected' && devices.value.length > 0);
@@ -238,16 +261,16 @@ export const useToyStore = defineStore('toys', () => {
     const scalars = d.features.filter((f) => f.via === 'scalar' && f.kind !== 'linear');
     const rotations = d.features.filter((f) => f.via === 'rotate');
     const linears = d.features.filter((f) => f.kind === 'linear');
-    if (scalars.length) void client.scalar(d.index, scalars.map((f) => ({ Index: f.index, Scalar: 0.3, ActuatorType: f.actuator }))).catch(fail);
-    if (rotations.length) void client.rotate(d.index, rotations.map((f) => ({ Index: f.index, Speed: 0.3, Clockwise: true }))).catch(fail);
+    if (scalars.length) void client.scalar(d.index, scalars.map((f) => ({ Index: f.index, Scalar: Math.min(0.3, featureCap(d, f) / 100), ActuatorType: f.actuator }))).catch(fail);
+    if (rotations.length) void client.rotate(d.index, rotations.map((f) => ({ Index: f.index, Speed: Math.min(0.3, featureCap(d, f) / 100), Clockwise: true }))).catch(fail);
     for (const f of linears) {
-      if (f.via === 'linear') void client.linear(d.index, [{ Index: f.index, Duration: 600, Position: 0.7 }]).catch(fail);
+      if (f.via === 'linear') void client.linear(d.index, [{ Index: f.index, Duration: 600, Position: Math.min(0.7, featureCap(d, f) / 100) }]).catch(fail);
     }
     setTimeout(() => {
       if (!client.connected) return;
       if (scalars.length) void client.scalar(d.index, scalars.map((f) => ({ Index: f.index, Scalar: 0, ActuatorType: f.actuator }))).catch(fail);
       if (rotations.length) void client.rotate(d.index, rotations.map((f) => ({ Index: f.index, Speed: 0, Clockwise: true }))).catch(fail);
-      for (const f of linears) if (f.via === 'linear') void client.linear(d.index, [{ Index: f.index, Duration: 600, Position: 0.2 }]).catch(fail);
+      for (const f of linears) if (f.via === 'linear') void client.linear(d.index, [{ Index: f.index, Duration: 600, Position: Math.min(0.2, featureCap(d, f) / 100) }]).catch(fail);
     }, 800);
   }
 
@@ -325,12 +348,11 @@ export const useToyStore = defineStore('toys', () => {
     return `${lines.join('\n')}\n能写的键：${keys.join('、')}、STOP；别的键这些玩具做不了，不要写。`;
   }
 
-  /** 强度上限和最快的速度 */
+  /** AI 始终用完整的 0–100；连接上限仅在发送到各通道时截断 */
   function limitsLine(): string {
     const c = settings.caps;
-    const caps = kinds.value.filter((k): k is (typeof SCALAR_KINDS)[number] => k !== 'linear').map((k) => `${TOY_KIND_LABEL[k]} ${c[k]}`);
     const parts = [
-      caps.length ? `强度上限：${caps.join('、')}（超过的会被压到上限，写的时候就在上限以内安排轻重）` : '',
+      '指令数值按完整的 0–100 表达，可以输出 100；每个设备通道的连接上限由程序发送时截断，不需要预先降低或按比例缩放指令',
       kinds.value.includes('linear') ? `伸缩：从底到顶一下最快 ${c.strokeMs} 毫秒（幅度小按比例更快）` : '',
       '变速的每一档不短于 120 毫秒',
     ];
@@ -361,7 +383,7 @@ export const useToyStore = defineStore('toys', () => {
         pronoun: opts.character.pronoun,
         fills: {
           deviceToys: `连着的玩具：\n${toysLine()}`,
-          deviceLimits: `强度上限和最快的速度：${limitsLine()}`,
+          deviceLimits: `指令数值与执行速度：${limitsLine()}`,
           deviceNow: `玩具现在：${nowLine()}`,
           deviceRecent: opts.recent.length ? `最近的对话：\n${opts.recent.join('\n')}` : '',
           deviceLine: `${opts.character.name}这一句（要配指令的话）：\n${opts.line}`,
@@ -398,6 +420,8 @@ export const useToyStore = defineStore('toys', () => {
     wanted,
     intensity,
     kinds,
+    featureCap,
+    setFeatureCap,
     connect,
     disconnect,
     scan,

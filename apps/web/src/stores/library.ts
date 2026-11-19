@@ -1,5 +1,6 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import assistantMergeUpgrades from '@/migrations/presetAssistantMerge.json';
+import toyOutputCapUpgrades from '@/migrations/presetToyOutputCaps.json';
 import {
   appContextBeforeHistory,
   categoryMarkers,
@@ -652,7 +653,7 @@ function upgradeSeeded(list: Preset[], done: Set<string>): Preset[] {
       }
     }
   }
-  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[], ...assistantMergeUpgrades as SeedUpgrade[]]) {
+  for (const u of [...SEED_UPGRADES, ...pronounUpgrades as SeedUpgrade[], ...assistantMergeUpgrades as SeedUpgrade[], ...toyOutputCapUpgrades as unknown as SeedUpgrade[]]) {
     if (done.has(u.id)) continue;
     done.add(u.id);
     for (const file of u.files ?? (u.file ? [u.file] : [])) upgradeFile(list, u, file, changed);
