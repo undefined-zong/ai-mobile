@@ -22,7 +22,7 @@ import {
   type PresetCategory,
 } from '@app/shared';
 import { useAiStore } from '@/stores/ai';
-import { useAssistantStore, type AssistantMessage, type AssistantMode, type AssistantTarget, type AssistantUndo } from '@/stores/assistant';
+import { useAssistantStore, type AssistantMerge, type AssistantMessage, type AssistantMode, type AssistantTarget, type AssistantUndo } from '@/stores/assistant';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { isDemoRecord, useLibraryStore } from '@/stores/library';
@@ -40,7 +40,7 @@ import { brawlMaterial } from './brawl';
  */
 
 export const KIND_LABEL: Record<EditKind, string> = { preset: '预设', lorebook: '世界书', character: '角色卡', fighter: '战斗档案' };
-export const MODE_LABEL: Record<AssistantMode, string> = { check: '一键检测', card: '做角色卡 / 补全设定' };
+export const MODE_LABEL: Record<AssistantMode, string> = { check: '一键检测', card: '做角色卡 / 补全设定', merge: '预设融合' };
 
 /** 发给助手的对象 JSON 最多多少字：超了就把长的块、条目从后面截掉（写明还有多少字没给） */
 const TARGET_BUDGET = 60_000;
@@ -361,9 +361,22 @@ function chatText(history: AssistantMessage[]): string {
   return `最近的对话：\n${recent.map(line).join('\n\n')}`;
 }
 
-function askText(ask: string, mode: AssistantMode | undefined, subjects: Subject[]): string {
+/** 预设融合选的两个预设：「名字」（id） */
+function mergeText(merge: AssistantMerge | undefined): string {
+  if (!merge) return '';
+  const lib = useLibraryStore();
+  const name = (id: string) => {
+    const p = lib.presetById(id);
+    return p ? `「${p.name}」（${PRESET_CATEGORIES[p.category].label}预设，id ${id}）` : `（找不到 id 是 ${id} 的预设）`;
+  };
+  return `用户要融合两个预设：底子是${name(merge.base)}，功能来源是${name(merge.source)}。照底子新建一个预设，把功能来源里的功能缝进去，底子和功能来源都不改。`;
+}
+
+function askText(ask: string, mode: AssistantMode | undefined, subjects: Subject[], merge?: AssistantMerge): string {
   const head =
-    mode === 'check'
+    mode === 'merge'
+      ? mergeText(merge)
+      : mode === 'check'
       ? '用户点了"一键检测"：看看要看的对象哪些和 App 的格式不合，改成适配的（只改格式）。'
       : mode === 'card'
         ? subjects.some((s) => s.kind === 'character')
@@ -377,6 +390,8 @@ function askText(ask: string, mode: AssistantMode | undefined, subjects: Subject
 export interface AskOptions {
   ask: string;
   mode?: AssistantMode;
+  /** 预设融合时选的两个预设 */
+  merge?: AssistantMerge;
   targets: AssistantTarget[];
   /** 这一次之前的对话 */
   history: AssistantMessage[];
@@ -398,7 +413,7 @@ export async function askAssistant(opts: AskOptions): Promise<string> {
       assistantTargets: targetsText(subjects),
       assistantChecks: checksText(opts.targets),
       assistantChat: chatText(opts.history),
-      assistantAsk: askText(opts.ask, opts.mode, subjects),
+      assistantAsk: askText(opts.ask, opts.mode, subjects, opts.merge),
     },
     // 预设里的示例照 SillyTavern 写 {{char}} {{user}}，原样留给助手（不换成名字）
     macros: { char: '{{char}}', user: '{{user}}', pronoun: subjects.length === 1 && subjects[0]?.kind === 'character' ? subjects[0].obj.pronoun : undefined },
@@ -431,6 +446,7 @@ export function planOps(ops: AssistantOp[]): EditPlan {
     newId: (prefix) => uid(prefix),
     now: Date.now(),
     defaultPresetId: defaultPresetId(),
+    knownMarkers: (category) => lib.markerChoices(category).map((m) => m.identifier),
   });
 }
 
@@ -468,6 +484,10 @@ export function applyPlan(plan: EditPlan): AssistantUndo {
     undo.characters.push(clone(chars.list[i]!));
     chars.list[i] = { ...c, updatedAt: now };
   }
+  for (const p of plan.newPresets) {
+    lib.addPreset({ ...p, updatedAt: now });
+    undo.created.push({ kind: 'preset', id: p.id });
+  }
   for (const b of plan.newLorebooks) {
     lib.addLorebook(b);
     undo.created.push({ kind: 'lorebook', id: b.id });
@@ -501,7 +521,8 @@ export function undoApply(undo: AssistantUndo) {
     if (i >= 0) chars.list[i] = clone(c);
   }
   for (const x of undo.created) {
-    if (x.kind === 'lorebook') {
+    if (x.kind === 'preset') lib.removePreset(x.id);
+    else if (x.kind === 'lorebook') {
       lib.removeLorebook(x.id);
       for (const c of chars.list) if (c.lorebookIds.includes(x.id)) c.lorebookIds = c.lorebookIds.filter((id) => id !== x.id);
     } else {

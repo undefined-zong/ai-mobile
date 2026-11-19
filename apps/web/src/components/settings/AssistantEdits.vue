@@ -57,7 +57,7 @@ async function undo() {
   try {
     await showConfirmDialog({
       title: '撤销这次修改',
-      message: '把这些对象放回应用之前的样子（应用之后又改过的地方也会回去），这次新建的角色、世界书会删掉。',
+      message: '把这些对象放回应用之前的样子（应用之后又改过的地方也会回去），这次新建的预设、角色、世界书会删掉。',
       confirmButtonText: '撤销',
     });
   } catch {

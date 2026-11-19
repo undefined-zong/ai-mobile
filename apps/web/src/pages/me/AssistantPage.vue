@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { errorText, isAbortError } from '@app/ai';
-import { FORMAT_LEVELS, parseAssistantReply, type EditKind, type FormatLevel } from '@app/shared';
+import { FORMAT_LEVELS, PRESET_CATEGORIES, parseAssistantReply, type EditKind, type FormatLevel } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
 import AssistantEdits from '@/components/settings/AssistantEdits.vue';
+import PresetChooser from '@/components/settings/PresetChooser.vue';
 import PageHeader from '@/layouts/PageHeader.vue';
 import {
   askAssistant,
@@ -20,7 +21,7 @@ import {
   type ScanResult,
   type TargetInfo,
 } from '@/services/assistant';
-import { useAssistantStore, type AssistantMode, type AssistantTarget } from '@/stores/assistant';
+import { useAssistantStore, type AssistantMerge, type AssistantMode, type AssistantTarget } from '@/stores/assistant';
 import { useCharacterStore } from '@/stores/characters';
 import { useLibraryStore } from '@/stores/library';
 import { useBrawlStore } from '@/stores/brawl';
@@ -30,6 +31,7 @@ import { useBrawlStore } from '@/stores/brawl';
  * - 上面选"要看的"（可以选好几个，批量改）；
  * - 一键检测：上次检测之后导入的（没有就查全部导入的）哪些和 App 的格式不合，不用 API；有问题的一键交给助手修；
  * - 做角色卡、补全设定；
+ * - 预设融合：选一个底子、一个功能来源，助手照底子新建预设，把功能来源里的块和正则缝进去（两个原来的都不改）；
  * - 助手给的修改先预览（改之前 / 改之后），点"应用"才改，能撤销。提示词在"助手"预设里，API 是"助手"这个功能。
  */
 const store = useAssistantStore();
@@ -118,7 +120,7 @@ const placeholder = computed(() =>
       : '说点什么，或者先在上面选要看的预设、世界书、角色卡',
 );
 
-async function send(text = said.value, m: AssistantMode | null = mode.value) {
+async function send(text = said.value, m: AssistantMode | null = mode.value, merge?: AssistantMerge) {
   const t = text.trim();
   if (replying.value !== null || (!t && !m)) return;
   if (!status.value.live) return showToast(status.value.reason);
@@ -126,7 +128,7 @@ async function send(text = said.value, m: AssistantMode | null = mode.value) {
   const targets = store.targets.map((x) => ({ ...x }));
   said.value = '';
   mode.value = null;
-  store.add({ role: 'user', text: t || MODE_LABEL[m!], ...(m ? { mode: m } : {}), targets });
+  store.add({ role: 'user', text: t || MODE_LABEL[m!], ...(m ? { mode: m } : {}), ...(merge ? { merge } : {}), targets });
   replying.value = '';
   scrollDown();
   abort = new AbortController();
@@ -134,6 +136,7 @@ async function send(text = said.value, m: AssistantMode | null = mode.value) {
     const raw = await askAssistant({
       ask: t,
       mode: m ?? undefined,
+      merge,
       targets,
       history,
       signal: abort.signal,
@@ -184,6 +187,42 @@ async function clearChat() {
   scan.value = null;
 }
 
+// —— 预设融合：选底子和功能来源 ——
+const mergeOpen = ref(false);
+const mergeSlot = ref<keyof AssistantMerge>('base');
+const merging = ref<{ base: string | null; source: string | null }>({ base: null, source: null });
+const MERGE_SLOTS: { value: keyof AssistantMerge; label: string }[] = [
+  { value: 'base', label: '底子' },
+  { value: 'source', label: '功能来源' },
+];
+const presetName = (id: string | null | undefined) => (id ? (lib.presetById(id)?.name ?? '（找不到了）') : '');
+function startMerge() {
+  // 要看的里已经选了预设：先拿前两个填上
+  const [base, source] = store.targets.filter((t) => t.kind === 'preset' && lib.presetById(t.id)).map((t) => t.id);
+  merging.value = { base: base ?? null, source: source ?? null };
+  mergeSlot.value = merging.value.base ? 'source' : 'base';
+  mergeOpen.value = true;
+}
+function pickMerge(id: string) {
+  const other: keyof AssistantMerge = mergeSlot.value === 'base' ? 'source' : 'base';
+  merging.value = { ...merging.value, [mergeSlot.value]: id, ...(merging.value[other] === id ? { [other]: null } : {}) };
+  if (!merging.value[other]) mergeSlot.value = other;
+}
+function swapMerge() {
+  merging.value = { base: merging.value.source, source: merging.value.base };
+}
+function runMerge() {
+  const { base, source } = merging.value;
+  if (!base || !source) return showToast('底子和功能来源都要选');
+  if (!status.value.live) return showToast(status.value.reason);
+  mergeOpen.value = false;
+  store.setTargets([
+    { kind: 'preset', id: base },
+    { kind: 'preset', id: source },
+  ]);
+  void send(said.value || `把「${presetName(source)}」里的功能缝进「${presetName(base)}」，做成一个新预设`, 'merge', { base, source });
+}
+
 // —— 一键检测 ——
 const scan = ref<ScanResult | null>(null);
 const fightersOnly = computed(() => store.targets.length > 0 && store.targets.every(t => t.kind === 'fighter'));
@@ -226,6 +265,7 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
   { label: '做一张新角色卡', icon: 'i-lucide-user-round-plus', run: startCard },
   { label: '补全角色卡的设定', icon: 'i-lucide-list-plus', run: fillCard },
   { label: '批量改几个预设 / 世界书', icon: 'i-lucide-layers', run: () => openPicker('preset') },
+  { label: '融合两个预设', icon: 'i-lucide-combine', run: startMerge },
   { label: '调整大乱斗属性与技能', icon: 'i-lucide-swords', run: () => openPicker('fighter') },
 ];
 </script>
@@ -272,6 +312,7 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
       <template v-for="m in store.messages" :key="m.id">
         <div v-if="m.role === 'user'" class="bubble user">
           <div v-if="m.mode" class="mode-line">{{ MODE_LABEL[m.mode] }}</div>
+          <div v-if="m.merge" class="t-line !mt-0 !mb-1">底子「{{ presetName(m.merge.base) }}」 + 功能来源「{{ presetName(m.merge.source) }}」</div>
           {{ m.text }}
           <div v-if="m.targets?.length" class="t-line">看：{{ m.targets.length }} 个对象</div>
         </div>
@@ -324,6 +365,7 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
         <button v-if="!fightersOnly" type="button" class="q press" :disabled="replying !== null" @click="checkSelected"><span class="i-lucide-scan-search" />{{ targetRows.length ? '检测选中的' : '一键检测' }}</button>
         <button type="button" class="q press" :class="{ on: mode === 'card' }" :disabled="replying !== null" @click="mode === 'card' ? (mode = null) : startCard()"><span class="i-lucide-user-round-plus" />做角色卡</button>
         <button type="button" class="q press" :disabled="replying !== null" @click="fillCard"><span class="i-lucide-list-plus" />补全设定</button>
+        <button type="button" class="q press" :disabled="replying !== null" data-testid="assistant-merge" @click="startMerge"><span class="i-lucide-combine" />融合预设</button>
       </div>
       <div v-if="mode" class="mode-tag">
         <span class="i-lucide-sparkles" />这次：{{ MODE_LABEL[mode] }}
@@ -335,6 +377,35 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
         <button v-else type="button" class="send" aria-label="发送" data-testid="assistant-send" :disabled="!said.trim() && !mode" @click="send()"><span class="i-lucide-arrow-up" /></button>
       </div>
     </div>
+
+    <van-popup v-model:show="mergeOpen" position="bottom" round teleport="body" :style="{ height: '82%' }">
+      <div class="picker" data-testid="merge-sheet">
+        <div class="p-head">
+          <span class="font-600 shrink-0">预设融合</span>
+          <span class="text-[12px] text-ink-3 min-w-0 truncate">照底子新建一个预设，把功能来源里的功能缝进去</span>
+        </div>
+        <div class="m-slots">
+          <button v-for="sl in MERGE_SLOTS" :key="sl.value" type="button" class="m-slot press" :class="{ on: mergeSlot === sl.value }" :data-slot="sl.value" @click="mergeSlot = sl.value">
+            <span class="text-[11.5px] text-ink-3">{{ sl.label }}</span>
+            <span class="block truncate text-[14px] font-600">{{ presetName(merging[sl.value]) || '点这里，再在下面选' }}</span>
+            <span v-if="merging[sl.value]" class="block truncate text-[11px] text-ink-3">{{ PRESET_CATEGORIES[lib.presetById(merging[sl.value])?.category ?? 'chat'].label }}预设</span>
+          </button>
+          <button type="button" class="icon-btn self-center" aria-label="底子和功能来源对调" :disabled="!merging.base && !merging.source" @click="swapMerge"><span class="i-lucide-arrow-left-right" /></button>
+        </div>
+        <p class="text-[12px] text-ink-3 mt-2 mb-0 leading-relaxed">
+          {{ mergeSlot === 'base' ? '底子：新预设照它复制，文风、规矩、程序块都按它。' : '功能来源：助手从里面找出功能（状态栏、生图、选项、某个玩法的规则和输出格式……）和配套的正则，复制进新预设。' }}
+          两个原来的预设都不改。想只要某几个功能，在下面输入框里写上再点"开始融合"。
+        </p>
+        <div class="p-list">
+          <PresetChooser :model-value="merging[mergeSlot]" @update:model-value="pickMerge" />
+        </div>
+        <div class="p-foot">
+          <span class="flex-1 text-[12px] text-ink-3 truncate">{{ said.trim() ? `要求：${said.trim()}` : '' }}</span>
+          <button type="button" class="q press" @click="mergeOpen = false">取消</button>
+          <button type="button" class="done press" :disabled="!merging.base || !merging.source || replying !== null" data-testid="merge-run" @click="runMerge">开始融合</button>
+        </div>
+      </div>
+    </van-popup>
 
     <van-popup v-model:show="pickerOpen" position="bottom" round teleport="body" :style="{ height: '78%' }">
       <div class="picker">
@@ -745,6 +816,26 @@ const IDEAS: { label: string; icon: string; run: () => void }[] = [
   align-items: center;
   gap: 6px;
   padding-top: 8px;
+}
+.m-slots {
+  display: flex;
+  gap: 8px;
+}
+.m-slot {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1.5px solid transparent;
+  text-align: left;
+}
+.m-slot.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.done:disabled {
+  opacity: 0.45;
 }
 .done {
   height: 34px;

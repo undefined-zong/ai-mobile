@@ -1,13 +1,22 @@
 import pronounUpgrades from '@/migrations/presetPronouns.json';
 import {
   appContextBeforeHistory,
+  canBecome,
+  copyBlocks,
+  markerBlock,
+  markerChoices as categoryMarkerChoices,
+  markerInsertIndex,
+  markerName,
   parseLorebook,
   parsePresetFile,
   repairFlatLoreEntries,
   presetUse,
+  PRESET_CATEGORIES,
   PRESET_CATEGORY_ORDER,
+  PRESET_FILE_FORMAT,
   PRESET_USES,
   toPresetFile,
+  type CopyBlocksResult,
   type Character,
   type Lorebook,
   type Preset,
@@ -15,6 +24,7 @@ import {
   type PresetFile,
   type PresetUse,
   type PresetUseId,
+  type PromptBlock,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -52,6 +62,22 @@ function readSeeds(): Seed[] {
 }
 
 const SEEDS = readSeeds();
+
+/**
+ * 新建预设用的模板：src/presets/templates/ 里的预设文件（格式同自带预设，但不放进预设库）。往这个文件夹里加一个 .json 就多一个模板；
+ * 模板的分类决定新建哪一类时能选它（角色扮演类的模板对话、功能、主动消息都能用）。
+ */
+const TEMPLATE_FILES = import.meta.glob<unknown>('../presets/templates/*.json', { eager: true, import: 'default' });
+const TEMPLATES = Object.entries(TEMPLATE_FILES).flatMap(([path, json]) => {
+  const file = path.split('/').pop() ?? path;
+  try {
+    const { warnings: _w, defaultFor: _d, id: _id, ...preset } = parsePresetFile(json, file);
+    return [{ file, preset }];
+  } catch (e) {
+    console.error(`预设模板 ${file} 读不出来：`, e);
+    return [];
+  }
+});
 
 /**
  * App 自带的世界书：src/lorebooks/ 里的 SillyTavern 世界书文件（例如"聊天 · 主动卡片"）。
@@ -298,6 +324,13 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     id: 'assistant:brawl',
     file: 'assistant.json',
     added: ['brawlProtocol'],
+  },
+  {
+    // 助手多了"预设融合"：照底子新建预设，把功能来源里的块、正则复制进去（只在 merge 时发那一块）
+    id: 'assistant:merge',
+    file: 'assistant.json',
+    added: ['taskMerge'],
+    renamed: { description: ["\"我的 → 助手\"用：检测导入的预设、世界书、角色卡哪些和 App 的格式不合，改成适配的（只改格式、不改原文，除非你要），批量编辑，做角色卡、补全设定。平时聊天发通用的几块；\"一键检测\"（check）、\"做角色卡\"（card）各多发一块。规矩可以改；\"修改的写法\"里的字段名别改，程序按它读。 也能编辑大乱斗的角色和人设战斗档案（血量、蓝量、技能、被动、外观），先预览再应用，支持撤销。", "\"我的 → 助手\"用：检测导入的预设、世界书、角色卡哪些和 App 的格式不合，改成适配的（只改格式、不改原文，除非你要），批量编辑，做角色卡、补全设定，把两个预设融合成一个新预设。平时聊天发通用的几块；\"一键检测\"（check）、\"做角色卡\"（card）、\"预设融合\"（merge）各多发一块。规矩可以改；\"修改的写法\"里的字段名别改，程序按它读。 也能编辑大乱斗的角色和人设战斗档案（血量、蓝量、技能、被动、外观），先预览再应用，支持撤销。"] },
   },
   {
     // 素材库扩展地点类型；保留用户自己改过的建世界提示词
@@ -921,6 +954,77 @@ export const useLibraryStore = defineStore('library', () => {
     return clone(best.preset);
   }
 
+  /** 这一类的自带预设里的程序块（同一个 identifier 取第一次出现的，按出现的先后），新建、加程序块时照它们的身份和位置 */
+  function seedMarkerBlocks(category: PresetCategory): PromptBlock[] {
+    const out: PromptBlock[] = [];
+    for (const s of SEEDS) {
+      if (s.preset.category !== category) continue;
+      for (const b of s.preset.blocks) if (b.marker && !out.some((x) => x.identifier === b.identifier)) out.push({ ...clone(b), enabled: true });
+    }
+    return out;
+  }
+
+  /** 这一类预设能加的程序块：程序按分类认的，加上这一类的自带预设里用到的 */
+  function markerChoices(category: PresetCategory): { identifier: string; name: string }[] {
+    return categoryMarkerChoices(category, seedMarkerBlocks(category));
+  }
+
+  /** 给预设加一块程序块（加在聊天记录前，没有聊天记录块就加在最后）；已经有了就不加 */
+  function addMarker(presetId: string, identifier: string): PromptBlock | undefined {
+    const p = presetById(presetId);
+    if (!p || p.blocks.some((b) => b.marker && b.identifier === identifier)) return undefined;
+    const block = seedMarkerBlocks(p.category).find((b) => b.identifier === identifier) ?? markerBlock(identifier, markerName(identifier) ?? identifier);
+    const at = markerInsertIndex(p.blocks, identifier);
+    p.blocks.splice(at, 0, block);
+    p.updatedAt = Date.now();
+    return p.blocks[at];
+  }
+
+  /** 把一个预设里的几块复制到另一个预设（也可以是同一个，复制一份放在原来那块后面） */
+  function copyBlocksTo(fromId: string, blocks: PromptBlock[], toId: string): CopyBlocksResult | undefined {
+    const from = presetById(fromId);
+    const to = presetById(toId);
+    if (!from || !to) return undefined;
+    const res = copyBlocks(to, from, blocks, { known: markerChoices(to.category).map((m) => m.identifier), newId: uid });
+    if (res.added.length) to.updatedAt = Date.now();
+    return res;
+  }
+
+  /** 新建某一类时能选的模板 */
+  function templatesFor(category: PresetCategory): { file: string; name: string; description: string }[] {
+    return TEMPLATES.filter((t) => canBecome(t.preset.category, category)).map((t) => ({ file: t.file, name: t.preset.name, description: t.preset.description }));
+  }
+
+  /**
+   * 新建一个预设：选了模板照模板来；不选模板是空白的，只放这一类的自带预设用到的程序块，
+   * 采样参数和拼装设置照这一类的自带预设（没有自带预设时用预设文件的默认值）
+   */
+  function createPreset(category: PresetCategory, templateFile?: string): Preset {
+    const template = TEMPLATES.find((t) => t.file === templateFile && canBecome(t.preset.category, category))?.preset;
+    const ref = (SEEDS.find((s) => s.preset.category === category && s.defaultFor.length) ?? SEEDS.find((s) => s.preset.category === category))?.preset;
+    const blocks = seedMarkerBlocks(category);
+    const label = PRESET_CATEGORIES[category].label;
+    let data: Omit<Preset, 'id' | 'createdAt' | 'updatedAt'>;
+    if (template) data = clone(template);
+    else {
+      const { warnings: _w, defaultFor: _d, id: _id, ...blank } = parsePresetFile({
+        format: PRESET_FILE_FORMAT,
+        version: 1,
+        category,
+        name: label,
+        blocks: blocks.length ? blocks : categoryMarkerChoices(category).map((m) => markerBlock(m.identifier, m.name)),
+        ...(ref ? { sampler: ref.sampler, formats: ref.formats, worldInfoEnabled: ref.worldInfoEnabled } : {}),
+      });
+      data = { ...blank, description: '' };
+    }
+    const names = new Set(presets.value.map((p) => p.name));
+    const stem = `新的${label}预设`;
+    let name = stem;
+    for (let n = 2; names.has(name); n++) name = `${stem} ${n}`;
+    const now = Date.now();
+    return addPreset({ ...data, id: uid('preset'), createdAt: now, updatedAt: now, name, category });
+  }
+
   /** 这一类的自带预设里出现过的程序填充块（程序认得的） */
   function knownMarkersOf(category: PresetCategory): string[] {
     return [...new Set(SEEDS.filter((s) => s.preset.category === category).flatMap((s) => s.preset.blocks.filter((b) => b.marker).map((b) => b.identifier)))];
@@ -974,6 +1078,11 @@ export const useLibraryStore = defineStore('library', () => {
     seedOf,
     referenceFor,
     knownMarkersOf,
+    markerChoices,
+    addMarker,
+    copyBlocksTo,
+    templatesFor,
+    createPreset,
     restoreFromFile,
     exportFile,
     addLorebook,

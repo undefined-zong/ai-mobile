@@ -19,18 +19,26 @@ export interface AssistantUndo {
   presets: Preset[];
   lorebooks: Lorebook[];
   characters: Character[];
-  created: { kind: 'lorebook' | 'character'; id: string }[];
+  created: { kind: 'lorebook' | 'character' | 'preset'; id: string }[];
 }
 
-export type AssistantMode = 'check' | 'card';
+export type AssistantMode = 'check' | 'card' | 'merge';
+
+/** 预设融合：拿哪个预设当底子，从哪个预设里找要缝进去的功能（预设 id） */
+export interface AssistantMerge {
+  base: string;
+  source: string;
+}
 
 export interface AssistantMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   at: number;
-  /** 这一次做的事：一键检测 check、做角色卡 / 补全设定 card；平时聊天为空 */
+  /** 这一次做的事：一键检测 check、做角色卡 / 补全设定 card、预设融合 merge；平时聊天为空 */
   mode?: AssistantMode;
+  /** 预设融合时选的两个预设 */
+  merge?: AssistantMerge;
   /** 发这一条时选着的对象 */
   targets?: AssistantTarget[];
   /** 助手给的修改（原样存，预览、应用时按对象现在的样子重算） */

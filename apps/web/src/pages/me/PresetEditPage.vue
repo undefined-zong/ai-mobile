@@ -31,6 +31,7 @@ import {
   SPRITE_POSE,
   SPRITE_TASKS,
   TRUTH_DARE_LEVEL,
+  type Preset,
   type PresetCategory,
   type PromptBlock,
 } from '@app/shared';
@@ -38,6 +39,7 @@ import { showConfirmDialog, showToast } from 'vant';
 import { computed, ref, toRaw, watch, type ComponentPublicInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Segmented from '@/components/common/Segmented.vue';
+import PresetChooser from '@/components/settings/PresetChooser.vue';
 import PresetRegex from '@/components/settings/PresetRegex.vue';
 import SpriteBlockFields from '@/components/settings/SpriteBlockFields.vue';
 import SpriteParamsForm from '@/components/settings/SpriteParamsForm.vue';
@@ -49,6 +51,8 @@ import { useLibraryStore } from '@/stores/library';
 /**
  * 编辑一个预设（自带的和导入的一样）：
  * - 提示词：每一块的名字、内容、角色、位置都能改，能加块、删块、开关；长按一块拖动调顺序（电脑上按住直接拖）；程序填充的块内容由程序填，其余都能改；
+ *   "加程序块"从这一类程序认得的程序块里挑（角色卡、你的人设、场景、聊天记录……）；
+ *   一块或者多选几块能复制一份、复制到别的预设（程序块目标里已经有、或者那一类用不了的会跳过）；
  * - 采样参数；正则（导入、改、拖动调顺序，见 components/settings/PresetRegex.vue）；名字、说明、分类（对话 / 功能 / 主动消息之间可以互换）；
  * - 右上角 ⋯：复制一份、导出成预设文件、恢复成预设文件里的样子（自带的）、删除。
  * 改了马上存在本机，下一次调用起生效。
@@ -98,6 +102,7 @@ watch(
   () => route.params.id,
   () => {
     editing.value = null;
+    selecting.value = false;
     if (tab.value === 'params' && preset.value?.category !== 'sprite') tab.value = 'blocks';
   },
 );
@@ -152,6 +157,86 @@ async function removeBlock(b: PromptBlock) {
   editing.value = null;
   touch();
 }
+// —— 加程序块：这一类的程序认得的程序填充块，已经有的点了打开那一块 ——
+const markerOpen = ref(false);
+const markerRows = computed(() => {
+  const p = preset.value;
+  if (!p) return [];
+  return lib.markerChoices(p.category).map((m) => ({ ...m, block: p.blocks.find((b) => b.marker && b.identifier === m.identifier) }));
+});
+function pickMarker(row: { identifier: string; name: string; block?: PromptBlock }) {
+  markerOpen.value = false;
+  if (row.block) {
+    editing.value = row.block;
+    return;
+  }
+  const p = preset.value;
+  const added = p && lib.addMarker(p.id, row.identifier);
+  if (!added) return;
+  showToast(`加了程序块「${added.name}」${p.blocks.at(-1) === added ? '，在最后' : '，在聊天记录前'}；长按可以拖到别的位置`);
+}
+
+// —— 复制：一块（编辑弹层里）或者多选几块；复制一份放在原来那块后面，或者复制到别的预设 ——
+const selecting = ref(false);
+const selected = ref<string[]>([]);
+const selectedBlocks = computed(() => preset.value?.blocks.filter((b) => selected.value.includes(keyOf(b))) ?? []);
+function startSelect() {
+  editing.value = null;
+  selected.value = [];
+  selecting.value = true;
+}
+function toggleSelect(b: PromptBlock) {
+  const k = keyOf(b);
+  selected.value = selected.value.includes(k) ? selected.value.filter((x) => x !== k) : [...selected.value, k];
+}
+/** 复制结果的一句话：复制了几块，跳过的为什么 */
+function copySummary(added: number, skipped: { reason: string }[]): string {
+  return [added ? `复制了 ${added} 块` : '一块都没复制', ...skipped.map((x) => x.reason)].join('；');
+}
+function duplicate(blocks: PromptBlock[]) {
+  const p = preset.value;
+  const res = p && lib.copyBlocksTo(p.id, blocks, p.id);
+  if (!p || !res) return;
+  showToast(res.skipped.length ? copySummary(res.added.length, res.skipped) : `复制了 ${res.added.length} 块，放在原来那块后面`);
+  selecting.value = false;
+  // 只复制了一块：接着改复制出来的那块
+  const copy = res.added.length === 1 ? p.blocks.find((b) => toRaw(b) === res.added[0]) : undefined;
+  editing.value = copy ?? null;
+}
+const copying = ref<PromptBlock[] | null>(null);
+const copyToOpen = computed({ get: () => !!copying.value, set: (v) => !v && (copying.value = null) });
+function startCopyTo(blocks: PromptBlock[]) {
+  if (!blocks.length) return;
+  editing.value = null;
+  copying.value = blocks;
+}
+/** 选目标时提醒：这几块里有目标那一类用不了、或者目标已经有的程序块 */
+function copyNote(target: Preset): string {
+  const known = new Set(lib.markerChoices(target.category).map((m) => m.identifier));
+  const skip = (copying.value ?? []).filter((b) => b.marker && (!known.has(b.identifier) || target.blocks.some((x) => x.marker && x.identifier === b.identifier)));
+  return skip.length ? `${skip.length} 块程序块会跳过（那边已经有，或者${PRESET_CATEGORIES[target.category].label}预设用不了）` : '';
+}
+async function copyTo(id: string) {
+  const p = preset.value;
+  const blocks = copying.value;
+  copying.value = null;
+  const res = p && blocks && lib.copyBlocksTo(p.id, blocks, id);
+  const target = lib.presetById(id);
+  if (!res || !target) return;
+  selecting.value = false;
+  if (!res.added.length) return showToast(copySummary(0, res.skipped));
+  const go = await showConfirmDialog({
+    title: `复制到「${target.name}」了`,
+    message: `${copySummary(res.added.length, res.skipped)}。放在和原来相同的邻居旁边，没有对应的邻居就放在最后。`,
+    confirmButtonText: '去看看',
+    cancelButtonText: '留在这里',
+  }).then(
+    () => true,
+    () => false,
+  );
+  if (go) void router.push(`/me/presets/${id}`);
+}
+
 function setPosition(b: PromptBlock, absolute: boolean) {
   b.injection = { ...b.injection, position: absolute ? 'absolute' : 'relative' };
   touch();
@@ -299,7 +384,7 @@ const HINT: Record<PresetCategory, string> = {
   novel:
     '创意工坊里写小说用。"商量""写下一章""写番外"几件事按触发条件只发这次要做的那一块（novel-chat、novel-chapter、novel-extra）；"程序填充"的块是这一次的输入（作品的设定和大纲、已经写好的章节、你们最近的讨论、这一次要做的）。文风、长度、尺度写在规则里，可以改；写章节时第一行"# 标题"的格式别改，程序按它分出标题和正文。',
   assistant:
-    '"我的 → 助手"用。"一键检测""做角色卡"两件事按触发条件只发那一块（check、card），平时聊天两块都不发；"程序填充"的块是这一次的输入（特殊格式和参照的自带预设、要看的对象、程序检测到的问题、最近的对话、你刚说的）。"规则"里写着只改格式不改原文，可以改；"修改的写法"里的字段名别改，程序按它读。',
+    '"我的 → 助手"用。"一键检测""做角色卡""预设融合"三件事按触发条件只发那一块（check、card、merge），平时聊天都不发；"程序填充"的块是这一次的输入（特殊格式和参照的自带预设、要看的对象、程序检测到的问题、最近的对话、你刚说的）。"规则"里写着只改格式不改原文，可以改；"修改的写法"里的字段名别改，程序按它读。',
 };
 </script>
 
@@ -320,21 +405,35 @@ const HINT: Record<PresetCategory, string> = {
             <van-switch :model-value="preset.worldInfoEnabled !== false" size="22px" aria-label="使用世界书" @update:model-value="preset.worldInfoEnabled = $event; touch()" />
           </template>
         </van-cell>
+        <div class="flex items-center gap-2 text-[12.5px] text-ink-3 px-1">
+          <span class="flex-1">{{ selecting ? `点块来选，已选 ${selected.length} 块` : `${preset.blocks.length} 块` }}</span>
+          <button v-if="!selecting" type="button" class="mini press" data-testid="blocks-select" @click="startSelect"><span class="i-lucide-list-checks" />选几块复制</button>
+          <button v-else type="button" class="mini press" @click="selected = selected.length === preset.blocks.length ? [] : preset.blocks.map(keyOf)">
+            {{ selected.length === preset.blocks.length ? '全不选' : '全选' }}
+          </button>
+        </div>
         <div
           v-for="(b, i) in preset.blocks"
           :key="keyOf(b)"
           class="block sortable"
-          :class="{ off: !b.enabled, lifted: sort.state.phase === 'drag' && sort.state.from === i }"
+          :class="{ off: !b.enabled && !selecting, lifted: sort.state.phase === 'drag' && sort.state.from === i, picked: selecting && selected.includes(keyOf(b)) }"
           :style="sort.styleFor(i)"
           :data-block="b.identifier"
           data-sort-item
-          @pointerdown="sort.onPointerDown($event, i)"
-          @touchstart.passive="sort.onTouchStart($event, i)"
+          @pointerdown="!selecting && sort.onPointerDown($event, i)"
+          @touchstart.passive="!selecting && sort.onTouchStart($event, i)"
         >
-          <button type="button" class="grip" data-sort-handle :aria-label="`拖动调整「${b.name}」的位置，也可以按上下方向键`" @keydown="sort.onHandleKey($event, i)">
+          <span v-if="selecting" class="check" aria-hidden="true"><span v-if="selected.includes(keyOf(b))" class="i-lucide-check" /></span>
+          <button v-else type="button" class="grip" data-sort-handle :aria-label="`拖动调整「${b.name}」的位置，也可以按上下方向键`" @keydown="sort.onHandleKey($event, i)">
             <span class="i-lucide-grip-vertical" />
           </button>
-          <button type="button" class="flex-1 min-w-0 text-left" :aria-label="`编辑「${b.name}」`" @click="editing = b">
+          <button
+            type="button"
+            class="flex-1 min-w-0 text-left"
+            :aria-label="selecting ? `选「${b.name}」` : `编辑「${b.name}」`"
+            :aria-pressed="selecting ? selected.includes(keyOf(b)) : undefined"
+            @click="selecting ? toggleSelect(b) : (editing = b)"
+          >
             <div class="flex items-center gap-1.5 min-w-0">
               <span class="block-name text-[14px] truncate" :class="{ 'font-600': !b.marker }">{{ b.name }}</span>
               <!-- 窄屏、大字体时标签先让位，名字尽量完整 -->
@@ -346,11 +445,19 @@ const HINT: Record<PresetCategory, string> = {
             </div>
             <div class="text-[11.5px] text-ink-3 truncate">{{ where(b) }} · {{ line(b) }}</div>
           </button>
-          <van-switch v-model="b.enabled" data-sort-ignore size="20px" :aria-label="`发送「${b.name}」`" @change="touch" />
+          <van-switch v-if="!selecting" v-model="b.enabled" data-sort-ignore size="20px" :aria-label="`发送「${b.name}」`" @change="touch" />
         </div>
-        <button type="button" class="add press" @click="addBlock"><span class="i-lucide-plus" />加一块</button>
+        <div v-if="selecting" class="select-bar" data-testid="blocks-select-bar">
+          <button type="button" class="sb-btn press" :disabled="!selected.length" @click="duplicate(selectedBlocks)"><span class="i-lucide-copy" />复制一份</button>
+          <button type="button" class="sb-btn press" :disabled="!selected.length" @click="startCopyTo(selectedBlocks)"><span class="i-lucide-copy-plus" />复制到其他预设</button>
+          <button type="button" class="sb-btn press" @click="selecting = false">取消</button>
+        </div>
+        <div v-else class="grid grid-cols-2 gap-1.5">
+          <button type="button" class="add press" @click="addBlock"><span class="i-lucide-plus" />加一块</button>
+          <button type="button" class="add press" data-testid="add-marker" @click="markerOpen = true"><span class="i-lucide-cpu" />加程序块</button>
+        </div>
         <p class="text-[12px] text-ink-3 mt-1 mb-0 leading-relaxed">
-          长按一块拖到想要的位置（电脑上用鼠标按住直接拖），从上到下就是发给模型的顺序。{{ HINT[preset.category] }} 文字里可以用 {{ MACROS }} 这些宏。
+          长按一块拖到想要的位置（电脑上用鼠标按住直接拖），从上到下就是发给模型的顺序。{{ HINT[preset.category] }} "加程序块"能把关掉、删掉的程序填充块加回来。文字里可以用 {{ MACROS }} 这些宏。
         </p>
       </div>
 
@@ -508,9 +615,41 @@ const HINT: Record<PresetCategory, string> = {
           </template>
         </template>
         <div class="flex gap-2.5 mt-5">
+          <van-button round block size="small" :disabled="editing.marker" @click="duplicate([editing])"><span class="i-lucide-copy mr-1 align-[-2px]" />复制一份</van-button>
+          <van-button round block size="small" @click="startCopyTo([editing])"><span class="i-lucide-copy-plus mr-1 align-[-2px]" />复制到其他预设</van-button>
+        </div>
+        <p v-if="editing.marker" class="text-[12px] text-ink-3 mt-1.5 mb-0">程序块在一个预设里只能有一块，可以复制到别的预设。</p>
+        <div class="flex gap-2.5 mt-2.5">
           <van-button round block @click="removeBlock(editing)">删掉这一块</van-button>
           <van-button round block type="primary" @click="editing = null">好了</van-button>
         </div>
+      </div>
+    </van-popup>
+
+    <van-popup v-model:show="markerOpen" position="bottom" round :style="{ maxHeight: '80%' }">
+      <div class="sheet" data-testid="marker-picker">
+        <div class="sheet-title">加程序块</div>
+        <p class="text-[12.5px] text-ink-3 mt-1 mb-3 leading-relaxed">
+          {{ PRESET_CATEGORIES[preset.category].label }}预设的程序认得这些块，内容每次由程序填。已经有的点了打开那一块。
+        </p>
+        <div class="grid gap-1.5">
+          <button v-for="m in markerRows" :key="m.identifier" type="button" class="marker-row press" :class="{ has: !!m.block }" :data-marker="m.identifier" @click="pickMarker(m)">
+            <span class="flex-1 min-w-0 text-left">
+              <span class="block text-[14px] truncate">{{ m.name }}</span>
+              <span class="block text-[11.5px] text-ink-3 truncate">{{ m.identifier }}</span>
+            </span>
+            <span v-if="m.block" class="tag">{{ m.block.enabled ? '已有' : '已有 · 关着' }}</span>
+            <span v-else class="i-lucide-plus text-accent-ink" />
+          </button>
+        </div>
+      </div>
+    </van-popup>
+
+    <van-popup v-model:show="copyToOpen" position="bottom" round :style="{ maxHeight: '85%' }">
+      <div v-if="copying" class="sheet" data-testid="copy-to">
+        <div class="sheet-title">复制 {{ copying.length === 1 ? `「${copying[0]!.name}」` : `${copying.length} 块` }}到哪个预设</div>
+        <p class="text-[12.5px] text-ink-3 mt-1 mb-3 leading-relaxed">原样复制过去，放在和这边相同的邻居旁边；那边已经有、或者那一类用不了的程序块会跳过。</p>
+        <PresetChooser :exclude="[preset.id]" :initial-category="preset.category" :note="copyNote" @update:model-value="copyTo" />
       </div>
     </van-popup>
   </div>
@@ -533,6 +672,78 @@ const HINT: Record<PresetCategory, string> = {
 }
 .block.off {
   opacity: 0.55;
+}
+.block.picked {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0 3px 0 5px;
+  border-radius: 99px;
+  border: 1.5px solid var(--border);
+  color: var(--on-accent);
+  font-size: 13px;
+}
+.block.picked .check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+.select-bar {
+  position: sticky;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.sb-btn {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.sb-btn:disabled {
+  opacity: 0.45;
+}
+.marker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: var(--panel);
+}
+.marker-row.has {
+  opacity: 0.7;
 }
 /* 长按拖动：不选中文字、不弹系统菜单 */
 .sortable {
