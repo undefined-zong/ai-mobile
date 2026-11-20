@@ -20,15 +20,15 @@ function readThemeSetting(): ThemeSetting {
  * 主题（首页长什么样，和昼 / 夜配色无关）：
  * - classic 经典：消息是首页，"地图"页签里看她的世界、选活动
  * - pixel 像素小镇："世界"页签是首页，上面是她的像素小镇，下面一键直达
- * - focus 聚焦：打开就是她（她此刻在的地方、她刚说的话），上滑是完整对话，"一起"就地开始；别的页面放在两侧
+ * - focus 聚焦：打开就是她（她此刻在的地方、她刚说的话），长回复可以滚动阅读，"一起"就地开始；地图是像素小镇，别的页面放在两侧
  * 只存在这台设备上，和配色设置一样
  */
 export type HomeTheme = 'classic' | 'pixel' | 'focus';
 export const HOME_THEME_LABEL: Record<HomeTheme, string> = { classic: '经典', pixel: '像素小镇', focus: '聚焦' };
 /** 各主题的首页 */
 const HOME_PATH: Record<HomeTheme, string> = { classic: '/chats', pixel: '/world', focus: '/focus' };
-/** 底部"地图"页签去哪：像素小镇是她的像素小镇，"我的世界"的真实地图仍是 /map（从像素小镇的切换面板进） */
-const MAP_PATH: Record<HomeTheme, string> = { classic: '/map', pixel: '/world', focus: '/map' };
+/** "地图"入口跟随主题：像素小镇和聚焦都去她的像素小镇，"我的世界"的真实地图仍是 /map */
+const MAP_PATH: Record<HomeTheme, string> = { classic: '/map', pixel: '/world', focus: '/world' };
 const HOME_THEME_KEY = 'ai-mobile:home-theme';
 
 function readHomeTheme(): HomeTheme {

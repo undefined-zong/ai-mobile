@@ -1,5 +1,6 @@
 import { getLocation, isRainy, isRealPlace, worldOf, type Character, type MapLocation } from '@app/shared';
 import { computed, toValue, type MaybeRefOrGetter } from 'vue';
+import { useAppStore } from '@/stores/app';
 import { useWeatherStore } from '@/stores/weather';
 
 /**
@@ -7,6 +8,7 @@ import { useWeatherStore } from '@/stores/weather';
  * 在家时背景是卧室；她来你这边了（真实世界的地点）就看你那边的天气，否则看她那边的。
  */
 export function useHerPlace(character: MaybeRefOrGetter<Character | null | undefined>) {
+  const app = useAppStore();
   const weatherStore = useWeatherStore();
   const c = computed(() => toValue(character) ?? null);
   /** 她那边的天气（她在别的城市时是那里的，否则和你一样） */
@@ -26,7 +28,10 @@ export function useHerPlace(character: MaybeRefOrGetter<Character | null | undef
   /** 那边的天气取得怎么样（还在取、没取到）：没有天气时告诉你为什么 */
   const weatherEntry = computed(() => (isRealPlace(loc.value) ? weatherStore.mineEntry : weatherStore.entryFor(c.value)));
   /** 在地图上看：她世界里的地点去她的世界，你真实世界里的地点去"我的世界" */
-  const mapLink = computed(() => `/map?world=${isRealPlace(loc.value) ? 'me' : c.value?.id}&focus=${loc.value.id}`);
+  const mapLink = computed(() => {
+    const real = isRealPlace(loc.value);
+    return `${real ? '/map' : app.mapPath}?${new URLSearchParams({ world: real ? 'me' : (c.value?.id ?? ''), focus: loc.value.id })}`;
+  });
   const backdrop = computed(() => (loc.value.area === 'home' ? 'bedroom' : loc.value.backdrop));
   const rain = computed(() => isRainy(weather.value?.text) && (!loc.value.indoor || ['bedroom', 'library', 'cafe'].includes(backdrop.value)));
   return { herWeather, herWeatherText, loc, placeKnown, weather, weatherText, weatherEntry, mapLink, backdrop, rain };

@@ -87,7 +87,7 @@ const themeOpen = ref(false);
 const HOME_THEMES: { key: HomeTheme; desc: string }[] = [
   { key: 'classic', desc: '消息是首页，在「地图」页签里看Ta的世界、选活动' },
   { key: 'pixel', desc: '「地图」是首页：上面是Ta的像素小镇，下面一键直达要一起做的事' },
-  { key: 'focus', desc: '打开就是Ta：Ta此刻在的地方、刚说的话，直接回Ta；上滑看完整对话，「一起」就地开始，别的页面收在两侧' },
+  { key: 'focus', desc: '打开就是Ta：Ta此刻在的地方、刚说的话，长回复上下滚动，直接回Ta；点「完整对话」看聊天记录，「地图」是像素小镇，「一起」就地开始' },
 ];
 function pickHomeTheme(t: HomeTheme) {
   app.setHomeTheme(t);

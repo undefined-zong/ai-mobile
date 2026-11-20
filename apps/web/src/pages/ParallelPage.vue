@@ -583,7 +583,7 @@ const herLatest = computed(() => [...todayNotes.value].reverse().find((n) => n.a
 
 <template>
   <div class="page" data-page="parallel">
-    <PageHeader title="平行时空" :subtitle="character ? `${character.name}和${persona.name}的今天 · ${dateText}` : ''" fallback="/map">
+    <PageHeader title="平行时空" :subtitle="character ? `${character.name}和${persona.name}的今天 · ${dateText}` : ''" :fallback="app.mapPath">
       <template #right>
         <button v-if="character" class="icon-btn" aria-label="平行时空设置" data-testid="parallel-settings" @click="settingsOpen = true"><span class="i-lucide-settings-2 text-[20px]" /></button>
       </template>

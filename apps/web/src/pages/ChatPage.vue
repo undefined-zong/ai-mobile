@@ -254,7 +254,7 @@ function onAction(id: string) {
       void router.push('/scene/meal');
       break;
     case 'scenes':
-      void router.push(placeKnown.value ? mapLink.value : '/map');
+      void router.push(placeKnown.value ? mapLink.value : app.mapPath);
       break;
     case 'call':
       void router.push(`/call/${c.id}`);

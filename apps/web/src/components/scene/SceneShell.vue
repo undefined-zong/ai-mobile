@@ -130,7 +130,7 @@ function openArt() {
       </Transition>
       <div class="tint" />
       <header class="scene-top">
-        <button class="pill" aria-label="返回" @click="back ? back() : goBack('/map')"><span class="i-lucide-chevron-left text-[20px]" /></button>
+        <button class="pill" aria-label="返回" @click="back ? back() : goBack(app.mapPath)"><span class="i-lucide-chevron-left text-[20px]" /></button>
         <span class="pill title"><span :class="scene.icon" /><span class="truncate">{{ title ?? titleAt(location, sceneId) }}</span></span>
         <span class="flex-1" />
         <button v-if="modeText && !hideMode" class="pill mode" :class="together ?? ''" :disabled="together === 'bring'" :aria-label="`怎么在一起：${modeText}`" @click="toggleMode">

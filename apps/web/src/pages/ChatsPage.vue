@@ -3,12 +3,14 @@ import { getLocation, isRealPlace, type Character } from '@app/shared';
 import { computed } from 'vue';
 import ChatListItem from '@/components/chat/ChatListItem.vue';
 import Avatar from '@/components/common/Avatar.vue';
+import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { useWeatherStore } from '@/stores/weather';
 import { weekday } from '@/utils/time';
 
 const chat = useChatStore();
+const app = useAppStore();
 const chars = useCharacterStore();
 
 /** 消息页只放"像真人"的东西：她们在哪、聊天。主动消息的排期在"我的 → 主动消息"里看，这里不提，免得出戏 */
@@ -50,7 +52,7 @@ const today = computed(() => {
 
     <div class="page-scroll">
       <!-- 她们在哪：每人一行（各自小世界里的位置），点开进地图 -->
-      <RouterLink to="/map" class="where-card press" aria-label="打开地图，看Ta们在哪">
+      <RouterLink :to="app.mapPath" class="where-card press" aria-label="打开地图，看Ta们在哪">
         <span class="thumb"><span class="i-lucide-map" /></span>
         <div class="flex-1 min-w-0 grid gap-1.5">
           <div v-for="c in shown" :key="c.id" class="flex items-center gap-1.5 min-w-0 text-[13px] leading-tight">

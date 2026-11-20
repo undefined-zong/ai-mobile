@@ -480,7 +480,7 @@ const sceneName = (sid: string) => SCENES.find((s) => s.id === sid)?.name ?? sid
                 存在本机，能在这里重建，在角色卡的「背景」里给每个地点换背景。能一起做的事：{{ [...new Set(locations.flatMap((l) => l.activities.map((a) => sceneName(a.sceneId))))].join('、') }}
               </div>
               <div class="flex gap-2 mt-3">
-                <van-button round block size="small" :to="`/map?world=${c.id}`">在地图上看</van-button>
+                <van-button round block size="small" :to="{ path: app.mapPath, query: { world: c.id } }">在地图上看</van-button>
                 <van-button v-if="built" round block size="small" :loading="busy === 'build'" @click="rebuild">重建小世界</van-button>
               </div>
               <ErrorDetails v-if="buildError && built" :title="buildError.reason" :detail="buildError.detail ?? buildError.reason" max-height="30vh" />
