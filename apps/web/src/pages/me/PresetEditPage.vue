@@ -34,6 +34,7 @@ import {
   SPRITE_POSE,
   SPRITE_TASKS,
   TRUTH_DARE_LEVEL,
+  textVarNames,
   type Preset,
   type PresetCategory,
   type PresetUseId,
@@ -51,7 +52,7 @@ import { useDragSort } from '@/composables/useDragSort';
 import PageHeader from '@/layouts/PageHeader.vue';
 import { injectionsOf } from '@/services/markerInjections';
 import { useCharacterStore } from '@/stores/characters';
-import { useLibraryStore } from '@/stores/library';
+import { BUNDLED_TEXTS, seedTexts, useLibraryStore } from '@/stores/library';
 import { hhmm, monthDay } from '@/utils/time';
 
 /**
@@ -62,6 +63,7 @@ import { hhmm, monthDay } from '@/utils/time';
  *   （聊天记录、示例对话是一条条消息，不能套）；
  *   "加程序块"可选所有用途的程序块（角色卡、你的人设、场景、聊天记录……）；
  *   一块或者多选几块能复制一份、复制到别的预设（目标里已经有的程序块会跳过）；
+ * - 程序文字：程序拼进程序块的说明文字（场景规则、当前环境、各个任务的输入……）按键列出来，能改、能恢复成自带的；
  * - 采样参数；正则（导入、改、拖动调顺序，见 components/settings/PresetRegex.vue）；名字、说明、分类（所有分类都能互换）；
  * - 右上角 ⋯：复制一份、导出成预设文件、恢复成预设文件里的样子（自带的）、删除。
  * 改了马上存在本机，下一次调用起生效。
@@ -71,11 +73,12 @@ const router = useRouter();
 const lib = useLibraryStore();
 const chars = useCharacterStore();
 const preset = computed(() => lib.presetById(route.params.id as string));
-const tab = ref<'blocks' | 'params' | 'sampler' | 'regex' | 'info'>('blocks');
+const tab = ref<'blocks' | 'params' | 'texts' | 'sampler' | 'regex' | 'info'>('blocks');
 /** 立绘预设多一页"出图参数"（模型、尺寸、换表情 / 换动作的办法） */
 const tabs = computed(() => [
   { value: 'blocks' as const, label: '提示词' },
   ...(preset.value?.category === 'sprite' ? [{ value: 'params' as const, label: '出图参数' }] : []),
+  { value: 'texts' as const, label: '程序文字' },
   { value: 'sampler' as const, label: '采样参数' },
   { value: 'regex' as const, label: '正则' },
   { value: 'info' as const, label: '名字分类' },
@@ -461,6 +464,66 @@ const HINT: Record<PresetCategory, string> = {
   assistant:
     '"我的 → 助手"用。"一键检测""做角色卡""预设融合"三件事按触发条件只发那一块（check、card、merge），平时聊天都不发；"程序填充"的块是这一次的输入（特殊格式和参照的自带预设、要看的对象、程序检测到的问题、最近的对话、你刚说的）。"规则"里写着只改格式不改原文，可以改；"修改的写法"里的字段名别改，程序按它读。',
 };
+
+// —— 程序文字（@app/shared programText）：这个预设自己的放最前，其余按写在哪个自带预设文件里分组；
+// 没改的跟着 App 自带的走，改了的存在这个预设的 texts 里 ——
+const textQuery = ref('');
+/** 展开的组（'' = 这个预设自己的，默认展开） */
+const openGroups = ref(new Set<string>(['']));
+/** 搜索时最多列出多少段（一千来段全展开手机上太卡） */
+const SEARCH_LIMIT = 80;
+/** 这个键自带的写法：它自己的预设文件里的 → 写着这个键的那个自带预设文件里的 */
+function defaultText(key: string): string | undefined {
+  return seedTexts(preset.value?.seedFile)[key] ?? BUNDLED_TEXTS.get(key)?.text;
+}
+const textOf = (key: string) => preset.value?.texts?.[key] ?? defaultText(key) ?? '';
+const changed = (key: string) => preset.value?.texts?.[key] !== undefined && preset.value.texts[key] !== defaultText(key);
+const textGroups = computed(() => {
+  const p = preset.value;
+  if (!p) return { groups: [], more: 0 };
+  const own = seedTexts(p.seedFile);
+  const groups = new Map<string, { id: string; label: string; keys: string[] }>();
+  const add = (id: string, label: string, key: string) => {
+    if (!groups.has(id)) groups.set(id, { id, label, keys: [] });
+    groups.get(id)!.keys.push(key);
+  };
+  const ownLabel = p.seedFile ? `这个预设（${p.seedFile}）` : '这个预设';
+  for (const k of Object.keys(own)) add('', ownLabel, k);
+  for (const k of Object.keys(p.texts ?? {})) if (!(k in own) && !BUNDLED_TEXTS.has(k)) add('', ownLabel, k);
+  for (const [k, v] of BUNDLED_TEXTS) if (!(k in own)) add(v.file, `${v.name}（${v.file}）`, k);
+  const q = textQuery.value.trim().toLowerCase();
+  if (!q) return { groups: [...groups.values()], more: 0 };
+  let left = SEARCH_LIMIT;
+  let more = 0;
+  const hits = [...groups.values()].flatMap((g) => {
+    const keys = g.keys.filter((k) => k.toLowerCase().includes(q) || textOf(k).toLowerCase().includes(q));
+    more += Math.max(0, keys.length - left);
+    const shown = keys.slice(0, Math.max(0, left));
+    left -= shown.length;
+    return keys.length ? [{ ...g, keys: shown }] : [];
+  });
+  return { groups: hits.filter((g) => g.keys.length), more };
+});
+/** 搜索时有结果的组都展开 */
+const groupOpen = (id: string) => !!textQuery.value.trim() || openGroups.value.has(id);
+function toggleGroup(id: string) {
+  const s = new Set(openGroups.value);
+  if (s.has(id)) s.delete(id);
+  else s.add(id);
+  openGroups.value = s;
+}
+/** 和自带的一样时不存（以后自带的更新了跟着走）；不一样时存在这个预设里 */
+function setText(key: string, value: string) {
+  const p = preset.value;
+  if (!p) return;
+  const texts = { ...p.texts };
+  if (value === defaultText(key)) delete texts[key];
+  else texts[key] = value;
+  if (Object.keys(texts).length) p.texts = texts;
+  else delete p.texts;
+  touch();
+}
+const textRows = (key: string) => Math.min(12, Math.max(2, textOf(key).split('\n').length + 1));
 </script>
 
 <template>
@@ -571,6 +634,36 @@ const HINT: Record<PresetCategory, string> = {
       </van-cell-group>
 
       <PresetRegex v-else-if="tab === 'regex'" :preset="preset" :visible-top="tabsBottom" @touch="touch" />
+
+      <div v-else-if="tab === 'texts'" class="px-4" data-testid="preset-texts">
+        <p class="text-[12px] text-ink-3 mt-0 mb-2 leading-relaxed">
+          程序拼进程序块的说明文字都在这里（场景规则、当前环境、各个任务的输入……），程序只给数据。
+          <code v-pre>{{名字}}</code> 换成数据，数据为空时这一行不要；<code v-pre>[[…]]</code> 是可有可无的一段，里面的数据为空时只去掉这一段；
+          <code v-pre>{{?名字}}</code> 有这个数据才要这一行，<code v-pre>{{!名字}}</code> 反过来；<code v-pre>{{列表|分隔}}</code> 把列表连起来。
+          改了只影响这个预设，没改的跟着 App 自带的走。
+        </p>
+        <input v-model="textQuery" class="input" placeholder="搜键名或文字" autocomplete="off" />
+        <div v-for="g in textGroups.groups" :key="g.id" class="tgroup">
+          <button type="button" class="tgroup-head" @click="toggleGroup(g.id)">
+            <span class="min-w-0 truncate">{{ g.label }}</span>
+            <span class="text-[12px] text-ink-3 shrink-0">{{ g.keys.length }} 段{{ g.keys.some(changed) ? ` · 改过 ${g.keys.filter(changed).length}` : '' }}</span>
+            <span class="shrink-0 ml-auto" :class="groupOpen(g.id) ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" />
+          </button>
+          <template v-if="groupOpen(g.id)">
+            <div v-for="k in g.keys" :key="k" class="titem">
+              <div class="flex items-center gap-2">
+                <code class="tkey">{{ k }}</code>
+                <span v-if="changed(k)" class="tchanged">改过</span>
+                <button v-if="changed(k) && defaultText(k) !== undefined" type="button" class="mini ml-auto" @click="setText(k, defaultText(k)!)">恢复自带</button>
+              </div>
+              <textarea class="textarea" :value="textOf(k)" :rows="textRows(k)" @change="setText(k, ($event.target as HTMLTextAreaElement).value)" />
+              <div v-if="textVarNames(textOf(k)).length" class="text-[11px] text-ink-3">用到：{{ textVarNames(textOf(k)).join('、') }}</div>
+            </div>
+          </template>
+        </div>
+        <p v-if="!textGroups.groups.length" class="text-[12px] text-ink-3">没有搜到。</p>
+        <p v-else-if="textGroups.more" class="text-[12px] text-ink-3">还有 {{ textGroups.more }} 段没列出来，搜得再具体一点。</p>
+      </div>
 
       <div v-else class="px-4">
         <label class="field-label" for="pe-name">名字</label>
@@ -850,6 +943,40 @@ const HINT: Record<PresetCategory, string> = {
 .block.picked .check {
   background: var(--accent);
   border-color: var(--accent);
+}
+.tgroup {
+  margin-top: 10px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.tgroup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  text-align: left;
+}
+.titem {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+}
+.tkey {
+  font-size: 12px;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+.tchanged {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 99px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
 }
 .mini {
   display: inline-flex;
