@@ -1,13 +1,13 @@
 import { fromOpenAIBody, imageUseMoments, parseSecondaryReply } from '@app/ai';
-import { allowedInviteGames, cardFlags, getScene, IMAGE_MODES, PRESET_USES, type Character, type Chat, type Message } from '@app/shared';
-import { assembleForChat, boundLoreEntries, sceneText, type ChatAssembleOptions } from './prompt';
+import { cardFlags, getScene, IMAGE_MODES, PRESET_USES, type Character, type Chat, type Message } from '@app/shared';
+import { assembleForChat, sceneText, type ChatAssembleOptions } from './prompt';
 import { useAiStore } from '@/stores/ai';
 import { useLibraryStore } from '@/stores/library';
 
 /**
  * 和主回复使用同一份历史及时间，只读世界书状态；不再次推进冷却、变量或记忆使用次数。
  * 输出是要追加的正文和隐藏标签（不是 JSON）：主动卡片的写法在副对话预设自己的块里，
- * 这一轮能用的模块按她绑定的世界书开关打开对应的块（cardFlags），预设不用开世界书。
+ * 按这一轮处理的标签发送对应卡片块（cardFlags），全部游戏都可用。
  */
 export async function secondaryChat(chat: Chat, character: Character, history: Message[], opts: ChatAssembleOptions, signal: AbortSignal) {
   const ai = useAiStore();
@@ -42,7 +42,7 @@ export async function secondaryChat(chat: Chat, character: Character, history: M
     agent: 'secondary',
     use: 'secondary',
     dryRun: true,
-    flags: [...(opts.flags ?? []), ...cardFlags(tags, allowedInviteGames(boundLoreEntries(character)))],
+    flags: [...(opts.flags ?? []), ...cardFlags(tags)],
     task: { name: 'secondary', input: lines.filter(Boolean).join('\n') },
   });
   const request = fromOpenAIBody(prompt.request);

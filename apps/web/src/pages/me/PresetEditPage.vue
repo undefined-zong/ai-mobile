@@ -745,7 +745,7 @@ const HINT: Record<PresetCategory, string> = {
             <button v-for="(label, t) in ROLEPLAY_FLAGS" :key="t" type="button" class="opt" :class="{ on: editing.triggers?.includes(t) }" @click="toggleTrigger(editing, t)">{{ label }}</button>
           </div>
           <template v-if="forSecondary">
-            <div class="text-[12px] text-ink-3 mt-2.5 mb-1.5">主动卡片（按角色绑定的世界书开关，这一轮能用才发）</div>
+            <div class="text-[12px] text-ink-3 mt-2.5 mb-1.5">主动卡片（按本轮标签发送对应提示块）</div>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="(label, t) in CARD_FLAGS" :key="t" type="button" class="opt" :class="{ on: editing.triggers?.includes(t) }" @click="toggleTrigger(editing, t)">{{ label }}</button>
             </div>

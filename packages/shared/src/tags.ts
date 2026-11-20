@@ -22,7 +22,7 @@ import { INVITE_GAMES, inviteGame, parseStudyInvite, parseWatchInvite, type Invi
  *   [parallel]            邀请你看平行时空（你们俩今天的安排和留言）
  *   <device>"VIBRATE": 40</device>   玩具的控制指令（尖括号写法，可以跨行；内容见 device.ts）
  *
- * 聊天里哪些能用由她绑定的世界书决定（chatModules.ts 的 moduleSwitches）。
+ * 日常聊天支持全部主动卡片和游戏，世界书只提供提示词内容。
  * 兼容全角写法【expr：smile】。不认识的方括号（例如"[笑]"）原样保留为正文。
  */
 export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel'] as const;

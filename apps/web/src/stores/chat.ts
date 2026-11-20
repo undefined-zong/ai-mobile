@@ -1,7 +1,6 @@
 import { characterPronoun, paceText, textFn } from '@app/shared';
 import {
   AGENT_META,
-  allowedInviteGames,
   describeCommand,
   getLocation,
   getScene,
@@ -38,7 +37,7 @@ import { services } from '@/services';
 import { putAsset } from '@/services/assets';
 import { describePhoto } from '@/services/photos';
 import { sessionSummary as musicSummary, stop as stopMusic } from '@/services/musicPlayer';
-import { assembleForChat, boundLoreEntries, messageToText, personaOf, presetForTurn, sceneTags, storeRegex, toLLMMessages, type ChatPrompt } from '@/services/prompt';
+import { assembleForChat, messageToText, personaOf, presetForTurn, sceneTags, storeRegex, toLLMMessages, type ChatPrompt } from '@/services/prompt';
 import { latestRecall, noteRecallUsed, prefetchRecall } from '@/services/recall';
 import { backfillChat, pendingForSummary, summarizeChat, type BackfillProgress, type SummaryOutcome } from '@/services/summary';
 import { useMemoryStore } from './memory';
@@ -555,7 +554,7 @@ export const useChatStore = defineStore('chat', () => {
         // 邀请卡片：点接受去对应的陪伴场景或平行时空
         if (tag.kind === 'study') parts.push({ type: 'invite', kind: 'study', task: tag.task, minutes: tag.minutes });
         if (tag.kind === 'watch') parts.push({ type: 'invite', kind: 'watch', title: tag.title, link: tag.link });
-        if (tag.kind === 'game' && allowedInviteGames(boundLoreEntries(character)).includes(tag.game)) parts.push({ type: 'invite', kind: 'game', game: tag.game });
+        if (tag.kind === 'game') parts.push({ type: 'invite', kind: 'game', game: tag.game });
         if (tag.kind === 'sleep' || tag.kind === 'exercise' || tag.kind === 'parallel') parts.push({ type: 'invite', kind: tag.kind });
         // 聊天里的玩具指令（心跳里的由心跳自己按位置执行）：卡片 + 连着时读到那里自动执行
         if (tag.kind === 'device' && scene.id === 'free') {

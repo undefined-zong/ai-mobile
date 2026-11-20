@@ -3,11 +3,7 @@ import type { ControlTagKind } from './tags.ts';
 /**
  * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、哄睡 [sleep]、一起运动 [exercise]、平行时空 [parallel]、玩具指令 <device>。
  *
- * 开不开由她绑定的世界书决定（自带的"聊天 · 主动卡片"世界书每个模块一条，开关那一条就开关那个模块）：
- * - 有一条开着的条目教了这个写法（内容里写了 [watch:…]）→ 开；
- * - 只有关着的条目教了它 → 关；
- * - 世界书里都没提 → 按默认（歌曲、打电话照旧能用，其余不开）。
- * 所以自己写的、导入的世界书只要内容里写了这些写法也一样能开关。游戏还能一个个开关（allowedInviteGames）。
+ * 日常聊天默认支持全部模块和游戏，世界书只提供提示词内容。
  */
 
 /** 一起游戏里能约的游戏（和 apps/web 的 GameScene 里的 GAMES 一一对应） */
@@ -65,7 +61,7 @@ export function parseWatchInvite(value: string): { kind: 'watch'; title: string;
   return title || link ? { kind: 'watch', title, link } : null;
 }
 
-/** 世界书能开关的模块（都是聊天里的标签） */
+/** 日常聊天支持的主动卡片模块 */
 export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'device'] as const satisfies readonly ControlTagKind[];
 export type ModuleTag = (typeof MODULE_TAGS)[number];
 
@@ -83,8 +79,8 @@ export const MODULE_LABELS: Record<ModuleTag, string> = {
 };
 
 /**
- * 副对话预设里主动卡片那几块的触发条件："card:music"……，游戏一个个开："card:game:soup"。
- * 这一轮能用哪个模块（按她绑定的世界书开关算出来的）就打开哪个，副对话预设不用开世界书
+ * 副对话预设里主动卡片那几块的触发条件："card:music"……，游戏按类型分块："card:game:soup"。
+ * 按这一轮处理的标签发送对应提示块；游戏模块包含全部游戏。
  */
 export const CARD_FLAG_PREFIX = 'card:';
 export type CardKey = ModuleTag | `game:${InviteGameId}`;
@@ -93,10 +89,10 @@ export function cardFlag(key: CardKey): string {
   return `${CARD_FLAG_PREFIX}${key}`;
 }
 
-/** 这一轮打开哪些卡片块：能用的模块，模块里有游戏时再加上能约的那几个游戏 */
-export function cardFlags(tags: readonly ControlTagKind[], games: readonly InviteGameId[]): string[] {
+/** 这一轮发送的卡片提示块，游戏模块包含所有注册游戏 */
+export function cardFlags(tags: readonly ControlTagKind[]): string[] {
   const on = MODULE_TAGS.filter((t) => tags.includes(t));
-  return [...on.map((t) => cardFlag(t)), ...(on.includes('game') ? games.map((g) => cardFlag(`game:${g}`)) : [])];
+  return [...on.map((t) => cardFlag(t)), ...(on.includes('game') ? INVITE_GAMES.map((g) => cardFlag(`game:${g.id}`)) : [])];
 }
 
 /** 卡片块触发条件的中文名（预设编辑页里选） */
@@ -104,49 +100,3 @@ export const CARD_FLAGS: Record<string, string> = Object.fromEntries([
   ...MODULE_TAGS.map((t) => [cardFlag(t), `主动卡片：${MODULE_LABELS[t]}`]),
   ...INVITE_GAMES.map((g) => [cardFlag(`game:${g.id}`), `主动卡片：游戏 · ${g.label}`]),
 ]);
-
-/** 条目内容里写了哪个写法，就算教了哪个模块 */
-const TEACHES: Record<ModuleTag, RegExp> = {
-  music: /[[【]music[:：]/i,
-  call: /[[【]call[\]】]/i,
-  study: /[[【]study[:：\]】]/i,
-  watch: /[[【]watch[:：]/i,
-  game: /[[【]game[:：]/i,
-  sleep: /[[【]sleep[\]】]/i,
-  exercise: /[[【]exercise[\]】]/i,
-  parallel: /[[【]parallel[\]】]/i,
-  device: /<device\s*>/i,
-};
-
-/** 她绑定的世界书条目 → 每个模块开（true）、关（false），没提到的不写 */
-export function moduleSwitches(entries: readonly { content: string; enabled: boolean }[]): Partial<Record<ModuleTag, boolean>> {
-  const out: Partial<Record<ModuleTag, boolean>> = {};
-  for (const tag of MODULE_TAGS) {
-    const taught = entries.filter((e) => TEACHES[tag].test(e.content));
-    if (taught.length) out[tag] = taught.some((e) => e.enabled);
-  }
-  return out;
-}
-
-/**
- * 每个游戏单独开关：条目里写了 [game:海龟汤] 就是海龟汤的开关。
- * 有开着的游戏条目时只约开着的那几个；一个具体的游戏都没提（只写了 [game:游戏名]）时除了关掉的都能约
- */
-export function allowedInviteGames(entries: readonly { content: string; enabled: boolean }[]): InviteGameId[] {
-  const sw: Partial<Record<InviteGameId, boolean>> = {};
-  for (const e of entries) {
-    for (const m of e.content.matchAll(/[[【]game[:：]([^\]】\n]+)[\]】]/gi)) {
-      const id = inviteGame(m[1] ?? '');
-      if (id) sw[id] = sw[id] === true || e.enabled;
-    }
-  }
-  const on = INVITE_GAMES.filter((g) => sw[g.id]).map((g) => g.id);
-  return on.length ? on : INVITE_GAMES.filter((g) => sw[g.id] !== false).map((g) => g.id);
-}
-
-/** 按世界书的开关调整这个场景能用的标签 */
-export function applyModuleSwitches(base: readonly ControlTagKind[], switches: Partial<Record<ModuleTag, boolean>>): ControlTagKind[] {
-  const out = base.filter((t) => switches[t as ModuleTag] !== false);
-  for (const tag of MODULE_TAGS) if (switches[tag] && !out.includes(tag)) out.push(tag);
-  return out;
-}
