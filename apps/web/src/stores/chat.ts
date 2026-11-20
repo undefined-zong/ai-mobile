@@ -526,7 +526,10 @@ export const useChatStore = defineStore('chat', () => {
       let image: SecondaryImageChoice = {};
       if (supplement && !abort.signal.aborted) {
         image = supplement.value.image;
-        const extra = parseControlTags(storeRegex(chat, character, supplement.value.append, 'assistant', { preset: supplement.preset }), delegatedTags);
+        // 副对话的内容也是这条回复的一部分：先过副对话预设自己的正则，再过这一轮回复用的预设的正则（同一个预设时只过一次）
+        const own = storeRegex(chat, character, supplement.value.append, 'assistant', { preset: supplement.preset });
+        const appended = supplement.preset.id === prompt.preset.id ? own : storeRegex(chat, character, own, 'assistant', { preset: prompt.preset });
+        const extra = parseControlTags(appended, delegatedTags);
         const separator = extra.visible || extra.tags.length ? '\n\n' : '';
         const offset = parsed.visible.length + separator.length;
         parsed = {
