@@ -1,9 +1,7 @@
 import { characterPronoun } from '@app/shared';
 import { openaiReasoningEffort } from '@app/ai';
 import {
-  allowedInviteGames,
   anniversaryLine,
-  applyModuleSwitches,
   applyRegexScripts,
   assemblePrompt,
   buildChatRequest,
@@ -16,7 +14,6 @@ import {
   inviteGameLabel,
   isRealPlace,
   MEAL_LABEL,
-  moduleSwitches,
   pokeLine,
   portraitTags,
   PRESET_CATEGORIES,
@@ -302,26 +299,12 @@ const POSE_SCENES = new Set<string>(['free', 'poke']);
  * 表情只列她有图的（没有立绘时是占位小人会的那几种）；聊天里、戳戳乐里她有两个以上的动作时加上 [pose:] 和能用的动作
  */
 export function sceneTags(scene: ReturnType<typeof getScene>, character: Character): ControlTagKind[] {
-  // 日常聊天里能主动调用哪些模块（歌曲、电话、学习 / 看片 / 游戏 / 哄睡 / 运动 / 平行时空邀请、玩具）：按她绑定的世界书里对应条目的开关
-  const base = scene.id === 'free' ? applyModuleSwitches(scene.allowedTags, moduleSwitches(boundLoreEntries(character))) : scene.allowedTags;
+  const base = scene.allowedTags;
   return POSE_SCENES.has(scene.id) ? portraitTags(base, character.portraits) : base;
 }
 
-/** 她绑定的世界书里的全部条目（开着的、关着的）：聊天里的主动卡片按它们开关 */
-export function boundLoreEntries(character: Character) {
-  const lib = useLibraryStore();
-  return character.lorebookIds.flatMap((id) => lib.lorebookById(id)?.entries ?? []);
-}
-
-function tagDesc(t: ControlTagKind, character: Character): string {
-  if (t !== 'game') return CONTROL_TAG_DOCS[t].desc;
-  // 游戏一个个开关：只列她现在能约的
-  const games = allowedInviteGames(boundLoreEntries(character)).map(inviteGameLabel);
-  return `约对方玩某一个游戏，显示成邀请卡片；游戏名只能是：${games.join('、')}`;
-}
-
 function tagsLine(scene: ReturnType<typeof getScene>, character: Character, allowed = sceneTags(scene, character)): string {
-  const tags = allowed.map((t) => `- ${CONTROL_TAG_DOCS[t].syntax}：${tagDesc(t, character)}`);
+  const tags = allowed.map((t) => `- ${CONTROL_TAG_DOCS[t].syntax}：${CONTROL_TAG_DOCS[t].desc}`);
   return `回复里可以夹带这些隐藏标签（对方看不到，程序会执行）：\n${tags.join('\n')}\n${expressionPromptLines(character.portraits, { poses: allowed.includes('pose') })}`;
 }
 

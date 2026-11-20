@@ -114,6 +114,12 @@ const DEMO_BOOK_IDS = new Set(demoLorebooks.map((b) => b.id));
  */
 const BOOK_UPGRADES: { id: string; file: string; replaced: Record<string, string[]>; added?: string[]; description?: string }[] = [
   {
+    id: 'chat-modules:remove-lore-gates',
+    file: 'chat-modules.json',
+    description: "她在聊天里主动发卡片：一起听歌、打电话（没接可以回拨）、约学习、约看片、约某一个游戏、哄睡、一起运动、平行时空、玩具指令。绑到角色卡上（我的 → 角色卡 → 世界书），每一条的开关就是那个功能的开关；玩具指令默认关着。",
+    replaced: { '0': ["你可以像真人一样主动发起一些事：分享歌、打电话、约{{user}}一起学习、看片、玩游戏、运动，陪{{user}}入睡，或者一起看看平行时空里的安排。做法是在你那句话后面夹带一个隐藏标签，程序会把它变成卡片，{{user}}点一下就能和你一起做。\n- 只在聊到相关的事、气氛合适时用；一次回复最多发一张卡，不要每条都发，也不要连着几条都约。\n- 先用你自己的话自然地说出来（例如\"要不要一起听这首？\"），标签跟在这句话后面。\n- 只能用下面几条里写到的标签；没写到的就是现在不能用。\n- {{user}}说下次、没空时别追着约，换个话题。"] },
+  },
+  {
     // 去掉凭空加的限制：玩具指令只在"明确愿意"时用、说停就停
     id: 'restrictions:chat-modules-toys',
     file: 'chat-modules.json',
@@ -219,6 +225,12 @@ function patchBlocks(p: Preset, patched: Record<string, [string, string][]>): bo
   return touched;
 }
 const SEED_UPGRADES: SeedUpgrade[] = [
+  {
+    id: 'secondary:remove-lore-gates',
+    file: 'feature-secondary.json',
+    renamed: { description: ["与主对话并行：接在回复末尾发主动卡片、配图，并完成你写的其他任务。直接输出正文和隐藏标签（不是 JSON），配图的画法另起一行写 mode###…### 这几行。主动卡片的写法在这个预设自己的块里，哪些模块能用按角色绑定的世界书开关，预设本身不用开世界书。", "与主对话并行：接在回复末尾发主动卡片、配图，并完成你写的其他任务。直接输出正文和隐藏标签（不是 JSON），配图的画法另起一行写 mode###…### 这几行。主动卡片的写法在这个预设自己的块里，主动卡片模块和游戏默认全部可用，预设本身不用开世界书。"] },
+    replaced: { cardRules: ["你可以像真人一样主动发起一些事：分享歌、打电话、约{{user}}一起学习、看片、玩游戏、运动，陪{{user}}入睡，或者一起看看平行时空里的安排。做法是在你那句话后面夹带一个隐藏标签，程序会把它变成卡片，{{user}}点一下就能和你一起做。\n- 只在聊到相关的事、气氛合适时用；一次回复最多发一张卡，不要每条都发，也不要连着几条都约。\n- 先用你自己的话自然地说出来（例如\"要不要一起听这首？\"），标签跟在这句话后面。\n- 只能用下面几条里写到的标签；没写到的就是现在不能用。\n- {{user}}说下次、没空时别追着约，换个话题。"] },
+  },
   {
     id: 'chat-daily:context-before-history',
     file: 'chat-daily.json',
