@@ -2,7 +2,7 @@ import { cleanHtml, count, hash32, nullable, shortDay, shortStamp, str } from '.
 import { dailySlots, momentExtras } from './social.ts';
 import { zonedInstant } from './timezone.ts';
 import {
-  COMMUNITY_LIMITS, COMMUNITY_SORTS, DEFAULT_COMMUNITY_SETTINGS, netizenId,
+  COMMUNITY_LAYOUTS, COMMUNITY_LIMITS, COMMUNITY_SORTS, DEFAULT_COMMUNITY_SETTINGS, netizenId,
   type Community, type CommunityComment, type CommunityPost, type CommunitySettings,
 } from './types/community.ts';
 import { MOMENT_USER } from './types/social.ts';
@@ -28,6 +28,7 @@ export function communitySettingsOf(raw?: Partial<CommunitySettings> | null): Co
   if (typeof raw?.autoImage === 'boolean') out.autoImage = raw.autoImage;
   if (typeof raw?.notify === 'boolean') out.notify = raw.notify;
   if (raw?.sort && raw.sort in COMMUNITY_SORTS) out.sort = raw.sort;
+  if (raw?.layout && raw.layout in COMMUNITY_LAYOUTS) out.layout = raw.layout;
   return out;
 }
 

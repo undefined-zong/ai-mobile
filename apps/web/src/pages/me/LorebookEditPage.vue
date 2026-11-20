@@ -140,7 +140,7 @@ function addKey() {
   border: 1px dashed var(--border);
   background: transparent;
   outline: none;
-  font-size: 13px;
+  font-size: 16px;
 }
 .opt {
   height: 30px;

@@ -1768,7 +1768,7 @@ const figureHidden = computed(() => {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .tell {
   flex-shrink: 0;
@@ -1913,7 +1913,7 @@ const figureHidden = computed(() => {
   border: 1px solid var(--glass-line);
   background: var(--glass-strong);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .spin {
   animation: spin 1s linear infinite;

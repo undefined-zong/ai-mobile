@@ -1277,7 +1277,7 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
   background: var(--panel);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .stamps {
   display: flex;
@@ -1554,7 +1554,7 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
   border: 1px solid var(--glass-line);
   background: var(--glass-strong);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 /* 视频浮窗能拖动的范围：同计时器，顶栏下面到底栏上面 */
 .float-track {

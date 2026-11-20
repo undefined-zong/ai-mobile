@@ -384,7 +384,7 @@ async function talk() {
 .area { resize: vertical; min-height: 90px; }
 .participant, .appointment { display: flex; align-items: center; gap: 12px; margin: 12px 0; padding-bottom: 10px; border-bottom: 1px solid #d8c8a7; }
 .participant > span, .appointment > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-family: var(--royal-serif); font-size: 16px; }
-.participant select, .appointment select { width: 56%; flex-shrink: 0; font-size: 13px; }
+.participant select, .appointment select { width: 56%; flex-shrink: 0; font-size: 16px; }
 .toggle { display: flex; align-items: center; gap: 9px; font-size: 13px; margin: 20px 0 8px; }
 .toggle input, .policy > input { width: 17px; height: 17px; flex-shrink: 0; }
 .footnote { font-size: 11px; color: var(--ink-2); margin-top: 16px !important; }

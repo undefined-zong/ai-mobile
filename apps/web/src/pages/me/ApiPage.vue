@@ -613,7 +613,7 @@ async function runReindex() {
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 .sim {
   margin-top: 14px;

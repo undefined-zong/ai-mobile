@@ -524,7 +524,7 @@ async function reveal() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .area {
   width: 100%;
@@ -533,7 +533,7 @@ async function reveal() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
 }
 .btns :deep(.van-button) {

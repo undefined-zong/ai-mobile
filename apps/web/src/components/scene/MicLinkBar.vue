@@ -122,7 +122,7 @@ function send() {
   border: 1px solid var(--glass-line);
   background: var(--glass-strong);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .lb.send {
   background: var(--accent);

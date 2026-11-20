@@ -392,7 +392,7 @@ watch(
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 16px;
 }
 .test-ok {
   display: flex;

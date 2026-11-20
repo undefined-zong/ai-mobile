@@ -124,7 +124,7 @@ const thumb = (url: string) => (/hdslb\.com\/bfs\//.test(url) && !url.includes('
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .hint {
   margin-top: 10px;

@@ -772,7 +772,7 @@ function again() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
 }
 .field {
@@ -784,7 +784,7 @@ function again() {
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .tally {
   margin-top: 6px;

@@ -1303,7 +1303,7 @@ const modeLabel = computed(() => MODES.find((m) => m.id === mode.value)?.label ?
   background: var(--glass-strong);
   color: var(--ink);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }

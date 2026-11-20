@@ -861,7 +861,7 @@ onBeforeUnmount(() => void halt());
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 16px;
 }
 .lib-scroll {
   flex: 1;

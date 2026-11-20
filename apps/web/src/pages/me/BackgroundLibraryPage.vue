@@ -84,10 +84,10 @@ h2 { font-size: 16px; font-weight: 600; margin: 26px 0 12px; }
 .scene-preview { position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 12px; background: var(--surface); }
 .match-caption { color: var(--ink-2); font-size: 13px; line-height: 1.5; margin: 8px 0; }
 .search-label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink-2); }
-.search-label input { width: 100%; min-width: 0; background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 14px; }
+.search-label input { width: 100%; min-width: 0; background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 16px; }
 .filters { display: flex; gap: 12px; margin: 14px 0 8px; }
 .filters label { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-2); }
-.filters select { display: block; width: 100%; min-height: 40px; margin-top: 5px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: var(--surface); font: inherit; font-size: 14px; }
+.filters select { display: block; width: 100%; min-height: 40px; margin-top: 5px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: var(--surface); font: inherit; font-size: 16px; }
 .result-count { color: var(--ink-2); font-size: 12px; margin: 10px 0; }
 .asset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; }
 .asset { display: flex; flex-direction: column; text-align: left; min-width: 0; }

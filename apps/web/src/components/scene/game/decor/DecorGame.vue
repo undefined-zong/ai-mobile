@@ -912,7 +912,7 @@ const hint = computed(() =>
 .life-setting { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; text-align: left; border-bottom: 1px solid var(--border); color: var(--ink); }
 .life-setting strong { display: block; font-size: 14px; font-weight: 600; }
 .life-setting small { display: block; font-size: 12px; color: var(--ink-3); line-height: 1.5; margin-top: 4px; }
-.life-setting select { border: 1px solid var(--border); padding: 8px; border-radius: 8px; background: var(--panel); font-size: 13px; }
+.life-setting select { border: 1px solid var(--border); padding: 8px; border-radius: 8px; background: var(--panel); font-size: 16px; }
 .life-switch { flex: none; width: 44px; height: 26px; padding: 3px; border-radius: 99px; background: var(--border); }
 .life-switch span { display: block; width: 20px; height: 20px; border-radius: 50%; background: white; box-shadow: 0 1px 3px #0002; transition: transform .15s; }
 .life-switch.on { background: #6e8c6a; }
@@ -1238,7 +1238,7 @@ const hint = computed(() =>
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .sheet {
   display: flex;
@@ -1339,7 +1339,7 @@ const hint = computed(() =>
 .catalog-heading .sheet-title span { font-size: 12px; font-weight: 400; color: var(--ink-2); margin-left: 6px; }
 .catalog-close { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--panel); color: var(--ink-2); }
 .catalog-search { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; background: var(--panel); border-radius: 10px; color: var(--ink-2); }
-.catalog-search input { min-width: 0; width: 100%; background: transparent; border: 0; font-size: 13px; color: var(--ink); padding: 11px 0; }
+.catalog-search input { min-width: 0; width: 100%; background: transparent; border: 0; font-size: 16px; color: var(--ink); padding: 11px 0; }
 .catalog-filters { display: flex; gap: 12px; align-items: center; margin: 12px 0 10px; font-size: 12px; color: var(--ink-2); }
 .catalog-filters select { flex: 1; min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--ink); padding: 0 10px; }
 .catalog-results { display: flex; justify-content: space-between; gap: 8px; padding: 12px 0 4px; color: var(--ink-2); font-size: 12px; }

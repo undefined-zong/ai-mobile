@@ -163,6 +163,22 @@ export function goBack(fallback: string) {
   else void router.replace(fallback);
 }
 
+/**
+ * 离开这一页去 to，这一页不留在历史里：约会结束后去聊天、回地图，再返回时不会回到约会里又开始一次。
+ * 上一页的路径就在 same 里（默认就是 to 的路径）时直接返回上一页，不在历史里多叠一层。
+ */
+export function leaveTo(to: string, same: string[] = [pathOf(to)]) {
+  const prev = isPreview ? stack.at(-2) : (window.history.state?.back as string | null | undefined);
+  if (prev && same.includes(pathOf(prev))) {
+    goBack(to);
+    return;
+  }
+  // 内存路由：先把这一页出栈，替换过去以后栈顶就是 to
+  if (isPreview) stack.pop();
+  void router.replace(to);
+}
+const pathOf = (fullPath: string) => fullPath.split('?')[0] as string;
+
 /** 截图脚本和"关于"页用：列出所有可访问的页面 */
 export function listRoutePaths(): string[] {
   return router

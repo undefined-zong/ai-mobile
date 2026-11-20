@@ -623,7 +623,7 @@ const timeText = computed(() => `${String(clock.value.getHours()).padStart(2, '0
   border: 1px solid var(--border);
   background: var(--panel);
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
 }
 .field:focus {
   border-color: var(--accent-line);
