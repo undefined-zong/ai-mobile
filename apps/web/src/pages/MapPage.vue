@@ -5,7 +5,6 @@ import {
   getLocation,
   getScene,
   isRealPlace,
-  SCENES,
   timeOfDay,
   worldOf,
   hasOwnWorld,
@@ -22,6 +21,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import HScroll from '@/components/common/HScroll.vue';
 import RealMap from '@/components/map/RealMap.vue';
 import WorldMap from '@/components/map/WorldMap.vue';
+import { sceneActivity, scenePlaces, TOGETHER_SCENES } from '@/composables/useTogether';
 import { dayEvents, dayStats, todayDate, type DayEvent } from '@/services/myDay';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
@@ -248,15 +248,13 @@ function openChar(c: Character) {
   charOpen.value = true;
 }
 
-// —— 一起做点什么：她的世界里有哪些事、在哪做 ——
-function placesFor(sceneId: SceneId) {
-  return world.value.locations.filter((l) => l.activities.some((a) => a.sceneId === sceneId));
-}
+// —— 一起做点什么：每件事都在（共同的家、心跳、出逃另有入口），她的世界里没地方做的在她家做 ——
+const placesFor = (sceneId: SceneId) => scenePlaces(world.value, sceneId);
 const tiles = computed(() =>
-  SCENES.map((s) => {
+  TOGETHER_SCENES.map((s) => {
     const places = placesFor(s.id);
     return { scene: s, count: places.length, where: places.length > 1 ? `${places.length} 个地方` : (places[0]?.name ?? '') };
-  }).filter((t) => t.count > 0),
+  }),
 );
 const selectedScene = ref<SceneDef | null>(null);
 const actOpen = ref(false);
@@ -265,9 +263,7 @@ function openActivity(s: SceneDef) {
   selectedScene.value = s;
   actOpen.value = true;
 }
-function activityAt(l: MapLocation, sceneId: SceneId): LocationActivity {
-  return l.activities.find((a) => a.sceneId === sceneId) ?? (l.activities[0] as LocationActivity);
-}
+const activityAt = sceneActivity;
 function whoAt(l: MapLocation) {
   const list = chars.list.filter((c) => c.locationId === l.id);
   return list.length ? `${list.map((c) => c.name).join('、')}在这里` : '';
