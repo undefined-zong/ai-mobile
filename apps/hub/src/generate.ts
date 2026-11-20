@@ -1,4 +1,4 @@
-import { AgentSystem, fromOpenAIBody } from '@app/ai';
+import { AgentSystem, AiError, fromOpenAIBody } from '@app/ai';
 import {
   anniversaryLine, applyRegexScripts, assemblePrompt, buildChatRequest, estimateTokens, formatEnvironmentBlock, FREE_SCENE,
   parseControlTags, proactiveMessageText, substituteMacros,
@@ -62,7 +62,21 @@ export async function generateMessage(context: ProactiveContext, credentials: Pr
     const attempt = system.router.attempts('proactive')[0]!;
     const request = proactivePrompt(context, t, now, attempt.endpoint.model);
     request.names = { user: context.persona.name, char: c.name };
-    const r = await system.chat('proactive', request, { stream: false, signal: AbortSignal.timeout(120_000) });
+    const signal = AbortSignal.timeout(120_000);
+    const tokensOf = (x: { text: string; usage?: { inputTokens?: number; outputTokens?: number } | null }, req: typeof request) =>
+      (x.usage?.inputTokens ?? estimateTokens(JSON.stringify(req.messages))) + (x.usage?.outputTokens ?? estimateTokens(x.text));
+    // 推理模型的思考也算在输出上限里：思考把预设的回复上限用光时，正文只剩开头几个字（结束原因是 length / MAX_TOKENS）。
+    // 正文本身没写到上限的一半就被截断，说明是思考占掉了，加大上限再要一次；还是这样就不发半句话，留给调度器重试
+    const limit = request.maxTokens ?? 600;
+    const starved = (x: { text: string; finishReason?: string | null }) => /length|max_tokens/i.test(x.finishReason ?? '') && estimateTokens(x.text) < limit / 2;
+    let r = await system.chat('proactive', request, { stream: false, signal });
+    let tokens = tokensOf(r, request);
+    if (starved(r)) {
+      const retry = { ...request, maxTokens: Math.min(32_768, Math.max(limit * 4, 8192)) };
+      r = await system.chat('proactive', retry, { stream: false, signal });
+      tokens += tokensOf(r, retry);
+      if (starved(r)) throw new AiError('empty', `思考用完了输出上限，正文被截断（结束原因：${r.finishReason}）`, { retryable: true });
+    }
     // 预设里改存下来的消息的正则（作用在"她的回复"上的），同 App 里的回复
     const reply = applyRegexScripts(context.preset?.regex, r.text, { target: 'store', placement: 'ai_output', char: c.name, user: context.persona.name });
     const parsed = parseControlTags(reply, FREE_SCENE.allowedTags.filter((k) => ['expr', 'music'].includes(k)));
@@ -73,8 +87,7 @@ export async function generateMessage(context: ProactiveContext, credentials: Pr
       if (tag.kind === 'music') parts.push({ type: 'music', songId: '', title: tag.title, artist: tag.artist });
     }
     if (!parts.length) throw new Error('主动消息模型返回了空内容');
-    meta = { agent: 'proactive', model: r.model, latencyMs: r.latencyMs, fellBack: r.fellBack,
-      tokens: (r.usage?.inputTokens ?? estimateTokens(JSON.stringify(request.messages))) + (r.usage?.outputTokens ?? estimateTokens(r.text)) };
+    meta = { agent: 'proactive', model: r.model, latencyMs: r.latencyMs, fellBack: r.fellBack, tokens };
   }
   return { id: `proactive:${t.id}`, chatId: chat.id, role: 'assistant', createdAt: now, updatedAt: now,
     text, parts, expression, swipes: [], swipeIndex: 0, proactive: true, read: false, meta };
