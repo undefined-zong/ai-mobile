@@ -23,7 +23,7 @@ import {
   type ParsedReply,
   type PresetUseId,
 } from '@app/shared';
-import { errorReport, errorText, fromOpenAIBody, isAbortError, SECONDARY_TAGS, type SecondaryReply } from '@app/ai';
+import { errorReport, errorText, fromOpenAIBody, isAbortError, SECONDARY_TAGS, type SecondaryImageChoice } from '@app/ai';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { useAiStore } from './ai';
@@ -522,14 +522,11 @@ export const useChatStore = defineStore('chat', () => {
       const supplement = await secondary;
       msg = find(chatId, id);
       if (!msg) return;
-      let image: SecondaryReply['image'] = null;
+      // 副对话给 [cg:] 选的画法（用途、时刻、模型）；主对话这一轮不发 [cg:]，所以只用在副对话的配图上
+      let image: SecondaryImageChoice = {};
       if (supplement && !abort.signal.aborted) {
-        image = delegatedTags.includes('cg') ? supplement.value.image : null;
-        const extra = parseControlTags(
-          storeRegex(chat, character, supplement.value.append, 'assistant', { preset: supplement.preset }),
-          // 明确给了 image 对象时由它选择画法，不重复执行 append 中的 [cg:]。
-          image ? delegatedTags.filter((tag) => tag !== 'cg') : delegatedTags,
-        );
+        image = supplement.value.image;
+        const extra = parseControlTags(storeRegex(chat, character, supplement.value.append, 'assistant', { preset: supplement.preset }), delegatedTags);
         const separator = extra.visible || extra.tags.length ? '\n\n' : '';
         const offset = parsed.visible.length + separator.length;
         parsed = {
@@ -549,7 +546,7 @@ export const useChatStore = defineStore('chat', () => {
       for (const { tag, at } of parsed.tags) {
         // 歌曲卡片：点"一起听"时按歌名 + 歌手去网易云搜（还没有 id）
         if (tag.kind === 'music') parts.push({ type: 'music', songId: '', title: tag.title, artist: tag.artist });
-        if (tag.kind === 'cg' && !opts.sceneArt) parts.push({ type: 'image', assetKey: null, caption: tag.value, generated: false });
+        if (tag.kind === 'cg' && !opts.sceneArt) parts.push({ type: 'image', assetKey: null, caption: tag.value, generated: false, mode: image.mode, use: image.use, moment: image.moment, requestedModel: image.model });
         if (tag.kind === 'choice') msg.meta.choices = tag.options;
         // 邀请卡片：点接受去对应的陪伴场景或平行时空
         if (tag.kind === 'study') parts.push({ type: 'invite', kind: 'study', task: tag.task, minutes: tag.minutes });
@@ -578,7 +575,6 @@ export const useChatStore = defineStore('chat', () => {
           }, 900);
         }
       }
-      if (image) parts.push({ type: 'image', assetKey: null, caption: image.caption, mode: image.mode, use: image.use, moment: image.moment, requestedModel: image.model, generated: false });
       msg.parts = parts;
       const swipe = { text: msg.text, parts, expression: msg.expression, choices: msg.meta.choices, secondary: msg.meta.secondary, createdAt: Date.now() };
       if (target) {

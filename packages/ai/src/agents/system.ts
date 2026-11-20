@@ -216,7 +216,7 @@ export class AgentSystem {
     );
     this.record(role, (value.usage?.inputTokens ?? inputTokens) + (value.usage?.outputTokens ?? estimateTokens(value.text + value.thinking)));
     const text = applyFilters(value.text, filters);
-    if (!text.trim()) {
+    if (!text.trim() && !opts.allowEmpty) {
       throw new AiError('empty', `${attempt.endpoint.name} 的回复修剪后是空的（只有思考内容）`, {
         retryable: true,
         detail: value.text,

@@ -199,6 +199,8 @@ interface SeedUpgrade {
   /** 回复长度：还是旧的默认值时换成新的 [旧, 新] */
   maxTokens?: [number, number];
   forced?: { blocks: string[]; description?: boolean };
+  /** 整个预设换成文件里现在的样子（输出写法变了、旧的程序读不了时）：不管改没改过都换一次，id 和创建时间不变 */
+  reset?: boolean;
   patched?: Record<string, [string, string][]>;
   categories?: PresetCategory[];
 }
@@ -715,6 +717,13 @@ function upgradeFile(list: Preset[], u: SeedUpgrade, file: string, changed: Set<
   if (!seed) return;
   for (const p of list) {
     if (p.seedFile !== file) continue;
+    if (u.reset) {
+      const keep = { id: p.id, createdAt: p.createdAt, updatedAt: Date.now() };
+      for (const k of Object.keys(p)) delete (p as unknown as Record<string, unknown>)[k];
+      Object.assign(p, clone(seed), keep);
+      changed.add(p);
+      continue;
+    }
     const [fromName, toName] = u.renamed?.preset ?? [];
     if (fromName && toName && p.name === fromName) {
       p.name = toName;

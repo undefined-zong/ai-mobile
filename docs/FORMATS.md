@@ -88,6 +88,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 | novel.json | novel | `novel-chat` `novel-chapter` `novel-extra` `novel-rewrite` |
 | sprite.json | sprite | `sprite-tags` `sprite-label` `sprite-draw` `sprite-negative` |
 | assistant.json | assistant | `check`（一键检测）`card`（做角色卡 / 补全设定） |
+| feature-secondary.json | secondary（副对话） | `secondary`；主动卡片那几块的触发条件 `card:music` `card:call` `card:study` `card:watch` `card:sleep` `card:exercise` `card:parallel` `card:device`，游戏一个个开 `card:game:kingdom` `card:game:soup`……：按角色绑定世界书的模块开关，这一轮能用的才打开 |
 
 游戏的预设靠任务名的前缀认（`td-` `soup-` `fly-` `brawl-` `decor-` `ws-` `poke-` `community-`，`presetUses.ts`）：换成别的功能预设时出题、布置这些格式会不对。
 
@@ -105,6 +106,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 | social-community.json | community | 建社群 / 发帖 / 网友回应 / 角色回应 | community-create / community-feed、community-member-post / community-react / community-member-react | name、description、vibe、tags、icon、color、memberCount / posts（author、title、text、image、html、htmlTitle、likes、bumps、comments、replyTo）/ likes、bumps、comments / like、bump、comment |
 | rhythm.json | rhythm | 建世界、小镇外观 / 画小镇 / 排今天 | build-world / draw-town / plan-day | fixed、name、blurb、areas、home、locations、people、schedule、meals、wardrobe……/ look、ground、path、water、buildings……/ schedule、meals、outfits、events…… |
 | health.json | health | 排这周 / 排今天 | plan-week / plan-day | focus、days（weekday、workout、minutes、rest、meals）、shopping（name、amount、where、search）、tips / warmup、items（name、sets、reps、seconds、how、easier）、cooldown、meals（breakfast、lunch、dinner……） |
+| feature-secondary.json | secondary | 输出格式 | 每次 | 不是 JSON：直接写要接在回复末尾的话和隐藏标签（同主对话）；`[cg:]` 的画法另起一行写 `mode###…###` `use###…###` `moment###…###` `model###…###`，只认这一轮列出的值，读完从正文里去掉；没有要追加的什么都不输出 |
 | device-heart.json | device | 输出格式 | 每次 | 不是 JSON：把Ta那一句照抄一遍、在要变的地方插 `<device>`，里面的 VIBRATE、pattern、interval、loop、start_position、end_position、duration、STOP…… |
 | feature-heart*.json | scene:heart、heart-voice | 玩具：你自己写指令 | device-inline | `<device>` 里的 VIBRATE、LINEAR、STOP…… |
 | feature-game-brawl.json | game-brawl | 生成战斗档案 / 开场 / 结算 | brawl-make / brawl-open / brawl-end | title、style、hp、mp、attack、speed、color、look、passive、skills / line / line |

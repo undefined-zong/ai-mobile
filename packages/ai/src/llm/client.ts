@@ -92,7 +92,7 @@ export async function chatOnce(ep: Endpoint, req: ChatRequest, opts: ChatOptions
     }
   }
   if (onDelta && (result.text !== shownText || result.thinking !== shownThinking)) onDelta(result.text, result.thinking);
-  if (!result.text.trim()) {
+  if (!result.text.trim() && (!opts.allowEmpty || /length|max_tokens/i.test(result.finishReason ?? ''))) {
     throw new AiError('empty', `${ep.name} 返回了空回复${result.finishReason ? `（结束原因：${result.finishReason}）` : ''}`, { retryable: true });
   }
   return result;
