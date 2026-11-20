@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { characterPronoun } from '@app/shared';
-import { hasOwnWorld, type Character, type LocationActivity, type MapLocation, type SceneId } from '@app/shared';
+import { hasOwnWorld, type Character, type LocationActivity, type MapLocation, type MessagePart, type SceneId } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import Composer from '@/components/chat/Composer.vue';
+import MessageImageViewer from '@/components/chat/MessageImageViewer.vue';
+import PartCard from '@/components/chat/PartCard.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import { figureLayoutFor } from '@/components/scene/location';
 import StageView from '@/components/stage/StageView.vue';
@@ -28,7 +30,7 @@ import { hhmm } from '@/utils/time';
 /**
  * 聚焦主题的首页：打开就是她，不是一张列表。
  * - 整屏是她此刻在的地方（背景按她的地点、时段、天气）和她（立绘位置在「立绘设置 → 各场景的位置和大小 → 聚焦主题 · 首页」里调），能戳；
- * - 下面是她刚说的那句（长回复上下滚动，点「完整对话」看聊天记录），她给的选项，直接回她的输入栏；输入栏最前面的「一起」就地挑一件事去做；
+ * - 下面是她刚说的那句和卡片、配图（一起上下滚动，点「完整对话」看聊天记录），她给的选项，直接回她的输入栏；输入栏最前面的「一起」就地挑一件事去做；
  * - 左边一列去别处（地图、回忆、我的），右边一列她们的动态和找她（社媒、电话、视频、平行时空），两列顶端对齐；
  * - 左上角换人（也是消息列表：谁说了什么、几条没看），在她身上左右划也能换；中间是她在哪、几点，右上角是那边的天气。
  */
@@ -66,7 +68,8 @@ const thread = computed(() => (her.value ? (chat.chatOfCharacter(her.value.id) ?
 const messages = computed(() => (thread.value ? chat.list(thread.value.id) : []));
 const stream = computed(() => (thread.value ? chat.streams[thread.value.id] : undefined));
 const lastAi = computed(() => [...messages.value].reverse().find((m) => m.role === 'assistant'));
-const line = computed(() => (her.value ? messagePreview(lastAi.value, her.value) : ''));
+const cardParts = computed(() => lastAi.value?.parts.filter((p) => p.type !== 'text' && p.type !== 'poke') ?? []);
+const line = computed(() => (cardParts.value.length ? (lastAi.value?.text ?? '') : her.value ? messagePreview(lastAi.value, her.value) : ''));
 const choices = computed(() => (stream.value ? [] : (lastAi.value?.meta.choices ?? [])));
 const failed = computed(() => !stream.value && !!lastAi.value?.meta.error);
 /** 进来之前她连着发了几条（首页显示最后一条，提醒打开完整对话） */
@@ -85,7 +88,10 @@ watch(
     unseen.value = 0;
     if (old && app.viewingChatId === old.id) app.viewingChatId = null;
     // 正在看她：她这时发来的主动消息直接算已读、不弹横幅
-    if (t) app.viewingChatId = t.id;
+    if (t) {
+      app.viewingChatId = t.id;
+      app.activeCharacterId = t.characterId;
+    }
     seeAll();
   },
   { immediate: true },
@@ -133,6 +139,25 @@ function openChat() {
   unseen.value = 0;
   void router.push(`/chat/${id}`);
 }
+
+function openMusic(p: MessagePart) {
+  const q = p.type === 'music' ? `${p.title} ${p.artist}`.trim() : '';
+  void router.push({ path: '/scene/music', query: q ? { q } : {} });
+}
+function answerDate(p: MessagePart, ok: boolean) {
+  if (p.type === 'date') p.status = ok ? 'accepted' : 'declined';
+  send(ok ? '好呀，一言为定！' : '这周可能不太行……下周好不好？');
+}
+const imageOpen = ref(false);
+const imagePart = ref<MessagePart | null>(null);
+function openImage(p: MessagePart) {
+  imagePart.value = p;
+  imageOpen.value = true;
+}
+watch(() => thread.value?.id, () => {
+  imageOpen.value = false;
+  imagePart.value = null;
+});
 
 // —— 舞台：她在哪、穿什么、站哪儿 ——
 const { loc, placeKnown, mapLink, backdrop, rain, weather, weatherText, weatherEntry } = useHerPlace(her);
@@ -285,8 +310,22 @@ async function openTogether() {
               完整对话<span class="i-lucide-chevron-up" aria-hidden="true" />
             </button>
           </div>
-          <div :key="lastAi?.id ?? her.id" class="line" :class="{ 'stream-caret': stream && !stream.thinking && line }" role="region" :aria-label="`${her.name}的最新回复`" tabindex="0">
-            <span v-for="(s, i) in splitActions(line)" :key="i" :class="{ action: s.action }">{{ s.text }}</span>
+          <div :key="lastAi?.id ?? her.id" class="line" role="region" :aria-label="`${her.name}的最新回复`" tabindex="0">
+            <div v-if="line" class="line-text" :class="{ 'stream-caret': stream && !stream.thinking }">
+              <span v-for="(s, i) in splitActions(line)" :key="i" :class="{ action: s.action }">{{ s.text }}</span>
+            </div>
+            <div v-if="cardParts.length" class="line-cards">
+              <PartCard
+                v-for="(p, i) in cardParts"
+                :key="i"
+                :part="p"
+                :character="her"
+                :mine="false"
+                @open-music="openMusic"
+                @open-image="openImage(p)"
+                @answer-date="(ok) => answerDate(p, ok)"
+              />
+            </div>
           </div>
           <span v-if="failed" class="line-note bad">回复没出来 · 点开对话重试</span>
           <span v-else-if="unseen > 1" class="line-note">{{ her.pronoun }}发来 {{ unseen }} 条 · 点「完整对话」查看</span>
@@ -321,6 +360,8 @@ async function openTogether() {
       <div class="text-[15px] mt-3">还没有角色</div>
       <RouterLink to="/import" class="empty-btn press">导入角色卡</RouterLink>
     </div>
+
+    <MessageImageViewer v-if="her && thread" v-model:show="imageOpen" :part="imagePart" :character="her" :chat-id="thread.id" />
 
     <!-- 换人：也是消息列表 -->
     <van-popup v-model:show="whoOpen" position="bottom" round teleport="body" :style="{ maxHeight: '80%' }">
@@ -660,8 +701,19 @@ async function openTogether() {
   font-size: 16px;
   line-height: 1.6;
   letter-spacing: 0.02em;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+.line-text {
+  white-space: pre-wrap;
+}
+.line-cards {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.line-text + .line-cards {
+  margin-top: 8px;
 }
 .action {
   opacity: 0.6;
