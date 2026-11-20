@@ -2,7 +2,7 @@
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
 import { errorText, parseJsonLoose } from '@app/ai';
-import { getLocation, IMAGE_MOMENTS, MEAL_LABEL, mealOfStatus, toMinutes, wallDate, worldOf, type MealSlot, type MessagePart, type PlanMeal, type VideoHit } from '@app/shared';
+import { canDineAt, getLocation, IMAGE_MOMENTS, MEAL_LABEL, mealOfStatus, toMinutes, wallDate, worldOf, type MealSlot, type MessagePart, type PlanMeal, type VideoHit } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -123,11 +123,13 @@ const dayKey = (t: number) => {
 // —— 她那边：今天的作息此刻是不是在吃饭 ——
 const herSlot = computed(() => rhythm.slotNow(her.value.id, new Date(now.value)));
 const herMealSlot = computed(() => (herSlot.value ? mealOfStatus(herSlot.value.status, herSlot.value.from) : null));
-/** 能不能共同吃饭：她作息里正好在吃饭；带她出门吃（她就在你对面）也行 */
-const canTogether = computed(() => !!herMealSlot.value || together.value === 'bring');
 /** 她在哪：带她来时是这家店，否则按她的作息（没有作息时用地图上点进来的地方） */
 const herLocId = computed(() => (together.value === 'bring' ? (location.value?.id ?? null) : (herSlot.value?.locationId ?? location.value?.id ?? null)));
 const herPlace = computed(() => getLocation(herLocId.value)?.name ?? location.value?.name ?? '');
+/** 她此刻在的地方（节律里这一段的地点，小世界里的）能一起吃饭 */
+const herDines = computed(() => canDineAt(getLocation(herLocId.value) ?? location.value));
+/** 能不能共同吃饭：她在能吃饭的地方、作息里正好在吃饭、或者带她出门吃（她就在你对面） */
+const canTogether = computed(() => herDines.value || !!herMealSlot.value || together.value === 'bring');
 /** "在家看书"本身带"在"，"自习中"不带：拼成"在…"时不重复 */
 const doing = (status: string) => (status.startsWith('在') ? status : `在${status}`);
 function herFoodOf(s: MealSlot): string {
@@ -152,6 +154,7 @@ const togetherHint = computed(() => {
   const p = her.value.pronoun;
   if (together.value === 'bring') return `${p}来${herPlace.value || '你这边'}陪你吃，坐在你对面；背景画${p}在对面吃饭的样子`;
   if (herMealSlot.value) return `${p}现在正好在${herSlot.value?.status}（${herPlace.value}），像坐在一张桌子两边一起吃；背景画${p}在对面吃饭的样子`;
+  if (herDines.value) return `${p}在${herPlace.value}${herSlot.value ? `（${herSlot.value.status}）` : ''}，那里能坐下来一起吃，像坐在一张桌子两边；背景画${p}在对面吃饭的样子`;
   if (!herSlot.value) return `${p}今天还没有作息，不知道${p}什么时候吃饭，先各吃各的（作息在"我的 → 节律"里）`;
   const next = herNextMeal.value;
   return `${p}现在${doing(herSlot.value.status)}，不在吃饭，只能各吃各的${next ? `；${next.from} ${p}${next.status}，到时候再来共同吃饭` : ''}`;
@@ -185,8 +188,8 @@ const howOptions = computed(() => [
 ]);
 /** 准备到一半说不照计划了（只这一顿，不改记住的吃法） */
 const offPlan = ref(false);
-/** 按计划吃（只在共同吃饭时） */
-const planned = computed(() => how.value === 'together' && mode.value === 'plan' && !offPlan.value);
+/** 按计划吃（共同吃饭、各吃各的都能照今天的饮食计划） */
+const planned = computed(() => mode.value === 'plan' && !offPlan.value);
 
 // —— 今天吃了哪几顿：从聊天里的饭卡算（真实记录） ——
 const mealCards = computed(() =>
@@ -407,14 +410,16 @@ function contextLines(): string[] {
     lines.push(
       together.value === 'bring'
         ? `共同吃饭：${her.value.name}来${herPlace.value || userName.value + '这边'}陪${userName.value}吃，坐在${userName.value}对面`
-        : `共同吃饭：${her.value.name}作息里正好在${s?.status ?? '吃饭'}（在${herPlace.value}），你们像坐在同一张桌子两边一起吃`,
+        : herMealSlot.value
+          ? `共同吃饭：${her.value.name}作息里正好在${s?.status ?? '吃饭'}（在${herPlace.value}），你们像坐在同一张桌子两边一起吃`
+          : `共同吃饭：${her.value.name}在${herPlace.value}${s ? `（本来在${s.status}，先停下来）` : ''}，那里能坐下来吃，你们像坐在同一张桌子两边一起吃`,
     );
   } else {
     lines.push(`各吃各的：${her.value.name}在${herPlace.value || '自己那边'}${s ? `，${s.status}` : ''}；${userName.value}在${yourPlace.value || '自己那边'}吃饭，你隔着屏幕陪着`);
   }
   if (herMeal.value) lines.push(`${her.value.name}这顿吃：${herMeal.value}`);
   if (planned.value && planMeal.value) lines.push(planLine(planMeal.value));
-  else if (how.value === 'together') lines.push('随便吃点（没照计划）');
+  else lines.push('随便吃点（没照计划）');
   const mine = food.value.trim();
   if (mine) lines.push(`${userName.value}这顿吃的：${mine}`);
   if (seen.value) lines.push(`${userName.value}拍的饭照（识图看到的）：${seen.value.desc}`);
@@ -721,7 +726,7 @@ async function finish() {
     food: f,
     photo: photo.value,
     how: how.value,
-    ...(how.value === 'together' ? { mode: mode.value } : {}),
+    mode: mode.value,
     ...(planned.value && planMeal.value ? { plan: { name: planMeal.value.name, way: way.value } } : {}),
     ...(herMeal.value ? { herMeal: herMeal.value } : {}),
     ...(cheers.value ? { cheers: cheers.value } : {}),
@@ -761,8 +766,8 @@ function again() {
 }
 const doneArt = computed(() => sessionArt.value.at(-1) ?? null);
 const howText = computed(() => {
-  if (how.value === 'solo') return '各吃各的';
-  return planned.value && planMeal.value ? `共同吃饭 · 按计划${WAY_SHORT[way.value]}` : '共同吃饭 · 随便吃点';
+  const h = how.value === 'solo' ? '各吃各的' : '共同吃饭';
+  return planned.value && planMeal.value ? `${h} · 按计划${WAY_SHORT[way.value]}` : `${h} · 随便吃点`;
 });
 
 let ticker: ReturnType<typeof setInterval> | undefined;
@@ -770,7 +775,7 @@ onMounted(() => {
   window.addEventListener('resize', onResize);
   ticker = setInterval(() => (now.value = Date.now()), 1000);
   chat.setLeaveSummary(her.value.id, () => (visitMeals.value.length ? `吃了${visitMeals.value.join('、')}` : undefined));
-  if (how.value === 'together' && mode.value === 'plan' && hs.value && !plan.value && healthStatus.value.live && !planBusy.value) void makePlan();
+  if (mode.value === 'plan' && hs.value && !plan.value && healthStatus.value.live && !planBusy.value) void makePlan();
 });
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize);
@@ -828,14 +833,14 @@ const figureHidden = computed(() => {
                 <div class="text-[14.5px] leading-snug mt-0.5">
                   <template v-if="together === 'bring'">{{ her.pronoun }}来陪你吃饭了，坐在你对面</template>
                   <template v-else-if="herMealSlot">{{ her.pronoun }}正在{{ herSlot?.status }}<template v-if="herMeal"><span class="text-ink-2">：</span>{{ herMeal }}</template></template>
-                  <template v-else-if="herSlot">{{ her.pronoun }}{{ doing(herSlot.status) }}，不在吃饭</template>
+                  <template v-else-if="herSlot">{{ her.pronoun }}{{ doing(herSlot.status) }}<template v-if="!herDines">，不在吃饭</template></template>
                   <template v-else>不知道{{ her.pronoun }}现在在干什么</template>
                 </div>
               </div>
             </div>
             <div v-if="herSlot && together !== 'bring'" class="plan-slots">
               <span class="slot now"><span class="num">{{ herSlot.from }}–{{ herSlot.to }}</span>{{ herSlot.status }}</span>
-              <span v-if="!herMealSlot && herNextMeal" class="slot"><span class="num">{{ herNextMeal.from }}</span>{{ herNextMeal.status }}</span>
+              <span v-if="!canTogether && herNextMeal" class="slot"><span class="num">{{ herNextMeal.from }}</span>{{ herNextMeal.status }}</span>
             </div>
           </div>
           <div v-else-if="shownLine || stream" class="done-say">
@@ -856,46 +861,44 @@ const figureHidden = computed(() => {
                 <Segmented v-model="how" :options="howOptions" data-testid="meal-how" />
                 <p class="hint" data-testid="together-hint">{{ how === 'together' || !canTogether ? togetherHint : `上半屏画${her.pronoun}那边（${her.pronoun}在做自己的事），下半屏是你这边；吃的时候能拍一张、碰杯，也能连麦、放歌、看下饭视频` }}</p>
 
-                <template v-if="how === 'together'">
-                  <div class="label">怎么准备</div>
-                  <Segmented v-model="mode" :options="MODE_OPTIONS" />
-                  <template v-if="mode === 'plan'">
-                    <div v-if="!hs" class="notice mt-2.5">
-                      <span class="i-lucide-heart-pulse shrink-0" />
-                      <span class="flex-1 min-w-0">健康系统没开，没有饮食计划可以照着吃：先在人设里打开，或者选"随便吃点"</span>
-                      <button class="text-accent-ink shrink-0" @click="router.push(`/me/personas/${persona.id}/health`)">去打开</button>
-                    </div>
-                    <template v-else-if="planMeal">
-                      <MealCard :key="slot" :meal="planMeal" :which="slot" open class="mt-2.5" data-testid="meal-plan" />
-                      <p class="hint">
-                        {{ way === 'cook' ? '开始后照着做法一步一步做，做好了再开吃' : way === 'buy' ? '开始后告诉你去哪、点什么，买到了再开吃' : '开始后提醒你怎么热，热好了再开吃' }}；吃的时候可以拍一张（不拍也行）
-                      </p>
-                    </template>
-                    <div v-else-if="plan" class="notice mt-2.5">
-                      <span class="i-lucide-calendar-x shrink-0" />
-                      <span class="flex-1 min-w-0">今天的计划里没有{{ label }}，换一顿，或者选"随便吃点"</span>
-                    </div>
-                    <div v-else class="plan-box text-center">
-                      <div class="text-[14px]">今天的饮食计划还没排</div>
-                      <p v-if="!healthStatus.live" class="hint !text-center">「健康计划」还没接通：<RouterLink to="/me/api?feature=health" class="text-accent-ink">去设置</RouterLink></p>
-                      <p v-else-if="planError" class="hint !text-center text-bad">{{ planError.reason }}</p>
-                      <van-button
-                        class="!mt-2"
-                        size="small"
-                        round
-                        type="primary"
-                        :loading="!!planBusy"
-                        :loading-text="planBusy === 'week' ? '在排这周…' : '在排今天…'"
-                        :disabled="!healthStatus.live"
-                        data-testid="meal-make-plan"
-                        @click="makePlan"
-                      >
-                        排今天的计划
-                      </van-button>
-                    </div>
+                <div class="label">怎么准备</div>
+                <Segmented v-model="mode" :options="MODE_OPTIONS" />
+                <template v-if="mode === 'plan'">
+                  <div v-if="!hs" class="notice mt-2.5">
+                    <span class="i-lucide-heart-pulse shrink-0" />
+                    <span class="flex-1 min-w-0">健康系统没开，没有饮食计划可以照着吃：先在人设里打开，或者选"随便吃点"</span>
+                    <button class="text-accent-ink shrink-0" @click="router.push(`/me/personas/${persona.id}/health`)">去打开</button>
+                  </div>
+                  <template v-else-if="planMeal">
+                    <MealCard :key="slot" :meal="planMeal" :which="slot" open class="mt-2.5" data-testid="meal-plan" />
+                    <p class="hint">
+                      {{ way === 'cook' ? '开始后照着做法一步一步做，做好了再开吃' : way === 'buy' ? '开始后告诉你去哪、点什么，买到了再开吃' : '开始后提醒你怎么热，热好了再开吃' }}；吃的时候可以拍一张（不拍也行）
+                    </p>
                   </template>
-                  <p v-else class="hint">吃的时候写一句吃了什么，或者拍一张、从相册选一张，识图会认出是什么</p>
+                  <div v-else-if="plan" class="notice mt-2.5">
+                    <span class="i-lucide-calendar-x shrink-0" />
+                    <span class="flex-1 min-w-0">今天的计划里没有{{ label }}，换一顿，或者选"随便吃点"</span>
+                  </div>
+                  <div v-else class="plan-box text-center">
+                    <div class="text-[14px]">今天的饮食计划还没排</div>
+                    <p v-if="!healthStatus.live" class="hint !text-center">「健康计划」还没接通：<RouterLink to="/me/api?feature=health" class="text-accent-ink">去设置</RouterLink></p>
+                    <p v-else-if="planError" class="hint !text-center text-bad">{{ planError.reason }}</p>
+                    <van-button
+                      class="!mt-2"
+                      size="small"
+                      round
+                      type="primary"
+                      :loading="!!planBusy"
+                      :loading-text="planBusy === 'week' ? '在排这周…' : '在排今天…'"
+                      :disabled="!healthStatus.live"
+                      data-testid="meal-make-plan"
+                      @click="makePlan"
+                    >
+                      排今天的计划
+                    </van-button>
+                  </div>
                 </template>
+                <p v-else class="hint">吃的时候写一句吃了什么，或者拍一张、从相册选一张，识图会认出是什么</p>
 
                 <div class="label">哪一顿</div>
               </template>

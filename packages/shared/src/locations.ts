@@ -597,6 +597,11 @@ export function isRealPlace(l: MapLocation | null | undefined): boolean {
   return l?.area === 'real';
 }
 
+/** 能一起吃饭的地方：小世界里这个地点能做的事里有"一起吃饭" */
+export function canDineAt(l: MapLocation | null | undefined): boolean {
+  return !!l?.activities.some((a) => a.sceneId === 'meal');
+}
+
 /** 这个角色有没有自己的小世界（导入的角色在"建世界"之前没有） */
 export function hasOwnWorld(characterId: string | null | undefined): boolean {
   return allWorlds().some((w) => w.characterId === characterId);

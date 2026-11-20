@@ -57,7 +57,7 @@ export const SCENES: SceneDef[] = [
     id: 'meal',
     name: '一起吃饭',
     icon: 'i-lucide-utensils',
-    tagline: '{{pronoun}}也在吃饭时一起吃，不在饭点就各吃各的、碰个杯',
+    tagline: '{{pronoun}}在能吃饭的地方或正在吃饭时一起吃，不然就各吃各的、碰个杯',
     backdrop: 'dining',
     ambient: ['cafe'],
     outfit: 'daily',
