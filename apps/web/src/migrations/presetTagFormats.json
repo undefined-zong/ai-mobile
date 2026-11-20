@@ -564,5 +564,10 @@
         ]
       ]
     }
+  },
+  {
+    "id": "tag-format:secondary",
+    "file": "feature-secondary.json",
+    "reset": true
   }
 ]

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  CARD_FLAGS,
   DEVICE_INLINE_FLAG,
   HEALTH_TASKS,
   PLANNER_TASKS,
@@ -73,6 +74,8 @@ const tabs = computed(() => [
 ]);
 const ROLE: Record<PromptBlock['role'], string> = { system: '系统', user: '用户', assistant: '助手' };
 const roleplay = computed(() => !!preset.value && isRoleplayCategory(preset.value.category));
+/** 给副对话用的预设：块上能选"主动卡片"的开关（这一轮能用哪个模块才发那一块） */
+const forSecondary = computed(() => !!preset.value && lib.usesOf(preset.value.id).some((u) => u.id === 'secondary'));
 const usedBy = computed(() => {
   const p = preset.value;
   if (!p) return '';
@@ -251,7 +254,7 @@ function triggerLabel(t: string): string {
   if (t.startsWith(SPRITE_POSE)) return `动作"${t.slice(SPRITE_POSE.length)}"`;
   if (SPRITE_TRIGGERS[t]) return SPRITE_TRIGGERS[t];
   return IMAGE_MODES[t as keyof typeof IMAGE_MODES] ?? momentLabel(t) ?? RHYTHM_TASKS[t as keyof typeof RHYTHM_TASKS] ?? HEALTH_TASKS[t as keyof typeof HEALTH_TASKS] ?? PLANNER_TASKS[t as keyof typeof PLANNER_TASKS] ?? PARALLEL_TASKS[t as keyof typeof PARALLEL_TASKS] ?? SOCIAL_TASKS[t as keyof typeof SOCIAL_TASKS] ?? COMMUNITY_TASKS[t as keyof typeof COMMUNITY_TASKS]
-    ?? COMMUNITY_IMAGE_MOMENTS[t as keyof typeof COMMUNITY_IMAGE_MOMENTS] ?? ROLEPLAY_FLAGS[t] ?? t;
+    ?? COMMUNITY_IMAGE_MOMENTS[t as keyof typeof COMMUNITY_IMAGE_MOMENTS] ?? ROLEPLAY_FLAGS[t] ?? CARD_FLAGS[t] ?? t;
 }
 /** 尺度：真心话大冒险、海龟汤、戳戳乐的预设里，块上能填"…的尺度"（名字写进触发条件 前缀名字） */
 const LEVEL_FIELDS = [
@@ -607,6 +610,12 @@ const HINT: Record<PresetCategory, string> = {
           <div class="flex flex-wrap gap-1.5">
             <button v-for="(label, t) in ROLEPLAY_FLAGS" :key="t" type="button" class="opt" :class="{ on: editing.triggers?.includes(t) }" @click="toggleTrigger(editing, t)">{{ label }}</button>
           </div>
+          <template v-if="forSecondary">
+            <div class="text-[12px] text-ink-3 mt-2.5 mb-1.5">主动卡片（按角色绑定的世界书开关，这一轮能用才发）</div>
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="(label, t) in CARD_FLAGS" :key="t" type="button" class="opt" :class="{ on: editing.triggers?.includes(t) }" @click="toggleTrigger(editing, t)">{{ label }}</button>
+            </div>
+          </template>
           <template v-for="f in levelFields" :key="f.prefix">
             <label class="field-label" :for="`be-level-${f.prefix}`">{{ f.label }}（填了名字，这一块就是一个尺度：开始前按块的顺序列出来，选了它才发送）</label>
             <input

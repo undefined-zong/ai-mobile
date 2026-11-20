@@ -78,6 +78,8 @@ export interface ChatOptions extends ChatCallbacks {
   signal?: AbortSignal;
   /** 默认有 onDelta 就流式 */
   stream?: boolean;
+  /** 空回复也算正常结果（副对话这一轮没有要追加的）；写到一半被输出上限截断的仍然报错 */
+  allowEmpty?: boolean;
 }
 
 export interface ChatResult {

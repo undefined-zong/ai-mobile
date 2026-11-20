@@ -93,7 +93,7 @@ async function undo() {
 </script>
 
 <template>
-  <div v-if="changes.length || errors.length" class="edits" :class="{ done: !!applied }" data-testid="assistant-edits">
+  <div v-if="changes.length || errors.length" class="edits" :class="{ 'is-applied': !!applied }" data-testid="assistant-edits">
     <div class="head">
       <span :class="applied ? 'i-lucide-circle-check' : 'i-lucide-file-pen-line'" class="shrink-0" />
       <span class="flex-1 min-w-0">
@@ -154,7 +154,7 @@ async function undo() {
   border: 1px solid var(--border);
   font-size: 13px;
 }
-.edits.done {
+.edits.is-applied {
   opacity: 0.85;
 }
 .head {

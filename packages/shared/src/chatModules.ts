@@ -69,6 +69,42 @@ export function parseWatchInvite(value: string): { kind: 'watch'; title: string;
 export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'device'] as const satisfies readonly ControlTagKind[];
 export type ModuleTag = (typeof MODULE_TAGS)[number];
 
+/** 模块的中文名（和"聊天 · 主动卡片"世界书的条目标题一致） */
+export const MODULE_LABELS: Record<ModuleTag, string> = {
+  music: '一起听歌',
+  call: '打电话',
+  study: '约一起学习',
+  watch: '约一起看片',
+  game: '约游戏',
+  sleep: '哄睡',
+  exercise: '一起运动',
+  parallel: '平行时空',
+  device: '玩具指令（成人）',
+};
+
+/**
+ * 副对话预设里主动卡片那几块的触发条件："card:music"……，游戏一个个开："card:game:soup"。
+ * 这一轮能用哪个模块（按她绑定的世界书开关算出来的）就打开哪个，副对话预设不用开世界书
+ */
+export const CARD_FLAG_PREFIX = 'card:';
+export type CardKey = ModuleTag | `game:${InviteGameId}`;
+
+export function cardFlag(key: CardKey): string {
+  return `${CARD_FLAG_PREFIX}${key}`;
+}
+
+/** 这一轮打开哪些卡片块：能用的模块，模块里有游戏时再加上能约的那几个游戏 */
+export function cardFlags(tags: readonly ControlTagKind[], games: readonly InviteGameId[]): string[] {
+  const on = MODULE_TAGS.filter((t) => tags.includes(t));
+  return [...on.map((t) => cardFlag(t)), ...(on.includes('game') ? games.map((g) => cardFlag(`game:${g}`)) : [])];
+}
+
+/** 卡片块触发条件的中文名（预设编辑页里选） */
+export const CARD_FLAGS: Record<string, string> = Object.fromEntries([
+  ...MODULE_TAGS.map((t) => [cardFlag(t), `主动卡片：${MODULE_LABELS[t]}`]),
+  ...INVITE_GAMES.map((g) => [cardFlag(`game:${g.id}`), `主动卡片：游戏 · ${g.label}`]),
+]);
+
 /** 条目内容里写了哪个写法，就算教了哪个模块 */
 const TEACHES: Record<ModuleTag, RegExp> = {
   music: /[[【]music[:：]/i,
