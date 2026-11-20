@@ -47,6 +47,9 @@ import { startParallelSchedule } from '@/services/parallel';
 import { useAssistantStore } from '@/stores/assistant';
 import { useCommunityStore } from '@/stores/community';
 import { startSocialSchedule } from '@/services/social';
+import { startDiarySchedule } from '@/services/diary';
+import { useDiaryStore } from '@/stores/diary';
+import { useAlbumStore } from '@/stores/album';
 import { startCommunitySchedule } from '@/services/community';
 import { maybeAutoConsolidate } from './services/consolidate';
 import { useServicesStore } from './stores/services';
@@ -112,6 +115,9 @@ const hydrated = Promise.allSettled([
   useSocialStore().hydrate(),
   // 社群：自带的、搜出来的社群，里面的帖子，和社群的设置
   useCommunityStore().hydrate(),
+  // 日记：她们每晚写的日记；相册：你从生成的图里存下来的
+  useDiaryStore().hydrate(),
+  useAlbumStore().hydrate(),
   // 我的 → 助手：和助手的对话、选着的对象、应用过的修改（能撤销）
   useAssistantStore().hydrate(),
 ]);
@@ -162,6 +168,8 @@ void hydrated.then(async (results) => {
   startCommunitySchedule();
   // 平行时空：云端没接通时，App 开着也按同样的随机时间让她们给你留言
   startParallelSchedule();
+  // 日记：开了"主动写日记"的角色每晚 22:00 写（云端写；没连云端时 App 开着在这里写，第二天上午补写昨天的）
+  startDiarySchedule();
   // 健康计划：每天到点自动排（云端排；没连云端时 App 开着在这里排）
   startHealthSchedule();
   void maybeAutoConsolidate(useHubStore().connected);

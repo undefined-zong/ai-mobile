@@ -113,6 +113,16 @@ export interface CharacterWeather {
   provider?: WeatherProviderChoice;
 }
 
+/**
+ * 主动写日记：开着时每晚 22:00（按"环境与作息"的时区）按今天的节律写一篇当天的日记。
+ * 写的是Ta自己的一天（不全围着你转），可以配一张图。
+ */
+export interface CharacterDiary {
+  enabled: boolean;
+  /** 配图（默认开）：模型觉得这一天值得画时写一句画面，手机用"生图"画 */
+  image?: boolean;
+}
+
 export interface Character extends SyncMeta {
   live2d?: import('./live2d.ts').CharacterLive2D;
   name: string;
@@ -139,6 +149,8 @@ export interface Character extends SyncMeta {
   relationship: Relationship;
   /** 她那边的天气（住在哪座城市）；没有 = 跟你一样 */
   weather?: CharacterWeather;
+  /** 主动写日记（没有 = 不写） */
+  diary?: CharacterDiary;
   /** 状态行，例如"在图书馆自习" */
   status: string;
   /**

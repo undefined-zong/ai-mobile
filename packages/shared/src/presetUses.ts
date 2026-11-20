@@ -16,6 +16,7 @@ import { SOCIAL_TASKS } from './types/social.ts';
  *   装修小屋用"一起游戏 · 装修小屋"（game-decor）。
  * - 创意工坊：写小说用"小说"预设（novel，调"创作 · 小说"的 API），画画用"一起游戏 · 创意工坊"的生图预设（game-workshop-image，可以跟随配图），
  *   把作品给她看、她捧场或吐槽用"一起游戏 · 创意工坊"（game-workshop）。
+ * - 日记：开了"主动写日记"的角色每晚 22:00 写当天的日记用 diary（"日记"分类的预设、调"日记"的 API），配图用"配图"的生图预设。
  * - 社媒：朋友圈（她发朋友圈、回应你的朋友圈和评论）用 social，社群（按关键字建社群、网友发帖和回应、加入社群的角色发帖和回应）用 community，
  *   都是"社媒"分类的预设、调"社媒"的 API；朋友圈的配图用"配图"的生图预设，社群帖子的配图用"社群配图"（community-image，可以跟随配图）。
  * - 立绘：AI 画立绘用"立绘"预设（sprite）：写外观 tags、各个表情和动作的 tags、出图参数都在它里面。
@@ -31,6 +32,7 @@ export type PresetUseId =
   | 'proactive'
   | 'social'
   | 'community'
+  | 'diary'
   | 'theater'
   | 'summary'
   | 'consolidate'
@@ -230,6 +232,14 @@ export const PRESET_USES: PresetUse[] = [
     label: '社群',
     desc: '搜不到社群时按关键字建一个；你加入的社群里网友每天发帖（云端随机时间发）、给你的帖子点赞顶帖回复；你邀请进社群的角色发帖、回应你',
     icon: 'i-lucide-users-round',
+    follow: null,
+  },
+  {
+    id: 'diary',
+    category: 'diary',
+    label: '日记',
+    desc: '开了"主动写日记"的角色每晚 22:00 按今天的节律写一篇当天的日记（云端写，App 关着也写），回忆 → 日记里也能让Ta现在写；要配的图交给"配图"画',
+    icon: 'i-lucide-notebook-tabs',
     follow: null,
   },
   { id: 'theater', category: 'theater', label: '番外', desc: '"我的 → 试一试 → 写一段番外"', icon: 'i-lucide-book-heart', follow: null },

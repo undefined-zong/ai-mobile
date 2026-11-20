@@ -10,7 +10,7 @@ import { assetUrl } from '@/services';
 /**
  * 一条朋友圈 / 社群里一帖带的东西：图（你的照片 / AI 画的，没画出来时显示要画的画面和"画这张图"）
  * 和一小页 HTML（单据、卡片，放在沙盒小窗里）。朋友圈和社群共用。
- * 点开看大图：AI 画的那几张能"重新生成"（给了 redraw 时；拍的照片不行）
+ * 点开看大图：AI 画的那几张能"重新生成"（给了 redraw 时；拍的照片不行），能"存到相册"（给了 album 时）
  */
 const props = defineProps<{
   images: MomentImage[];
@@ -19,6 +19,8 @@ const props = defineProps<{
   drawing?: number[];
   /** 重画已经画好的第 index 张 */
   redraw?: (index: number) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** 存到相册时记下的：哪个角色发的（网友、你发的为空）、朋友圈还是社群、什么时候发的、在哪 */
+  album?: { characterId: string | null; scene: 'moments' | 'community'; at: number; place?: string; text?: string };
 }>();
 const emit = defineEmits<{ (e: 'draw', index: number): void }>();
 
@@ -29,27 +31,50 @@ async function urlOf(i: MomentImage | undefined): Promise<string | null> {
   return i.assetKey ? (/^(?:https?:|data:|blob:)/.test(i.assetKey) ? i.assetKey : assetUrl(i.assetKey)) : (i.url ?? null);
 }
 
+/** 第 n 张看大图用的（重画以后按新图重新拼：存到相册时存的是新图） */
+async function viewerOf(n: number): Promise<ViewerImage | null> {
+  const img = props.images[n];
+  const url = await urlOf(img);
+  if (!img || !url) return null;
+  const redraw = props.redraw;
+  const album = props.album;
+  return {
+    url,
+    name: img.caption,
+    ...(redraw && !img.photo
+      ? {
+          redraw: async () => {
+            const r = await redraw(n);
+            if (!r.ok) throw new Error(r.reason);
+            return viewerOf(n);
+          },
+        }
+      : {}),
+    ...(album && !img.photo && (img.assetKey || img.url)
+      ? {
+          album: {
+            assetKey: img.assetKey && !/^(?:https?:|data:|blob:)/.test(img.assetKey) ? img.assetKey : null,
+            ...(img.url || (img.assetKey && /^https?:/.test(img.assetKey)) ? { url: img.url ?? img.assetKey! } : {}),
+            characterId: album.characterId,
+            title: (album.text ?? '').replace(/\s+/g, ' ').slice(0, 30) || img.caption.slice(0, 30),
+            caption: img.caption,
+            scene: album.scene,
+            ...(album.place ? { place: album.place } : {}),
+            at: album.at,
+          },
+        }
+      : {}),
+  };
+}
+
 async function preview(index: number) {
   const list: ViewerImage[] = [];
   let start = 0;
-  for (const [n, img] of props.images.entries()) {
-    const url = await urlOf(img);
-    if (!url) continue;
+  for (const n of props.images.keys()) {
+    const v = await viewerOf(n);
+    if (!v) continue;
     if (n === index) start = list.length;
-    const redraw = props.redraw;
-    list.push({
-      url,
-      name: img.caption,
-      ...(redraw && !img.photo
-        ? {
-            redraw: async () => {
-              const r = await redraw(n);
-              if (!r.ok) throw new Error(r.reason);
-              return urlOf(props.images[n]);
-            },
-          }
-        : {}),
-    });
+    list.push(v);
   }
   if (list.length) previewImages(list, { startPosition: start });
 }

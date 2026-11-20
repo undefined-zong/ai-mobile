@@ -364,12 +364,12 @@ watch(together, () => {
 });
 async function preview(item: { assetKey: string | null; url?: string } | null) {
   if (!item) return;
-  const img = await shotViewerImage(item);
+  const img = await shotViewerImage(item, { characterId: her.value.id, scene: 'meal' });
   if (img) previewImages([img]);
   else showToast('本机找不到这张图了');
 }
 async function previewSession(start: number) {
-  const { images, start: at } = await shotViewerImages(sessionArt.value, start);
+  const { images, start: at } = await shotViewerImages(sessionArt.value, start, { characterId: her.value.id, scene: 'meal' });
   if (images.length) previewImages(images, { startPosition: at });
   else showToast('本机找不到这几张图了');
 }

@@ -1,6 +1,6 @@
 import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
 import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, watchWorkoutLine, type HubWatchWorkouts, type WatchWorkout, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
-  type Character, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
+  type Character, type HubDiaries, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { getOne, msgKey, write } from '@/db/idb';
@@ -12,6 +12,7 @@ import { settleSyncJobs } from '@/services/hubSync';
 import { communityCloudContext, receiveHubPosts } from '@/services/community';
 import { receiveHubMoments, socialCloudContext } from '@/services/social';
 import { parallelCloudContext, parallelPlanCloudContexts, receiveHubNotes } from '@/services/parallel';
+import { diaryCloudContext, receiveHubDiaries } from '@/services/diary';
 import { useAiStore } from './ai';
 import { useAppStore } from './app';
 import { useCharacterStore } from './characters';
@@ -24,6 +25,7 @@ import { afterSummarized, lastN, useMessageSettingsStore } from './messageSettin
 import { useRhythmStore } from './rhythm';
 import { useHealthStore } from './health';
 import { useParallelStore } from './parallel';
+import { useDiaryStore } from './diary';
 import { useServicesStore } from './services';
 import { useSocialStore } from './social';
 import { usePersonaStore } from './personas';
@@ -51,6 +53,8 @@ interface SavedHub {
   plannerRevisions?: Record<string, number>; plannerHashes?: Record<string, string>; plannerApiHash?: string; plannerMcpHashes?: Record<string, string>;
   /** 平行时空：每个角色上传过的版本和内容指纹、API 指纹 */
   parallelRevisions?: Record<string, number>; parallelHashes?: Record<string, string>; parallelApiHash?: string;
+  /** 日记：每个角色上传过的版本和内容指纹、API 指纹 */
+  diaryRevisions?: Record<string, number>; diaryHashes?: Record<string, string>; diaryApiHash?: string;
   /** 健康计划：每个人设上传过的版本和内容指纹、API 指纹 */
   healthRevisions?: Record<string, number>; healthHashes?: Record<string, string>; healthApiHash?: string; healthCursor?: number;
   /** 给云端的 Google 地图 Key 上传过的指纹（空 = 没传） */
@@ -66,9 +70,11 @@ interface SavedHub {
 export const useHubStore = defineStore('hub', () => {
   const config = reactive<SavedHub>({ url: '', cursor: 0, deviceId: '', active: false, preview: 'name-only', revisions: {}, hashes: {}, apiHash: '', rhythmRevisions: {}, rhythmHashes: {}, rhythmApiHash: '',
     memoryRevisions: {}, memoryHashes: {}, memoryApiHash: '', memoryAppliedAt: 0, socialRevisions: {}, socialHashes: {}, socialApiHash: '', communityRevisions: {}, communityHashes: {},
-    plannerRevisions: {}, plannerHashes: {}, plannerApiHash: '', plannerMcpHashes: {}, parallelRevisions: {}, parallelHashes: {}, parallelApiHash: '', parallelPlanRevisions: {}, parallelPlanHashes: {}, healthRevisions: {}, healthHashes: {}, healthApiHash: '' });
+    plannerRevisions: {}, plannerHashes: {}, plannerApiHash: '', plannerMcpHashes: {}, parallelRevisions: {}, parallelHashes: {}, parallelApiHash: '', parallelPlanRevisions: {}, parallelPlanHashes: {}, healthRevisions: {}, healthHashes: {}, healthApiHash: '', diaryRevisions: {}, diaryHashes: {}, diaryApiHash: '' });
   /** 云端没留出来的言（"云端与同步"、平行时空里显示） */
   const parallelErrors = ref<HubParallelNotes['errors']>([]);
+  /** 云端没写出来的日记（"云端与同步"、回忆 → 日记里显示） */
+  const diaryErrors = ref<HubDiaries['errors']>([]);
   /** 云端没发出来的社群帖子（"云端与同步"、社群设置里显示） */
   const communityErrors = ref<HubCommunityPosts['errors']>([]);
   /** 云端没发出来的朋友圈（"云端与同步"、朋友圈设置里显示） */
@@ -92,6 +98,8 @@ export const useHubStore = defineStore('hub', () => {
   const supportsPlanner = computed(() => typeof status.value?.plannerConfigured === 'boolean');
   /** 旧版 Worker 没有平行时空：不算"必须升级"，只是云端不会替她留言（App 开着照样留） */
   const supportsParallel = computed(() => typeof status.value?.parallelConfigured === 'boolean');
+  /** 旧版 Worker 没有日记：不算"必须升级"，只是云端不会每晚替她写（App 开着照样写） */
+  const supportsDiary = computed(() => typeof status.value?.diaryConfigured === 'boolean');
   /** 云端会不会每天到点排健康计划（旧版 Worker 没有：手机开着时自己排） */
   const supportsHealth = computed(() => typeof status.value?.healthConfigured === 'boolean');
   /** 云端会不会每天到点整理你的一天（旧版 Worker 没有：手机开着时自己整理） */
@@ -179,7 +187,7 @@ export const useHubStore = defineStore('hub', () => {
     error.value = '';
     if (config.url !== base) Object.assign(config, { cursor: 0, active: false, revisions: {}, hashes: {}, apiHash: '', rhythmRevisions: {}, rhythmHashes: {}, rhythmApiHash: '',
       memoryRevisions: {}, memoryHashes: {}, memoryApiHash: '', memoryAppliedAt: 0, socialRevisions: {}, socialHashes: {}, socialApiHash: '', communityRevisions: {}, communityHashes: {},
-      plannerRevisions: {}, plannerHashes: {}, plannerApiHash: '', plannerMcpHashes: {}, parallelRevisions: {}, parallelHashes: {}, parallelApiHash: '', parallelPlanRevisions: {}, parallelPlanHashes: {}, healthRevisions: {}, healthHashes: {}, healthApiHash: '', lastSyncAt: undefined });
+      plannerRevisions: {}, plannerHashes: {}, plannerApiHash: '', plannerMcpHashes: {}, parallelRevisions: {}, parallelHashes: {}, parallelApiHash: '', parallelPlanRevisions: {}, parallelPlanHashes: {}, healthRevisions: {}, healthHashes: {}, healthApiHash: '', diaryRevisions: {}, diaryHashes: {}, diaryApiHash: '', lastSyncAt: undefined });
     status.value = null; points.value = []; lastSyncAt.value = config.lastSyncAt ?? null;
     config.url = base;
     config.deviceId = result.deviceId;
@@ -236,6 +244,12 @@ export const useHubStore = defineStore('hub', () => {
           config.parallelRevisions = Object.fromEntries(data.contexts.map((c) => [c.id, c.revision]));
           config.parallelHashes = Object.fromEntries(Object.keys(config.parallelHashes ?? {}).map((id) => [id, '']));
           config.parallelApiHash = '';
+        } }] : []),
+        ...(supportsDiary.value ? [{ label: '日记版本', run: async () => {
+          const data = await request<{ contexts: { id: string; revision: number }[] }>('/v1/diary/contexts');
+          config.diaryRevisions = Object.fromEntries(data.contexts.map((c) => [c.id, c.revision]));
+          config.diaryHashes = Object.fromEntries(Object.keys(config.diaryHashes ?? {}).map((id) => [id, '']));
+          config.diaryApiHash = '';
         } }] : []),
         ...(supportsHealth.value ? [{ label: '健康计划版本', run: async () => {
           const data = await request<{ contexts: { id: string; revision: number }[] }>('/v1/health/contexts');
@@ -359,7 +373,7 @@ export const useHubStore = defineStore('hub', () => {
     if (failed?.status === 'rejected') throw failed.reason;
   }
 
-  async function uploadApi(role: 'proactive' | 'rhythm' | 'consolidate' | 'social' | 'planner' | 'parallel' | 'health' = 'proactive') {
+  async function uploadApi(role: 'proactive' | 'rhythm' | 'consolidate' | 'social' | 'planner' | 'parallel' | 'health' | 'diary' = 'proactive') {
     const ai = useAiStore();
     if (!ai.isLive(role)) throw new Error(`请先在 API 设置中接通${AGENT_META[role].label}`);
     // 主动消息可能跟随「陪伴 · 快速」、它再跟随主对话：一路上的设置都要带上，云端才解析得出用哪个 API
@@ -372,9 +386,9 @@ export const useHubStore = defineStore('hub', () => {
       textObfuscation: ai.textObfuscation,
     });
     const fingerprint = await hash(credentials);
-    const key = role === 'rhythm' ? 'rhythmApiHash' : role === 'consolidate' ? 'memoryApiHash' : role === 'social' ? 'socialApiHash' : role === 'planner' ? 'plannerApiHash' : role === 'parallel' ? 'parallelApiHash' : role === 'health' ? 'healthApiHash' : 'apiHash';
+    const key = role === 'rhythm' ? 'rhythmApiHash' : role === 'consolidate' ? 'memoryApiHash' : role === 'social' ? 'socialApiHash' : role === 'planner' ? 'plannerApiHash' : role === 'parallel' ? 'parallelApiHash' : role === 'health' ? 'healthApiHash' : role === 'diary' ? 'diaryApiHash' : 'apiHash';
     const configured = role === 'rhythm' ? status.value?.rhythmConfigured : role === 'consolidate' ? status.value?.memoryConfigured
-      : role === 'social' ? status.value?.socialConfigured : role === 'planner' ? status.value?.plannerConfigured : role === 'parallel' ? status.value?.parallelConfigured : role === 'health' ? status.value?.healthConfigured : status.value?.configured;
+      : role === 'social' ? status.value?.socialConfigured : role === 'planner' ? status.value?.plannerConfigured : role === 'parallel' ? status.value?.parallelConfigured : role === 'health' ? status.value?.healthConfigured : role === 'diary' ? status.value?.diaryConfigured : status.value?.configured;
     if (config[key] === fingerprint && configured) return;
     await request(`/v1/secrets/${role}`, 'PUT', credentials);
     config[key] = fingerprint;
@@ -617,6 +631,57 @@ export const useHubStore = defineStore('hub', () => {
     await save();
     const failure = results.find((r) => r.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
+  }
+
+  /** 日记：开着"主动写日记"的角色各上传一份（角色卡、今天的节律、今天和你、记得的事、最近几篇日记），云端每晚 22:00 替她写 */
+  function diaryContexts() {
+    // "日记"没接通时不传（传了云端也写不出来）
+    if (!useAiStore().isLive('diary')) return [];
+    return useCharacterStore().list.flatMap((c) => {
+      const context = diaryCloudContext(c.id);
+      return context ? [context] : [];
+    });
+  }
+
+  async function uploadDiary() {
+    if (!useDiaryStore().ready) return;
+    config.diaryRevisions ??= {};
+    config.diaryHashes ??= {};
+    const revisions = config.diaryRevisions;
+    const hashes = config.diaryHashes;
+    const snapshots = clone(diaryContexts());
+    const present = new Set(snapshots.map((c) => c.character.id));
+    // Only unregister this device's previously uploaded roles. Empty devices cannot erase other roles.
+    const results = await Promise.allSettled([
+      ...snapshots.map(async (context) => {
+        const id = context.character.id;
+        const fingerprint = await hash(context);
+        if (hashes[id] === fingerprint) return;
+        const result = await putContext('/v1/diary/contexts', id, context, revisions);
+        revisions[id] = result.revision; hashes[id] = fingerprint;
+      }),
+      ...Object.keys(hashes).filter((id) => !present.has(id)).map(async (id) => {
+        await request(`/v1/diary/contexts/${encodeURIComponent(id)}`, 'DELETE');
+        delete hashes[id]; delete revisions[id];
+      }),
+      ...(snapshots.length ? [uploadApi('diary')] : []),
+    ]);
+    await save();
+    const failure = results.find((r) => r.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
+  }
+
+  /** 拉云端写好的日记：放进来；有新的弹一条横幅 */
+  async function pullDiary() {
+    const diary = useDiaryStore();
+    if (!diary.ready) return;
+    const data = await request<HubDiaries>(`/v1/diary/entries?since=${diary.cursor}`);
+    diaryErrors.value = data.errors;
+    const added = receiveHubDiaries(data.entries.map((e) => e.entry));
+    diary.cursor = Math.max(diary.cursor, ...data.entries.map((e) => e.doneAt));
+    const latest = added.at(-1);
+    const author = useCharacterStore().byId(latest?.characterId);
+    if (latest && author) useAppStore().showBanner({ characterId: author.id, title: author.name, text: `写了今天的日记${latest.title ? `《${latest.title}》` : ''}`, to: `/memories?char=${encodeURIComponent(author.id)}&tab=diary`, icon: 'i-lucide-notebook-tabs' });
   }
 
   /** 健康计划：开着健康系统的人设各上传一份（拼好的今天、明天的材料），云端每天到点替你排 */
@@ -936,6 +1001,7 @@ export const useHubStore = defineStore('hub', () => {
         ...(supportsCommunity.value ? [{ label: '社群', run: () => pullCommunities().then(uploadCommunities) }] : []),
         ...(supportsPlanner.value ? [{ label: '日程计划', run: () => pullPlanner().then(uploadPlanner) }] : []),
         ...(supportsParallel.value ? [{ label: '平行时空', run: () => pullParallel().then(uploadParallel) }] : []),
+        ...(supportsDiary.value ? [{ label: '日记', run: () => pullDiary().then(uploadDiary) }] : []),
         ...(supportsHealth.value ? [{ label: '健康计划', run: () => pullHealth().then(uploadHealth) }] : []),
         ...(supportsIngest.value && useHealthStore().watch.mode !== 'off' ? [{ label: '手表数据', run: pullWatchWorkouts }] : []),
         ...(supportsParallelPlan.value ? [{ label: '整理你的一天', run: () => pullParallelPlans().then(uploadParallelPlans) }] : []),
@@ -1022,7 +1088,7 @@ export const useHubStore = defineStore('hub', () => {
     navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data?.type === 'hub-inbox') void syncNow(); });
     watch(() => config.preview, () => { void save(); });
     let debounce: ReturnType<typeof setTimeout>;
-    watch(() => [contexts(), rhythmContexts(), socialContexts(), communityContexts(), plannerContexts(), parallelContexts(), parallelPlanCloudContexts(), healthContexts(), useAiStore().routes, useAiStore().outputFilters, useAiStore().textObfuscation,
+    watch(() => [contexts(), rhythmContexts(), socialContexts(), communityContexts(), plannerContexts(), parallelContexts(), parallelPlanCloudContexts(), healthContexts(), diaryContexts(), useAiStore().routes, useAiStore().outputFilters, useAiStore().textObfuscation,
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('planner'))),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('planner'), true)),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('proactive'))),
@@ -1033,11 +1099,13 @@ export const useHubStore = defineStore('hub', () => {
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('social'), true)),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('parallel'))),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('parallel'), true)),
+      useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('diary'))),
+      useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('diary'), true)),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('health'))),
       useAiStore().keyOf(apiKeyId(useAiStore().system.router.source('health'), true)), useServicesStore().cloudMapsKey, useChatStore().streams], () => {
       clearTimeout(debounce); debounce = setTimeout(() => void syncNow(), 500);
     }, { deep: true });
   }
-  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, endpoint,
+  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, diaryErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsDiary, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, endpoint,
     ensureStatus, pushMcpSecret, syncPlannerNow, runPlanner, mcpCall, plannerTools, oauthDiscover, oauthRegister, oauthToken, pullWatchWorkouts, createIngestToken, revokeIngestToken, start };
 });

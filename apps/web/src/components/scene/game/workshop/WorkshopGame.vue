@@ -13,7 +13,7 @@ import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { useLibraryStore } from '@/stores/library';
-import { useWorkshopStore, type Drawing } from '@/stores/workshop';
+import { drawingAlbum, useWorkshopStore, type Drawing } from '@/stores/workshop';
 import { uid } from '@/utils/id';
 import DrawStudio from './DrawStudio.vue';
 import NovelStudio from './NovelStudio.vue';
@@ -103,7 +103,7 @@ const ago = (t: number) => {
 /** 点一张画：看大图 */
 async function previewDrawing(d: Drawing) {
   const url = d.assetKey ? await assetUrl(d.assetKey) : d.url;
-  if (url) previewImages([url]);
+  if (url) previewImages([{ url, name: d.title, album: drawingAlbum(d) }]);
   else showToast('本机找不到这张图了');
 }
 

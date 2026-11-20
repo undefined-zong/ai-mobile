@@ -98,6 +98,9 @@ export interface HubStatus {
   /** 云端平行时空的 API 已上传；旧版 Worker 没有这个字段（不会在云端替她留言） */
   parallelConfigured?: boolean;
   lastParallelError?: string | null;
+  /** 云端日记的 API 已上传；旧版 Worker 没有这个字段（不会在云端写日记，手机开着时自己写） */
+  diaryConfigured?: boolean;
+  lastDiaryError?: string | null;
   /** 云端健康计划的 API 已上传；旧版 Worker 没有这个字段（不会在云端排健康计划，手机开着时自己排） */
   healthConfigured?: boolean;
   lastHealthError?: string | null;

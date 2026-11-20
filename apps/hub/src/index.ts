@@ -1,5 +1,5 @@
 import { AgentSystem, discoverOAuth, exchangeOAuthCode, openMcpSession, registerOAuthClient } from '@app/ai';
-import { communitySettingsValid, normalizeMcpServer, WEREAD_HEADERS, normalizePlanner, PARALLEL_PER_DAY_MAX, shiftDate, SOCIAL_PER_DAY_MAX, zonedParts, type CommunityContext, type ParallelContext, type ParallelNote, type ParallelPlan, type ParallelPlanContext, type HealthPlanContext, type HealthRunResult, type McpOAuthToken, type McpServerSecret, type PlannerContext, type PlannerRunResult, type CommunityPost, type MemoryConsolidationContext, type MemoryJobResult, type Moment, type ProactiveContext, type ProactiveCredentials, type RhythmContext, type SocialContext, type Touchpoint } from '@app/shared';
+import { communitySettingsValid, type DiaryContext, type DiaryEntry, normalizeMcpServer, WEREAD_HEADERS, normalizePlanner, PARALLEL_PER_DAY_MAX, shiftDate, SOCIAL_PER_DAY_MAX, zonedParts, type CommunityContext, type ParallelContext, type ParallelNote, type ParallelPlan, type ParallelPlanContext, type HealthPlanContext, type HealthRunResult, type McpOAuthToken, type McpServerSecret, type PlannerContext, type PlannerRunResult, type CommunityPost, type MemoryConsolidationContext, type MemoryJobResult, type Moment, type ProactiveContext, type ProactiveCredentials, type RhythmContext, type SocialContext, type Touchpoint } from '@app/shared';
 import { digest, equalSecret, seal } from './crypto.ts';
 import { assert, HttpError, json, readJson } from './http.ts';
 import { syncApi, syncStatus } from './sync.ts';
@@ -11,6 +11,7 @@ import { runMemoryScheduled } from './memory.ts';
 import { runSocialScheduled } from './social.ts';
 import { runCommunityScheduled } from './community.ts';
 import { runParallelScheduled } from './parallel.ts';
+import { runDiaryScheduled } from './diary.ts';
 import { runParallelPlanScheduled } from './parallelPlan.ts';
 import { runHealthScheduled } from './health.ts';
 import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './planner.ts';
@@ -116,7 +117,7 @@ async function api(request: Request, env: Env): Promise<Response> {
 
   if (path === '/v1/status' && request.method === 'GET') {
     const [enabled, lastCronAt, lastError, configured, channels, rhythmConfigured, lastRhythmError, memoryConfigured, lastMemoryError, socialConfigured, lastSocialError, lastCommunityError,
-      plannerConfigured, lastPlannerError, plannerMcp, parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured, lastHealthError, mapsConfigured, ingest] = await Promise.all([
+      plannerConfigured, lastPlannerError, plannerMcp, parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured, lastHealthError, mapsConfigured, ingest, diaryConfigured, lastDiaryError] = await Promise.all([
       getMeta(env, 'enabled', false), getMeta<number | null>(env, 'lastCronAt', null), getMeta<string | null>(env, 'lastError', null),
       env.DB.prepare("SELECT id FROM secrets WHERE id = 'proactive'").first(),
       env.DB.prepare('SELECT id, kind, label, last_ok_at AS lastOkAt FROM push_channels').all(),
@@ -131,11 +132,12 @@ async function api(request: Request, env: Env): Promise<Response> {
       env.DB.prepare("SELECT id FROM secrets WHERE id = 'health'").first(), getMeta<string | null>(env, 'lastHealthError', null),
       env.DB.prepare("SELECT id FROM secrets WHERE id = 'maps'").first(),
       ingestStatus(env),
+      env.DB.prepare("SELECT id FROM secrets WHERE id = 'diary'").first(), getMeta<string | null>(env, 'lastDiaryError', null),
     ]);
     return json({ enabled, lastCronAt, lastError, configured: !!configured, rhythmConfigured: !!rhythmConfigured, lastRhythmError,
       memoryConfigured: !!memoryConfigured, lastMemoryError, socialConfigured: !!socialConfigured, lastSocialError, lastCommunityError,
       plannerConfigured: !!plannerConfigured, lastPlannerError, plannerMcp: plannerMcp.results.map((r) => r.server_id),
-      parallelConfigured: !!parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured: !!healthConfigured, lastHealthError, mapsConfigured: !!mapsConfigured,
+      parallelConfigured: !!parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured: !!healthConfigured, lastHealthError, mapsConfigured: !!mapsConfigured, diaryConfigured: !!diaryConfigured, lastDiaryError,
       weread: true, mcpCall: true, ...ingest, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
   }
   if (path === '/v1/proactive/enabled' && request.method === 'PUT') {
@@ -341,6 +343,7 @@ async function api(request: Request, env: Env): Promise<Response> {
   }
   if (path.startsWith('/v1/planner/')) return plannerApi(request, env, url);
   if (path.startsWith('/v1/parallel/')) return parallelApi(request, env, url);
+  if (path.startsWith('/v1/diary/')) return diaryApi(request, env, url);
   if (path.startsWith('/v1/health/')) return healthApi(request, env, url);
   // 给云端的 Google 地图 Key（排健康计划时查家附近的店）：加密存，只写不读
   if (path === '/v1/secrets/maps' && request.method === 'PUT') {
@@ -355,9 +358,9 @@ async function api(request: Request, env: Env): Promise<Response> {
     await env.DB.prepare("DELETE FROM secrets WHERE id = 'maps'").run();
     return json({ ok: true });
   }
-  if (['/v1/secrets/proactive', '/v1/secrets/rhythm', '/v1/secrets/consolidate', '/v1/secrets/social', '/v1/secrets/planner', '/v1/secrets/parallel', '/v1/secrets/health'].includes(path) && request.method === 'PUT') {
+  if (['/v1/secrets/proactive', '/v1/secrets/rhythm', '/v1/secrets/consolidate', '/v1/secrets/social', '/v1/secrets/planner', '/v1/secrets/parallel', '/v1/secrets/health', '/v1/secrets/diary'].includes(path) && request.method === 'PUT') {
     const role = path === '/v1/secrets/rhythm' ? 'rhythm' : path === '/v1/secrets/consolidate' ? 'consolidate' : path === '/v1/secrets/social' ? 'social'
-      : path === '/v1/secrets/planner' ? 'planner' : path === '/v1/secrets/parallel' ? 'parallel' : path === '/v1/secrets/health' ? 'health' : 'proactive';
+      : path === '/v1/secrets/planner' ? 'planner' : path === '/v1/secrets/parallel' ? 'parallel' : path === '/v1/secrets/health' ? 'health' : path === '/v1/secrets/diary' ? 'diary' : 'proactive';
     const credentials = await body<ProactiveCredentials>(request);
     assert(Array.isArray(credentials.routes) && credentials.keys && Array.isArray(credentials.outputFilters), 'API 配置无效');
     const system = new AgentSystem({ config: { routes: () => credentials.routes, keyOf: (id) => credentials.keys[id] || null, textObfuscation: () => credentials.textObfuscation } });
@@ -570,6 +573,58 @@ async function parallelApi(request: Request, env: Env, url: URL): Promise<Respon
   throw new HttpError(404, '接口不存在');
 }
 
+/** 日记：每个角色写日记要的东西（上传、删掉）、云端写好的日记（手机按 done_at 拉） */
+async function diaryApi(request: Request, env: Env, url: URL): Promise<Response> {
+  const path = url.pathname;
+  const method = request.method;
+  if (path === '/v1/diary/contexts' && method === 'GET') {
+    return json({ contexts: (await env.DB.prepare('SELECT character_id AS id, revision FROM diary_contexts').all()).results });
+  }
+  if (path.startsWith('/v1/diary/contexts/')) {
+    const id = decodeURIComponent(path.slice('/v1/diary/contexts/'.length));
+    if (method === 'DELETE') {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM diary_contexts WHERE character_id = ?').bind(id),
+        env.DB.prepare('DELETE FROM diary_entries WHERE character_id = ? AND data IS NULL').bind(id),
+      ]);
+      return json({ ok: true });
+    }
+    if (method === 'PUT') {
+      const { context: c, revision } = await body<{ context: DiaryContext; revision: number }>(request);
+      assert(c?.character?.id === id && c.character.name && c.character.card && typeof c.userName === 'string', '日记的角色无效');
+      assert(typeof c.timezone === 'string' && c.timezone, '缺少时区');
+      try { zonedParts(Date.now(), c.timezone); } catch { throw new HttpError(400, '无效的 IANA 时区'); }
+      assert(typeof c.settings?.enabled === 'boolean' && typeof c.settings.image === 'boolean', '日记设置无效');
+      assert(typeof c.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.date), '日期无效');
+      assert([c.withUser, c.memories, c.previous, c.weather].every((t) => typeof t === 'string') && (c.day === null || Array.isArray(c.day?.schedule)), '日记的内容无效');
+      assert(c.preset && Array.isArray(c.preset.blocks), '缺少"日记"预设');
+      assert(['full', 'name-only', 'hidden'].includes(c.preview), '通知预览无效');
+      assert(Number.isSafeInteger(revision) && revision >= 0, 'revision 无效');
+      const updated = await env.DB.prepare(`INSERT INTO diary_contexts(character_id, revision, data, updated_at)
+        SELECT ?, 1, ?, ? WHERE ? = 0 OR EXISTS (SELECT 1 FROM diary_contexts WHERE character_id = ?)
+        ON CONFLICT(character_id) DO UPDATE SET revision = diary_contexts.revision + 1, data = excluded.data, updated_at = excluded.updated_at
+        WHERE diary_contexts.revision = ? RETURNING revision`)
+        .bind(id, JSON.stringify(c), Date.now(), revision, id, revision).first<{ revision: number }>();
+      if (!updated) throw new HttpError(409, '另一台设备更新了日记设置，请在「云端与同步」选择「用本机设置重新同步」');
+      return json(updated);
+    }
+  }
+  if (path === '/v1/diary/entries' && method === 'GET') {
+    const since = Number(url.searchParams.get('since') ?? 0);
+    assert(Number.isSafeInteger(since) && since >= 0, 'since 无效');
+    // since 那一刻的也返回（同一毫秒可能有两篇）：手机按 id 去重
+    const rows = await env.DB.prepare('SELECT data, done_at FROM diary_entries WHERE done_at >= ? AND data IS NOT NULL ORDER BY done_at LIMIT 50')
+      .bind(since).all<{ data: string; done_at: number }>();
+    const errors = await env.DB.prepare('SELECT character_id, date, last_error FROM diary_entries WHERE data IS NULL AND last_error IS NOT NULL AND due_at > ?')
+      .bind(Date.now() - 86_400_000).all<{ character_id: string; date: string; last_error: string }>();
+    return json({
+      entries: rows.results.map((r) => ({ doneAt: r.done_at, entry: JSON.parse(r.data) as DiaryEntry })),
+      errors: errors.results.map((e) => ({ characterId: e.character_id, date: e.date, reason: e.last_error })),
+    });
+  }
+  throw new HttpError(404, '接口不存在');
+}
+
 function validSecret(s: McpServerSecret | null | undefined): s is McpServerSecret {
   if (!s || !https(s.url)) return false;
   if (s.headers && (typeof s.headers !== 'object' || Object.values(s.headers).some((v) => typeof v !== 'string'))) return false;
@@ -739,7 +794,8 @@ export default {
     // Scheduled execution is independent of HTTP requests and browser/service-worker lifetime.
     const jobs = await Promise.allSettled([runScheduled(env, controller.scheduledTime), runRhythmScheduled(env, controller.scheduledTime), runMemoryScheduled(env, controller.scheduledTime),
       runSocialScheduled(env, controller.scheduledTime), runCommunityScheduled(env, controller.scheduledTime), runPlannerScheduled(env, controller.scheduledTime),
-      runParallelScheduled(env, controller.scheduledTime), runHealthScheduled(env, controller.scheduledTime), runParallelPlanScheduled(env, controller.scheduledTime)]);
+      runParallelScheduled(env, controller.scheduledTime), runHealthScheduled(env, controller.scheduledTime), runParallelPlanScheduled(env, controller.scheduledTime),
+      runDiaryScheduled(env, controller.scheduledTime)]);
     const failure = jobs.find((r) => r.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
   },

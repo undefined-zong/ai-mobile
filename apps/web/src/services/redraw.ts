@@ -1,6 +1,8 @@
+import { getLocation } from '@app/shared';
 import { assetUrl } from '@/services/assets';
 import { services } from '@/services';
 import type { ViewerImage } from '@/services/imageViewer';
+import type { AlbumDraft } from '@/stores/album';
 import { useChatStore } from '@/stores/chat';
 import { useGalleryStore, type GalleryItem } from '@/stores/gallery';
 
@@ -11,6 +13,8 @@ import { useGalleryStore, type GalleryItem } from '@/stores/gallery';
  */
 
 type Shot = { id?: string; assetKey: string | null; url?: string; title?: string };
+/** 图库里找不到这张时（太旧被清掉了）：存到相册按这些记 */
+export type ShotContext = { characterId?: string | null; scene?: string; at?: number; caption?: string };
 
 async function urlOf(i: { assetKey: string | null; url?: string }): Promise<string | null> {
   if (!i.assetKey) return i.url ?? null;
@@ -51,20 +55,43 @@ export async function redrawGalleryItem(id: string): Promise<string | null> {
   return urlOf(r.item);
 }
 
-/** 场景里画的一张、卡片上的一张 → 看大图用的（在图库里找得到时能重新生成） */
-export async function shotViewerImage(shot: Shot | null | undefined): Promise<ViewerImage | null> {
+/** 存到相册要的东西：图库里有这张就照图库记的（哪个角色、场景、地点、画面、什么时候），没有按卡片给的 */
+function albumOf(shot: Shot, item: GalleryItem | undefined, ctx: ShotContext): AlbumDraft | undefined {
+  const assetKey = shot.assetKey && !/^(?:https?:|data:|blob:)/.test(shot.assetKey) ? shot.assetKey : null;
+  const url = shot.url ?? (shot.assetKey && /^https?:/.test(shot.assetKey) ? shot.assetKey : undefined);
+  if (!assetKey && !url) return undefined;
+  const place = item?.place ?? getLocation(item?.locationId)?.name;
+  return {
+    assetKey,
+    ...(url ? { url } : {}),
+    characterId: item?.characterId ?? ctx.characterId ?? null,
+    title: shot.title || item?.title || '',
+    caption: item?.caption ?? ctx.caption ?? '',
+    scene: item?.sceneId ?? ctx.scene ?? 'chat',
+    ...(place ? { place } : {}),
+    at: item?.at ?? ctx.at ?? Date.now(),
+    ...(item?.prompt ? { prompt: item.prompt } : {}),
+    ...(item?.seed != null ? { seed: item.seed } : {}),
+    ...(item?.model ? { model: item.model } : {}),
+  };
+}
+
+/** 场景里画的一张、卡片上的一张 → 看大图用的（在图库里找得到时能重新生成；生成的图都能存到相册） */
+export async function shotViewerImage(shot: Shot | null | undefined, ctx: ShotContext = {}): Promise<ViewerImage | null> {
   if (!shot) return null;
   const url = await urlOf(shot);
   if (!url) return null;
   const item = galleryItemOf(shot);
   const id = item?.id;
+  const album = albumOf(shot, item, ctx);
   return {
     url,
     name: shot.title || item?.title,
+    ...(album ? { album } : {}),
     ...(id ? {
       redraw: async () => {
         await redrawGalleryItem(id);
-        return shotViewerImage(useGalleryStore().items.find((i) => i.id === id));
+        return shotViewerImage(useGalleryStore().items.find((i) => i.id === id), ctx);
       },
     } : {}),
     ...(item?.vibeComparison ? {
@@ -72,15 +99,16 @@ export async function shotViewerImage(shot: Shot | null | undefined): Promise<Vi
       compareVibe: async () => {
         const result = await services.image.compareVibe(item.vibeComparison!.assetKey);
         const comparisonUrl = await urlOf(result);
-        return comparisonUrl ? { url: comparisonUrl, name: `${item.title} · Vibe 关闭`, label: '对比图 · Vibe 关闭' } : null;
+        const compared = albumOf({ assetKey: result.assetKey, url: result.url, title: `${item.title} · Vibe 关闭` }, undefined, { ...ctx, characterId: item.characterId, scene: item.sceneId, caption: item.caption, at: Date.now() });
+        return comparisonUrl ? { url: comparisonUrl, name: `${item.title} · Vibe 关闭`, label: '对比图 · Vibe 关闭', ...(compared ? { album: compared } : {}) } : null;
       },
     } : {}),
   };
 }
 
 /** 一组（这次画的几张）：找不到图的跳过；返回列表和 start 在列表里的位置 */
-export async function shotViewerImages(shots: Shot[], start = 0): Promise<{ images: ViewerImage[]; start: number }> {
-  const all = await Promise.all(shots.map(shotViewerImage));
+export async function shotViewerImages(shots: Shot[], start = 0, ctx: ShotContext = {}): Promise<{ images: ViewerImage[]; start: number }> {
+  const all = await Promise.all(shots.map((s) => shotViewerImage(s, ctx)));
   const images = all.filter((i): i is ViewerImage => !!i);
   return { images, start: all.slice(0, start).filter(Boolean).length };
 }

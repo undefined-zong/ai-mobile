@@ -6,6 +6,7 @@ import { isPhatic, timeOnlyQuery, type RecallLine } from './recall';
 import { communityMemoryLines } from './community';
 import { recentMomentsLines } from './social';
 import { parallelNotesLines } from './parallel';
+import { recentDiaryLines } from './diary';
 
 /** 摘要、记忆和动态先按当前话题选择，再按完整渲染文本共用一个 token 预算。 */
 const DAY = 86_400_000;
@@ -40,7 +41,7 @@ function memoryLine(m: Memory, timeZone: string): string {
   return `- ${m.content}${due}`;
 }
 
-type Section = 'relationship' | 'fixed' | 'recall' | 'profile' | 'timeline' | 'moments' | 'community' | 'parallel';
+type Section = 'relationship' | 'fixed' | 'recall' | 'profile' | 'timeline' | 'moments' | 'community' | 'parallel' | 'diary';
 interface Entry {
   key: string;
   section: Section;
@@ -104,12 +105,13 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
     }
   }
   if (opts.moments !== false) {
-    const add = (section: 'moments' | 'community' | 'parallel', lines: { text: string; at: number | null }[]) => {
+    const add = (section: 'moments' | 'community' | 'parallel' | 'diary', lines: { text: string; at: number | null }[]) => {
       lines.forEach((line, i) => pool.push({ ...entry(section, `${section}:${i}`, line.text, line.text, line.at ?? now), timeless: line.at === null }));
     };
     add('moments', recentMomentsLines(character));
     add('community', communityMemoryLines(character));
     add('parallel', parallelNotesLines(character));
+    add('diary', recentDiaryLines(character));
   }
 
   if (opts.proactive) {
@@ -135,10 +137,10 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
   const headings: Record<Section, string> = {
     relationship: '', fixed: `${character.name}一直记着的：`, recall: `${character.name}想起来的事：`,
     profile: `${character.name}知道的你：`, timeline: opts.proactive ? '近期时间线：' : '与本轮有关的时间线：',
-    moments: '相关的朋友圈：', community: '相关的社群动态：', parallel: '相关的平行时空留言：',
+    moments: '相关的朋友圈：', community: '相关的社群动态：', parallel: '相关的平行时空留言：', diary: `${character.name}最近写的日记（只有${character.name}自己知道写了什么）：`,
   };
   const summarySections: Section[] = ['profile', 'timeline'];
-  const memorySections: Section[] = ['relationship', 'fixed', 'recall', 'moments', 'community', 'parallel'];
+  const memorySections: Section[] = ['relationship', 'fixed', 'recall', 'moments', 'community', 'parallel', 'diary'];
   const render = (entries: Entry[], sections: Section[]) => sections.map((section) => {
     const rows = entries.filter((e) => e.section === section).sort((a, b) => a.at - b.at);
     return rows.length ? [headings[section], ...rows.map((e) => e.text)].filter(Boolean).join('\n') : '';
@@ -160,7 +162,7 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
   const usage = `两块合计估算 ${tokens(selected)} / ${policy.tokenBudget} tokens`;
   return {
     summary: { content: render(selected, summarySections), source: `画像卡 ${count('profile')} / ${profile.length} 行 + 时间线 ${count('timeline')} / ${timeline.length} 段 · ${usage}` },
-    memory: { content: render(selected, memorySections), source: `置顶和到期 ${count('fixed')} 条 + 相关记忆 ${count('recall')} 条 + 动态 ${count('moments') + count('community') + count('parallel')} 条 · ${usage}` },
+    memory: { content: render(selected, memorySections), source: `置顶和到期 ${count('fixed')} 条 + 相关记忆 ${count('recall')} 条 + 动态 ${count('moments') + count('community') + count('parallel')} 条 + 日记 ${count('diary')} 篇 · ${usage}` },
     recall: selected.flatMap((e) => e.recall ? [e.recall] : []),
   };
 }

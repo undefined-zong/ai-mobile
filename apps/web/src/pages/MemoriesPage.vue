@@ -22,13 +22,16 @@ import { useRoute, useRouter } from 'vue-router';
 import Avatar from '@/components/common/Avatar.vue';
 import HScroll from '@/components/common/HScroll.vue';
 import Segmented from '@/components/common/Segmented.vue';
-import CgArt from '@/components/figure/CgArt.vue';
-import { album, diaries, MEMORY_TYPE_META, timeline, type AlbumItem } from '@/mock/memories';
+import AlbumGrid from '@/components/memories/AlbumGrid.vue';
+import DiaryList from '@/components/memories/DiaryList.vue';
+import { MEMORY_TYPE_META } from '@/mock/memories';
 import { services } from '@/services';
 import { consolidateNow } from '@/services/consolidate';
+import { metAtOf, timelineNodes, type TimelineNode } from '@/services/timeline';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
+import { useDiaryStore } from '@/stores/diary';
 import { useEnvironmentStore } from '@/stores/environment';
 import { memKey, useMemoryStore } from '@/stores/memory';
 import { showErrorDialog } from '@/utils/errors';
@@ -52,8 +55,9 @@ function pick(id: string) {
   void router.replace({ query: { ...route.query, char: id } });
 }
 const chat = computed(() => chats.chatOfCharacter(character.value.id));
-const myDiaries = computed(() => diaries.filter((d) => d.characterId === character.value.id));
-const myAlbum = computed(() => album.filter((a) => a.characterId === character.value.id));
+const diary = useDiaryStore();
+/** 这个角色还没看过的日记 */
+const unreadDiaries = computed(() => diary.of(character.value.id).filter((d) => d.unread).length);
 const rel = computed(() => character.value.relationship);
 const messages = computed(() => (chat.value ? chats.list(chat.value.id) : []));
 
@@ -69,12 +73,13 @@ function cgCount(list: Message[]): number {
   return n;
 }
 
-/** 你们之间的几个数：相识天数按「环境与作息」的时区算日子（聊天比相识日还早时从第一条算） */
+/** 相识的时间：按最早的一条记忆（没有记忆时按第一条聊天） */
+const metAt = computed(() => metAtOf(character.value));
+/** 你们之间的几个数：相识天数按「环境与作息」的时区算日子 */
 const stats = computed(() => {
   const tz = env.settings.timezone;
-  const metAt = Math.min(rel.value.metAt, messages.value[0]?.createdAt ?? Infinity);
   return [
-    { label: '相识天数', value: Math.max(0, daysBetweenDates(zonedDateKey(metAt, tz), zonedDateKey(Date.now(), tz))) },
+    { label: '相识天数', value: Math.max(0, daysBetweenDates(zonedDateKey(metAt.value, tz), zonedDateKey(Date.now(), tz))) },
     { label: '条对话', value: messages.value.filter((m) => m.role === 'user' || m.role === 'assistant').length },
     { label: '条记忆', value: mem.activeOf(character.value.id).length },
     { label: '张 CG', value: cgCount(messages.value) },
@@ -140,9 +145,23 @@ watch(
 const segments = computed(() => (chat.value ? [...mem.timelineOf(chat.value.id)].reverse() : []));
 const slices = computed(() => [...mem.slicesOf(character.value.id)].sort((a, b) => b.startAt - a.startAt));
 const sliceLimit = ref(30);
-watch(character, () => (sliceLimit.value = 30));
-/** 还没总结过：先显示演示时间线 */
-const demoTimeline = computed(() => (segments.value.length || slices.value.length ? [] : timeline.filter((t) => t.characterId === character.value.id)));
+/** 一路走来：相识（最早的记忆）、关系里程碑、重要的事和约定、标了重要的故事片段 */
+const nodes = computed(() => timelineNodes(character.value));
+const nodeLimit = ref(40);
+watch(character, () => {
+  sliceLimit.value = 30;
+  nodeLimit.value = 40;
+});
+/** 时间线上的一个点：最后一个（相识）总显示 */
+const shownNodes = computed(() => (nodes.value.length > nodeLimit.value ? [...nodes.value.slice(0, nodeLimit.value - 1), nodes.value.at(-1)!] : nodes.value));
+/** "11月2日"；不是今年的带上年份 */
+function fullDay(at: number): string {
+  const y = new Date(at).getFullYear();
+  return `${y !== new Date().getFullYear() ? `${y}年` : ''}${monthDay(at)}`;
+}
+function openNode(n: TimelineNode) {
+  if (n.messageId && chat.value) void router.push({ path: `/chat/${chat.value.id}`, query: { at: n.messageId } });
+}
 function span(a: number, b: number) {
   const x = monthDay(a);
   const y = monthDay(b);
@@ -277,10 +296,6 @@ async function runConsolidate() {
   }
 }
 
-const expanded = ref<string | null>(null);
-watch(character, () => (expanded.value = myDiaries.value[0]?.id ?? null), { immediate: true });
-const viewing = ref<AlbumItem | null>(null);
-const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.value = v ? viewing.value : null) });
 </script>
 
 <template>
@@ -344,7 +359,7 @@ const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.va
         class="mt-3"
         :options="[
           { value: 'timeline', label: '时间线' },
-          { value: 'diary', label: '日记' },
+          { value: 'diary', label: unreadDiaries ? `日记 · ${unreadDiaries}` : '日记' },
           { value: 'album', label: '相册' },
           { value: 'book', label: '记忆本' },
         ]"
@@ -355,7 +370,21 @@ const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.va
       </div>
 
       <!-- 时间线 -->
-      <div v-if="tab === 'timeline'" class="mt-1">
+      <div v-if="tab === 'timeline'" class="mt-1" data-testid="timeline">
+        <div class="sub-title">一路走来<span>相识于 {{ fullDay(metAt) }} · 按最早的记忆算</span></div>
+        <ol class="timeline">
+          <li v-for="n in shownNodes" :key="n.id" :style="{ '--tone': n.tint }" :data-node="n.kind">
+            <span class="dot"><span :class="n.icon" /></span>
+            <component :is="n.messageId && chat ? 'button' : 'div'" type="button" class="node flex-1 min-w-0 text-left" @click="openNode(n)">
+              <div class="text-[12px] text-ink-3 num">{{ fullDay(n.at) }}<template v-if="n.kind === 'met'"> · 第 1 天</template></div>
+              <div class="text-[15px] font-600 leading-snug">{{ n.title }}</div>
+              <div v-if="n.desc" class="text-[13px] text-ink-2 leading-snug mt-0.5">{{ n.desc }}</div>
+            </component>
+          </li>
+        </ol>
+        <div v-if="nodes.length > nodeLimit" class="px-4 -mt-2 mb-2"><van-button size="small" round block @click="nodeLimit += 40">再显示 40 件</van-button></div>
+        <p v-if="nodes.length <= 1" class="note-line">{{ character.name }}还没记下什么大事。聊得多了，总结会把关系的变化、重要的事和约定记进记忆，这里跟着长出来。</p>
+
         <template v-if="segments.length">
           <div class="sub-title">你们的时间线<span>越早越概括</span></div>
           <ol class="timeline">
@@ -384,45 +413,13 @@ const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.va
             <van-button v-if="slices.length > sliceLimit" size="small" round block @click="sliceLimit += 30">再显示 30 段</van-button>
           </div>
         </template>
-        <ol v-if="demoTimeline.length" class="timeline">
-          <li v-for="t in demoTimeline" :key="t.id" :style="{ '--tone': t.tint }">
-            <span class="dot"><span :class="t.icon" /></span>
-            <div class="flex-1 min-w-0">
-              <div class="text-[12px] text-ink-3 num">{{ monthDay(t.when) }}</div>
-              <div class="text-[15px] font-600">{{ t.title }}</div>
-              <div class="text-[13px] text-ink-2">{{ t.desc }}</div>
-            </div>
-          </li>
-        </ol>
       </div>
 
       <!-- 日记 -->
-      <div v-else-if="tab === 'diary'" class="px-4 grid gap-3 mt-1">
-        <p class="text-[12px] text-ink-3 m-0">每晚由总结智能体用{{ character.name }}的口吻写，也是{{ character.pronoun }}的"情景记忆"</p>
-        <article v-for="d in myDiaries" :key="d.id" class="diary press" @click="expanded = expanded === d.id ? null : d.id">
-          <div class="flex items-center gap-2 text-[12.5px] text-ink-3">
-            <span class="text-[15px] font-600 text-ink">{{ d.date }}</span>
-            <span class="i-lucide-cloud-rain" v-if="d.weather.includes('雨')" /><span class="i-lucide-cloud-sun" v-else />{{ d.weather }}
-            <span class="ml-auto mood-chip">{{ d.mood }}</span>
-          </div>
-          <p class="serif diary-text" :class="{ clamp: expanded !== d.id }">{{ d.text }}</p>
-          <div class="flex flex-wrap gap-1.5">
-            <span v-for="h in d.highlights" :key="h" class="chip !h-6">{{ h }}</span>
-          </div>
-        </article>
-      </div>
+      <DiaryList v-else-if="tab === 'diary'" :character="character" />
 
       <!-- 相册 -->
-      <div v-else-if="tab === 'album'" class="px-4 mt-1">
-        <p class="text-[12px] text-ink-3 m-0 mb-2.5">聊天、约会、主动"自拍"里生成的 CG，都保存提示词和种子，可以复现</p>
-        <div class="grid grid-cols-2 gap-2.5">
-          <button v-for="a in myAlbum" :key="a.id" class="tile press" @click="viewing = a">
-            <CgArt :character="character" :scene="a.scene" :expression="a.id === 'a3' ? 'laugh' : 'smile'" :outfit="a.scene === 'park' ? 'sport' : a.scene === 'bedroom' ? 'pajama' : a.scene === 'aquarium' || a.scene === 'amusement' ? 'date' : 'daily'" class="rounded-[14px]" />
-            <div class="text-[13px] font-600 mt-1.5 truncate">{{ a.caption }}</div>
-            <div class="text-[11.5px] text-ink-3 num">{{ monthDay(a.when) }}</div>
-          </button>
-        </div>
-      </div>
+      <AlbumGrid v-else-if="tab === 'album'" :character="character" />
 
       <!-- 记忆本 -->
       <div v-else class="mt-1">
@@ -558,18 +555,6 @@ const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.va
       </div>
     </van-popup>
 
-    <van-popup v-model:show="albumOpen" round class="w-[88%] max-w-[400px]">
-      <div v-if="viewing" class="p-3">
-        <CgArt :character="character" :scene="viewing.scene" expression="smile" class="rounded-[16px]" />
-        <div class="mt-3 text-[16px] font-600">{{ viewing.caption }}</div>
-        <div class="mt-1 text-[12px] text-ink-3 break-all">提示词：{{ viewing.prompt }}</div>
-        <div class="text-[12px] text-ink-3 num">种子：{{ viewing.seed }} · NovelAI V4.5 · 832×1216</div>
-        <div class="flex gap-2 mt-3">
-          <van-button size="small" round block @click="showToast('M5 接入 NovelAI')">用同样参数重画</van-button>
-          <van-button size="small" round block type="primary" @click="showToast('M5：出了真图就能一键设为聊天背景')">设为聊天背景</van-button>
-        </div>
-      </div>
-    </van-popup>
   </div>
 </template>
 
@@ -688,6 +673,10 @@ const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.va
 .timeline li:last-child::before {
   display: none;
 }
+.timeline .node {
+  display: block;
+  color: inherit;
+}
 .timeline .dot {
   display: inline-flex;
   align-items: center;
@@ -729,35 +718,6 @@ const albumOpen = computed({ get: () => !!viewing.value, set: (v) => (viewing.va
 }
 .tag-warn {
   color: var(--warn);
-}
-.diary {
-  display: block;
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-.mood-chip {
-  padding: 1px 8px;
-  border-radius: 99px;
-  background: var(--panel);
-  color: var(--ink-2);
-}
-.diary-text {
-  margin: 10px 0;
-  font-size: 15px;
-  line-height: 1.9;
-  color: var(--ink);
-}
-.diary-text.clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.tile {
-  display: block;
-  text-align: left;
 }
 .card {
   padding: 14px;

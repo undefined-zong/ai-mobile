@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
-import { availableExpressions, expressionLabel, hasPortraits, imageAppearance, isFandom, WEATHER_PROVIDER_LABEL, type WeatherProviderChoice } from '@app/shared';
+import { availableExpressions, DIARY_TIME_LABEL, diaryEnabled, diaryImageOn, expressionLabel, hasPortraits, imageAppearance, isFandom, WEATHER_PROVIDER_LABEL, type WeatherProviderChoice } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -49,6 +49,13 @@ function pickPreset(id: string | null) {
   if (!id || id === presetId.value) return;
   chars.setPreset(character.value.id, id);
   showToast(`换成「${lib.presetById(id)?.name ?? ''}」了`);
+}
+/** 主动写日记：开关、配不配图（第一次打开时配图默认开） */
+function setDiary(patch: { enabled?: boolean; image?: boolean }) {
+  const c = character.value;
+  c.diary = { enabled: diaryEnabled(c), image: diaryImageOn(c), ...patch };
+  c.updatedAt = Date.now();
+  if (patch.enabled) showToast(`${c.name}今晚 ${DIARY_TIME_LABEL} 起会写日记`);
 }
 function bindLorebook(id: string, enabled: boolean) {
   const c = character.value;
@@ -341,6 +348,16 @@ const PERSONALITY = { clingy: '粘人', balanced: '适中', independent: '独立
             <van-cell title="允许主动来电" center><template #right-icon><van-switch v-model="character.proactive.allowCalls" size="22px" /></template></van-cell>
             <van-cell title="允许主动发自拍" label="用 NovelAI 生成" center><template #right-icon><van-switch v-model="character.proactive.allowSelfies" size="22px" /></template></van-cell>
             <van-cell title="什么时候来找你、今天的计划、推送通道" is-link :to="`/me/proactive?char=${character.id}`" />
+          </van-cell-group>
+          <div class="group-title">日记</div>
+          <van-cell-group inset>
+            <van-cell title="主动写日记" :label="`每晚 ${DIARY_TIME_LABEL} 按${character.pronoun}今天的节律写当天的日记（连了云端时 App 关着也写）`" center data-testid="diary-switch">
+              <template #right-icon><van-switch :model-value="diaryEnabled(character)" size="22px" aria-label="主动写日记" @update:model-value="setDiary({ enabled: $event })" /></template>
+            </van-cell>
+            <van-cell v-if="diaryEnabled(character)" title="日记配图" label="想贴图的那天画一张（用「配图」的生图预设）" center>
+              <template #right-icon><van-switch :model-value="diaryImageOn(character)" size="22px" aria-label="日记配图" @update:model-value="setDiary({ image: $event })" /></template>
+            </van-cell>
+            <van-cell title="看日记" is-link :to="`/memories?char=${encodeURIComponent(character.id)}&tab=diary`" />
           </van-cell-group>
         </van-tab>
         <van-tab title="生图" name="look">

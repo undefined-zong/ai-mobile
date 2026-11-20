@@ -503,7 +503,7 @@ function toggleAutoDraw() {
 async function previewArt() {
   const a = art.value;
   if (!a) return;
-  const img = await shotViewerImage(a);
+  const img = await shotViewerImage(a, { characterId: her.value.id, scene: 'sleep' });
   if (img) previewImages([img]);
   else showToast('本机找不到这张图了');
 }

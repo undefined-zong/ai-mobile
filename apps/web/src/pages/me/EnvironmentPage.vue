@@ -6,7 +6,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import Segmented from '@/components/common/Segmented.vue';
 import PageHeader from '@/layouts/PageHeader.vue';
-import { mockToday, todayLine } from '@/mock/activity';
+import { dayLine, dayStats } from '@/services/myDay';
 import { useCharacterStore } from '@/stores/characters';
 import { deviceTimezone, useEnvironmentStore } from '@/stores/environment';
 import { useRealWorldStore } from '@/stores/realworld';
@@ -28,7 +28,7 @@ const block = computed(() => {
     timeZone: env.timezone,
     weather: inject.value.weather ? w.weather : null,
     herWeather: inject.value.weather ? w.herWeather : null,
-    todayLine: inject.value.activity ? todayLine(mockToday()) : undefined,
+    todayLine: inject.value.activity ? dayLine(dayStats()) : undefined,
     sinceLastChatMin: 3,
     anniversaries: inject.value.calendar ? anniversaryLine(preview.value?.relationship.anniversaries, Date.now(), env.timezone) : null,
   });
@@ -238,7 +238,7 @@ function saveZone() {
         <van-cell title="安卓：计步 / Health Connect" label="安卓壳的原生桥读取" />
         <van-cell title="iPhone：快捷指令" label="把健康数据定时推给你的 Worker（M6 提供快捷指令模板）" />
         <van-cell title="运动截图识别" label="视觉模型读出距离和时长" />
-        <van-cell title="App 内记录" label="健身 / 吃饭 / 学习 / 哄睡 场景自动记下" />
+        <van-cell title="App 内记录" label="健身 / 吃饭 / 学习 / 哄睡 场景自动记下（地图 → 我的世界 → 今天的你、我的一天）" is-link to="/map?world=me" />
       </van-cell-group>
     </div>
   </div>
