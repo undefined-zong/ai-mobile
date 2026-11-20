@@ -75,7 +75,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'me', component: MePage, meta: { title: '我的' } },
     ],
   },
-  { path: '/together', redirect: '/map' },
+  { path: '/together', redirect: () => useAppStore().mapPath },
   // 以前的朋友圈页签（旧通知里的链接）
   { path: '/moments', redirect: '/social/moments' },
   { path: '/community/:id', component: CommunityPage, meta: { title: '社群' } },

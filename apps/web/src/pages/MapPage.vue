@@ -80,7 +80,7 @@ function switchWorld(key: string) {
   actOpen.value = false;
   charOpen.value = false;
   selectedLoc.value = null;
-  void router.replace({ query: { world: key } });
+  void router.replace({ path: key === 'me' ? route.path : app.mapPath, query: { world: key } });
 }
 
 /** 顶上的天气：看她的世界时是她那边的（她住在别的城市时是那里的），看我的世界时是你这边的 */

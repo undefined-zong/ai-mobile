@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="game?.id === 'kingdom' || !her" class="page kingdom-shell" data-page="scene-game">
-    <header v-if="!game" class="kingdom-top"><button type="button" aria-label="返回游戏列表" @click="router.push('/map')"><span class="i-lucide-chevron-left" /></button><h1>一起游戏</h1></header>
+    <header v-if="!game" class="kingdom-top"><button type="button" aria-label="返回游戏列表" @click="router.push(app.mapPath)"><span class="i-lucide-chevron-left" /></button><h1>一起游戏</h1></header>
     <component v-if="game?.id === 'kingdom'" :is="COMPONENTS.kingdom" v-model:line="lines.kingdom" v-model:phase="phases.kingdom" @exit="backToList" @progress="(s: string | null) => (progress.kingdom = s)" @done="(s: string) => played.push(s)" @fail="fail" />
     <div v-else class="solo-menu"><p>从十八岁起，写下四十二年的王朝故事。</p><button type="button" class="game press" data-game="kingdom" @click="open('kingdom')"><span class="i-lucide-crown" /><span class="name">王国模拟</span><span class="desc">不加入聊天角色也能开局</span></button></div>
   </div>
