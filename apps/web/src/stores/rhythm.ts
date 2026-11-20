@@ -2,7 +2,6 @@ import { buildRhythmMessages, errorReport, errorText, samplerRequest, planDayInp
 import {
   dayFromTemplate,
   DEFAULT_RHYTHM_SETTINGS,
-  getLocation,
   hasOwnWorld,
   outfitOfDay,
   parseBuiltWorld,
@@ -36,7 +35,7 @@ import {
   type World,
 } from '@app/shared';
 import { defineStore } from 'pinia';
-import { reactive, ref } from 'vue';
+import { reactive, ref, watchEffect } from 'vue';
 import { useAiStore } from './ai';
 import { useCharacterStore } from './characters';
 import { useChatStore } from './chat';
@@ -48,6 +47,7 @@ import { autoSave, getEntries, write, type RemoteChange } from '@/db/idb';
 import { usePersonaStore } from './personas';
 import { characterLines, sourceLines } from '@/services/characterSource';
 import { starterWorldSpec } from '@/services/starterWorld';
+import { replaceInPlace } from '@/services/sync/apply';
 import { uid } from '@/utils/id';
 
 /**
@@ -118,6 +118,14 @@ export const useRhythmStore = defineStore('rhythm', () => {
     { apply: applyRemoteEntries },
   );
 
+  /** 保留世界对象，让已经打开的地图、地点和活动继续读取同一份响应式数据。 */
+  function setWorld(world: World) {
+    const current = worlds[world.characterId];
+    if (current) replaceInPlace(current, world);
+    else worlds[world.characterId] = world;
+    registerWorld(worlds[world.characterId]!);
+  }
+
   /** 读出一条节律记录（读库时、别的设备改了时）；返回 false：太旧了，从本机删掉 */
   function loadEntry(key: string, value: unknown, oldest: string): boolean {
     if (!value || typeof value !== 'object') return true;
@@ -130,8 +138,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
       days[dayKey(d.characterId, d.date)] = d;
     } else if (key.startsWith('world:')) {
       const w = value as World;
-      worlds[w.characterId] = w;
-      registerWorld(w);
+      setWorld(w);
     } else if (key.startsWith('town:')) {
       const { characterId, ...t } = value as TownDesign & { characterId: string };
       if (characterId && t.look) towns[characterId] = t;
@@ -157,6 +164,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
         delete worlds[id];
       } else if (key.startsWith('town:')) delete towns[id];
     }
+    refreshPresence();
   }
 
   async function hydrate() {
@@ -170,8 +178,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
       seededWorlds.push(demo.characterId);
       if (worlds[demo.characterId]) continue;
       const world = clone(demo);
-      worlds[demo.characterId] = world;
-      registerWorld(world);
+      setWorld(world);
     }
     if (stale.length) await write('rhythm', [], stale);
     saver.start();
@@ -293,6 +300,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
     const template = templateOf(characterId);
     if (template && keepTemplate) days[dayKey(characterId, today.value)] = { ...dayFromTemplate(characterId, today.value, template), edited: true };
     else delete days[dayKey(characterId, today.value)];
+    refreshPresence();
   }
 
   // —— 交给「节律」——
@@ -401,6 +409,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
         locations: context.world.locations, output: r.value.value, model: r.value.model, at: Date.now() });
       days[dayKey(characterId, date)] = day;
       delete errors[characterId];
+      refreshPresence();
       return { ok: true, value: day };
     } finally {
       delete busy[characterId];
@@ -478,8 +487,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
   /** 确认"建世界"的结果：存下世界、模板、身边的人；今天按新模板重来 */
   function applyWorld(characterId: string, preview: WorldPreview) {
     const world = clone(preview.world);
-    worlds[characterId] = world;
-    registerWorld(world);
+    setWorld(world);
     // 地点换了，旧的小镇蓝图对不上了：有新的就用新的，没有就回到按地名猜
     if (preview.town) towns[characterId] = clone(preview.town);
     else delete towns[characterId];
@@ -487,7 +495,9 @@ export const useRhythmStore = defineStore('rhythm', () => {
     c.template = clone(preview.template);
     c.people = clone(preview.people);
     c.updatedAt = Date.now();
-    resetToday(characterId, false);
+    // 留下新世界的今日快照，云端旧世界排过的那一天不会在下一次同步时重新覆盖它。
+    today.value = rhythmDate(new Date(), useEnvironmentStore().settings.timezone);
+    days[dayKey(characterId, today.value)] = dayFromTemplate(characterId, today.value, c.template);
     tick();
   }
 
@@ -553,22 +563,38 @@ export const useRhythmStore = defineStore('rhythm', () => {
   /** 自动排失败后，这个角色一小时内不再自动试（完整报错在节律页） */
   const backoff = new Map<string, number>();
   let timer: ReturnType<typeof setInterval> | undefined;
+  let stopPresence: ReturnType<typeof watchEffect> | undefined;
+
+  /** 日程、世界或连线改变时立即更新；地点失效也不能把上一段活动留到现在。 */
+  function refreshPresence() {
+    const now = new Date();
+    today.value = rhythmDate(now, useEnvironmentStore().settings.timezone);
+    const chars = useCharacterStore();
+    const chat = useChatStore();
+    for (const c of chars.list) {
+      // 正在一起做事：她在你们那儿，不按作息挪
+      if (chat.chatOfCharacter(c.id)?.togetherAt) continue;
+      const slot = slotNow(c.id, now);
+      if (slot) {
+        const resolve = locationResolver(worlds[c.id]?.locations ?? [], c.id);
+        Object.assign(c, { locationId: resolve(slot.locationId), status: slot.status });
+      }
+    }
+  }
 
   function tick() {
-    today.value = rhythmDate(new Date(), useEnvironmentStore().settings.timezone);
+    refreshPresence();
     const chars = useCharacterStore();
     const chat = useChatStore();
     const ai = useAiStore();
     for (const c of chars.list) {
-      // 正在一起做事：她在你们那儿，不按作息挪
       if (chat.chatOfCharacter(c.id)?.togetherAt) continue;
-      const slot = slotNow(c.id);
-      if (slot && getLocation(slot.locationId)) Object.assign(c, { locationId: slot.locationId, status: slot.status });
       const cfg = configs[c.id];
       if (useHubStore().connected) continue;
-      if (cfg?.settings.mode !== 'daily' || days[dayKey(c.id, today.value)] || busy[c.id]) continue;
+      const day = days[dayKey(c.id, today.value)];
+      if (cfg?.settings.mode !== 'daily' || (day && (day.source === 'model' || day.edited)) || busy[c.id]) continue;
       if ((backoff.get(c.id) ?? 0) > Date.now() || !ai.isLive('rhythm') || !templateOf(c.id)) continue;
-      void planToday(c.id).then((r) => {
+      void planToday(c.id, { force: true }).then((r) => {
         if (!r.ok) backoff.set(c.id, Date.now() + 3_600_000);
         else tick();
       });
@@ -576,6 +602,8 @@ export const useRhythmStore = defineStore('rhythm', () => {
   }
 
   function start() {
+    stopPresence?.();
+    stopPresence = watchEffect(refreshPresence);
     tick();
     clearInterval(timer);
     timer = setInterval(tick, 60_000);
