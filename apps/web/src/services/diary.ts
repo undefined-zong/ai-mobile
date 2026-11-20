@@ -1,6 +1,6 @@
 import { buildDiaryMessages, diaryInput, errorText, isAbortError, samplerRequest } from '@app/ai';
 import {
-  AGENT_META, diaryEnabled, diaryId, diaryImageOn, diaryLine, dueDiaryDates, getLocation, parseDiaryDraft, rhythmDate, shiftDate, socialDayOf,
+  AGENT_META, diaryEnabled, diaryId, diaryImageOn, diaryLine, dueDiaryDates, getLocation, packDiaryContext, parseDiaryDraft, rhythmDate, shiftDate, socialDayOf,
   type Character, type DiaryContext, type DiaryEntry, type Preset,
 } from '@app/shared';
 import { onRemote } from '@/db/idb';
@@ -82,7 +82,7 @@ export function diaryCloudContext(characterId: string): DiaryContext | null {
   const c = useCharacterStore().byId(characterId);
   if (!c || !diaryEnabled(c) || !useDiaryStore().ready) return null;
   const preset = diaryPreset(c);
-  return preset ? diaryContextOf(c, preset) : null;
+  return preset ? packDiaryContext(diaryContextOf(c, preset)) : null;
 }
 
 // —— 写一篇 ——

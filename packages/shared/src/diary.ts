@@ -1,4 +1,5 @@
 import { nullable, str } from './modelText.ts';
+import type { TaskPresetLike } from './st/task.ts';
 import { shiftDate, zonedDateKey, zonedInstant } from './timezone.ts';
 import type { Character } from './types/character.ts';
 import type { DiaryEntry } from './types/memory.ts';
@@ -93,7 +94,9 @@ export function diaryLine(e: Pick<DiaryEntry, 'date' | 'title' | 'text' | 'mood'
  * withUser 是手机拼的"今天和你"（date 那一天的）；云端写的不是那一天时不用它（好几天没开 App）
  */
 export interface DiaryContext {
-  character: Pick<Character, 'id' | 'name' | 'pronoun' | 'card'>;
+  character: Pick<Character, 'id' | 'name' | 'pronoun'> & {
+    card: Pick<Character['card'], 'description' | 'personality' | 'scenario'>;
+  };
   userName: string;
   timezone: string;
   settings: { enabled: boolean; image: boolean };
@@ -109,9 +112,27 @@ export interface DiaryContext {
   previous: string;
   /** Ta那边现在的天气（一句话） */
   weather: string;
-  preset: Preset | null;
+  preset: (Pick<Preset, 'sampler'> & TaskPresetLike) | null;
   /** 通知里显示多少（同主动消息的设置） */
   preview: NotificationPreview;
+}
+
+/** 日记生成只用角色描述、性格、场景和任务预设；附件、界面配置及导出备份留在本机原始记录里。 */
+export function packDiaryContext(input: DiaryContext): DiaryContext {
+  const { character: c, preset } = input;
+  const { description, personality, scenario } = c.card;
+  return {
+    ...input,
+    character: { id: c.id, name: c.name, pronoun: c.pronoun, card: { description, personality, scenario } },
+    preset: preset ? {
+      blocks: preset.blocks.map(({ extra: _extra, ...block }) => block),
+      sampler: preset.sampler,
+      worldInfoEnabled: preset.worldInfoEnabled,
+      lorebooks: preset.lorebooks?.map(({ extra: _extra, entries, ...book }) => ({
+        ...book, entries: entries.map(({ extra: _entryExtra, ...entry }) => entry),
+      })),
+    } : null,
+  };
 }
 
 /** 云端写好的日记（/v1/diary/entries）：图由手机收到后再画 */

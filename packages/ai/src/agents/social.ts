@@ -39,7 +39,7 @@ function cut(text: string | undefined, max: number): string {
 }
 
 /** 角色那一块：名字、描述、性格、场景（宏先替换好） */
-export function socialCharacterFill(c: SocialContext['character'], userName: string): string {
+export function socialCharacterFill(c: Pick<SocialContext['character'], 'id' | 'name' | 'pronoun'> & { card: Pick<SocialContext['character']['card'], 'description' | 'personality' | 'scenario'> }, userName: string): string {
   const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName, pronoun: c.pronoun }).trim();
   return [
     `名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`,
