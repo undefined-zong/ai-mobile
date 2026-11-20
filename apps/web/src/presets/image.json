@@ -216,6 +216,9 @@
     "image.size.square": "方图（square）",
     "image.recent": "最近的对话：\n{{lines|\\n}}",
     "image.caption": "要画的画面：{{caption}}",
-    "image.retry": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。"
+    "image.retry": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。",
+    "image.trial": "{{char}}的全身像：白色背景，站着看向镜头，表情自然[[{{?fandom}}；看看画出来是不是原作里的样子]]",
+    "image.recent.moment": "{{char}}的朋友圈：{{text}}",
+    "image.recent.diary": "{{char}}的日记：{{text}}"
   }
 }

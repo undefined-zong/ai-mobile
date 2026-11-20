@@ -208,7 +208,7 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
   try {
     const out = await services.image.illustrate(
       // 朋友圈的配图始终参考节律里的衣着（不看服装参考开关）
-      { characterId: c.id, caption: img.caption, use: 'image', place: m.location, outfitRef: true, recent: m.text ? [`${c.name}的朋友圈：${m.text}`] : undefined },
+      { characterId: c.id, caption: img.caption, use: 'image', place: m.location, outfitRef: true, recent: m.text ? [textFn(textsFor(useLibraryStore().presetForUse('image', c)))('image.recent.moment', { char: c.name, text: m.text })] : undefined },
       { priority },
     );
     // await 之后按 id 重新取（期间这条可能被删、被替换）

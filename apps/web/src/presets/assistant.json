@@ -232,6 +232,10 @@
     "assistant.ask.check": "用户点了\"一键检测\"：看看要看的对象哪些和 App 的格式不合，改成适配的（只改格式）。",
     "assistant.ask.cardFill": "用户要补全角色卡的设定。",
     "assistant.ask.cardNew": "用户要做一张新角色卡。",
-    "assistant.ask": "这一次：[[{{head}}]][[{{!head}}{{!said}}用户没写话。]]\n用户说：{{said}}"
+    "assistant.ask": "这一次：[[{{head}}]][[{{!head}}{{!said}}用户没写话。]]\n用户说：{{said}}",
+    "assistant.clipped": "（后面还有 {{left}} 字没给）",
+    "assistant.from.seed": "App 自带（{{file}}）",
+    "assistant.from.st": "从 SillyTavern 导入[[（{{stFile}}）]]",
+    "assistant.from.other": "导入或复制的"
   }
 }

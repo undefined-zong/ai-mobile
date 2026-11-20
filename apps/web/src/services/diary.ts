@@ -172,7 +172,7 @@ export async function drawDiaryImage(entryId: string, index = 0, priority: 'user
   try {
     const out = await services.image.illustrate(
       // 日记的配图参考节律里今天的衣着（同朋友圈）
-      { characterId: c.id, caption: img.caption, use: 'image', outfitRef: true, recent: [`${c.name}的日记：${e.text.slice(0, 300)}`] },
+      { characterId: c.id, caption: img.caption, use: 'image', outfitRef: true, recent: [textFn(textsFor(useLibraryStore().presetForUse('image', c)))('image.recent.diary', { char: c.name, text: e.text.slice(0, 300) })] },
       { priority },
     );
     const now = useDiaryStore().byId(entryId)?.images?.[index];

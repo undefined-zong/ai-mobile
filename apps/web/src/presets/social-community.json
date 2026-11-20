@@ -405,6 +405,8 @@
     "community.ask.react": "这一次：{{user}}刚发了这一帖。写网友们的回应：新增的赞和顶，还有回复。",
     "community.ask.reply": "这一次：{{user}}在这一帖下面[[回复了 {{target}}]][[{{!target}}回了帖]]：「{{said}}」。写[[{{target}}（别的网友也可以插一句）]][[{{!target}}网友们]]接下来的回复；likes、bumps 写 0。",
     "community.ask.memberReact": "这一次：{{user}}刚在社群里发了这一帖，{{char}}刷到了。决定点不点赞、要不要顶帖、要不要回复。",
-    "community.ask.memberReply": "这一次：{{user}}在[[{{?mine}}{{char}}的这一帖]][[{{!mine}}这一帖]]下面对{{char}}说了「{{said}}」，{{char}}回复这一句（like、bump 写 false）。"
+    "community.ask.memberReply": "这一次：{{user}}在[[{{?mine}}{{char}}的这一帖]][[{{!mine}}这一帖]]下面对{{char}}说了「{{said}}」，{{char}}回复这一句（like、bump 写 false）。",
+    "community.memory.joined": "{{day}} {{user}}邀请{{char}}加入了社群「{{community}}」[[（{{description}}）]]。{{char}}和{{user}}在这个社群里互相关注，{{char}}也会在里面发帖、回{{user}}的帖",
+    "community.memory.left": "{{day}} {{user}}邀请{{char}}加入了社群「{{community}}」[[（{{description}}）]]；后来{{char}}退出了这个社群"
   }
 }

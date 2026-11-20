@@ -515,8 +515,7 @@ export function rememberPost(postId: string, characterId: string) {
 function membershipMemory(c: Community, ch: Character, joinedAt: number, left: boolean): string {
   const user = userNameFor(ch.id);
   const day = new Intl.DateTimeFormat('zh-CN', { timeZone: useEnvironmentStore().settings.timezone, month: 'numeric', day: 'numeric' }).format(new Date(joinedAt));
-  const base = `${day} ${user}邀请${ch.name}加入了社群「${c.name}」（${c.description}）`;
-  return left ? `${base}；后来${ch.name}退出了这个社群` : `${base}。${ch.name}和${user}在这个社群里互相关注，${ch.name}也会在里面发帖、回${user}的帖`;
+  return textFn(textsFor(communityPreset()))(left ? 'community.memory.left' : 'community.memory.joined', { day, user, char: ch.name, community: c.name, description: c.description });
 }
 
 /** 邀请一个角色加入社群：她成了成员（和你互关，会自己发帖、回应你），这件事写进她的记忆 */

@@ -27,7 +27,7 @@ import { useAiStore } from '@/stores/ai';
 import { useAssistantStore, type AssistantMerge, type AssistantMessage, type AssistantMode, type AssistantTarget, type AssistantUndo } from '@/stores/assistant';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
-import { isDemoRecord, useLibraryStore, withTexts } from '@/stores/library';
+import { isDemoRecord, textsFor, useLibraryStore, withTexts } from '@/stores/library';
 import { usePersonaStore } from '@/stores/personas';
 import { uid } from '@/utils/id';
 import { defaultPresetId } from './importer';
@@ -207,8 +207,11 @@ function fitCap(lengths: number[], budget: number): number {
   return Number.POSITIVE_INFINITY;
 }
 
+/** 太长时截掉（后面那句说明在助手预设的程序文字 assistant.clipped 里） */
 function clip(text: string, cap: number): string {
-  return text.length > cap ? `${text.slice(0, cap)}（后面还有 ${text.length - cap} 字没给）` : text;
+  if (text.length <= cap) return text;
+  const t = textFn(textsFor(useLibraryStore().presetForUse('assistant')));
+  return `${text.slice(0, cap)}${t('assistant.clipped', { left: text.length - cap })}`;
 }
 
 function texts(s: Subject): string[] {
@@ -230,7 +233,7 @@ function subjectJson(s: Subject, cap: number): Record<string, unknown> {
       category: p.category,
       categoryLabel: PRESET_CATEGORIES[p.category].label,
       usedFor: presetUsedFor(p),
-      from: p.seedFile ? `App 自带（${p.seedFile}）` : p.source?.kind === 'sillytavern' ? `从 SillyTavern 导入${p.source.fileName ? `（${p.source.fileName}）` : ''}` : '导入或复制的',
+      from: textFn(textsFor(useLibraryStore().presetForUse('assistant')))(p.seedFile ? 'assistant.from.seed' : p.source?.kind === 'sillytavern' ? 'assistant.from.st' : 'assistant.from.other', { file: p.seedFile, stFile: p.source?.fileName }),
       description: p.description,
       blocks: p.blocks.map((b) => ({
         identifier: b.identifier,

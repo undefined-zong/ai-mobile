@@ -150,6 +150,7 @@
     "story.now": "【现在】{{date}} {{weekday}} {{time}}[[；{{char}}在{{place}}[[（{{status}}）]]]]",
     "story.memories": "【{{char}}记得的关于{{user}}的事】\n{{items|\\n}}",
     "story.recent": "【最近的聊天】\n{{lines|\\n}}",
-    "story.previous": "【最近写过的番外】{{titles}}"
+    "story.previous": "【最近写过的番外】{{titles}}",
+    "story.meals": "早饭{{breakfast}}，午饭{{lunch}}，晚饭{{dinner}}"
   }
 }

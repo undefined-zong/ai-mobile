@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
-import { availableExpressions, DIARY_TIME_LABEL, diaryEnabled, diaryImageOn, expressionLabel, hasPortraits, imageAppearance, isFandom, WEATHER_PROVIDER_LABEL, type WeatherProviderChoice } from '@app/shared';
+import { availableExpressions, textFn, DIARY_TIME_LABEL, diaryEnabled, diaryImageOn, expressionLabel, hasPortraits, imageAppearance, isFandom, WEATHER_PROVIDER_LABEL, type WeatherProviderChoice } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -18,7 +18,7 @@ import PageHeader from '@/layouts/PageHeader.vue';
 import { assetUrl, services, type IllustrateOutcome } from '@/services';
 import { presetFor } from '@/services/prompt';
 import { useAiStore } from '@/stores/ai';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -103,7 +103,8 @@ async function trialDraw() {
     const out = await services.image.illustrate({
       characterId: c.id,
       mode: 'portrait',
-      caption: `${c.name}的全身像：白色背景，站着看向镜头，表情自然${isFandom(c) ? '；看看画出来是不是原作里的样子' : ''}`,
+      // 试画一张的画面写在生图预设的程序文字里
+      caption: textFn(textsFor(useLibraryStore().presetForUse('image', c)))('image.trial', { char: c.name, fandom: isFandom(c) }),
       lockOutfit: !!todayOutfit.value,
     });
     trial.value = { busy: false, out };

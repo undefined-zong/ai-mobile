@@ -218,7 +218,7 @@ export function toTurns(history: Message[], character: Character, user: string, 
     // 一起做事时说的话带上位置（第几个番茄、片内时间……），她知道是在哪一刻说的
     // 通话状态由当前任务提供，历史通话的标签不再写进说话正文。
     const cue = m.meta?.cue;
-    const content = cue && cue !== '语音通话' && cue !== '视频通话' ? `（${cue}）${text}` : text;
+    const content = cue && cue !== t('call.kind.voice') && cue !== t('call.kind.video') ? t('history.cue', { cue, text }) : text;
     if (m.role === 'user') out.push({ role: 'user', name: user, content });
     else if (m.role === 'assistant') out.push({ role: 'assistant', name: character.name, content });
     else out.push({ role: 'system', name: '', content });
