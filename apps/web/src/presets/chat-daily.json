@@ -523,6 +523,7 @@
     "poke.user": "{{user}}{{act}}[[，连着 {{times}} 下]][[{{?sensitive}}，碰到了不该碰的地方]]",
     "poke.act.plain": "拍了拍{{char}}的{{target}}",
     "poke.act.hold": "{{pre}}{{char}}的{{target}}[[{{post}}]]",
-    "poke.act.tap": "{{tap}}{{char}}的{{target}}"
+    "poke.act.tap": "{{tap}}{{char}}的{{target}}",
+    "common.jsonRetry": "上面的输出不是合法的 JSON，或者缺少要求的字段。请只输出一个符合要求的 JSON 对象，不要任何其他文字。"
   }
 }

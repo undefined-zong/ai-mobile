@@ -81,6 +81,11 @@ export interface AgentSystemOptions {
   onCall?(role: AgentRole, outcome: { ok: true; fellBack: boolean } | { ok: false; error: unknown }): void;
   /** 输出修剪的规则（llm/filter.ts 的写法）；不给用默认的三条（去掉漏出来的思考内容） */
   outputFilters?: string[];
+  /**
+   * 要 JSON 的智能体没按要求输出时，发回去的那句提醒（程序文字 common.jsonRetry，从预设里取）。
+   * 没给时不重试，直接报错
+   */
+  jsonRetry?: () => string | undefined;
 }
 
 export interface AgentCallOptions {
@@ -233,20 +238,21 @@ export class AgentSystem {
     role: AgentRole,
     req: ChatRequest,
     parse: (value: unknown) => T | null,
-    opts: AgentCallOptions & { retries?: number } = {},
+    opts: AgentCallOptions & { retries?: number; /** 这一次的提醒（预设里的程序文字）；不给用 jsonRetry */ retryHint?: string } = {},
   ): Promise<{ value: T; result: AgentChatResult }> {
     let messages = req.messages;
+    const hint = opts.retryHint ?? this.opts.jsonRetry?.();
     for (let tries = 0; ; tries += 1) {
       const result = await this.chat(role, { ...req, messages, json: req.json ?? true }, { signal: opts.signal, onFailover: opts.onFailover });
       const value = parse(parseJsonLoose(result.text));
       if (value !== null) return { value, result };
-      if (tries >= (opts.retries ?? 1)) {
+      if (!hint || tries >= (opts.retries ?? 1)) {
         throw new AiError('bad_response', `"${AGENT_META[role].label}"没有按要求输出 JSON：${result.text.replace(/\s+/g, ' ').slice(0, 120)}`, { retryable: true });
       }
       messages = [
         ...req.messages,
         { role: 'assistant', content: result.text },
-        { role: 'user', content: '上面的输出不是合法的 JSON，或者缺少要求的字段。请只输出一个符合要求的 JSON 对象，不要任何其他文字。' },
+        { role: 'user', content: hint },
       ];
     }
   }

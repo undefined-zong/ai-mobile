@@ -1,5 +1,6 @@
+import { textFn } from '@app/shared';
 import type { ImageRequest, ImageVibe } from '../image/types.ts';
-import { buildImagePromptMessages, fallbackImagePrompt, hasUserInFrame, IMAGE_PROMPT_RETRY, parseImagePrompt, toImageRequest, type ImagePromptInput, type ImagePromptOutput } from './imagePrompt.ts';
+import { buildImagePromptMessages, fallbackImagePrompt, hasUserInFrame, parseImagePrompt, toImageRequest, type ImagePromptInput, type ImagePromptOutput } from './imagePrompt.ts';
 import type { AgentCallOptions, AgentSystem, CallMeta } from './system.ts';
 import { samplerRequest, type TaskPreset } from './taskPreset.ts';
 
@@ -40,7 +41,7 @@ export async function illustrate(
   let promptBy: IllustrateResult['promptBy'] = null;
   const preset = opts.preset;
   if (system.isLive('imagePrompt') && preset) {
-    const { value, result } = await system.text('imagePrompt', { messages: buildImagePromptMessages(input, preset), ...samplerRequest(preset.sampler) }, parseImagePrompt, IMAGE_PROMPT_RETRY, opts);
+    const { value, result } = await system.text('imagePrompt', { messages: buildImagePromptMessages(input, preset), ...samplerRequest(preset.sampler) }, parseImagePrompt, textFn(preset.texts)('image.retry'), opts);
     prompt = value;
     promptBy = result;
   } else {

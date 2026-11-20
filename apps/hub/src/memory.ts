@@ -37,6 +37,7 @@ async function consolidateOne(env: Env, row: ContextRow, credentials: ProactiveC
     const system = new AgentSystem({
       config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
+      jsonRetry: () => ctx.preset?.texts?.['common.jsonRetry'],
     });
     const { ops, errors } = await run(system, ctx, { signal: AbortSignal.timeout(LEASE_MS - 30_000) });
     // 四件事都失败了：算这次失败，稍后重试

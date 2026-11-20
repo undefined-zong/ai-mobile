@@ -1,4 +1,4 @@
-import { ACTION_TAG_PREFIXES, assembleTaskPrompt, IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_PERSON_SEPARATOR, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags, plainActionTags } from '@app/shared';
+import { ACTION_TAG_PREFIXES, assembleTaskPrompt, textFn, type TextFn, IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_PERSON_SEPARATOR, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags, plainActionTags } from '@app/shared';
 import type { ImageCharacter, ImageRequest, ImageSize } from '../image/types.ts';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -93,7 +93,6 @@ export interface ImagePromptInput {
 /** 提示词里能用的画幅（竖图、横图、方图） */
 export type PromptSize = 'portrait' | 'landscape' | 'square';
 
-const SIZE_LABEL: Record<PromptSize, string> = { portrait: '竖图（portrait）', landscape: '横图（landscape）', square: '方图（square）' };
 
 export interface ImagePromptOutput {
   /** 中文短标题，进相册（程序按要画的画面写） */
@@ -119,50 +118,35 @@ function lockedUserOutfit(input: ImagePromptInput): string {
   return o?.locked && input.mode !== 'background' ? o.tags.trim() : '';
 }
 
-/** 这一次的输入：填进"生图"预设的程序填充块 */
-export function imagePromptFills(input: ImagePromptInput): Record<string, string> {
+/** 这一次的输入：填进"生图"预设的程序填充块（说明文字在预设的程序文字 image.* 里） */
+export function imagePromptFills(input: ImagePromptInput, t: TextFn): Record<string, string> {
   const { character: c, scene = {}, withUser } = input;
   const mode = input.mode ?? 'scene';
   const outfit = c.outfit;
   const locked = lockedOutfit(input);
   const youOutfit = withUser?.outfit?.tags.trim();
+  const none = t('image.none');
   return {
     // "你"可以入画时：你的长相和两个人同框时的输出字段（解析时按 characters 读每个人的动作）；单人图不写 characters
     imageCharacters:
       withUser && mode === 'scene'
-        ? [
-            `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
-            ...(youOutfit
-              ? [lockedUserOutfit(input)
-                  ? `${withUser.name}的服装 tags（两个人同框时程序会加在 user### 那一份里，不要重复，也不要另写别的衣服）：${youOutfit}`
-                  : `${withUser.name}常穿：${youOutfit}（两个人同框时照它写进 user###，画面要换装时可以换）`]
-              : []),
-            `画${c.name}和${withUser.name}两个人同框时：image### 里只写整体画面（人数、构图、场景、光线），再各起一行分别写每个人：`,
-            `char###${c.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
-            `user###${withUser.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
-            `人物类别按各自的外观与角色信息填写，不按 char / user 固定性别。位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），不指定位置时不写。`,
-            `两个人之间的动作写在各自那一行，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出谁做、谁承受、相互（例如 char###girl, source#hug### 和 user###boy, target#hug###；相互拥抱两边都写 mutual#hug）。`,
-            `只针对一个人的负面 tags 另起一行写 char negative###…### 或 user negative###…###。只画${c.name}一个人时不写 char### 和 user###。`,
-            `画面里还有别的人时，在 image### 里用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开：第一段写整体画面，后面每段写一个人（人物类别、长相、表情、动作、服装）；只针对这些人的负面 tags 在 negative### 里按同样的顺序用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开。`,
-          ].join('\n')
+        ? t('image.duo', {
+          char: c.name, user: withUser.name, userLooks: withUser.appearanceTags || none,
+          userOutfitLocked: youOutfit && lockedUserOutfit(input) ? youOutfit : null,
+          userOutfit: youOutfit && !lockedUserOutfit(input) ? youOutfit : null,
+          actions: ACTION_TAG_PREFIXES.map((p) => `${p}#`), separator: IMAGE_PROMPT_PERSON_SEPARATOR,
+        })
         : '',
-    imageSubject: [
-      `角色：${c.name}${c.pronoun ? `（${c.pronoun}）` : ''}；外观 tags（程序会加，不要重复）：${c.appearanceTags || '（无）'}`,
-      locked && outfit ? `服装：${outfit.name}；服装 tags（程序会加在外观后面，不要重复，也不要另写别的衣服）：${locked}` : outfit ? `${c.name}今天穿：${outfit.name}（${outfit.tags}）` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
-    imageScene: [
-      scene.place ? `地点：${scene.place}` : '',
-      scene.outfit ? `服装：${scene.outfit}` : '',
-      [scene.timeOfDay, scene.weather].filter(Boolean).length ? `时间与天气：${[scene.timeOfDay, scene.weather].filter(Boolean).join('，')}` : '',
-      scene.expression ? `此刻的表情：${scene.expression}` : '',
-      input.size ? `画幅：${SIZE_LABEL[input.size]}，程序按这个画幅出图，构图照它来` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
-    imageRecent: input.recent?.length ? `最近的对话：\n${input.recent.slice(-6).join('\n')}` : '',
-    imageCaption: `要画的画面：${input.caption}`,
+    imageSubject: t('image.subject', {
+      char: c.name, pronoun: c.pronoun, looks: c.appearanceTags || none,
+      outfitName: outfit?.name, outfitLocked: locked && outfit ? locked : null, outfitTags: !locked && outfit ? outfit.tags : null,
+    }),
+    imageScene: t('image.scene', {
+      place: scene.place, outfit: scene.outfit, timeWeather: [scene.timeOfDay, scene.weather].filter((x): x is string => !!x),
+      expression: scene.expression, size: input.size ? t(`image.size.${input.size}`) : null,
+    }),
+    imageRecent: input.recent?.length ? t('image.recent', { lines: input.recent.slice(-6) }) : '',
+    imageCaption: t('image.caption', { caption: input.caption }),
   };
 }
 
@@ -191,7 +175,7 @@ export function imagePromptTypes(input: ImagePromptInput): string[] {
 export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPreset): ChatMessage[] {
   return assembleTaskPrompt({
     preset,
-    fills: imagePromptFills(input),
+    fills: imagePromptFills(input, textFn(preset.texts)),
     macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.withUser?.name ?? input.companionName ?? '', extra: imagePromptMacros(input) },
     type: imagePromptTypes(input),
   }).messages;
@@ -266,7 +250,6 @@ export function parseImagePrompt(text: string): ImagePromptOutput | null {
 }
 
 /** 让模型重写时的提醒 */
-export const IMAGE_PROMPT_RETRY = '上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。';
 
 const CENTERS = { left: { x: 0.3, y: 0.5 }, right: { x: 0.7, y: 0.5 }, center: { x: 0.5, y: 0.5 } } as const;
 

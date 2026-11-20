@@ -142,5 +142,14 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "story.character": "【角色】{{name}}\n{{description}}\n性格：{{personality}}\n背景：{{scenario}}",
+    "story.world": "【{{pronoun}}的世界】{{name}}[[：{{blurb}}]]\n{{?schedule}}作息：\n{{schedule|\\n}}\n手头在忙：{{task}}\n三餐：{{meals}}\n身边的人：{{people}}",
+    "story.person": "{{name}}（{{relation}}）",
+    "story.now": "【现在】{{date}} {{weekday}} {{time}}[[；{{char}}在{{place}}[[（{{status}}）]]]]",
+    "story.memories": "【{{char}}记得的关于{{user}}的事】\n{{items|\\n}}",
+    "story.recent": "【最近的聊天】\n{{lines|\\n}}",
+    "story.previous": "【最近写过的番外】{{titles}}"
+  }
 }

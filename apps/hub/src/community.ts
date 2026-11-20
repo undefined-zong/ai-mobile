@@ -37,7 +37,7 @@ export function communityRequest(context: CommunityContext, now: number, member?
 export async function generateCommunityPosts(context: CommunityContext, credentials: ProactiveCredentials, job: CommunityJob, now: number,
   member?: { context: SocialContext; day: SocialDay | null }): Promise<{ posts: CommunityPost[]; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent communities.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters, jsonRetry: () => context.preset?.texts?.['common.jsonRetry'] });
   const { value, result } = await system.json('social', communityRequest(context, now, member), parseCommunityBatch, { signal: AbortSignal.timeout(150_000) });
   const posts = postsFromDrafts(member ? value.slice(0, 1) : value.slice(0, context.settings.batchSize), {
     communityId: context.community.id, batchId: job.id, now, source: 'hub', model: result.model, known: knownNames(context, member?.context), unread: true,

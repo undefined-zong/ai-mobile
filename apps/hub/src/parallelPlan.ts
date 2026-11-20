@@ -94,6 +94,7 @@ export async function arrangeFor(env: Env, row: ContextRow, credentials: Proacti
     const system = new AgentSystem({
       config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
+      jsonRetry: () => ctx.preset?.texts?.['common.jsonRetry'],
     });
     const { value, result } = await system.json(
       'parallel',

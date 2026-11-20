@@ -120,6 +120,12 @@
   },
   "regex": [],
   "texts": {
-    "summary.narrator": "旁白"
+    "summary.narrator": "旁白",
+    "summary.now": "现在：{{day}} {{time}}[[（{{timeZone}}）]]",
+    "summary.previous": "上一段梗概：{{text}}",
+    "summary.memories": "已有记忆（和这段聊天可能有关的）：\n{{items|\\n}}",
+    "summary.memory": "- [{{id}}][[ ({{day}})]] {{content}}",
+    "summary.transcript": "要整理的聊天（#行号 [时间] 名字: 内容）：\n{{lines|\\n}}",
+    "summary.line": "#{{n}} [{{time}}] {{who}}: [[{{text}}]]"
   }
 }

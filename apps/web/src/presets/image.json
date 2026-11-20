@@ -205,5 +205,17 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "image.none": "（无）",
+    "image.duo": "{{user}}可以入画；外观 tags（程序会加，不要重复）：{{userLooks}}\n{{user}}的服装 tags（两个人同框时程序会加在 user### 那一份里，不要重复，也不要另写别的衣服）：{{userOutfitLocked}}\n{{user}}常穿：{{userOutfit}}（两个人同框时照它写进 user###，画面要换装时可以换）\n画{{char}}和{{user}}两个人同框时：image### 里只写整体画面（人数、构图、场景、光线），再各起一行分别写每个人：\nchar###{{char}}的人物类别（boy/girl/other）、表情、动作、服装###\nuser###{{user}}的人物类别（boy/girl/other）、表情、动作、服装###\n人物类别按各自的外观与角色信息填写，不按 char / user 固定性别。位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），不指定位置时不写。\n两个人之间的动作写在各自那一行，用 {{actions| / }} 标出谁做、谁承受、相互（例如 char###girl, source#hug### 和 user###boy, target#hug###；相互拥抱两边都写 mutual#hug）。\n只针对一个人的负面 tags 另起一行写 char negative###…### 或 user negative###…###。只画{{char}}一个人时不写 char### 和 user###。\n画面里还有别的人时，在 image### 里用 {{separator}} 隔开：第一段写整体画面，后面每段写一个人（人物类别、长相、表情、动作、服装）；只针对这些人的负面 tags 在 negative### 里按同样的顺序用 {{separator}} 隔开。",
+    "image.subject": "角色：{{char}}[[（{{pronoun}}）]]；外观 tags（程序会加，不要重复）：{{looks}}\n服装：{{outfitName}}；服装 tags（程序会加在外观后面，不要重复，也不要另写别的衣服）：{{outfitLocked}}\n{{char}}今天穿：{{outfitName}}（{{outfitTags}}）",
+    "image.scene": "地点：{{place}}\n服装：{{outfit}}\n时间与天气：{{timeWeather|，}}\n此刻的表情：{{expression}}\n画幅：{{size}}，程序按这个画幅出图，构图照它来",
+    "image.size.portrait": "竖图（portrait）",
+    "image.size.landscape": "横图（landscape）",
+    "image.size.square": "方图（square）",
+    "image.recent": "最近的对话：\n{{lines|\\n}}",
+    "image.caption": "要画的画面：{{caption}}",
+    "image.retry": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。"
+  }
 }

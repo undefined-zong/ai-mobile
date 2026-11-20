@@ -15,7 +15,7 @@ export function rhythmRequest(context: RhythmContext, date: string, recent: Rhyt
 
 export async function generateRhythm(context: RhythmContext, credentials: ProactiveCredentials, date: string, recent: RhythmDay[], now: number): Promise<{ day: RhythmDay; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent characters.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (id) => credentials.keys[id] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (id) => credentials.keys[id] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters, jsonRetry: () => context.preset?.texts?.['common.jsonRetry'] });
   const { value, result } = await system.json('rhythm', rhythmRequest(context, date, recent), parsePlanDay, { signal: AbortSignal.timeout(120_000) });
   return { day: rhythmDayFromPlan({ characterId: context.character.id, date, template: context.template, settings: context.settings,
     locations: context.world.locations, output: value, model: result.model, at: now }), tokens: system.usedToday('rhythm') };

@@ -82,6 +82,7 @@ export async function planFor(env: Env, row: ContextRow, credentials: ProactiveC
     const system = new AgentSystem({
       config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
+      jsonRetry: () => ctx.preset?.texts?.['common.jsonRetry'],
     });
     const signal = AbortSignal.timeout(LEASE_MS - 30_000);
     const fresh = await runPlanner(system, { context: ctx, at: now, date, week, lastRunAt: last?.at ?? null, want, via: 'hub' }, hubOpener(env, signal), { signal });

@@ -24,7 +24,7 @@ export function diaryRequest(context: DiaryContext, now: number, date: string, d
 
 export async function generateDiary(context: DiaryContext, credentials: ProactiveCredentials, date: string, now: number, day: SocialDay | null): Promise<{ entry: DiaryEntry; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent characters.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters, jsonRetry: () => context.preset?.texts?.['common.jsonRetry'] });
   const { value, result } = await system.json('diary', diaryRequest(context, now, date, day), parseDiaryDraft, { signal: AbortSignal.timeout(150_000) });
   const entry: DiaryEntry = {
     id: diaryId(context.character.id, date), characterId: context.character.id, date,
