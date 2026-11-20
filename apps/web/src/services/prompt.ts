@@ -7,7 +7,6 @@ import {
   applyRegexScripts,
   assemblePrompt,
   buildChatRequest,
-  CONTROL_TAG_DOCS,
   estimateTokens,
   expressionPromptLines,
   formatEnvironmentBlock,
@@ -22,6 +21,8 @@ import {
   PRESET_CATEGORIES,
   presetUse,
   sceneUse,
+  tagDoc,
+  textFn,
   type AppBlockFill,
   type PresetUseId,
   type AssembleResult,
@@ -35,6 +36,7 @@ import {
   type AgentRole,
   type Persona,
   type Preset,
+  type TextFn,
   type RegexScript,
   type TruthDareTally,
 } from '@app/shared';
@@ -42,7 +44,7 @@ import type { LLMChatMessage } from './types';
 import { useAiStore } from '@/stores/ai';
 import { usePersonaStore } from '@/stores/personas';
 import { useEnvironmentStore } from '@/stores/environment';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import { afterSummarized, lastN, useMessageSettingsStore } from '@/stores/messageSettings';
 import { useRealWorldStore } from '@/stores/realworld';
 import { useRhythmStore } from '@/stores/rhythm';
@@ -234,19 +236,20 @@ export function storeRegex(chat: Chat, character: Character, text: string, role:
   });
 }
 
-/** App 自己的四块：摘要、记忆 + 关系、【当前环境】、场景规则 */
-function appFills(chat: Chat, character: Character, history: Message[], now: Date, timeZone: string, recall: RecallForTurn, proactive: boolean, query: string): Record<string, AppBlockFill> {
+/** App 自己的四块：摘要、记忆 + 关系、【当前环境】、场景规则；说明文字都是这一轮预设的程序文字（t） */
+function appFills(chat: Chat, character: Character, history: Message[], now: Date, timeZone: string, recall: RecallForTurn, proactive: boolean, query: string, t: TextFn): Record<string, AppBlockFill> {
   const scene = getScene(chat.currentScene ?? 'free');
   const loc = getLocation(chat.togetherAt ?? character.locationId);
+  const who = { char: character.name, pronoun: character.pronoun, place: loc?.name };
   const place = !loc
     ? null
     : chat.togetherAt
       ? isRealPlace(loc)
         ? loc.id === 'real:home'
-          ? `${character.name}在你这边，你们一起在家`
-          : `你带${character.name}出门了，你们一起在${loc.name}`
-        : `你在${character.name}的小世界里陪${character.pronoun}，你们一起在${loc.name}`
-      : `${character.name}在${character.pronoun}的小世界里的${loc.name}${character.status ? `（${character.status}）` : ''}；${useRealWorldStore().whereLine}`;
+          ? t('env.place.home', who)
+          : t('env.place.out', who)
+        : t('env.place.herWorldTogether', who)
+      : t('env.place.her', { ...who, status: character.status, you: useRealWorldStore().whereText(t) });
 
   // 距上次聊天：最后一条之前那条消息到现在
   const before = history.at(-2)?.createdAt;
@@ -255,9 +258,9 @@ function appFills(chat: Chat, character: Character, history: Message[], now: Dat
   // 她今天穿什么（节律里这个场景该穿的那套）；服装参考关着时不告诉，免得 [cg:] 里写的永远是这一身
   const outfit = useAiStore().outfitRef() ? useRhythmStore().outfitFor(character.id, chat.currentScene) : undefined;
   // 真实天气：你那边；她住在别的城市（例如国内）时再加她那边的。取不到就不写，不编
-  const { weather, herWeather } = useWeatherStore().envInput(character);
+  const { weather, herWeather } = useWeatherStore().envInput(character, t);
 
-  const blocks = memoryBlocks(chat, character, now.getTime(), timeZone, { proactive, query, recall: recall.lines });
+  const blocks = memoryBlocks(chat, character, now.getTime(), timeZone, { proactive, query, recall: recall.lines, t });
   const { summary, memory } = blocks;
   recall.lines = blocks.recall;
   const cached = new Set(recall.snapshot?.lines.map((l) => l.key));
@@ -281,14 +284,14 @@ function appFills(chat: Chat, character: Character, history: Message[], now: Dat
         herWeather,
         sinceLastChatMin,
         place,
-        outfit: outfit ? `${character.name}今天穿${outfit.name}` : null,
+        outfit: outfit ? t('env.outfit', { char: character.name, outfit: outfit.name }) : null,
         sceneName: scene.id === 'free' ? null : scene.name,
-        anniversaries: anniversaryLine(character.relationship.anniversaries, now.getTime(), timeZone),
-      }),
+        anniversaries: anniversaryLine(character.relationship.anniversaries, now.getTime(), timeZone, t),
+      }, t),
       source: `时间 / 节气 / 纪念日 / 天气（${[weather ? `你那边 ${weather.city}` : '你那边没取到', herWeather ? `${character.name}那边 ${herWeather.city}` : ''].filter(Boolean).join('，')}）/ ${characterPronoun(character)}在哪 / ${characterPronoun(character)}今天穿什么`,
     },
     sceneRules: {
-      content: tagsLine(scene, character),
+      content: tagsLine(scene, character, t),
       source: `场景"${scene.name}"能用的标签和表情（场景规则由当前预设提供）`,
     },
   };
@@ -313,16 +316,13 @@ export function boundLoreEntries(character: Character) {
   return character.lorebookIds.flatMap((id) => lib.lorebookById(id)?.entries ?? []);
 }
 
-function tagDesc(t: ControlTagKind, character: Character): string {
-  if (t !== 'game') return CONTROL_TAG_DOCS[t].desc;
-  // 游戏一个个开关：只列她现在能约的
+/** 场景规则那一块（程序文字 tags.block / tags.item / tags.<种类>.*）：这个场景能用的标签，游戏只列她现在能约的 */
+function tagsLine(scene: ReturnType<typeof getScene>, character: Character, t: TextFn, allowed = sceneTags(scene, character)): string {
   const games = allowedInviteGames(boundLoreEntries(character)).map(inviteGameLabel);
-  return `约对方玩某一个游戏，显示成邀请卡片；游戏名只能是：${games.join('、')}`;
-}
-
-function tagsLine(scene: ReturnType<typeof getScene>, character: Character, allowed = sceneTags(scene, character)): string {
-  const tags = allowed.map((t) => `- ${CONTROL_TAG_DOCS[t].syntax}：${tagDesc(t, character)}`);
-  return `回复里可以夹带这些隐藏标签（对方看不到，程序会执行）：\n${tags.join('\n')}\n${expressionPromptLines(character.portraits, { poses: allowed.includes('pose') })}`;
+  return t('tags.block', {
+    tags: allowed.map((k) => t('tags.item', tagDoc(k, t, { games }))),
+    expressions: expressionPromptLines(character.portraits, t, { poses: allowed.includes('pose') }),
+  });
 }
 
 /** 这个角色的对话预设；没选或失效时回退到日常对话。 */
@@ -350,6 +350,15 @@ export class MissingPresetError extends Error {
     super(`没有可用的${what}预设：去"我的 → 预设"导入一个预设文件，或者复制一个过来`);
     this.name = 'MissingPresetError';
   }
+}
+
+/**
+ * 一起做事、通话、游戏拼场景任务时用的程序文字：这个用途这一次会用的那个预设里的
+ * （和 presetForTurn 选的同一个；chat 是这个角色的对话预设）
+ */
+export function sceneText(use: ChatPresetUse, character?: Character | null): TextFn {
+  const lib = useLibraryStore();
+  return textFn(textsFor(use === 'chat' ? lib.chatPresetFor(character) : lib.presetForUse(use, character)));
 }
 
 /** "功能 · 一起吃饭"、"对话"：这一轮的预设是按什么选的 */
@@ -430,15 +439,16 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const proactive = opts.agent === 'proactive' || opts.type === 'quiet';
   const userText = lastUser ? messageToText(lastUser, character, persona.name) : '';
   const recall: RecallForTurn = proactive ? { lines: [], snapshot: undefined, added: 0, reused: false } : recallForTurn(chat, character, userText, opts.targetId);
-  const app = appFills(chat, character, history, now, timeZone, recall, proactive, userText);
+  const t = textFn(textsFor(preset));
+  const app = appFills(chat, character, history, now, timeZone, recall, proactive, userText, t);
   if (opts.allowedTags) app.sceneRules = {
-    content: tagsLine(getScene(chat.currentScene ?? 'free'), character, opts.allowedTags),
+    content: tagsLine(getScene(chat.currentScene ?? 'free'), character, t, opts.allowedTags),
     source: '本轮实际可用的标签',
   };
-  if (opts.delegatedTags?.length) app.sceneRules!.content += `\n本轮由并行的副对话负责这些标签：${opts.delegatedTags.join('、')}。主回复结束后程序会追加副对话结果。你只生成主对话正文和上面列出的标签，不重复发卡片或配图，也不要预先声称已调用这些功能。`;
+  if (opts.delegatedTags?.length) app.sceneRules!.content += `\n${t('tags.delegated', { tags: opts.delegatedTags })}`;
   // 家务和健康：你人设里开着的系统今天的情况（都没开时没有这一块）
   const flags: string[] = [...lifeFlags(persona), ...(opts.flags ?? [])];
-  const home = homeBlock(persona);
+  const home = homeBlock(persona, t);
   if (home) app.home = home;
   if (opts.quiet) app.proactive = { content: opts.quiet, source: `主动消息：这一次要${characterPronoun(character)}做的事` };
   if (opts.task) app.sceneTask = { content: opts.task.input, source: `场景任务：${opts.task.name}` };

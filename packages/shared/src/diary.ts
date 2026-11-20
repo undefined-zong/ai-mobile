@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { nullable, str } from './modelText.ts';
 import type { TaskPresetLike } from './st/task.ts';
 import { shiftDate, zonedDateKey, zonedInstant } from './timezone.ts';
@@ -82,9 +83,9 @@ export function parseDiaryDraft(value: unknown): DiaryDraft | null {
 }
 
 /** 一篇日记写成一行字（进提示词、记忆拼装器）："11-18 苏晚的日记《雨天》：「……」" */
-export function diaryLine(e: Pick<DiaryEntry, 'date' | 'title' | 'text' | 'mood'>, name: string, max = 160): string {
+export function diaryLine(e: Pick<DiaryEntry, 'date' | 'title' | 'text' | 'mood'>, name: string, t: TextFn, max = 160): string {
   const body = e.text.replace(/\s+/g, ' ').trim();
-  return `${e.date.slice(5)} ${name}的日记${e.title ? `《${e.title}》` : ''}${e.mood ? `（心情：${e.mood}）` : ''}：「${body.length > max ? `${body.slice(0, max)}…` : body}」`;
+  return t('diary.line', { date: e.date.slice(5), name, title: e.title, mood: e.mood, text: body.length > max ? `${body.slice(0, max)}…` : body });
 }
 
 // —— 云端 ——
@@ -112,7 +113,7 @@ export interface DiaryContext {
   previous: string;
   /** Ta那边现在的天气（一句话） */
   weather: string;
-  preset: (Pick<Preset, 'sampler'> & TaskPresetLike) | null;
+  preset: (Pick<Preset, 'sampler'> & TaskPresetLike & Pick<Preset, 'texts'>) | null;
   /** 通知里显示多少（同主动消息的设置） */
   preview: NotificationPreview;
 }
@@ -128,6 +129,8 @@ export function packDiaryContext(input: DiaryContext): DiaryContext {
       blocks: preset.blocks.map(({ extra: _extra, ...block }) => block),
       sampler: preset.sampler,
       worldInfoEnabled: preset.worldInfoEnabled,
+      // 程序文字（云端拼输入时按键取说明文字）
+      ...(preset.texts ? { texts: preset.texts } : {}),
       lorebooks: preset.lorebooks?.map(({ extra: _extra, entries, ...book }) => ({
         ...book, entries: entries.map(({ extra: _entryExtra, ...entry }) => entry),
       })),

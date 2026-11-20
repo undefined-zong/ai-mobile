@@ -1,5 +1,6 @@
 import { cleanHtml, count, hash32, nullable, shortDay, shortStamp, str } from './modelText.ts';
-import { dailySlots, momentExtras } from './social.ts';
+import { commentText, dailySlots, momentExtras } from './social.ts';
+import type { TextFn } from './programText.ts';
 import { zonedInstant } from './timezone.ts';
 import {
   COMMUNITY_LAYOUTS, COMMUNITY_LIMITS, COMMUNITY_SORTS, DEFAULT_COMMUNITY_SETTINGS, netizenId,
@@ -308,45 +309,40 @@ export function matchCommunity(c: Pick<Community, 'name' | 'description' | 'tags
 // —— 写成文字 ——
 
 /** 社群的介绍（进提示词） */
-export function communityInfoText(c: Pick<Community, 'name' | 'description' | 'vibe' | 'tags' | 'memberCount'>): string {
-  return [
-    `社群：${c.name}`,
-    `简介：${c.description}`,
-    c.vibe ? `风气：${c.vibe}` : '',
-    c.tags.length ? `标签：${c.tags.join('、')}` : '',
-    c.memberCount ? `成员：${c.memberCount} 人` : '',
-  ].filter(Boolean).join('\n');
+export function communityInfoText(c: Pick<Community, 'name' | 'description' | 'vibe' | 'tags' | 'memberCount'>, t: TextFn): string {
+  return t('community.info', { name: c.name, description: c.description, vibe: c.vibe, tags: c.tags, members: c.memberCount || null });
 }
 
 type PostText = Pick<CommunityPost, 'authorId' | 'title' | 'text' | 'images' | 'html' | 'htmlTitle' | 'likes' | 'liked' | 'bumps' | 'bumped' | 'comments' | 'createdAt'>;
 
-function postHead(p: PostText, names: (id: string) => string): string {
-  const extras = momentExtras(p, '一页卡片');
-  return `${names(p.authorId)}发帖：${p.title ? `《${p.title}》` : ''}${p.text ? `「${p.text}」` : ''}${extras ? `（${extras}）` : ''}`;
+function postHead(p: PostText, names: (id: string) => string, t: TextFn): string {
+  return t('community.postHead', { author: names(p.authorId), title: p.title, text: p.text, extras: momentExtras(p, t, 'community.htmlFallback') });
 }
 
 /**
  * 一帖写成几行字（进提示词）：谁、什么时候、发了什么、多少赞多少顶（你和角色点的写出名字）、下面的回复。
  * names：id → 名字（你、角色、网友）
  */
-export function communityPostText(p: PostText, names: (id: string) => string, opts: { timeZone?: string; comments?: number; textMax?: number } = {}): string {
+export function communityPostText(p: PostText, names: (id: string) => string, t: TextFn, opts: { timeZone?: string; comments?: number; textMax?: number } = {}): string {
   const short = opts.textMax && p.text.length > opts.textMax ? { ...p, text: `${p.text.slice(0, opts.textMax)}…` } : p;
-  const who = (ids: string[]) => (ids.length ? `（有 ${ids.map(names).join('、')}）` : '');
   const likes = p.likes + p.liked.length;
   const bumps = p.bumps + p.bumped.length;
-  const stats = likes || bumps ? `  赞 ${likes}${who(p.liked)} · 顶 ${bumps}${who(p.bumped)}` : '';
-  const comments = p.comments.slice(-(opts.comments ?? 8)).map((c) => `  ${names(c.authorId)}${c.replyTo ? ` 回复 ${names(c.replyTo)}` : ''}：${c.text}`);
-  return [`${shortStamp(p.createdAt, opts.timeZone)} ${postHead(short, names)}`, stats, ...comments].filter(Boolean).join('\n');
+  const stats = likes || bumps ? t('community.postStats', { likes, liked: p.liked.map(names), bumps, bumped: p.bumped.map(names) }) : '';
+  const comments = p.comments.slice(-(opts.comments ?? 8)).map((c) => commentText(c, names, t));
+  return [t('community.post', { stamp: shortStamp(p.createdAt, opts.timeZone), head: postHead(short, names, t) }), stats, ...comments].filter(Boolean).join('\n');
 }
 
 /** 一帖对这个角色来说要记住的一句话（写进记忆）：她自己发的、你发的，只带她和你的互动 */
-export function communityPostMemory(p: PostText, communityName: string, characterId: string, names: (id: string) => string, timeZone?: string): string {
+export function communityPostMemory(p: PostText, communityName: string, characterId: string, names: (id: string) => string, t: TextFn, timeZone?: string): string {
   const mine = p.authorId === characterId;
   const other = mine ? MOMENT_USER : characterId;
-  const parts = [`${shortDay(p.createdAt, timeZone)} 在社群「${communityName}」里，${postHead({ ...p, text: p.text.slice(0, 200) }, names)}`];
-  const did = [p.liked.includes(other) ? '点了赞' : '', p.bumped.includes(other) ? '顶了帖' : ''].filter(Boolean).join('、');
-  if (did) parts.push(`${names(other)}${did}`);
+  const did = [p.liked.includes(other) ? t('community.memory.liked') : '', p.bumped.includes(other) ? t('community.memory.bumped') : ''].filter(Boolean);
   const talk = p.comments.filter((c) => c.authorId === characterId || c.authorId === MOMENT_USER).slice(-4);
-  if (talk.length) parts.push(`回复里 ${talk.map((c) => `${names(c.authorId)}：${c.text.slice(0, 80)}`).join('；')}`);
-  return parts.join('，');
+  return t('moment.memory', {
+    parts: [
+      t('community.memory.head', { day: shortDay(p.createdAt, timeZone), community: communityName, head: postHead({ ...p, text: p.text.slice(0, 200) }, names, t) }),
+      did.length ? t('community.memory.did', { name: names(other), did }) : '',
+      talk.length ? t('community.memory.talk', { items: talk.map((c) => t('moment.memory.talkItem', { name: names(c.authorId), text: c.text.slice(0, 80) })) }) : '',
+    ].filter(Boolean),
+  });
 }

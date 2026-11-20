@@ -1,5 +1,5 @@
 import { dayLabel, LexicalIndex, lineTime, rankRecall } from '@app/ai';
-import { estimateTokens, parseTimeQuery, pronounText, type AppBlockFill, type Character, type Chat, type Memory } from '@app/shared';
+import { estimateTokens, parseTimeQuery, pronounText, type AppBlockFill, type Character, type Chat, type Memory, type TextFn } from '@app/shared';
 import { useMemoryStore } from '@/stores/memory';
 import { useMessageSettingsStore } from '@/stores/messageSettings';
 import { isPhatic, timeOnlyQuery, type RecallLine } from './recall';
@@ -25,20 +25,21 @@ export function alwaysOn(characterId: string, now: number): Memory[] {
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (a.dueAt ?? 0) - (b.dueAt ?? 0) || b.importance - a.importance);
 }
 
-export function relationshipLine(character: Character): string {
+/** 关系那一行（程序文字 memory.relationship.*）：好感（不是默认的 50 时）、心情、互相的称呼 */
+export function relationshipLine(character: Character, t: TextFn): string {
   const rel = character.relationship;
+  const v = { pronoun: character.pronoun };
   const parts = [
-    rel.affection !== 50 ? `好感 ${rel.affection}` : '',
-    rel.mood ? `心情"${rel.mood}"` : '',
-    rel.userNickname ? `${character.pronoun}叫你"${rel.userNickname}"` : '',
-    rel.charNickname ? `你叫${character.pronoun}"${rel.charNickname}"` : '',
+    rel.affection !== 50 ? t('memory.relationship.affection', { ...v, n: rel.affection }) : '',
+    rel.mood ? t('memory.relationship.mood', { ...v, mood: rel.mood }) : '',
+    rel.userNickname ? t('memory.relationship.userNickname', { ...v, nick: rel.userNickname }) : '',
+    rel.charNickname ? t('memory.relationship.charNickname', { ...v, nick: rel.charNickname }) : '',
   ].filter(Boolean);
-  return parts.length ? `关系：${parts.join('，')}` : '';
+  return parts.length ? t('memory.relationship', { parts }) : '';
 }
 
-function memoryLine(m: Memory, timeZone: string): string {
-  const due = m.type === 'followup' && m.dueAt ? `（${lineTime(m.dueAt, timeZone)} 到期，到时候问问）` : '';
-  return `- ${m.content}${due}`;
+function memoryLine(m: Memory, timeZone: string, t: TextFn): string {
+  return t('memory.line', { content: m.content, due: m.type === 'followup' && m.dueAt ? lineTime(m.dueAt, timeZone) : null });
 }
 
 type Section = 'relationship' | 'fixed' | 'recall' | 'profile' | 'timeline' | 'moments' | 'community' | 'parallel' | 'diary';
@@ -69,7 +70,10 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
   proactive?: boolean;
   /** 发朋友圈和留言时动态另给，不在记忆里重复。 */
   moments?: boolean;
-} = {}): MemoryBlocks {
+  /** 这一次预设的程序文字（标题、每一行怎么写） */
+  t: TextFn;
+}): MemoryBlocks {
+  const t = opts.t;
   const policy = useMessageSettingsStore().memoryOptions();
   const mem = useMemoryStore();
   const profile = mem.profileOf(character.id)?.lines ?? [];
@@ -80,20 +84,20 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
   const entry = (section: Section, key: string, text: string, search: string, at: number, importance = 5): Entry =>
     ({ section, key, text, search, at, importance, priority: 1, score: 0 });
 
-  const rel = relationshipLine(character);
+  const rel = relationshipLine(character, t);
   if (rel) ranked.push({ ...entry('relationship', 'relationship', rel, rel, now), priority: -2 });
   const fixed = alwaysOn(character.id, now).filter((m) => m.pinned || opts.proactive);
   const fixedIds = new Set(fixed.map((m) => m.id));
-  for (const m of fixed) ranked.push({ ...entry('fixed', `m:${m.id}`, memoryLine(m, timeZone), m.content, m.happenedAt ?? m.createdAt, m.importance), priority: -1 });
+  for (const m of fixed) ranked.push({ ...entry('fixed', `m:${m.id}`, memoryLine(m, timeZone, t), m.content, m.happenedAt ?? m.createdAt, m.importance), priority: -1 });
   for (const l of opts.recall ?? []) {
     if (l.kind === 'memory' && fixedIds.has(l.id)) continue;
-    ranked.push({ ...entry('recall', l.key, `- ${dayLabel(l.at, timeZone)}：${l.text}`, l.text, l.at), priority: l.reason === 'time' ? 0 : 1, score: l.score, recall: l });
+    ranked.push({ ...entry('recall', l.key, t('memory.recall', { day: dayLabel(l.at, timeZone), text: l.text }), l.text, l.at), priority: l.reason === 'time' ? 0 : 1, score: l.score, recall: l });
   }
-  for (const l of profile) pool.push({ ...entry('profile', `p:${l.id}`, `【${l.section}】${l.text}`, l.text, l.updatedAt), timeless: true });
+  for (const l of profile) pool.push({ ...entry('profile', `p:${l.id}`, t('memory.profile', { section: l.section, text: l.text }), l.text, l.updatedAt), timeless: true });
   for (const s of timeline) {
     const a = dayLabel(s.fromAt, timeZone);
     const b = dayLabel(s.toAt, timeZone);
-    pool.push({ ...entry('timeline', `t:${s.id}`, `- ${a === b ? a : `${a} ~ ${b}`}：${s.text}`, s.text, s.fromAt), toAt: s.toAt });
+    pool.push({ ...entry('timeline', `t:${s.id}`, t('memory.timeline', { from: a, to: a === b ? null : b, text: s.text }), s.text, s.fromAt), toAt: s.toAt });
   }
   if (!profile.length && !timeline.length && DEMO_SUMMARIES[character.id]) {
     const text = pronounText(DEMO_SUMMARIES[character.id]!, character);
@@ -101,17 +105,17 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
   }
   if (opts.proactive) {
     for (const m of mem.activeOf(character.id)) {
-      if (!fixedIds.has(m.id)) pool.push(entry('recall', `m:${m.id}`, memoryLine(m, timeZone), m.content, m.happenedAt ?? m.createdAt, m.importance));
+      if (!fixedIds.has(m.id)) pool.push(entry('recall', `m:${m.id}`, memoryLine(m, timeZone, t), m.content, m.happenedAt ?? m.createdAt, m.importance));
     }
   }
   if (opts.moments !== false) {
     const add = (section: 'moments' | 'community' | 'parallel' | 'diary', lines: { text: string; at: number | null }[]) => {
       lines.forEach((line, i) => pool.push({ ...entry(section, `${section}:${i}`, line.text, line.text, line.at ?? now), timeless: line.at === null }));
     };
-    add('moments', recentMomentsLines(character));
-    add('community', communityMemoryLines(character));
-    add('parallel', parallelNotesLines(character));
-    add('diary', recentDiaryLines(character));
+    add('moments', recentMomentsLines(character, t));
+    add('community', communityMemoryLines(character, t));
+    add('parallel', parallelNotesLines(character, t));
+    add('diary', recentDiaryLines(character, t));
   }
 
   if (opts.proactive) {
@@ -134,10 +138,11 @@ export function memoryBlocks(chat: Chat | undefined, character: Character, now: 
   }
   ranked.sort((a, b) => a.priority - b.priority || b.score - a.score || b.at - a.at);
 
+  const who = { char: character.name };
   const headings: Record<Section, string> = {
-    relationship: '', fixed: `${character.name}一直记着的：`, recall: `${character.name}想起来的事：`,
-    profile: `${character.name}知道的你：`, timeline: opts.proactive ? '近期时间线：' : '与本轮有关的时间线：',
-    moments: '相关的朋友圈：', community: '相关的社群动态：', parallel: '相关的平行时空留言：', diary: `${character.name}最近写的日记（只有${character.name}自己知道写了什么）：`,
+    relationship: '', fixed: t('memory.heading.fixed', who), recall: t('memory.heading.recall', who),
+    profile: t('memory.heading.profile', who), timeline: t(opts.proactive ? 'memory.heading.timelineRecent' : 'memory.heading.timeline', who),
+    moments: t('memory.heading.moments', who), community: t('memory.heading.community', who), parallel: t('memory.heading.parallel', who), diary: t('memory.heading.diary', who),
   };
   const summarySections: Section[] = ['profile', 'timeline'];
   const memorySections: Section[] = ['relationship', 'fixed', 'recall', 'moments', 'community', 'parallel', 'diary'];

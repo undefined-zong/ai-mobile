@@ -1,10 +1,12 @@
 import {
   formatTemp,
   outlookLine,
+  textFn,
   weatherSnapshot,
   WEATHER_PROVIDER_LABEL,
   type Character,
   type TempUnit,
+  type TextFn,
   type WeatherProviderChoice,
   type WeatherReport,
   type WeatherSnapshot,
@@ -13,6 +15,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, watch } from 'vue';
 import { useCharacterStore } from './characters';
 import { useEnvironmentStore } from './environment';
+import { textsFor } from './library';
 import { useRealWorldStore } from './realworld';
 import { useServicesStore } from './services';
 import { services } from '@/services';
@@ -119,15 +122,16 @@ export const useWeatherStore = defineStore('weather', () => {
     return r ? `${r.place} ${r.text} ${temp(r.tempC)}` : '';
   }
   function outlook(r: WeatherReport | null): string {
-    return r ? outlookLine(r, unit.value) : '';
+    return r ? outlookLine(r, unit.value, textFn(textsFor(undefined))) : '';
   }
 
   /** 交给【当前环境】：你那边 + 她那边（她在别的城市时） */
-  function envInput(c: Character | null | undefined): { weather: WeatherSnapshot | null; herWeather: (WeatherSnapshot & { name: string }) | null } {
-    const me = mine.value ? weatherSnapshot(mine.value, unit.value) : null;
+  /** 交给【当前环境】的两边天气；t 是这一次预设的程序文字（"接下来"怎么说） */
+  function envInput(c: Character | null | undefined, t: TextFn): { weather: WeatherSnapshot | null; herWeather: (WeatherSnapshot & { name: string }) | null } {
+    const me = mine.value ? weatherSnapshot(mine.value, unit.value, t) : null;
     if (!c || !hasOwnCity(c)) return { weather: me, herWeather: null };
     const her = forCharacter(c);
-    return { weather: me, herWeather: her ? { ...weatherSnapshot(her, unit.value), name: c.name } : null };
+    return { weather: me, herWeather: her ? { ...weatherSnapshot(her, unit.value, t), name: c.name } : null };
   }
 
   // —— 取天气 ——

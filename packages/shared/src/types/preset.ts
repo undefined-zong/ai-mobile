@@ -222,6 +222,11 @@ export interface Preset extends SyncMeta {
   source?: { kind: 'sillytavern'; orderId: number | null; fileName?: string };
   /** 从 App 自带的哪个预设文件放进来的（可以"恢复成文件里的样子"） */
   seedFile?: string;
+  /**
+   * 程序文字：程序拼进程序块的说明文字（键 → 模板，写法见 programText.ts）。
+   * 这里没有的键用自带预设文件里的；改了的存在这里
+   */
+  texts?: Record<string, string>;
   /** 导入时其余没有对应字段的设置（reasoning_effort、bias、扩展……），导出时原样写回 */
   extra?: Record<string, unknown>;
 }

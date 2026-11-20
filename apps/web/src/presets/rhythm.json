@@ -260,5 +260,31 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "rhythm.backgrounds": "本次可用的背景素材库（地点名字照角色世界观写，图片从最接近的真实素材里挑）：\nbackdrop 类型：{{backdrops| / }}\n可选 backgroundSet 固定下面某一系列的完整 id；留空时程序按地点名称、描述、室内外和世界观自动匹配。backgroundSet 只选系列，白天/黄昏/夜间由程序切换。blurb 写清房间用途与风格（例如古典书房、日式和室、森林石径）。没有完全相同的世界观画面时选地点用途与风格最接近的，不把所有地点都写成公园或卧室。背景类型和系列以本次素材库为准。\n{{families|\\n}}",
+    "rhythm.backgrounds.family": "- {{id}}（{{place}}；{{periods}}）",
+    "rhythm.world": "{{name}}：[[{{blurb}}]]\n地点（id：名字 · 室内或室外 · 能一起做的事 · 一句话）：\n{{locations|\\n}}\n{{?people}}身边的人：\n{{people|\\n}}",
+    "rhythm.world.location": "- {{id}}：{{name}} · {{place}} · {{activities}}[[ · {{blurb}}]]",
+    "rhythm.world.person": "- {{name}}（{{relation}}）[[：{{note}}]]",
+    "rhythm.slot": "- {{from}}–{{to}} {{place}}（{{id}}）{{status}}[[{{?fixed}}（固定，不能挪）]]",
+    "rhythm.template": "作息模板：\n{{schedule|\\n}}\n三餐习惯：早饭{{breakfast}}；午饭{{lunch}}；晚饭{{dinner}}\n最近手头的事：{{task}}",
+    "rhythm.wardrobe": "衣柜：\n{{items|\\n}}",
+    "rhythm.wardrobe.item": "- [{{kind}}] {{name}}：{{tags}}",
+    "rhythm.wardrobe.empty": "衣柜：还是空的",
+    "rhythm.today": "今天：{{date}} {{weekday}}（[[{{?weekend}}周末]][[{{!weekend}}工作日]]）[[ · {{term}}]]",
+    "rhythm.recent": "最近几天：\n{{days|\\n}}",
+    "rhythm.recent.day": "- {{date}}：[[{{slots|，}}]]；穿 [[{{outfits}}]]；晚饭[[{{dinner}}]]",
+    "rhythm.ask": "这次要排的：{{asks}}[[{{?keepSchedule}}（作息按模板，不用写）]]",
+    "rhythm.ask.schedule": "作息",
+    "rhythm.ask.meals": "三餐",
+    "rhythm.ask.outfits": "穿着",
+    "rhythm.ask.task": "手头的事",
+    "rhythm.ask.events": "一两件小事",
+    "rhythm.promises.summary": "最近的聊天摘要：\n{{summary}}",
+    "rhythm.promises.recent": "最近的聊天：\n{{recent}}",
+    "source.notes": "作者备注：{{notes}}",
+    "source.entry": "【{{title}}】{{text}}",
+    "source.block": "世界书和设定：\n{{parts|\\n}}"
+  }
 }

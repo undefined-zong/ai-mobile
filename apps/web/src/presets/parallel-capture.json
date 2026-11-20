@@ -109,5 +109,20 @@
         "depth": 4
       }
     }
-  ]
+  ],
+  "texts": {
+    "capture.allDay": "全天",
+    "capture.untimed": "不定时",
+    "capture.env": "作息：起床 {{wake}}，睡觉 {{sleep}}；早饭 {{breakfast}}，午饭 {{lunchStart}}–{{lunchEnd}}，晚饭 {{dinnerStart}}–{{dinnerEnd}}",
+    "capture.tag.done": "做完了",
+    "capture.tag.fixed": "定死的",
+    "capture.tag.movable": "能挪",
+    "capture.tag.stay": "不挪",
+    "capture.item": "- [{{ref}}] {{span}} {{title}}（{{tags|；}}[[；清单：{{checklist}}]]）",
+    "capture.calendar": "- {{span}} {{title}}（Google 日历，不挪）",
+    "capture.day": "{{day}}[[（现在 {{now}}，这之前的时间不能再排）]]：\n{{items|\\n}}\n{{!items}}- 还没有安排",
+    "capture.schedule": "{{user}}这几天的安排（只列{{user}}这一边；\"能挪\"的必要时可以挪，其余不动）：\n{{env}}\n{{days|\\n}}",
+    "parallel.capture.input": "{{user}}随口说的：\n{{text}}",
+    "parallel.ask.capture": "这一次：把{{user}}随口说的整理成要做的事，排进 {{from}} 到 {{to}} 这几天的安排里（只能排在这几天）。"
+  }
 }

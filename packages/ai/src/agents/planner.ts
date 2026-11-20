@@ -21,6 +21,7 @@ import {
   type PlannerTask,
   type PlannerWeekPlan,
   TASK_MARKERS,
+  textFn,
 } from '@app/shared';
 import { AiError } from '../core/errors.ts';
 import type { ChatMessage } from '../llm/types.ts';
@@ -88,8 +89,8 @@ export interface PlannerRunInput {
 
 const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}\n…（后面还有 ${text.length - max} 字，截掉了）` : text;
+function clip(text: string, max: number, t: ReturnType<typeof textFn>): string {
+  return text.length > max ? `${text.slice(0, max)}\n${t('planner.clipped', { left: text.length - max })}` : text;
 }
 
 export async function runPlanner(
@@ -102,6 +103,8 @@ export async function runPlanner(
   const s = ctx.settings;
   const preset = ctx.preset;
   if (!preset) throw new AiError('no_route', '没有"计划"预设');
+  // 说明文字都在计划预设的程序文字里（上传的预设已经合好了自带预设文件里的）
+  const t = textFn(preset.texts);
   const userName = ctx.persona.name;
   const characterName = ctx.character?.name;
   const vars = plannerVars({ at, timeZone: ctx.timezone, date, weekStart: s.weekStart, lastRunAt: input.lastRunAt });
@@ -117,19 +120,19 @@ export async function runPlanner(
   // —— 这一次固定的输入 ——
   const wd = new Date(`${date}T12:00:00Z`).getUTCDay();
   const now = zonedParts(at, ctx.timezone);
-  const profile = [
-    `${userName}${ctx.persona.description.trim() ? `：${ctx.persona.description.trim()}` : ''}`,
-    s.note.trim() ? `${userName}写的情况和偏好：\n${s.note.trim()}` : '',
-    ctx.character ? `陪${userName}的人：${ctx.character.name}${ctx.character.description ? `（${ctx.character.description}）` : ''}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
-  const today = [
-    `今天：${date} ${WEEKDAY[wd]}（${wd === 0 || wd === 6 ? '周末' : '工作日'}），时区 ${ctx.timezone}，现在 ${String(now.hour).padStart(2, '0')}:${String(now.minute).padStart(2, '0')}`,
-    `这周：${vars.weekStart} 到 ${vars.weekEnd}`,
-    `上次排计划：${vars.lastRunAt}`,
-    `工具参数里能用的时间：${Object.entries(vars).map(([k, v]) => `${k} = ${v}`).join('；')}`,
-  ].join('\n');
+  const profile = t('planner.profile', {
+    user: userName,
+    description: ctx.persona.description.trim(),
+    note: s.note.trim(),
+    char: ctx.character?.name,
+    charDescription: ctx.character?.description,
+  });
+  const today = t('planner.today', {
+    date, weekday: WEEKDAY[wd], weekend: wd === 0 || wd === 6, timeZone: ctx.timezone,
+    now: `${String(now.hour).padStart(2, '0')}:${String(now.minute).padStart(2, '0')}`,
+    weekStart: vars.weekStart, weekEnd: vars.weekEnd, lastRunAt: vars.lastRunAt,
+    vars: Object.entries(vars).map(([k, v]) => `${k} = ${v}`),
+  });
 
   // —— 1. 连服务器 ——
   const sessions: PlannerSession[] = [];
@@ -150,13 +153,13 @@ export async function runPlanner(
     opts.onStep?.(`查「${session.server.name}」：${tool}`);
     try {
       const r = await session.call(tool, args);
-      const text = clip(r.text.trim() || '（没有内容）', s.resultChars);
+      const text = clip(r.text.trim() || t('planner.result.empty'), s.resultChars, t);
       sources.push({ server: session.server.name, tool, args: argsText, ok: !r.isError, chars: r.text.length, round, ...(r.isError ? { error: r.text.slice(0, 200) } : {}) });
-      gathered.push(`### 「${session.server.name}」${tool} ${argsText}${why ? `（${why}）` : ''}${r.isError ? '（工具报错）' : ''}\n${text}`);
+      gathered.push(t('planner.result', { server: session.server.name, tool, args: argsText, why, error: !!r.isError, text }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       sources.push({ server: session.server.name, tool, args: argsText, ok: false, chars: 0, round, error: msg.slice(0, 200) });
-      gathered.push(`### 「${session.server.name}」${tool} ${argsText}\n（调用失败：${msg.slice(0, 200)}）`);
+      gathered.push(t('planner.result.failed', { server: session.server.name, tool, args: argsText, error: msg.slice(0, 200) }));
     }
   }
 
@@ -182,7 +185,7 @@ export async function runPlanner(
     if (s.maxRounds > 0 && usable.length) {
       const catalog = usable
         .map(({ session, tools }) =>
-          [`## 服务器「${session.server.name}」（server 写 "${session.server.name}"）`, ...tools.map((t) => `- ${t.name}${t.title ? `（${t.title}）` : ''}：${t.description.replace(/\s+/g, ' ').slice(0, 400)}\n  参数：${toolParamsText(t.inputSchema)}`)].join('\n'),
+          t('planner.server', { server: session.server.name, tools: tools.map((x) => t('planner.tool', { name: x.name, title: x.title, description: x.description.replace(/\s+/g, ' ').slice(0, 400), params: toolParamsText(x.inputSchema, t) })) }),
         )
         .join('\n\n');
       for (let round = 1; round <= s.maxRounds; round++) {
@@ -196,9 +199,9 @@ export async function runPlanner(
               plannerToday: today,
               plannerLife: ctx.life,
               plannerTools: catalog,
-              plannerGathered: gathered.join('\n\n') || '（还没查）',
+              plannerGathered: gathered.join('\n\n') || t('planner.gathered.none'),
               plannerRecent: ctx.recent,
-              plannerAsk: `第 ${round} 轮（最多 ${s.maxRounds} 轮），这一轮最多调 ${s.maxCalls} 个工具。查够了就 done: true。`,
+              plannerAsk: t('planner.ask.gather', { round, maxRounds: s.maxRounds, maxCalls: s.maxCalls }),
             }),
             parsePlannerGather,
             { signal: opts.signal },
@@ -229,7 +232,7 @@ export async function runPlanner(
     await Promise.all(sessions.map((x) => x.close().catch(() => undefined)));
   }
 
-  const gatheredText = gathered.length ? gathered.join('\n\n') : sessions.length ? '（这次没查到东西）' : '（没有接邮箱和日程，或者都没连上）';
+  const gatheredText = gathered.length ? gathered.join('\n\n') : t(sessions.length ? 'planner.gathered.empty' : 'planner.gathered.noServers');
   const result: PlannerRunResult = { personaId: ctx.persona.id, date, sources, errors, at };
 
   // —— 4. 排这周 ——
@@ -244,9 +247,9 @@ export async function runPlanner(
           plannerToday: today,
           plannerLife: ctx.life,
           plannerGathered: gatheredText,
-          plannerWeek: input.week ? `上一版（今天重排，可以改）：\n${plannerWeekText(input.week, date)}` : '',
+          plannerWeek: input.week ? t('planner.week.previous', { week: plannerWeekText(input.week, t, date) }) : '',
           plannerRecent: ctx.recent,
-          plannerAsk: `排 ${weekStart} 开始的这一周（${vars.weekStart} 到 ${vars.weekEnd}）。`,
+          plannerAsk: t('planner.ask.week', { weekStart, from: vars.weekStart, to: vars.weekEnd }),
         }),
         (v) => parsePlannerWeek(v, weekStart),
         { signal: opts.signal },
@@ -269,9 +272,9 @@ export async function runPlanner(
           plannerToday: today,
           plannerLife: ctx.life,
           plannerGathered: gatheredText,
-          plannerWeek: plannerWeekText(week, date),
+          plannerWeek: plannerWeekText(week, t, date),
           plannerRecent: ctx.recent,
-          plannerAsk: `排今天（${date} ${WEEKDAY[wd]}）。`,
+          plannerAsk: t('planner.ask.day', { date, weekday: WEEKDAY[wd] }),
         }),
         parsePlannerDay,
         { signal: opts.signal },

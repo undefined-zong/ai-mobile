@@ -38,6 +38,9 @@ import {
   type ParallelRef,
   type Persona,
   type Preset,
+  type TextFn,
+  textFn,
+  checklistText,
 } from '@app/shared';
 import { awakeOf, dayOf as socialDayOfCharacter, memoriesText } from './social';
 import { MissingPresetError } from './prompt';
@@ -48,7 +51,7 @@ import { useEnvironmentStore } from '@/stores/environment';
 import { useHealthStore } from '@/stores/health';
 import { useHomeStore } from '@/stores/home';
 import { useHubStore } from '@/stores/hub';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore, withTexts } from '@/stores/library';
 import { useMemoryStore } from '@/stores/memory';
 import { useParallelStore } from '@/stores/parallel';
 import { usePersonaStore } from '@/stores/personas';
@@ -245,7 +248,8 @@ export function restoreEntry(persona: Persona, key: string) {
 
 /** 使用"整理你的一天"用途选中的预设。 */
 export function planPreset(): Preset | undefined {
-  return useLibraryStore().presetForUse('parallel-plan');
+  // 带上合好的程序文字（整理的输入、上传云端都按它写）
+  return withTexts(useLibraryStore().presetForUse('parallel-plan')) ?? undefined;
 }
 
 /** 能不能整理（API 接通了、有"平行时空 · 整理你的一天"预设）；不能时说明原因、去哪改 */
@@ -392,39 +396,36 @@ export function herTimeline(characterId: string): ParallelEntry[] {
 // —— 写进提示词 ——
 
 /** 最近的留言写成文字：今天和昨天的最后几条；except：正在回的那条不算 */
-function notesText(characterId: string, n = 6, except?: string): string {
+function notesText(characterId: string, t: TextFn, n = 6, except?: string): string {
   const parallel = useParallelStore();
   const today = parallelToday();
   const names = namesFor(characterId);
   const timeZone = useEnvironmentStore().settings.timezone;
-  return parallel.notesOf(characterId).filter((x) => x.id !== except && x.date >= shiftDate(today, -1)).slice(-n).map((x) => parallelNoteText(x, names, timeZone, { replies: 4 })).join('\n');
+  return parallel.notesOf(characterId).filter((x) => x.id !== except && x.date >= shiftDate(today, -1)).slice(-n).map((x) => parallelNoteText(x, names, t, timeZone, { replies: 4 })).join('\n');
 }
 
 /** 今天最后 4 条平行时空留言候选，由记忆拼装器按相关性和总预算选择。 */
-export function parallelNotesLines(character: Character): { text: string; at: number }[] {
+export function parallelNotesLines(character: Character, t: TextFn): { text: string; at: number }[] {
   const parallel = useParallelStore();
   if (!parallel.ready) return [];
   const list = parallel.notesOf(character.id, parallelToday()).slice(-4);
   if (!list.length) return [];
   const names = namesFor(character.id);
   const timeZone = useEnvironmentStore().settings.timezone;
-  return list.map((n) => ({ text: parallelNoteText(n, names, timeZone, { replies: 4 }), at: n.at }));
+  return list.map((n) => ({ text: parallelNoteText(n, names, t, timeZone, { replies: 4 }), at: n.at }));
 }
 
 /** "家务和健康"那一块里的平行时空：你自己记的今天的事、从今天拿掉的事（"写进聊天"关着、什么都没记时为空） */
-export function parallelLines(persona: Persona): string {
+export function parallelLines(persona: Persona, t: TextFn): string {
   const parallel = useParallelStore();
   if (!parallel.ready || !parallel.settings.inChat) return '';
   const day = parallel.dayOf(persona.id, parallelToday());
   if (!day) return '';
-  const own = day.items.map((it) => {
-    const list = it.checklist.length ? `；清单：${it.checklist.map((c) => `${c.text}${c.done ? '✓' : ''}`).join('、')}` : '';
-    return `- ${[it.time, it.title].filter(Boolean).join(' ')}${it.note ? `（${it.note}）` : ''}${list}${it.done ? ' ✓做完了' : ''}`;
-  });
+  const own = day.items.map((it) => t('parallel.today.ownItem', { label: entryLabel(it), note: it.note, checklist: checklistText(it.checklist, t), done: !!it.done }));
   const hidden = hiddenEntries(persona).map(entryLabel);
   return [
-    own.length ? `【平行时空】${persona.name}自己记的今天的事：\n${own.join('\n')}` : '',
-    hidden.length ? `${persona.name}在平行时空里把这些从今天拿掉了（今天不做了）：${hidden.join('、')}` : '',
+    own.length ? t('parallel.today.own', { user: persona.name, items: own }) : '',
+    hidden.length ? t('parallel.today.hidden', { user: persona.name, items: hidden }) : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -449,7 +450,10 @@ export function parallelStatus(character?: Character): { ok: true } | { ok: fals
 // —— 上传云端的那一份、她留言要的输入 ——
 
 /** 她给你留言要的输入（按角色）：角色卡、两边今天的安排、记得的事、最近的聊天和留言 */
-export function parallelContextOf(c: Character, preset: Preset | null, opts: { enabled?: boolean } = {}): ParallelContext {
+export function parallelContextOf(c: Character, raw: Preset | null, opts: { enabled?: boolean } = {}): ParallelContext {
+  // 预设带上合好的程序文字：这里拼的几块、云端拼的都按它写
+  const preset = withTexts(raw);
+  const t = textFn(preset?.texts ?? textsFor(null));
   const parallel = useParallelStore();
   const persona = personaFor(c.id);
   const chat = useChatStore().chatOfCharacter(c.id);
@@ -464,9 +468,9 @@ export function parallelContextOf(c: Character, preset: Preset | null, opts: { e
     env: { wakeTime: env.wakeTime, sleepTime: env.sleepTime, meals: env.meals },
     her,
     mine: { date: parallelToday(), entries: myEntries(persona) },
-    memories: memoriesText(c, persona.name),
+    memories: memoriesText(c, t),
     recent: chat ? useChatStore().recentLines(chat.id, 12).join('\n') : '',
-    notes: notesText(c.id),
+    notes: notesText(c.id, t),
     preset,
     preview: useHubStore().config.preview,
   };
@@ -489,7 +493,7 @@ export function rememberNote(noteId: string) {
   const n = useParallelStore().noteById(noteId);
   if (!n || !mem.ready || !useCharacterStore().byId(n.characterId)) return;
   if (n.authorId !== PARALLEL_USER && !n.replies.some((r) => r.authorId === PARALLEL_USER)) return;
-  const content = parallelNoteMemory(n, namesFor(n.characterId), useEnvironmentStore().settings.timezone);
+  const content = parallelNoteMemory(n, namesFor(n.characterId), textFn(textsFor(parallelPreset(useCharacterStore().byId(n.characterId)))), useEnvironmentStore().settings.timezone);
   if (n.memoryId) {
     const old = mem.memoryById(n.memoryId);
     if (old && !old.deleted && old.status === 'active' && old.content !== content) mem.updateMemory(n.memoryId, { content, vector: null });
@@ -588,26 +592,26 @@ export function startParallelSchedule() {
 // —— 你留言、你回她、你请她改日程 ——
 
 /** 回你时的共同输入：角色、现在、两边今天的安排、记忆、最近的聊天和留言 */
-function baseFills(c: Character, opts: { except?: string; ids?: boolean } = {}) {
+function baseFills(c: Character, t: TextFn, opts: { except?: string; ids?: boolean } = {}) {
   const persona = personaFor(c.id);
   const timeZone = useEnvironmentStore().settings.timezone;
   const chat = useChatStore().chatOfCharacter(c.id);
   const her = herTimeline(c.id);
   const mine = myEntries(persona);
   const day = socialDayOfCharacter(c.id);
-  const notes = notesText(c.id, 6, opts.except);
+  const notes = notesText(c.id, t, 6, opts.except);
   return {
     persona,
     her,
     mine,
     fills: {
-      parallelCharacter: socialCharacterFill({ id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, persona.name),
-      parallelNow: socialNowFill(Date.now(), timeZone).text,
-      parallelHer: herFill(day, her, c.name, { ids: opts.ids }),
-      parallelMine: mineFill(mine, persona.name),
-      parallelMemories: memoriesText(c, persona.name),
-      parallelRecent: chat ? `最近的聊天：\n${useChatStore().recentLines(chat.id, 8).join('\n')}` : '',
-      parallelNotes: notes ? `之前的留言：\n${notes}` : '',
+      parallelCharacter: socialCharacterFill({ id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, persona.name, t),
+      parallelNow: socialNowFill(Date.now(), timeZone, t).text,
+      parallelHer: herFill(day, her, c.name, t, { ids: opts.ids }),
+      parallelMine: mineFill(mine, persona.name, t),
+      parallelMemories: memoriesText(c, t),
+      parallelRecent: chat ? t('social.recent', { recent: useChatStore().recentLines(chat.id, 8).join('\n') }) : '',
+      parallelNotes: notes ? t('parallel.notesBefore', { notes }) : '',
     },
   };
 }
@@ -658,12 +662,13 @@ export async function replyTo(noteId: string): Promise<void> {
   const preset = parallelPreset(c)!;
   const timeZone = useEnvironmentStore().settings.timezone;
   const names = namesFor(c.id);
-  const { persona, her, mine, fills } = baseFills(c, { except: noteId });
+  const t = textFn(preset.texts);
+  const { persona, her, mine, fills } = baseFills(c, t, { except: noteId });
   const lastMine = [...n.replies].reverse().find((r) => r.authorId === PARALLEL_USER);
   const about = aboutText(n.about, her, mine);
   const ask = lastMine
-    ? `这一次：${persona.name}在这条留言下面说了「${lastMine.text}」，${c.name}回复这一句。`
-    : `这一次：${persona.name}刚在平行时空里留了这条言${about ? `（说的是 ${about}）` : ''}，${c.name}回复。`;
+    ? t('parallel.ask.reply', { user: persona.name, char: c.name, said: lastMine.text })
+    : t('parallel.ask.newNote', { user: persona.name, char: c.name, about });
   parallel.busy[key] = true;
   delete parallel.failures[key];
   try {
@@ -672,7 +677,7 @@ export async function replyTo(noteId: string): Promise<void> {
       {
         messages: buildParallelMessages({
           task: 'parallel-reply', characterName: c.name, pronoun: c.pronoun, userName: persona.name, now: new Date(), timeZone,
-          fills: { ...fills, parallelThread: `这一条留言和下面的回复：\n${parallelNoteText(n, names, timeZone, { replies: 12 })}`, parallelAsk: ask },
+          fills: { ...fills, parallelThread: t('parallel.thread', { thread: parallelNoteText(n, names, t, timeZone, { replies: 12 }) }), parallelAsk: ask },
         }, preset),
         ...samplerRequest(preset.sampler),
       },
@@ -727,7 +732,8 @@ export async function decideRequest(noteId: string): Promise<void> {
   const preset = parallelPreset(c)!;
   const timeZone = useEnvironmentStore().settings.timezone;
   const world = worldOf(c.id);
-  const { persona, her, mine, fills } = baseFills(c, { except: noteId, ids: true });
+  const t = textFn(preset.texts);
+  const { persona, her, mine, fills } = baseFills(c, t, { except: noteId, ids: true });
   const about = aboutText(n.about, her, mine);
   parallel.busy[key] = true;
   delete parallel.failures[key];
@@ -739,8 +745,8 @@ export async function decideRequest(noteId: string): Promise<void> {
           task: 'parallel-request', characterName: c.name, pronoun: c.pronoun, userName: persona.name, now: new Date(), timeZone,
           fills: {
             ...fills,
-            parallelWorld: `${world.name}里的地点（地点 id：名字 · 室内或室外 · 一句话）：\n${world.locations.map((l) => `- ${l.id}：${l.name} · ${l.indoor ? '室内' : '室外'}${l.blurb ? ` · ${l.blurb}` : ''}`).join('\n')}`,
-            parallelAsk: `这一次：${persona.name}请${c.name}改今天的日程：「${n.text}」${about ? `（说的是 ${about}）` : ''}。`,
+            parallelWorld: t('parallel.world', { world: world.name, locations: world.locations.map((l) => t('parallel.world.location', { id: l.id, name: l.name, place: t(l.indoor ? 'common.indoor' : 'common.outdoor'), blurb: l.blurb })) }),
+            parallelAsk: t('parallel.ask.request', { user: persona.name, char: c.name, text: n.text, about }),
           },
         }, preset),
         ...samplerRequest(preset.sampler),

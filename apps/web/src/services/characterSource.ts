@@ -1,5 +1,5 @@
 import { characterPronoun } from '@app/shared';
-import { substituteMacros, type Character } from '@app/shared';
+import { substituteMacros, type Character, type TextFn } from '@app/shared';
 import { useLibraryStore } from '@/stores/library';
 
 /**
@@ -7,24 +7,23 @@ import { useLibraryStore } from '@/stores/library';
  */
 
 /** 名字、称呼、描述、性格、场景 */
-export function characterLines(c: Character, user: string): string {
-  const sub = (t: string) => substituteMacros(t, { char: c.name, user, pronoun: c.pronoun }).trim();
-  return [
-    `名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`,
-    c.card.description ? `描述：${sub(c.card.description)}` : '',
-    c.card.personality ? `性格：${sub(c.card.personality)}` : '',
-    c.card.scenario ? `场景：${sub(c.card.scenario)}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+export function characterLines(c: Character, user: string, t: TextFn): string {
+  const sub = (x: string) => substituteMacros(x, { char: c.name, user, pronoun: c.pronoun }).trim();
+  return t('social.character', {
+    name: c.name,
+    pronoun: characterPronoun(c),
+    description: c.card.description ? sub(c.card.description) : '',
+    personality: c.card.personality ? sub(c.card.personality) : '',
+    scenario: c.card.scenario ? sub(c.card.scenario) : '',
+  });
 }
 
 /** 角色卡的作者备注和绑定的世界书（开着的条目），太长时截断 */
-export function sourceLines(c: Character, user: string, budget = 9000): string {
+export function sourceLines(c: Character, user: string, t: TextFn, budget = 9000): string {
   const lib = useLibraryStore();
   const parts: string[] = [];
   let left = budget;
-  if (c.card.creatorNotes.trim()) parts.push(`作者备注：${c.card.creatorNotes.trim().slice(0, 600)}`);
+  if (c.card.creatorNotes.trim()) parts.push(t('source.notes', { notes: c.card.creatorNotes.trim().slice(0, 600) }));
   for (const id of c.lorebookIds) {
     const book = lib.lorebookById(id);
     if (!book) continue;
@@ -33,8 +32,8 @@ export function sourceLines(c: Character, user: string, budget = 9000): string {
       const title = e.comment || e.keys.slice(0, 3).join('、');
       const text = substituteMacros(e.content, { char: c.name, user, pronoun: c.pronoun }).trim().slice(0, Math.min(1200, left));
       left -= text.length;
-      parts.push(`【${title}】${text}`);
+      parts.push(t('source.entry', { title, text }));
     }
   }
-  return parts.length ? `世界书和设定：\n${parts.join('\n')}` : '';
+  return parts.length ? t('source.block', { parts }) : '';
 }

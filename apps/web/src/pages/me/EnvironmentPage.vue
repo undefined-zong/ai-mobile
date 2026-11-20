@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { anniversaryLine, formatEnvironmentBlock, zonedParts, WEATHER_PROVIDER_LABEL, type WeatherProviderChoice } from '@app/shared';
+import { anniversaryLine, formatEnvironmentBlock, textFn, zonedParts, WEATHER_PROVIDER_LABEL, type WeatherProviderChoice } from '@app/shared';
 import { computed, ref, watch } from 'vue';
 import { showToast } from 'vant';
 import Avatar from '@/components/common/Avatar.vue';
@@ -9,6 +9,7 @@ import PageHeader from '@/layouts/PageHeader.vue';
 import { dayLine, dayStats } from '@/services/myDay';
 import { useCharacterStore } from '@/stores/characters';
 import { deviceTimezone, useEnvironmentStore } from '@/stores/environment';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import { useRealWorldStore } from '@/stores/realworld';
 import { useServicesStore } from '@/stores/services';
 import { useWeatherStore } from '@/stores/weather';
@@ -21,17 +22,20 @@ const svc = useServicesStore();
 const chars = useCharacterStore();
 const inject = ref({ time: true, weather: true, calendar: true, activity: true });
 const preview = computed(() => chars.list[0]);
+const lib = useLibraryStore();
 const block = computed(() => {
-  const w = weather.envInput(preview.value);
+  // 预览用第一个角色的对话预设里的写法
+  const t = textFn(textsFor(lib.chatPresetFor(preview.value)));
+  const w = weather.envInput(preview.value, t);
   return formatEnvironmentBlock({
     now: new Date(),
     timeZone: env.timezone,
     weather: inject.value.weather ? w.weather : null,
     herWeather: inject.value.weather ? w.herWeather : null,
-    todayLine: inject.value.activity ? dayLine(dayStats()) : undefined,
+    todayLine: inject.value.activity ? dayLine(dayStats(), t) : undefined,
     sinceLastChatMin: 3,
-    anniversaries: inject.value.calendar ? anniversaryLine(preview.value?.relationship.anniversaries, Date.now(), env.timezone) : null,
-  });
+    anniversaries: inject.value.calendar ? anniversaryLine(preview.value?.relationship.anniversaries, Date.now(), env.timezone, t) : null,
+  }, t);
 });
 const MEAL = { breakfast: '早饭', lunch: '午饭', dinner: '晚饭' } as const;
 

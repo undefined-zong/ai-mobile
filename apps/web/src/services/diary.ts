@@ -1,7 +1,7 @@
 import { buildDiaryMessages, diaryInput, errorText, isAbortError, samplerRequest } from '@app/ai';
 import {
   AGENT_META, diaryEnabled, diaryId, diaryImageOn, diaryLine, dueDiaryDates, getLocation, packDiaryContext, parseDiaryDraft, rhythmDate, shiftDate, socialDayOf,
-  type Character, type DiaryContext, type DiaryEntry, type Preset,
+  textFn, type Character, type DiaryContext, type DiaryEntry, type Preset, type TextFn,
 } from '@app/shared';
 import { onRemote } from '@/db/idb';
 import { services } from '@/services';
@@ -11,7 +11,7 @@ import { useDiaryStore } from '@/stores/diary';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useGalleryStore } from '@/stores/gallery';
 import { useHubStore } from '@/stores/hub';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore, withTexts } from '@/stores/library';
 import { useRhythmStore } from '@/stores/rhythm';
 import { useWeatherStore } from '@/stores/weather';
 import { withUserText } from './myDay';
@@ -44,18 +44,21 @@ export function diaryStatus(character?: Character): { ok: true } | { ok: false; 
 }
 
 /** 最近几篇日记写成几行（进提示词：不要重复） */
-function previousText(c: Character, before: string, n = 3): string {
+function previousText(c: Character, before: string, t: TextFn, n = 3): string {
   return useDiaryStore()
     .of(c.id)
     .filter((e) => e.date < before)
     .slice(0, n)
     .reverse()
-    .map((e) => diaryLine(e, c.name, 220))
+    .map((e) => diaryLine(e, c.name, t, 220))
     .join('\n');
 }
 
 /** 写一篇日记要的输入（按角色）：角色卡、今天的节律、今天和你、记得的事、最近几篇日记、天气 */
-export function diaryContextOf(c: Character, preset: Preset | null, date = rhythmDate(new Date(), useEnvironmentStore().settings.timezone)): DiaryContext {
+export function diaryContextOf(c: Character, raw: Preset | null, date = rhythmDate(new Date(), useEnvironmentStore().settings.timezone)): DiaryContext {
+  // 预设带上合好的程序文字：这里拼的几块、云端拼的都按它写
+  const preset = withTexts(raw);
+  const t = textFn(preset?.texts ?? textsFor(null));
   const userName = userNameFor(c.id);
   const weather = useWeatherStore();
   const w = weather.forCharacter(c);
@@ -68,9 +71,9 @@ export function diaryContextOf(c: Character, preset: Preset | null, date = rhyth
     settings: { enabled: diaryEnabled(c), image: diaryImageOn(c) },
     day: rhythm ? socialDayOf(rhythm, (id) => getLocation(id)?.name ?? id) : null,
     date,
-    withUser: withUserText(c.id, date, userName),
-    memories: memoriesText(c, userName),
-    previous: previousText(c, date),
+    withUser: withUserText(c.id, date, userName, t),
+    memories: memoriesText(c, t),
+    previous: previousText(c, date, t),
     weather: w ? weather.short(w) : '',
     preset,
     preview: useHubStore().config.preview,
@@ -202,13 +205,13 @@ export function receiveHubDiaries(list: DiaryEntry[]): DiaryEntry[] {
 // —— 记忆拼装 ——
 
 /** 最近三天的日记（最多 3 篇），由记忆拼装器按相关性挑（"相关的日记"） */
-export function recentDiaryLines(character: Character): { text: string; at: number }[] {
+export function recentDiaryLines(character: Character, t: TextFn): { text: string; at: number }[] {
   const since = shiftDate(rhythmDate(new Date(), useEnvironmentStore().settings.timezone), -3);
   return useDiaryStore()
     .of(character.id)
     .filter((e) => e.date >= since)
     .slice(0, 3)
-    .map((e) => ({ text: `- ${diaryLine(e, character.name, 200)}`, at: e.updatedAt }));
+    .map((e) => ({ text: t('memory.diary', { line: diaryLine(e, character.name, t, 200) }), at: e.updatedAt }));
 }
 
 // —— 到点写 ——

@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { WEEKDAY_LABEL, weekdayOf } from './housework.ts';
 import { distanceText, onlineShopsText, placeMentioned, samePlaceName, type FoodPlace, type GroceryStore } from './places.ts';
 import { shiftDate } from './timezone.ts';
@@ -119,30 +120,34 @@ export function normalizeHealth(raw: unknown): HealthSettings {
 // —— 每天到点自动排（手机和云端共用）——
 
 /** "这周的计划"那一块（排今天时）：每天练什么、吃什么，标出今天 */
-export function healthWeekText(plan: HealthWeekPlan | undefined, date: ISODate): string {
+export function healthWeekText(plan: HealthWeekPlan | undefined, date: ISODate, t: TextFn): string {
   if (!plan) return '';
   const wd = weekdayOf(date);
-  const rows = plan.days.map((d) => `- ${WEEKDAY_LABEL[d.weekday]}：${d.rest ? '休息' : `${d.workout} ${d.minutes} 分钟`}${d.meals ? `；吃：${d.meals}` : ''}${d.weekday === wd ? '  ← 今天' : ''}`);
-  return [`这周的计划（${plan.weekStart} 开始）${plan.focus ? `：${plan.focus}` : ''}`, ...rows].join('\n');
+  const rows = plan.days.map((d) => t('health.week.day', { weekday: WEEKDAY_LABEL[d.weekday], rest: !!d.rest, workout: d.workout, minutes: d.minutes, meals: d.meals, today: d.weekday === wd }));
+  return t('health.week', { weekStart: plan.weekStart, focus: plan.focus, days: rows });
 }
 
 /** "今天"那一块：日期、星期、工作日还是周末，有天气时带上 */
-export function healthTodayText(date: ISODate, weather = ''): string {
+export function healthTodayText(date: ISODate, t: TextFn, weather = ''): string {
   const wd = weekdayOf(date);
-  return `今天：${date} ${WEEKDAY_LABEL[wd]}（${wd === 0 || wd === 6 ? '周末' : '工作日'}）${weather ? ` · 天气：${weather}` : ''}`;
+  return t('health.today', { date, weekday: WEEKDAY_LABEL[wd], weekend: wd === 0 || wd === 6, weather });
 }
 
 /** 排这周时"这次要排的" */
-export function healthWeekAsk(date: ISODate, weekStart: ISODate): string {
-  return `这次要排：这一周（${weekStart} 周一 到 ${shiftDate(weekStart, 6)} 周日）每天练什么、练多久，三餐的方向，这周要买的东西。今天是${WEEKDAY_LABEL[weekdayOf(date)]}，今天以前的几天照样写（当作参考）。`;
+export function healthWeekAsk(date: ISODate, weekStart: ISODate, t: TextFn): string {
+  return t('health.ask.week', { from: weekStart, to: shiftDate(weekStart, 6), weekday: WEEKDAY_LABEL[weekdayOf(date)] });
 }
 
 /** 排今天时"这次要排的"：这周的计划里今天是什么、设置里今天能练多久 */
-export function healthDayAsk(date: ISODate, week: HealthWeekPlan, weekMinutes: number[]): string {
+export function healthDayAsk(date: ISODate, week: HealthWeekPlan, weekMinutes: number[], t: TextFn): string {
   const wd = weekdayOf(date);
   const planned = week.days.find((d) => d.weekday === wd);
   const minutes = weekMinutes[wd] ?? 0;
-  return `这次要排：今天（${date} ${WEEKDAY_LABEL[wd]}）的训练和三顿饭。这周的计划里今天是：${planned ? (planned.rest ? '休息' : `${planned.workout} ${planned.minutes} 分钟`) : '没写'}；设置里今天能练 ${minutes ? `${minutes} 分钟` : '0 分钟（不练）'}。`;
+  return t('health.ask.day', {
+    date, weekday: WEEKDAY_LABEL[wd],
+    planned: !planned ? t('health.ask.notPlanned') : planned.rest ? t('health.rest') : t('health.workoutMinutes', { workout: planned.workout, minutes: planned.minutes }),
+    minutes: minutes || null,
+  });
 }
 
 // —— 附近的店（接了 Google 地图时）：写成给「健康」的那一块，外食对上真实的店 ——
@@ -169,38 +174,35 @@ export interface NearbyBlock {
   near: string;
 }
 
-function placeLine(p: FoodPlace, hours?: string): string {
-  const serves = [p.breakfast ? '早饭' : '', p.lunch ? '午饭' : '', p.dinner ? '晚饭' : ''].filter(Boolean);
+function placeLine(p: FoodPlace, t: TextFn, hours?: string): string {
+  const serves = [p.breakfast ? t('health.place.breakfast') : '', p.lunch ? t('health.place.lunch') : '', p.dinner ? t('health.place.dinner') : ''].filter(Boolean);
+  const extras = [p.takeout ? t('health.place.takeout') : '', p.delivery ? t('health.place.delivery') : '', p.vegetarian ? t('health.place.vegetarian') : ''].filter(Boolean);
   const bits = [
     distanceText(p.distanceKm),
     p.price ? '$'.repeat(p.price) : '',
-    p.rating ? `${p.rating.toFixed(1)} 分${p.ratings ? `（${p.ratings} 条评价）` : ''}` : '',
+    p.rating ? t('health.place.rating', { rating: p.rating.toFixed(1), count: p.ratings || null }) : '',
     // Google 给的是"星期一: 10:30–21:00"：去掉星期几
-    hours ? `今天 ${hours.replace(/^[^:：]*[:：]\s*/, '')}` : '',
-    serves.length ? `有${serves.join('、')}` : '',
-    [p.takeout ? '能外带' : '', p.delivery ? '能外送' : '', p.vegetarian ? '有素食' : ''].filter(Boolean).join('、'),
-    p.summary ? `"${p.summary}"` : '',
+    hours ? t('health.place.hours', { hours: hours.replace(/^[^:：]*[:：]\s*/, '') }) : '',
+    serves.length ? t('health.place.serves', { meals: serves }) : '',
+    extras.length ? t('health.place.extras', { items: extras }) : '',
+    p.summary ? t('health.place.summary', { summary: p.summary }) : '',
   ].filter(Boolean);
-  return `${p.name}（${p.type}）· ${bits.join(' · ')}`;
+  return t('health.place', { name: p.name, type: p.type, bits });
 }
 
 /** 搜到的附近的店写成给「健康」的那一块；排今天时带上那天的营业时间 */
-export function healthNearbyText(found: NearbyFound, task: HealthTask, date: ISODate): NearbyBlock {
+export function healthNearbyText(found: NearbyFound, task: HealthTask, date: ISODate, t: TextFn): NearbyBlock {
   if (found.none !== undefined) return { text: '', food: [], stores: [], near: found.none, ...(found.country ? { country: found.country } : {}) };
   const { food, stores, country, label, why } = found;
   // Google 的营业时间从周一排起
   const hoursAt = (weekdayOf(date) + 6) % 7;
-  const online = onlineShopsText(country, stores);
-  const text = [
-    `下面是 Google 地图上${label}真实的店。外食只从"能吃饭的地方"里挑；要买的东西写这些超市${online ? '和网店' : ''}里真能买到的商品和规格。`,
-    food.length
-      ? `能吃饭的地方（按距离）：\n${food.map((p) => `- ${placeLine(p, task === 'plan-day' ? p.hours?.[hoursAt] : undefined)}`).join('\n')}`
-      : '能吃饭的地方：没搜到（外食照旧写在食堂、外卖、外面怎么选）',
-    stores.length ? `附近的超市：\n${stores.map((x) => `- ${x.name}（${x.type}）· ${distanceText(x.distanceKm)}`).join('\n')}` : '',
-    online ? `网购：${online}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const online = onlineShopsText(country, stores, t);
+  const text = t('health.nearby', {
+    label,
+    online,
+    food: food.map((p) => t('health.nearby.food', { place: placeLine(p, t, task === 'plan-day' ? p.hours?.[hoursAt] : undefined) })),
+    stores: stores.map((x) => t('health.nearby.store', { name: x.name, type: x.type, distance: distanceText(x.distanceKm) })),
+  });
   const counts = [food.length ? `${food.length} 家能吃饭的地方` : '', stores.length ? `${stores.length} 家超市` : ''].filter(Boolean).join('、');
   return { text, food, stores, ...(country ? { country } : {}), near: `参考了${label} ${counts}${why ? `（有一项没查到：${why}）` : ''}` };
 }

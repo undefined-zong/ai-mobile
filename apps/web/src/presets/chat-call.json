@@ -249,7 +249,10 @@
       "name": "后置指令",
       "role": "system",
       "content": "这是语音通话。每次只说 1-2 个短句，不写括号里的动作，不用表情符号。",
-      "triggers": ["call", "call-open"],
+      "triggers": [
+        "call",
+        "call-open"
+      ],
       "marker": false,
       "enabled": true,
       "injection": {
@@ -281,5 +284,16 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "call.kind.video": "视频通话",
+    "call.kind.voice": "语音通话",
+    "call.posing": "想换姿势时在表情标签后面再写一个动作标签 [pose:动作]，不换就不写。可用动作：{{poses}}。姿势跟着你此刻的态度和说的话走，别一直是同一个。",
+    "call.pose.momentary": "{{name}}（抬一下，几秒后自己放下）",
+    "call.visual": "你的形象在画面中。根据当前情绪在句首写一个表情标签 [expr:表情]。{{expressions}}。[[{{posing}}]]无需朗读标签；没有用户摄像头画面，不要声称看见用户。",
+    "call.reply": "{{kind}}中（已经通话 {{elapsed}}）。回{{user}}刚才说的话。[[{{visual}}]]",
+    "call.open.outgoing": "这是一通{{kind}}：你打电话给{{user}}，对方刚接起来[[（你打来是因为：{{reason}}）]]。先开口说第一句，1–2 个短句。[[{{visual}}]]",
+    "call.open.incoming": "这是一通{{kind}}：{{user}}打电话给你，你刚接起来。先开口打招呼，1–2 个短句。[[{{visual}}]]",
+    "call.missed": "你刚才给{{user}}打语音电话，对方没接。发一条消息给对方。"
+  }
 }

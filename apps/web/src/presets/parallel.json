@@ -223,5 +223,35 @@
         "depth": 4
       }
     }
-  ]
+  ],
+  "texts": {
+    "parallel.her.slot": "- [{{ref}}] {{time}} {{title}}[[ · {{place}}[[（地点 id：{{placeId}}）]]]][[{{?fixed}}（固定的事，不能挪）]][[{{?now}}  ← 现在]]",
+    "parallel.her": "{{!slots}}今天还没有作息\n{{?slots}}今天的作息：\n{{slots|\\n}}\n{{?meals}}三餐：早饭{{breakfast}}；午饭{{lunch}}；晚饭{{dinner}}\n今天穿：{{outfit}}\n手头的事：{{task}}\n今天的小事：{{events|；}}",
+    "parallel.checklist": "；清单：{{items}}",
+    "parallel.checkItem": "{{text}}[[{{?done}}✓]]",
+    "parallel.mine.empty": "{{user}}今天还没有安排（家务、健康、日程系统都没排出东西，平行时空里也没记事）",
+    "parallel.mine.fixed": "定死的",
+    "parallel.mine.edited": "{{user}}改过",
+    "parallel.mine.item": "- [{{ref}}] {{label}}（{{from|，}}）{{checklist}}[[{{?done}} ✓做完了]][[{{?overdue}}（过了时间还没做）]]",
+    "parallel.mine": "{{?untimed}}不定时：\n{{untimed|\\n}}\n{{?timeline}}时间线：\n{{timeline|\\n}}",
+    "parallel.note.request": "{{stamp}} {{author}}请{{her}}改今天的日程：「{{text}}」[[（说的是：{{about}}）]][[{{?accepted}} → {{her}}答应了[[，改成：{{changes|；}}]]]][[{{?declined}} → {{her}}没答应]]",
+    "parallel.note.post": "{{stamp}} {{author}}留言：「{{text}}」[[（说的是：{{about}}）]][[{{?accepted}} → {{her}}答应了[[，改成：{{changes|；}}]]]][[{{?declined}} → {{her}}没答应]]",
+    "parallel.note.reply": "  {{author}}：{{text}}",
+    "parallel.memory.request": "{{day}} {{who}}在平行时空里请{{her}}改日程：「{{text}}」[[{{?accepted}}，{{her}}答应了[[（{{changes}}）]]]][[{{?declined}}，{{her}}没答应]][[；来回说了 {{talk|；}}]]",
+    "parallel.memory.post": "{{day}} {{who}}在平行时空里留言：「{{text}}」[[；来回说了 {{talk|；}}]]",
+    "parallel.today.own": "【平行时空】{{user}}自己记的今天的事：\n{{items|\\n}}",
+    "parallel.today.ownItem": "- {{label}}[[（{{note}}）]]{{checklist}}[[{{?done}} ✓做完了]]",
+    "parallel.today.hidden": "{{user}}在平行时空里把这些从今天拿掉了（今天不做了）：{{items}}",
+    "parallel.her.none": "{{char}}今天还没有节律",
+    "parallel.mine.unknown": "不知道{{user}}今天的安排",
+    "parallel.notes": "最近的留言（不要重复说过的话）：\n{{notes}}",
+    "parallel.ask.post": "这一次：{{char}}现在在平行时空里给{{user}}留一句言。",
+    "parallel.notesBefore": "之前的留言：\n{{notes}}",
+    "parallel.ask.reply": "这一次：{{user}}在这条留言下面说了「{{said}}」，{{char}}回复这一句。",
+    "parallel.ask.newNote": "这一次：{{user}}刚在平行时空里留了这条言[[（说的是 {{about}}）]]，{{char}}回复。",
+    "parallel.thread": "这一条留言和下面的回复：\n{{thread}}",
+    "parallel.world": "{{world}}里的地点（地点 id：名字 · 室内或室外 · 一句话）：\n{{locations|\\n}}",
+    "parallel.world.location": "- {{id}}：{{name}} · {{place}}[[ · {{blurb}}]]",
+    "parallel.ask.request": "这一次：{{user}}请{{char}}改今天的日程：「{{text}}」[[（说的是 {{about}}）]]。"
+  }
 }

@@ -4,7 +4,7 @@ import { computed, reactive, watch, type Ref } from 'vue';
 import { services } from '@/services';
 import { ttsLiveFor } from '@/services/ai';
 import { CallListener, looksLikeEcho } from '@/services/listener';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SentenceStream, SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
 import { useCharacterStore } from '@/stores/characters';
@@ -197,16 +197,19 @@ export function useVoiceCall(characterId: Ref<string>, opts: { incoming: boolean
   function livePoses() {
     return opts.video?.() ? character.value.live2d?.poses ?? [] : [];
   }
+  /** 通话的场景任务（程序文字 call.*，在"通话"用途的预设里） */
   function taskInput(kind: 'open' | 'reply'): string {
+    const t = sceneText('call', character.value);
     const user = userName.value;
+    const kindLabel = t(opts.video?.() ? 'call.kind.video' : 'call.kind.voice');
     // 表情列她自己的（有立绘时是立绘上的那些）
     // Live2D 模型有姿势时（斑：自然 / 抬手 / 抱臂）也让她自己换
     const poses = livePoses();
-    const posing = poses.length ? `想换姿势时在表情标签后面再写一个动作标签 [pose:动作]，不换就不写。可用动作：${poses.map((p) => (p.momentary ? `${p.name}（抬一下，几秒后自己放下）` : p.name)).join('、')}。姿势跟着你此刻的态度和说的话走，别一直是同一个。` : '';
-    const visual = opts.video?.() ? `你的形象在画面中。根据当前情绪在句首写一个表情标签 [expr:表情]。${expressionPromptLines(character.value.portraits)}。${posing}无需朗读标签；没有用户摄像头画面，不要声称看见用户。` : '';
-    if (kind === 'reply') return `${callLabel()}中（已经通话 ${clock(state.seconds)}）。回${user}刚才说的话。${visual}`;
-    if (opts.incoming) return `这是一通${callLabel()}：你打电话给${user}，对方刚接起来${opts.reason ? `（你打来是因为：${opts.reason}）` : ''}。先开口说第一句，1–2 个短句。${visual}`;
-    return `这是一通${callLabel()}：${user}打电话给你，你刚接起来。先开口打招呼，1–2 个短句。${visual}`;
+    const posing = poses.length ? t('call.posing', { poses: poses.map((p) => (p.momentary ? t('call.pose.momentary', { name: p.name }) : p.name)) }) : '';
+    const visual = opts.video?.() ? t('call.visual', { expressions: expressionPromptLines(character.value.portraits, t), posing }) : '';
+    if (kind === 'reply') return t('call.reply', { kind: kindLabel, elapsed: clock(state.seconds), user, visual });
+    if (opts.incoming) return t('call.open.outgoing', { kind: kindLabel, user, reason: opts.reason, visual });
+    return t('call.open.incoming', { kind: kindLabel, user, visual });
   }
 
   async function herTurn(kind: 'open' | 'reply') {
@@ -377,7 +380,7 @@ export function useVoiceCall(characterId: Ref<string>, opts: { incoming: boolean
       chat.postCard(id, opts.incoming ? 'assistant' : 'user', { type: 'call-log', durationSec: 0, missed: true, video: hadVideo });
       // 她打来你没接：让她发条消息（主对话接通时由模型写；没接通就只有未接来电卡片）
       if (opts.incoming && llmStatus.value.live) {
-        void chat.generate(id, undefined, { task: { name: 'call-missed', input: `你刚才给${userName.value}打语音电话，对方没接。发一条消息给对方。` } });
+        void chat.generate(id, undefined, { task: { name: 'call-missed', input: sceneText('chat', character.value)('call.missed', { user: userName.value }) } });
       }
       return;
     }

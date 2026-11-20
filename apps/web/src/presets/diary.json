@@ -178,5 +178,41 @@
         "depth": 4
       }
     }
-  ]
+  ],
+  "texts": {
+    "diary.line": "{{date}} {{name}}的日记[[《{{title}}》]][[（心情：{{mood}}）]]：「{{text}}」",
+    "diary.noDay": "{{char}}这一天没有排节律：按角色卡里平时的生活来写",
+    "diary.now": "{{now}}\n天气：{{weather}}",
+    "diary.withUser": "{{date}} 这一天和{{user}}：\n{{withUser}}",
+    "diary.noUser": "{{date}} 这一天和{{user}}没怎么聊",
+    "diary.previous": "最近几篇日记（不要重复写过的事和句子）：\n{{previous}}",
+    "diary.ask": "这一次：{{char}}在写 {{date}} 这一天的日记[[{{?today}}（今晚睡前写）]][[{{!today}}（那天晚上没来得及写，现在补写那一天）]]。\n{{?image}}这一天有值得画下来的画面就写 image，没有写 null。\n{{!image}}这一篇不配图：image 写 null。",
+    "event.togetherWith": "和{{who}}一起",
+    "event.together": "一起",
+    "event.minutes": "{{minutes}} 分钟",
+    "event.workout.plan": "照计划练「{{title}}」",
+    "event.workout.detail": "{{minutes}} 分钟[[ · {{km}} 公里]][[ · {{steps}} 步]]",
+    "event.meal.title": "{{meal}} · {{food}}",
+    "event.meal.default": "吃饭",
+    "event.meal.together": "{{together}}吃",
+    "event.meal.solo": "{{name}}陪着",
+    "event.study.title": "学习 {{minutes}} 分钟",
+    "event.date.title": "约会 · {{place}}",
+    "event.watch.title": "看了《{{title}}》",
+    "event.watch.detail": "{{minutes}} 分钟[[ · {{name}}打了 {{score}} 分]]",
+    "event.read.title": "一起读《{{title}}》",
+    "event.game.title": "玩了{{game}}",
+    "event.game.default": "一局",
+    "event.call.video": "视频通话",
+    "event.call.voice": "通话",
+    "event.chore.title": "家务 · {{name}}",
+    "event.music.title": "《{{title}}》",
+    "diary.withUser.event": "{{time}} [{{body}}]",
+    "diary.withUser.said": "{{time}} {{who}}：{{text}}",
+    "event.parts": "{{parts| · }}",
+    "event.study.pomodoros": "{{n}} 段",
+    "event.study.tasks": "完成 {{done}}/{{total}} 件",
+    "event.study.together": "{{together}}专注",
+    "diary.withUser.eventBody": "[[{{who}}：]]{{title}}[[ · {{detail}}]]"
+  }
 }

@@ -199,5 +199,36 @@
         "depth": 4
       }
     }
-  ]
+  ],
+  "texts": {
+    "planner.week": "这周的计划（{{weekStart}} 开始）[[：{{focus}}]]\n{{days|\\n}}\n截止的事：{{deadlines|；}}\n这周要完成：{{goals|；}}",
+    "planner.week.day": "- {{weekday}} {{date}}：[[{{parts|；}}]][[{{!parts}}没有安排]][[{{?today}}  ← 今天]]",
+    "planner.week.events": "日程：{{items|；}}",
+    "planner.week.todos": "要做：{{items|；}}",
+    "planner.week.deadline": "{{date}} {{title}}",
+    "planner.param": "{{name}}: {{type}}[[（[[{{desc}}]][[，可选 {{values| / }}]]）]][[{{?required}} *必填]]",
+    "planner.params": "{{parts|；}}",
+    "planner.params.none": "不用参数",
+    "planner.clipped": "…（后面还有 {{left}} 字，截掉了）",
+    "planner.profile": "{{user}}[[：{{description}}]]\n{{?note}}{{user}}写的情况和偏好：\n{{note}}\n陪{{user}}的人：{{char}}[[（{{charDescription}}）]]",
+    "planner.today": "今天：{{date}} {{weekday}}（[[{{?weekend}}周末]][[{{!weekend}}工作日]]），时区 {{timeZone}}，现在 {{now}}\n这周：{{weekStart}} 到 {{weekEnd}}\n上次排计划：{{lastRunAt}}\n工具参数里能用的时间：{{vars|；}}",
+    "planner.result.empty": "（没有内容）",
+    "planner.result": "### 「{{server}}」{{tool}} {{args}}[[（{{why}}）]][[{{?error}}（工具报错）]]\n{{text}}",
+    "planner.result.failed": "### 「{{server}}」{{tool}} {{args}}\n（调用失败：{{error}}）",
+    "planner.server": "## 服务器「{{server}}」（server 写 \"{{server}}\"）\n{{tools|\\n}}",
+    "planner.tool": "- {{name}}[[（{{title}}）]]：[[{{description}}]]\n  参数：{{params}}",
+    "planner.gathered.none": "（还没查）",
+    "planner.gathered.empty": "（这次没查到东西）",
+    "planner.gathered.noServers": "（没有接邮箱和日程，或者都没连上）",
+    "planner.ask.gather": "第 {{round}} 轮（最多 {{maxRounds}} 轮），这一轮最多调 {{maxCalls}} 个工具。查够了就 done: true。",
+    "planner.week.previous": "上一版（今天重排，可以改）：\n{{week}}",
+    "planner.ask.week": "排 {{weekStart}} 开始的这一周（{{from}} 到 {{to}}）。",
+    "planner.ask.day": "排今天（{{date}} {{weekday}}）。",
+    "planner.life.chores": "【家务】{{user}}每天、每周要做的：\n{{items|\\n}}",
+    "planner.life.chore": "- {{name}}：{{schedule}}，约 {{minutes}} 分钟",
+    "planner.life": "（截至 {{at}}）\n{{parts|\\n}}",
+    "planner.recent.day": "{{date}}：{{summary}}；做完 {{done}}/{{total}} 项[[；没勾的：{{left}}]][[；待办：{{todos}}]]",
+    "planner.recent.noSummary": "（没写概览）",
+    "planner.recent.none": "最近几天还没有排过计划"
+  }
 }

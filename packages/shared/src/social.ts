@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { cleanHtml, hash32, nullable, shortDay, shortStamp, str } from './modelText.ts';
 import { outfitOfDay, toMinutes } from './rhythm.ts';
 import type { RhythmDay } from './types/rhythm.ts';
@@ -92,37 +93,44 @@ export function parseMomentReaction(value: unknown): MomentReaction | null {
 // —— 写成文字 ——
 
 /** 一条朋友圈里除了正文还有什么："配图：…"、"附：便利店小票"、"在 图书馆" */
-export function momentExtras(m: Pick<Moment, 'images' | 'htmlTitle' | 'html' | 'location'>, htmlFallback = '一张单据'): string {
-  const images = m.images.map((i) => (i.photo ? (i.seen ? `照片：${i.seen}` : '一张照片') : i.caption ? `配图：${i.caption}` : '一张图'));
-  return [...images, m.html ? `附：${m.htmlTitle || htmlFallback}` : '', m.location ? `在 ${m.location}` : ''].filter(Boolean).join('；');
+export function momentExtras(m: Pick<Moment, 'images' | 'htmlTitle' | 'html' | 'location'>, t: TextFn, htmlFallbackKey = 'moment.htmlFallback'): string {
+  const images = m.images.map((i) => (i.photo ? (i.seen ? t('moment.image.photoSeen', { seen: i.seen }) : t('moment.image.photo')) : i.caption ? t('moment.image.caption', { caption: i.caption }) : t('moment.image.plain')));
+  const html = m.html ? t('moment.html', { title: m.htmlTitle || t(htmlFallbackKey) }) : '';
+  const location = m.location ? t('moment.location', { location: m.location }) : '';
+  return t('moment.extras', { items: [...images, html, location].filter(Boolean) });
+}
+
+/** 一条评论（程序文字 moment.comment）：谁、回复谁、说了什么 */
+export function commentText(c: { authorId: string; replyTo?: string | null; text: string }, names: (id: string) => string, t: TextFn): string {
+  return t('moment.comment', { author: names(c.authorId), replyTo: c.replyTo ? names(c.replyTo) : null, text: c.text });
 }
 
 /**
  * 一条朋友圈写成几行字（进提示词）：谁、什么时候、发了什么、谁点了赞、下面的评论。
  * names：id → 名字（MOMENT_USER 是你的名字）
  */
-export function momentText(m: Moment, names: (id: string) => string, opts: { timeZone?: string; comments?: number } = {}): string {
-  const extras = momentExtras(m);
-  const head = `${shortStamp(m.createdAt, opts.timeZone)} ${names(m.authorId)}发了朋友圈：${m.text ? `「${m.text}」` : ''}${extras ? `（${extras}）` : ''}`;
-  const likes = m.likes.length ? `  点赞：${m.likes.map(names).join('、')}` : '';
-  const comments = m.comments.slice(-(opts.comments ?? 8)).map((c) => `  ${names(c.authorId)}${c.replyTo ? ` 回复 ${names(c.replyTo)}` : ''}：${c.text}`);
+export function momentText(m: Moment, names: (id: string) => string, t: TextFn, opts: { timeZone?: string; comments?: number } = {}): string {
+  const head = t('moment.head', { stamp: shortStamp(m.createdAt, opts.timeZone), author: names(m.authorId), text: m.text, extras: momentExtras(m, t) });
+  const likes = m.likes.length ? t('moment.likes', { names: m.likes.map(names) }) : '';
+  const comments = m.comments.slice(-(opts.comments ?? 8)).map((c) => commentText(c, names, t));
   return [head, likes, ...comments].filter(Boolean).join('\n');
 }
 
 /**
  * 一条朋友圈对这个角色来说要记住的一句话（写进记忆）：只带她自己和你的互动
  */
-export function momentMemory(m: Moment, characterId: string, names: (id: string) => string, timeZone?: string): string {
-  const extras = momentExtras(m);
-  const day = shortDay(m.createdAt, timeZone);
+export function momentMemory(m: Moment, characterId: string, names: (id: string) => string, t: TextFn, timeZone?: string): string {
   const mine = m.authorId === characterId;
   const who = mine ? names(characterId) : names(MOMENT_USER);
-  const parts = [`${day} ${who}发了朋友圈：${m.text ? `「${m.text.slice(0, 200)}」` : ''}${extras ? `（${extras}）` : ''}`];
   const other = mine ? MOMENT_USER : characterId;
-  if (m.likes.includes(other)) parts.push(`${names(other)}点了赞`);
   const talk = m.comments.filter((c) => c.authorId === characterId || c.authorId === MOMENT_USER).slice(-4);
-  if (talk.length) parts.push(`评论里 ${talk.map((c) => `${names(c.authorId)}：${c.text.slice(0, 80)}`).join('；')}`);
-  return parts.join('，');
+  return t('moment.memory', {
+    parts: [
+      t('moment.memory.head', { day: shortDay(m.createdAt, timeZone), who, text: m.text.slice(0, 200), extras: momentExtras(m, t) }),
+      m.likes.includes(other) ? t('moment.memory.liked', { name: names(other) }) : '',
+      talk.length ? t('moment.memory.talk', { items: talk.map((c) => t('moment.memory.talkItem', { name: names(c.authorId), text: c.text.slice(0, 80) })) }) : '',
+    ].filter(Boolean),
+  });
 }
 
 /** 节律里的一天换成朋友圈用的样子：地点 id 换成名字，穿着取平时那一套 */
@@ -139,19 +147,22 @@ export function socialDayOf(day: RhythmDay, placeName: (locationId: string) => s
 }
 
 /** 节律里的一天写成几行字：作息（标出现在在做什么）、三餐、穿着、手头的事、小事 */
-export function socialDayText(day: SocialDay, nowMinute: number | null): string {
-  const lines = day.schedule.map((s) => {
+export function socialDayText(day: SocialDay, nowMinute: number | null, t: TextFn): string {
+  const slots = day.schedule.map((s) => {
     const a = toMinutes(s.from) ?? 0;
     let b = toMinutes(s.to) ?? 0;
     if (b <= a) b += 24 * 60;
     const now = nowMinute !== null && ((nowMinute >= a && nowMinute < b) || (nowMinute + 24 * 60 >= a && nowMinute + 24 * 60 < b));
-    return `- ${s.from}–${s.to} ${s.place} · ${s.status}${now ? '  ← 现在' : ''}`;
+    return t('day.slot', { from: s.from, to: s.to, place: s.place, status: s.status, now });
   });
-  return [
-    `今天的作息：\n${lines.join('\n')}`,
-    `三餐：早饭${day.meals.breakfast || '—'}；午饭${day.meals.lunch || '—'}；晚饭${day.meals.dinner || '—'}`,
-    day.outfit ? `今天穿：${day.outfit}` : '',
-    day.task ? `手头的事：${day.task}` : '',
-    day.events.length ? `今天的小事：${day.events.join('；')}` : '',
-  ].filter(Boolean).join('\n');
+  const none = t('common.none');
+  return t('day.block', {
+    slots,
+    breakfast: day.meals.breakfast || none,
+    lunch: day.meals.lunch || none,
+    dinner: day.meals.dinner || none,
+    outfit: day.outfit,
+    task: day.task,
+    events: day.events,
+  });
 }

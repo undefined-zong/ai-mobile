@@ -1,4 +1,4 @@
-import { registerPlaces, type MapLocation, type World } from '@app/shared';
+import { registerPlaces, type MapLocation, type TextFn, type World } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { useEnvironmentStore } from './environment';
@@ -133,6 +133,17 @@ export const useRealWorldStore = defineStore('realworld', () => {
     if (out.value) return awayKm.value != null ? `你出门了，离家约 ${awayKm.value < 1 ? `${Math.round(awayKm.value * 1000)} 米` : `${awayKm.value.toFixed(1)} 公里`}` : '你出门了';
     return '你在家';
   });
+
+  /** 给模型看的你在哪（程序文字 env.you.*；界面上用 whereLine） */
+  function whereText(t: TextFn): string {
+    if (atPlace.value) return t('env.you.at', { place: atPlace.value.name });
+    if (out.value) {
+      const km = awayKm.value;
+      const distance = km == null ? null : km < 1 ? t('common.distance.m', { n: Math.round(km * 1000) }) : t('common.distance.km', { n: km.toFixed(1) });
+      return t('env.you.out', { distance });
+    }
+    return t('env.you.home');
+  }
 
   const places = computed(() => [home.value, ...nearby.value]);
   /** 当作一个"世界"交给 WorldMap 画（示意图；有 Key 时 MapPage 画真地图） */
@@ -320,6 +331,7 @@ export const useRealWorldStore = defineStore('realworld', () => {
     atPlace,
     hereId,
     whereLine,
+    whereText,
     places,
     mapsReady,
     world,

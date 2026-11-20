@@ -18,6 +18,7 @@ import {
   type PlannerRunResult,
   type ProactiveCredentials,
   type SocialDay,
+  textFn,
 } from '@app/shared';
 import { unseal } from './crypto.ts';
 import type { Env } from './env.ts';
@@ -99,7 +100,7 @@ async function postOne(env: Env, row: ContextRow, slot: number, dueAt: number, d
         .bind(id, row.updated_at).all<{ data: string }>(),
     ]);
     const names = parallelNames(context.persona.name, () => context.character.name);
-    const mineNotes = later.results.map((r) => parallelNoteText(JSON.parse(r.data) as ParallelNote, names, context.timezone)).reverse();
+    const mineNotes = later.results.map((r) => parallelNoteText(JSON.parse(r.data) as ParallelNote, names, textFn(context.preset?.texts), context.timezone)).reverse();
     const current: ParallelContext = { ...context, notes: [context.notes, ...mineNotes].filter(Boolean).join('\n') };
     const route = credentials.routes.find((r) => r.role === 'parallel');
     const request = parallelRequest(current, now, her, mine).request;

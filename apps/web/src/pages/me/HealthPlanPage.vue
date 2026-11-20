@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CHORE_WHEN, MEAL_KEYS, moveAmount, weekdayOf, WEEKDAY_LABEL, type FitMove, type MealKey, type MealSpot, type ShoppingItem } from '@app/shared';
+import { CHORE_WHEN, MEAL_KEYS, moveAmount, textFn, weekdayOf, WEEKDAY_LABEL, type FitMove, type MealKey, type MealSpot, type ShoppingItem } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -12,6 +12,7 @@ import PageHeader from '@/layouts/PageHeader.vue';
 import { distanceText } from '@/services/maps';
 import { useAiStore } from '@/stores/ai';
 import { useHealthStore, workoutLine } from '@/stores/health';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import { usePersonaStore } from '@/stores/personas';
 import { useServicesStore } from '@/stores/services';
 import { copyText } from '@/utils/errors';
@@ -122,6 +123,8 @@ onMounted(() => {
   // 排的时候家务系统还没开的：开了以后把要提前做的补发过去
   health.syncPrep(persona.value);
 });
+/** 运动记录一行的写法：和写进提示词的一样（健康预设里的程序文字） */
+const workoutText = textFn(textsFor(useLibraryStore().presetForUse('health')));
 </script>
 
 <template>
@@ -288,7 +291,7 @@ onMounted(() => {
         <template v-if="recent.length">
           <div class="group-title">最近练的</div>
           <div class="px-4 grid gap-1.5">
-            <div v-for="l in recent" :key="l.id" class="text-[13px] text-ink-2 num">{{ workoutLine(l) }}</div>
+            <div v-for="l in recent" :key="l.id" class="text-[13px] text-ink-2 num">{{ workoutLine(l, workoutText) }}</div>
           </div>
         </template>
         <p class="note">排计划用的提示词在<RouterLink to="/me/presets?cat=health" class="text-accent-ink">我的 → 预设 → 健康</RouterLink>里，能改（比如动作讲得再细一点）。计划只是参考：身体不舒服就停下来。</p>

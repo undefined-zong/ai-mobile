@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { roughlyInChina, roughlyInUS } from './weather.ts';
 
 /**
@@ -135,24 +136,24 @@ export function samePlaceName(a: string, b: string): boolean {
 }
 
 /** 排计划时给「健康」的一行：你那里能用哪些网店（美国按附近有没有 Kroger、Target、Costco 的店来写） */
-export function onlineShopsText(country: string | undefined, nearbyStores: { name: string }[]): string {
+export function onlineShopsText(country: string | undefined, nearbyStores: { name: string }[], t: TextFn): string {
   if (country === 'US') {
     const near = (re: RegExp) => nearbyStores.find((s) => re.test(s.name));
     const kroger = near(KROGER);
-    return [
-      'Amazon（amazon.com：Amazon Fresh / Whole Foods 配送生鲜；干货、调料、蛋白粉这类耐放的东西第二天到）',
-      'Walmart（walmart.com 配送或到店自提）',
-      kroger ? `Kroger（kroger.com 配送或到店自提；附近的 ${kroger.name} 就是 Kroger 家的）` : 'Kroger（kroger.com；附近没搜到 Kroger 家的店，可能不送你这里，少写）',
-      near(TARGET) ? 'Target（target.com 配送或到店自提）' : '',
-      near(COSTCO) ? 'Costco（要会员，包装大）' : '',
-      'Instacart（从附近的超市代买，当天送上门）',
-    ]
-      .filter(Boolean)
-      .join('；');
+    return t('health.shops', {
+      items: [
+        t('health.shop.amazonUS'),
+        t('health.shop.walmart'),
+        kroger ? t('health.shop.krogerNear', { store: kroger.name }) : t('health.shop.krogerFar'),
+        near(TARGET) ? t('health.shop.target') : '',
+        near(COSTCO) ? t('health.shop.costco') : '',
+        t('health.shop.instacart'),
+      ].filter(Boolean),
+    });
   }
-  if (country === 'CN') return '京东（京东超市、京东到家）；淘宝 / 天猫超市；盒马；美团（小象超市）；叮咚买菜';
+  if (country === 'CN') return t('health.shops.CN');
   const amazon = country ? AMAZON_DOMAIN[country] : undefined;
-  return amazon ? `Amazon（${amazon}）` : '';
+  return amazon ? t('health.shop.amazon', { domain: amazon }) : '';
 }
 
 /** 一段话里提到了附近的哪家店（备案里"去 CAVA 点……"）：名字最长的那家优先 */

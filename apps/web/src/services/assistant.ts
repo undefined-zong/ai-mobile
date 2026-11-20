@@ -20,12 +20,14 @@ import {
   type Lorebook,
   type Preset,
   type PresetCategory,
+  type TextFn,
+  textFn,
 } from '@app/shared';
 import { useAiStore } from '@/stores/ai';
 import { useAssistantStore, type AssistantMerge, type AssistantMessage, type AssistantMode, type AssistantTarget, type AssistantUndo } from '@/stores/assistant';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
-import { isDemoRecord, useLibraryStore } from '@/stores/library';
+import { isDemoRecord, useLibraryStore, withTexts } from '@/stores/library';
 import { usePersonaStore } from '@/stores/personas';
 import { uid } from '@/utils/id';
 import { defaultPresetId } from './importer';
@@ -300,13 +302,13 @@ function subjectJson(s: Subject, cap: number): Record<string, unknown> {
   };
 }
 
-function targetsText(subjects: Subject[]): string {
-  if (!subjects.length) return '要看的对象：用户这次没选（要改东西的话请用户在上面"要看的"里选；做新角色卡不用选）。';
-  const cap = fitCap(subjects.flatMap(texts).map((t) => t.length), TARGET_BUDGET);
-  return `要看的对象（${subjects.length} 个）：\n${subjects.map((s) => JSON.stringify(subjectJson(s, cap))).join('\n')}`;
+function targetsText(subjects: Subject[], t: TextFn): string {
+  if (!subjects.length) return t('assistant.targets.none');
+  const cap = fitCap(subjects.flatMap(texts).map((x) => x.length), TARGET_BUDGET);
+  return t('assistant.targets', { n: subjects.length, items: subjects.map((s) => JSON.stringify(subjectJson(s, cap))) });
 }
 
-function checksText(targets: AssistantTarget[]): string {
+function checksText(targets: AssistantTarget[], tx: TextFn): string {
   const lib = useLibraryStore();
   const parts: string[] = [];
   for (const t of targets) {
@@ -315,17 +317,16 @@ function checksText(targets: AssistantTarget[]): string {
     if (s.kind === 'fighter') continue;
     const issues = issuesOf(t);
     const ref = s.kind === 'preset' ? lib.referenceFor(s.obj) : undefined;
-    const head = `【${KIND_LABEL[t.kind]}「${s.obj.name}」（${t.id}）】${ref ? `参照 App 自带的「${ref.name}」` : ''}`;
-    parts.push(
-      issues.length
-        ? `${head}\n${issues.map((i) => `- [${FORMAT_LEVELS[i.level].label}] ${i.whereLabel ? `${i.whereLabel}${i.where && i.where !== i.whereLabel ? `（${i.where}）` : ''}：` : ''}${i.message}`).join('\n')}`
-        : `${head}\n- 程序没查出问题`,
-    );
+    const head = tx('assistant.checks.head', { kind: KIND_LABEL[t.kind], name: s.obj.name, id: t.id, reference: ref?.name });
+    const lines = issues.length
+      ? issues.map((i) => tx('assistant.checks.issue', { level: FORMAT_LEVELS[i.level].label, where: i.whereLabel, detail: i.where && i.where !== i.whereLabel ? i.where : null, message: i.message }))
+      : [tx('assistant.checks.none')];
+    parts.push([head, ...lines].join('\n'));
   }
-  return parts.length ? `程序检测到的问题：\n${parts.join('\n\n')}` : '';
+  return parts.length ? tx('assistant.checks', { parts }) : '';
 }
 
-function guideText(subjects: Subject[]): string {
+function guideText(subjects: Subject[], t: TextFn): string {
   const lib = useLibraryStore();
   const presets = subjects.filter((s): s is Extract<Subject, { kind: 'preset' }> => s.kind === 'preset').map((s) => s.obj);
   const references: Preset[] = [];
@@ -345,48 +346,54 @@ function guideText(subjects: Subject[]): string {
     // 没选对象时多半是要做新角色卡：带上角色卡的字段说明
     character: subjects.some((s) => s.kind === 'character') || !subjects.length,
     references,
+    t,
   });
-  return guide ? `特殊格式（App 认的写法）：\n\n${guide}` : '';
+  return guide ? t('assistant.guide', { guide }) : '';
 }
 
-function chatText(history: AssistantMessage[]): string {
+function chatText(history: AssistantMessage[], t: TextFn): string {
   const recent = history.filter((m) => !m.error).slice(-CHAT_KEEP);
   if (!recent.length) return '';
   const line = (m: AssistantMessage) => {
-    const who = m.role === 'user' ? '用户' : '你';
     const text = m.text.length > 1500 ? `${m.text.slice(0, 1500)}…` : m.text;
-    const ops = m.ops?.length ? `（给了 ${m.ops.length} 项修改，${m.applied ? '用户点了应用' : '用户还没应用'}）` : '';
-    return `${who}：${text || '（没写字）'}${ops}${m.merge ? `\n${mergeText(m.merge)}` : ''}`;
+    const head = t('assistant.chat.line', {
+      who: t(m.role === 'user' ? 'assistant.chat.user' : 'assistant.chat.you'),
+      text: text || t('assistant.chat.empty'),
+      ops: m.ops?.length || null,
+      applied: !!m.applied,
+    });
+    return m.merge ? `${head}\n${mergeText(m.merge, t)}` : head;
   };
-  return `最近的对话：\n${recent.map(line).join('\n\n')}`;
+  return t('assistant.chat', { lines: recent.map(line) });
 }
 
 /** 预设融合选的两个预设：「名字」（id） */
-function mergeText(merge: AssistantMerge | undefined): string {
+function mergeText(merge: AssistantMerge | undefined, t: TextFn): string {
   if (!merge) return '';
   const lib = useLibraryStore();
   const source = lib.presetById(merge.source);
   const name = (id: string) => {
     const p = lib.presetById(id);
-    return p ? `「${p.name}」（${PRESET_CATEGORIES[p.category].label}预设，id ${id}）` : `（找不到 id 是 ${id} 的预设）`;
+    return p ? t('assistant.merge.preset', { name: p.name, category: PRESET_CATEGORIES[p.category].label, id }) : t('assistant.merge.missing', { id });
   };
-  const destination = source ? `新预设归入功能来源的「${PRESET_CATEGORIES[source.category].label}」分类（category: ${source.category}）。` : '';
-  return `用户要融合两个预设：底子是${name(merge.base)}，功能来源是${name(merge.source)}。照底子新建一个预设，把功能来源里的功能缝进去，底子和功能来源都不改。${destination}`;
+  return t('assistant.merge', {
+    base: name(merge.base),
+    source: name(merge.source),
+    category: source ? PRESET_CATEGORIES[source.category].label : null,
+    categoryId: source?.category,
+  });
 }
 
-function askText(ask: string, mode: AssistantMode | undefined, subjects: Subject[], merge?: AssistantMerge): string {
+function askText(ask: string, mode: AssistantMode | undefined, subjects: Subject[], t: TextFn, merge?: AssistantMerge): string {
   const head =
     mode === 'merge'
-      ? mergeText(merge)
+      ? mergeText(merge, t)
       : mode === 'check'
-      ? '用户点了"一键检测"：看看要看的对象哪些和 App 的格式不合，改成适配的（只改格式）。'
+      ? t('assistant.ask.check')
       : mode === 'card'
-        ? subjects.some((s) => s.kind === 'character')
-          ? '用户要补全角色卡的设定。'
-          : '用户要做一张新角色卡。'
+        ? t(subjects.some((s) => s.kind === 'character') ? 'assistant.ask.cardFill' : 'assistant.ask.cardNew')
         : '';
-  const said = ask.trim();
-  return `这一次：${head}${said ? `\n用户说：${said}` : head ? '' : '用户没写话。'}`;
+  return t('assistant.ask', { head, said: ask.trim() });
 }
 
 export interface AskOptions {
@@ -405,17 +412,19 @@ export interface AskOptions {
 export async function askAssistant(opts: AskOptions): Promise<string> {
   const status = assistantStatus();
   if (!status.live) throw new Error(status.reason);
-  const preset = useLibraryStore().presetForUse('assistant');
+  const preset = withTexts(useLibraryStore().presetForUse('assistant'));
   if (!preset) throw new MissingPresetError('助手');
+  // 这一次的几块怎么写都在助手预设的程序文字里
+  const t = textFn(preset.texts);
   const subjects = opts.targets.map(subjectOf).filter((s): s is Subject => !!s);
   const { messages } = assembleTaskPrompt({
     preset,
     fills: {
-      assistantFormats: guideText(subjects),
-      assistantTargets: targetsText(subjects),
-      assistantChecks: checksText(opts.targets),
-      assistantChat: chatText(opts.history),
-      assistantAsk: askText(opts.ask, opts.mode, subjects, opts.merge),
+      assistantFormats: guideText(subjects, t),
+      assistantTargets: targetsText(subjects, t),
+      assistantChecks: checksText(opts.targets, t),
+      assistantChat: chatText(opts.history, t),
+      assistantAsk: askText(opts.ask, opts.mode, subjects, t, opts.merge),
     },
     // 预设里的示例照 SillyTavern 写 {{char}} {{user}}，原样留给助手（不换成名字）
     macros: { char: '{{char}}', user: '{{user}}', pronoun: subjects.length === 1 && subjects[0]?.kind === 'character' ? subjects[0].obj.pronoun : undefined },

@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { shiftDate } from './timezone.ts';
 import type { ISODate } from './types/common.ts';
 import type { ChoreDay, ChoreDef, ChoreEffect, ChoreKind, ChoreMark, ChoreWhen, ExtraChore, HouseworkSettings, MealSpot } from './types/life.ts';
@@ -392,22 +393,11 @@ export function choreRecent(input: Omit<ChoreDayInput, 'nowMin'>, days = 7): { d
 }
 
 /** 没做的时候她会怎样（写进提示词的那几个字；具体怎么做在预设里） */
-export function effectLine(c: Pick<ChoreDef, 'effect' | 'effectNote'>, userName: string): string {
+export function effectLine(c: Pick<ChoreDef, 'effect' | 'effectNote'>, userName: string, t: TextFn): string {
   const note = c.effectNote.trim();
-  switch (c.effect) {
-    case 'disgust':
-      return note ? `嫌弃（${note}）` : '嫌弃';
-    case 'no-date':
-      return `不跟${userName}约会、出门${note ? `（${note}）` : ''}`;
-    case 'miss-food':
-      return `有点失落，想吃${userName}亲手做的${note ? `（最想吃：${note}）` : ''}`;
-    case 'nag':
-      return note ? `唠叨一句（${note}）` : '唠叨一句';
-    case 'custom':
-      return note;
-    default:
-      return '';
-  }
+  if (c.effect === 'custom') return note;
+  if (!c.effect || c.effect === 'none') return '';
+  return t(`home.effect.${c.effect}`, { user: userName, note });
 }
 
 function clockOf(at: number | undefined, timeZone?: string): string {
@@ -420,24 +410,22 @@ function clockOf(at: number | undefined, timeZone?: string): string {
 }
 
 /** 一件家务现在的情况："做完了（07:42）" / "还没做，已经 2 天没做了" / "拖了 2 次还没做" */
-export function choreStateText(it: ChoreItem, timeZone?: string): string {
+export function choreStateText(it: ChoreItem, t: TextFn, timeZone?: string): string {
   const m = it.mark;
   if (m.status === 'done') {
-    const at = clockOf(m.doneAt, timeZone);
-    const spent = m.spentSec ? `，做了 ${Math.max(1, Math.round(m.spentSec / 60))} 分钟` : '';
-    return `做完了${at ? `（${at}${spent}）` : spent ? `（${spent.slice(1)}）` : ''}${m.later ? `，之前拖了 ${m.later} 次` : ''}`;
+    return t('home.chore.done', { at: clockOf(m.doneAt, timeZone), minutes: m.spentSec ? Math.max(1, Math.round(m.spentSec / 60)) : null, later: m.later || null });
   }
   const parts: string[] = [];
-  if (m.status === 'doing') parts.push('正在做');
-  else if (m.status === 'later') parts.push(`说了晚点做（拖了 ${m.later ?? 1} 次）`);
-  else if (it.carriedFrom) parts.push(`${WEEKDAY_LABEL[weekdayOf(it.carriedFrom)]}该做的没做，拖到了今天`);
-  else if (it.overdue) parts.push('过了时间还没做');
-  else if (it.early) parts.push('还没到时候');
-  else parts.push('还没做');
-  if (it.missedDays === 1) parts.push('昨天也没做');
-  else if (it.missedDays > 1) parts.push(`之前已经 ${it.missedDays} 天没做了`);
-  if (it.chore.freq === 'weekly' && it.sinceDone !== null && !it.week) parts.push(it.sinceDone === 1 ? '上次做是昨天' : `上次做是 ${it.sinceDone} 天前`);
-  return parts.join('，');
+  if (m.status === 'doing') parts.push(t('home.chore.doing'));
+  else if (m.status === 'later') parts.push(t('home.chore.later', { times: m.later ?? 1 }));
+  else if (it.carriedFrom) parts.push(t('home.chore.carried', { weekday: WEEKDAY_LABEL[weekdayOf(it.carriedFrom)] }));
+  else if (it.overdue) parts.push(t('home.chore.overdue'));
+  else if (it.early) parts.push(t('home.chore.early'));
+  else parts.push(t('home.chore.todo'));
+  if (it.missedDays === 1) parts.push(t('home.chore.missedYesterday'));
+  else if (it.missedDays > 1) parts.push(t('home.chore.missedDays', { days: it.missedDays }));
+  if (it.chore.freq === 'weekly' && it.sinceDone !== null && !it.week) parts.push(it.sinceDone === 1 ? t('home.chore.lastYesterday') : t('home.chore.lastDaysAgo', { days: it.sinceDone }));
+  return t('home.chore.state', { parts });
 }
 
 /**
@@ -450,24 +438,31 @@ export function formatChoreBlock(opts: {
   recent?: ReturnType<typeof choreRecent> | null;
   nowText: string;
   timeZone?: string;
+  t: TextFn;
 }): string {
-  const { userName, items } = opts;
-  if (!items.length) return `【家务】${userName}今天没有要做的家务（截至 ${opts.nowText}）。`;
+  const { userName, items, t } = opts;
+  if (!items.length) return t('home.chores.none', { user: userName, now: opts.nowText });
   const lines = items.map((it) => {
-    const extra = it.chore.freq === 'weekly' ? `（${it.week ? `每周 ${it.week.need} 次，这周做了 ${it.week.done} 次` : choreSchedule(it.chore)}）` : '';
-    const label = it.extra ? `${it.label}（健康计划里要提前做的${it.extra.meal ? `，给${it.extra.meal}` : ''}）` : it.chore.freq === 'daily' ? it.label : `${it.label}${extra}`;
+    const weekly = it.chore.freq === 'weekly';
     const pending = it.mark.status !== 'done' && (it.overdue || it.mark.status === 'later' || it.missedDays > 0);
-    const effect = pending ? effectLine(it.chore, userName) : '';
-    return `- ${label}：${choreStateText(it, opts.timeZone)}${effect ? `｜没做时：${effect}` : ''}`;
+    return t('home.chore.item', {
+      label: it.label,
+      extra: !!it.extra,
+      meal: it.extra?.meal,
+      weekNeed: weekly && !it.extra && it.week ? it.week.need : null,
+      weekDone: weekly && !it.extra && it.week ? it.week.done : null,
+      schedule: weekly && !it.extra && !it.week ? choreSchedule(it.chore) : null,
+      state: choreStateText(it, t, opts.timeZone),
+      effect: pending ? effectLine(it.chore, userName, t) : '',
+    });
   });
-  const done = items.filter((it) => it.mark.status === 'done').length;
   const r = opts.recent;
-  const recent = r && r.done + r.missed > 0 ? `最近 7 天：做完 ${r.done} 件，没做 ${r.missed} 件${r.laterMost ? `；拖得最多的是${r.laterMost.name}（${r.laterMost.times} 次）` : ''}。` : '';
-  return [
-    `【家务】${userName}今天的家务（截至 ${opts.nowText}，做完 ${done} / ${items.length}；是${userName}在"共同的家"里勾的，没勾的就是还没做）：`,
-    ...lines,
-    recent,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  return t('home.chores', {
+    user: userName,
+    now: opts.nowText,
+    done: items.filter((it) => it.mark.status === 'done').length,
+    total: items.length,
+    items: lines,
+    recent: r && r.done + r.missed > 0 ? t('home.chores.recent', { done: r.done, missed: r.missed, laterName: r.laterMost?.name, laterTimes: r.laterMost?.times }) : '',
+  });
 }

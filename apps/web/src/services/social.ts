@@ -1,7 +1,7 @@
 import { buildSocialMessages, errorText, isAbortError, samplerRequest, socialCharacterFill, socialNowFill, socialPostInput } from '@app/ai';
 import {
   AGENT_META, getLocation, hubMomentId, MOMENT_USER, momentDueTimes, momentMemory, momentText, parseMomentDraft, parseMomentReaction, shiftDate, socialDayOf, socialDayText, socialPerDay, zonedDateKey,
-  type Character, type Moment, type MomentImage, type Preset, type SocialContext, type SocialDay,
+  textFn, type Character, type Moment, type MomentImage, type Preset, type SocialContext, type SocialDay, type TextFn,
 } from '@app/shared';
 import { onRemote } from '@/db/idb';
 import { putAsset } from './assets';
@@ -17,7 +17,7 @@ import { useCommunityStore } from '@/stores/community';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useGalleryStore } from '@/stores/gallery';
 import { useHubStore } from '@/stores/hub';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore, withTexts } from '@/stores/library';
 import { useMemoryStore } from '@/stores/memory';
 import { usePersonaStore } from '@/stores/personas';
 import { useRhythmStore } from '@/stores/rhythm';
@@ -53,24 +53,24 @@ export function momentNames(characterId?: string): (id: string) => string {
 }
 
 /** 这个角色看得到的最近几条朋友圈，写成文字（进提示词）；except：这一条不算（正要回应的那条） */
-export function feedText(characterId: string, n = 6, except?: string): string {
+export function feedText(characterId: string, t: TextFn, n = 6, except?: string): string {
   const timeZone = useEnvironmentStore().settings.timezone;
   const names = momentNames(characterId);
   return useSocialStore()
     .visibleTo(characterId)
     .filter((m) => m.id !== except)
     .slice(-n)
-    .map((m) => momentText(m, names, { timeZone, comments: 4 }))
+    .map((m) => momentText(m, names, t, { timeZone, comments: 4 }))
     .join('\n');
 }
 
 /** 最近三天的朋友圈候选（最多 4 条），由记忆拼装器按相关性和总预算选择。 */
-export function recentMomentsLines(character: Character): { text: string; at: number }[] {
+export function recentMomentsLines(character: Character, t: TextFn): { text: string; at: number }[] {
   const since = Date.now() - 3 * 86_400_000;
   const timeZone = useEnvironmentStore().settings.timezone;
   const names = momentNames(character.id);
   const list = useSocialStore().visibleTo(character.id).filter((m) => m.createdAt >= since).slice(-4);
-  return list.map((m) => ({ text: momentText(m, names, { timeZone, comments: 4 }), at: m.createdAt }));
+  return list.map((m) => ({ text: momentText(m, names, t, { timeZone, comments: 4 }), at: m.createdAt }));
 }
 
 // —— 发朋友圈要的输入 ——
@@ -93,9 +93,9 @@ export function awakeOf(day: SocialDay | null): { from: string; to: string } {
 }
 
 /** 她记得的关于你的事：画像卡 + 关系 + 置顶的和最重要的记忆（不带"最近的朋友圈"和社群，那两块单独给） */
-export function memoriesText(c: Character, _userName: string): string {
+export function memoriesText(c: Character, t: TextFn): string {
   const timeZone = useEnvironmentStore().settings.timezone;
-  const blocks = memoryBlocks(undefined, c, Date.now(), timeZone, { proactive: true, moments: false });
+  const blocks = memoryBlocks(undefined, c, Date.now(), timeZone, { proactive: true, moments: false, t });
   return [blocks.summary.content, blocks.memory.content].filter(Boolean).join('\n\n');
 }
 
@@ -103,7 +103,10 @@ export function memoriesText(c: Character, _userName: string): string {
  * 发一条朋友圈要的输入（按角色）：角色卡、今天的节律、记得的事、最近的聊天和朋友圈。
  * 她在社群里发帖、回应时也用这一份（只用角色、节律、记忆、聊天那几项）
  */
-export function socialContextOf(c: Character, preset: Preset | null, opts: { /** 自己发不发朋友圈（上传云端的那份按设置；手动让她发时不看） */ enabled?: boolean } = {}): SocialContext {
+export function socialContextOf(c: Character, raw: Preset | null, opts: { /** 自己发不发朋友圈（上传云端的那份按设置；手动让她发时不看） */ enabled?: boolean } = {}): SocialContext {
+  // 预设带上合好的程序文字：这里拼的几块、云端拼的都按它写
+  const preset = withTexts(raw);
+  const t = textFn(preset?.texts ?? textsFor(null));
   const chat = useChatStore().chatOfCharacter(c.id);
   const userName = userNameFor(c.id);
   const day = dayOf(c.id);
@@ -114,9 +117,9 @@ export function socialContextOf(c: Character, preset: Preset | null, opts: { /**
     settings: { enabled: opts.enabled ?? true, perDay: socialPerDay(useSocialStore().characterSettings(c.id)) },
     awake: awakeOf(day),
     day,
-    memories: memoriesText(c, userName),
+    memories: memoriesText(c, t),
     recent: chat ? useChatStore().recentLines(chat.id, 12).join('\n') : '',
-    feed: feedText(c.id),
+    feed: feedText(c.id, t),
     preset,
     preview: useHubStore().config.preview,
   };
@@ -148,7 +151,8 @@ export function rememberMoment(momentId: string, characterId: string) {
   const mem = useMemoryStore();
   const m = useSocialStore().byId(momentId);
   if (!m || !mem.ready || !useCharacterStore().byId(characterId)) return;
-  const content = momentMemory(m, characterId, momentNames(characterId), useEnvironmentStore().settings.timezone);
+  const c = useCharacterStore().byId(characterId);
+  const content = momentMemory(m, characterId, momentNames(characterId), textFn(textsFor(momentsPreset(c))), useEnvironmentStore().settings.timezone);
   const known = m.memoryIds?.[characterId];
   if (known) {
     const old = mem.memoryById(known);
@@ -389,12 +393,14 @@ export async function reactToMoment(momentId: string, characterId: string, kind:
   const timeZone = useEnvironmentStore().settings.timezone;
   const chat = useChatStore().chatOfCharacter(characterId);
   const day = dayOf(characterId);
-  const at = socialNowFill(Date.now(), timeZone);
+  const t = textFn(preset.texts);
+  const at = socialNowFill(Date.now(), timeZone, t);
   const mine = m.authorId === characterId;
   const lastUser = [...m.comments].reverse().find((x) => x.authorId === MOMENT_USER);
   const ask = kind === 'new'
-    ? `这一次：${userName}刚发了这条朋友圈，${c.name}刷到了。决定点不点赞、要不要评论。`
-    : `这一次：${userName}在${mine ? `${c.name}的这条朋友圈` : '这条朋友圈的评论区'}里说了「${lastUser?.text ?? ''}」，${c.name}回复这一句（like 写 false）。`;
+    ? t('social.ask.react', { user: userName, char: c.name })
+    : t('social.ask.reply', { user: userName, char: c.name, mine, said: lastUser?.text ?? '' });
+  const before = feedText(characterId, t, 4, momentId);
   social.busy[key] = true;
   delete social.failures[key];
   try {
@@ -404,13 +410,13 @@ export async function reactToMoment(momentId: string, characterId: string, kind:
         messages: buildSocialMessages({
           task: 'react', characterName: c.name, pronoun: c.pronoun, userName, now: new Date(), timeZone,
           fills: {
-            socialCharacter: socialCharacterFill({ id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, userName),
-            socialLife: day ? socialDayText(day, at.minute) : '',
+            socialCharacter: socialCharacterFill({ id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, userName, t),
+            socialLife: day ? socialDayText(day, at.minute, t) : '',
             socialNow: at.text,
-            socialMemories: memoriesText(c, userName),
-            socialRecent: chat ? `最近的聊天：\n${useChatStore().recentLines(chat.id, 8).join('\n')}` : '',
-            socialFeed: feedText(characterId, 4, momentId) ? `之前的朋友圈：\n${feedText(characterId, 4, momentId)}` : '',
-            socialPost: `这条朋友圈和下面的评论：\n${momentText(m, names, { timeZone, comments: 12 })}`,
+            socialMemories: memoriesText(c, t),
+            socialRecent: chat ? t('social.recent', { recent: useChatStore().recentLines(chat.id, 8).join('\n') }) : '',
+            socialFeed: before ? t('social.feedBefore', { feed: before }) : '',
+            socialPost: t('social.post', { post: momentText(m, names, t, { timeZone, comments: 12 }) }),
             socialAsk: ask,
           },
         }, preset),

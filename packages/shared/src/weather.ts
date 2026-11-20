@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import type { WeatherSnapshot } from './environment.ts';
 
 /**
@@ -43,8 +44,8 @@ export interface WeatherReport {
   isDay?: boolean;
   today?: WeatherDay;
   tomorrow?: WeatherDay;
-  /** 接下来几个小时：例如"3 小时后可能下雨" */
-  soon?: string;
+  /** 接下来几个小时：第一次可能下雨 / 下雪是几小时后、概率多少 */
+  soon?: WeatherSoon;
   /** 预警，一句话（多条用"；"隔开） */
   alert?: string;
   /** 什么时候取的（毫秒） */
@@ -212,32 +213,43 @@ export function formatRange(minC: number, maxC: number, unit: TempUnit = 'c'): s
   return `${n(minC)}~${formatTemp(maxC, unit)}`;
 }
 
-/** "今天 8~15°C，明天降温，最高 6°C / 明天有雨" */
-export function outlookLine(r: Pick<WeatherReport, 'today' | 'tomorrow' | 'soon' | 'text'>, unit: TempUnit = 'c'): string {
-  const t = (c: number) => formatTemp(c, unit);
+/** 接下来几个小时会下雨 / 下雪：几小时后、降水概率、是不是雪 */
+export interface WeatherSoon {
+  hours: number;
+  chance: number;
+  snow: boolean;
+}
+
+/**
+ * 接下来的天气（程序文字 weather.outlook.*，例如"今天 8~15°C，明天降温，最高 6°C"）：
+ * 程序只判断是哪种情况、给温度，怎么说写在预设里
+ */
+export function outlookLine(r: Pick<WeatherReport, 'today' | 'tomorrow' | 'soon' | 'text'>, unit: TempUnit, t: TextFn): string {
+  const temp = (c: number) => formatTemp(c, unit);
   const parts: string[] = [];
-  if (r.soon) parts.push(r.soon);
-  if (r.today) parts.push(`今天 ${formatRange(r.today.minC, r.today.maxC, unit)}`);
+  // 以前存的是一句话，读到时不用
+  if (r.soon && typeof r.soon === 'object') parts.push(t(r.soon.snow ? 'weather.outlook.soonSnow' : 'weather.outlook.soonRain', { ...r.soon }));
+  if (r.today) parts.push(t('weather.outlook.today', { range: formatRange(r.today.minC, r.today.maxC, unit) }));
   const tm = r.tomorrow;
   if (tm) {
     const wet = (s: string | undefined) => isRainy(s) || isSnowy(s);
     const todayMax = r.today?.maxC;
-    if (wet(tm.text) && !wet(r.today?.text) && !wet(r.text)) parts.push(`明天有${isSnowy(tm.text) ? '雪' : '雨'}（${tm.text}）`);
-    else if (todayMax != null && tm.maxC <= todayMax - 4) parts.push(`明天降温，最高 ${t(tm.maxC)}`);
-    else if (todayMax != null && tm.maxC >= todayMax + 4) parts.push(`明天升温到 ${t(tm.maxC)}`);
-    else parts.push(`明天${tm.text} ${formatRange(tm.minC, tm.maxC, unit)}`);
+    if (wet(tm.text) && !wet(r.today?.text) && !wet(r.text)) parts.push(t(isSnowy(tm.text) ? 'weather.outlook.tomorrowSnow' : 'weather.outlook.tomorrowRain', { text: tm.text }));
+    else if (todayMax != null && tm.maxC <= todayMax - 4) parts.push(t('weather.outlook.cooler', { max: temp(tm.maxC) }));
+    else if (todayMax != null && tm.maxC >= todayMax + 4) parts.push(t('weather.outlook.warmer', { max: temp(tm.maxC) }));
+    else parts.push(t('weather.outlook.tomorrow', { text: tm.text, range: formatRange(tm.minC, tm.maxC, unit) }));
   }
-  return parts.join('，');
+  return t('weather.outlook', { parts: parts.filter(Boolean) });
 }
 
 /** 交给【当前环境】的那一份 */
-export function weatherSnapshot(r: WeatherReport, unit: TempUnit = 'c'): WeatherSnapshot {
+export function weatherSnapshot(r: WeatherReport, unit: TempUnit, t: TextFn): WeatherSnapshot {
   return {
     city: r.place,
     text: r.text,
     tempC: round(r.tempC),
     ...(unit === 'f' ? { unit } : {}),
-    outlook: outlookLine(r, 'c') || undefined,
+    outlook: outlookLine(r, 'c', t) || undefined,
     ...(r.alert ? { alert: r.alert } : {}),
   };
 }
@@ -274,7 +286,7 @@ function dayAt(daily: Record<string, unknown[]> | undefined, i: number): Weather
 }
 
 /** 接下来 12 小时里第一次降水概率 ≥ 60% 的是几小时后（现在没在下的时候） */
-function soonFromHourly(hourly: Record<string, unknown[]> | undefined, nowCode: number): string | undefined {
+function soonFromHourly(hourly: Record<string, unknown[]> | undefined, nowCode: number): WeatherSoon | undefined {
   if (!hourly) return undefined;
   const wetNow = isRainy(wmoText(nowCode)) || isSnowy(wmoText(nowCode));
   if (wetNow) return undefined;
@@ -284,8 +296,7 @@ function soonFromHourly(hourly: Record<string, unknown[]> | undefined, nowCode: 
     const p = num(probs[i]);
     const code = num(codes[i]);
     if (p != null && p >= 60) {
-      const what = code != null && isSnowy(wmoText(code)) ? '下雪' : '下雨';
-      return `${i} 小时后可能${what}（${Math.round(p)}%）`;
+      return { hours: i, chance: Math.round(p), snow: code != null && isSnowy(wmoText(code)) };
     }
   }
   return undefined;

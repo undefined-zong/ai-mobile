@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { WEEKDAY_LABEL } from './housework.ts';
 import { str } from './modelText.ts';
 import { clockOf, entryLabel, parallelEnvMinutes, parallelMinute } from './parallel.ts';
@@ -67,40 +68,44 @@ export function captureRefs(days: CaptureDay[], now: CaptureNow): CaptureRef[] {
   return out;
 }
 
-function dayName(date: ISODate, today: ISODate): string {
+function dayName(date: ISODate, today: ISODate, t: TextFn): string {
   const diff = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   const wd = WEEKDAY_LABEL[new Date(`${date}T12:00:00Z`).getUTCDay()];
-  const rel = ['今天', '明天', '后天'][diff] ?? '';
+  const rel = diff >= 0 && diff <= 2 ? t(`common.daysLater.${diff}`) : '';
   return [rel, date, wd].filter(Boolean).join(' ');
 }
 
-function spanText(start: number | null, end: number | null): string {
-  if (start === null) return '全天';
+function spanText(start: number | null, end: number | null, t: TextFn): string {
+  if (start === null) return t('capture.allDay');
   return end !== null && end > start ? `${clockOf(start)}–${clockOf(end)}` : clockOf(start);
 }
 
-/** 作息写成一行（排时间时避开睡觉、吃饭） */
-export function captureEnvText(env: ParallelEnv): string {
+/** 作息写成一行（程序文字 capture.env；排时间时避开睡觉、吃饭） */
+export function captureEnvText(env: ParallelEnv, t: TextFn): string {
   const e = parallelEnvMinutes(env);
-  return `作息：起床 ${clockOf(e.wake)}，睡觉 ${clockOf(e.sleep)}；早饭 ${clockOf(e.breakfast)}，午饭 ${clockOf(e.lunchStart)}–${clockOf(e.lunchEnd)}，晚饭 ${clockOf(e.dinnerStart)}–${clockOf(e.dinnerEnd)}`;
+  return t('capture.env', {
+    wake: clockOf(e.wake), sleep: clockOf(e.sleep), breakfast: clockOf(e.breakfast),
+    lunchStart: clockOf(e.lunchStart), lunchEnd: clockOf(e.lunchEnd), dinnerStart: clockOf(e.dinnerStart), dinnerEnd: clockOf(e.dinnerEnd),
+  });
 }
 
-/** 这几天的安排写成给模型看的几段：每天一段，每项带编号和能不能挪；Google 日历里的另起几行 */
-export function captureScheduleText(days: CaptureDay[], refs: CaptureRef[], now: CaptureNow, env: ParallelEnv, userName: string): string {
+/** 这几天的安排写成给模型看的几段（程序文字 capture.*）：每天一段，每项带编号和能不能挪；Google 日历里的另起几行 */
+export function captureScheduleText(days: CaptureDay[], refs: CaptureRef[], now: CaptureNow, env: ParallelEnv, userName: string, t: TextFn): string {
   const parts = days.map((d) => {
     const mine = refs.filter((r) => r.date === d.date);
     const line = (r: CaptureRef) => {
       const e = r.entry;
-      const tags = [e.source, e.done ? '做完了' : '', e.fixed ? '定死的' : '', r.movable ? '能挪' : e.start !== null ? '不挪' : ''].filter(Boolean).join('；');
-      const list = e.checklist?.length ? `；清单：${e.checklist.map((c) => c.text).join('、')}` : '';
-      return `- [${r.ref}] ${e.start === null ? '不定时' : spanText(e.start, e.end)} ${e.title}（${tags}${list}）`;
+      const tags = [e.source, e.done ? t('capture.tag.done') : '', e.fixed ? t('capture.tag.fixed') : '', r.movable ? t('capture.tag.movable') : e.start !== null ? t('capture.tag.stay') : ''].filter(Boolean);
+      return t('capture.item', {
+        ref: r.ref, span: e.start === null ? t('capture.untimed') : spanText(e.start, e.end, t), title: e.title, tags,
+        checklist: e.checklist?.length ? e.checklist.map((c) => c.text) : null,
+      });
     };
-    const cal = d.calendar.map((c) => `- ${spanText(c.start, c.end)} ${c.title}（Google 日历，不挪）`);
-    const head = `${dayName(d.date, now.today)}${d.date === now.today ? `（现在 ${clockOf(now.minute)}，这之前的时间不能再排）` : ''}：`;
+    const cal = d.calendar.map((c) => t('capture.calendar', { span: spanText(c.start, c.end, t), title: c.title }));
     const body = [...mine.map(line), ...cal];
-    return `${head}\n${body.length ? body.join('\n') : '- 还没有安排'}`;
+    return t('capture.day', { day: dayName(d.date, now.today, t), now: d.date === now.today ? clockOf(now.minute) : null, items: body });
   });
-  return [`${userName}这几天的安排（只列${userName}这一边；"能挪"的必要时可以挪，其余不动）：`, captureEnvText(env), ...parts].join('\n');
+  return t('capture.schedule', { user: userName, env: captureEnvText(env, t), days: parts });
 }
 
 // —— 读模型写回来的 ——

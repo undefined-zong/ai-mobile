@@ -40,6 +40,8 @@ import {
   overlapShare,
   watchSportName,
   type WatchSource,
+  type TextFn,
+  textFn,
   type WatchWorkout,
 } from '@app/shared';
 import { defineStore } from 'pinia';
@@ -54,7 +56,7 @@ import { useCharacterStore } from './characters';
 import { useChatStore } from './chat';
 import { useEnvironmentStore } from './environment';
 import { useHomeStore } from './home';
-import { useLibraryStore } from './library';
+import { textsFor, useLibraryStore, withTexts } from './library';
 import { usePersonaStore } from './personas';
 import { useRealWorldStore } from './realworld';
 import { useWeatherStore } from './weather';
@@ -189,15 +191,20 @@ export function prepExtra(t: PrepTask): ExtraChore {
 }
 
 /** "11-12 跑步 25 分钟 · 3.1 公里 · 平均心率 142 · 约 260 千卡" */
-export function workoutLine(l: WorkoutLog, withDate = true): string {
-  const parts = [
-    `${l.mode === 'plan' && l.plan ? `照计划练「${l.plan.title}」（做完 ${l.plan.done}/${l.plan.total} 个动作）` : l.sport} ${Math.max(1, Math.round(l.durationSec / 60))} 分钟`,
-    l.distanceKm ? `${l.distanceKm.toFixed(2)} 公里` : '',
-    l.steps ? `${l.steps} 步` : '',
-    l.hrAvg ? `平均心率 ${l.hrAvg}${l.hrMax ? `，最高 ${l.hrMax}` : ''}` : '',
-    l.kcal ? `约 ${l.kcal} 千卡` : '',
-  ].filter(Boolean);
-  return `${withDate ? `${l.date.slice(5)} ` : ''}${parts.join(' · ')}`;
+export function workoutLine(l: WorkoutLog, t: TextFn, withDate = true): string {
+  return t('health.workout', {
+    date: withDate ? l.date.slice(5) : null,
+    plan: l.mode === 'plan' && l.plan ? l.plan.title : null,
+    planDone: l.plan?.done,
+    planTotal: l.plan?.total,
+    sport: l.mode === 'plan' && l.plan ? null : l.sport,
+    minutes: Math.max(1, Math.round(l.durationSec / 60)),
+    km: l.distanceKm ? l.distanceKm.toFixed(2) : null,
+    steps: l.steps || null,
+    hrAvg: l.hrAvg || null,
+    hrMax: l.hrMax || null,
+    kcal: l.kcal || null,
+  });
 }
 
 export const useHealthStore = defineStore('health', () => {
@@ -247,36 +254,47 @@ export const useHealthStore = defineStore('health', () => {
 
   // —— 拼「健康」要的输入 ——
 
+  /** 健康预设的程序文字：拼给「健康」的每一块怎么写 */
+  function hx(): TextFn {
+    return textFn(textsFor(useLibraryStore().presetForUse('health')));
+  }
+
   function profileText(name: string, h: HealthSettings): string {
-    const body = [h.heightCm ? `身高 ${h.heightCm} cm` : '', h.weightKg ? `体重 ${h.weightKg} kg` : '', bmiOf(h) ? `BMI ${bmiOf(h)}` : '', h.targetWeightKg ? `目标体重 ${h.targetWeightKg} kg` : '', h.age ? `${h.age} 岁` : '', h.sex ? (h.sex === 'male' ? '男' : '女') : '']
-      .filter(Boolean)
-      .join('，');
-    return [`${name}：${body || '身高体重没填'}`, `目标：${h.goal.trim() || '没写（按保持健康、慢慢变好来排）'}`, h.note.trim() ? `身体情况：${h.note.trim()}` : ''].filter(Boolean).join('\n');
+    const t = hx();
+    const body = [
+      h.heightCm ? t('health.profile.height', { n: h.heightCm }) : '',
+      h.weightKg ? t('health.profile.weight', { n: h.weightKg }) : '',
+      bmiOf(h) ? t('health.profile.bmi', { n: bmiOf(h) }) : '',
+      h.targetWeightKg ? t('health.profile.target', { n: h.targetWeightKg }) : '',
+      h.age ? t('health.profile.age', { n: h.age }) : '',
+      h.sex ? t(h.sex === 'male' ? 'health.profile.male' : 'health.profile.female') : '',
+    ].filter(Boolean);
+    return t('health.profile', { name, body, goal: h.goal.trim(), note: h.note.trim() });
   }
   function timeText(h: HealthSettings): string {
-    const week = WEEKDAY_ORDER.map((d) => `${WEEKDAY_LABEL[d]} ${h.weekMinutes[d] ? `${h.weekMinutes[d]} 分钟` : '不练'}`).join('、');
-    return [`能接受的健身方式：${h.methods.join('、') || '没写（按在家就能做的来）'}`, `一周里每天能练多久：${week}`, `一般在${FIT_TIME_LABEL[h.timeOfDay]}练${h.timeOfDay === 'any' ? '（什么时候都行）' : ''}`, h.timeNote.trim() ? `补充：${h.timeNote.trim()}` : ''].filter(Boolean).join('\n');
+    const t = hx();
+    const week = WEEKDAY_ORDER.map((d) => t('health.time.day', { weekday: WEEKDAY_LABEL[d], minutes: h.weekMinutes[d] || null }));
+    return t('health.time', { methods: h.methods, week, when: FIT_TIME_LABEL[h.timeOfDay], any: h.timeOfDay === 'any', note: h.timeNote.trim() });
   }
   function kitchenText(h: HealthSettings): string {
-    const zero = h.bento === 'off' ? ' 0 分钟（这顿不做饭，外食）' : ' 0 分钟（这顿不做饭：外食，或者吃提前做好带去的）';
-    const cook = MEAL_KEYS.map((k) => `${MEAL_LABEL[k]}${h.cookMinutes[k] ? ` ${h.cookMinutes[k]} 分钟` : zero}`).join('；');
-    const bento = h.bento === 'off' ? '不带' : h.bento === 'cold' ? '能带，但带去了热不了（挑凉着也好吃的）' : '能带，带去了能用微波炉热';
-    return [
-      `家里常有的食材：${h.ingredients.join('、') || '没写'}`,
-      `忌口 / 过敏：${h.avoid.trim() || '没有'}`,
-      `每顿能花多久做饭：${cook}`,
-      MEAL_KEYS.some((k) => !h.cookMinutes[k]) ? `带便当：${bento}` : '',
-      `有的厨具：${h.tools.join('、') || '没写'}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const t = hx();
+    const cook = MEAL_KEYS.map((k) => t('health.kitchen.cook', { meal: MEAL_LABEL[k], minutes: h.cookMinutes[k] || null, bento: h.bento !== 'off' }));
+    return t('health.kitchen', {
+      ingredients: h.ingredients,
+      avoid: h.avoid.trim(),
+      cook,
+      bento: MEAL_KEYS.some((k) => !h.cookMinutes[k]) ? t(`health.kitchen.bento.${h.bento}`) : null,
+      tools: h.tools,
+    });
   }
   /** "今天"那一块：今天的带上现在的天气（以后的那天不知道天气） */
   function todayText(date: ISODate): string {
-    const w = date === today() ? useWeatherStore().envInput(null).weather : null;
-    return healthTodayText(date, w ? weatherLine(w) : '');
+    const t = hx();
+    const w = date === today() ? useWeatherStore().envInput(null, t).weather : null;
+    return healthTodayText(date, t, w ? weatherLine(w, t) : '');
   }
   function recentText(personaId: string, date: ISODate): string {
+    const t = hx();
     const since = shiftDate(date, -7);
     const ls = logsOf(personaId, since).filter((l) => l.date < date || l.date === date);
     const persona = usePersonaStore().byId(personaId);
@@ -287,7 +305,7 @@ export const useHealthStore = defineStore('health', () => {
         if (d.date < since) continue;
         for (const [k, m] of Object.entries(d.marks)) {
           const chore = persona.housework?.chores.find((c) => k.startsWith(`${c.id}:`));
-          if (chore?.kind === 'cooking' && m.status === 'done') cooked.push(`${d.date.slice(5)}${m.note ? ` ${m.note}` : ' 做了饭'}`);
+          if (chore?.kind === 'cooking' && m.status === 'done') cooked.push(t('health.recent.cooked', { date: d.date.slice(5), note: m.note }));
         }
       }
     }
@@ -298,8 +316,7 @@ export const useHealthStore = defineStore('health', () => {
           .map((k) => {
             const m = y.meals[k];
             if (!m) return '';
-            const how = m.bento ? '（吃提前做好的）' : !m.cook && m.place ? `（在${m.place}吃）` : '';
-            return `${MEAL_LABEL[k]} ${m.name}${how}`;
+            return t('health.recent.meal', { meal: MEAL_LABEL[k], name: m.name, bento: !!m.bento, place: !m.bento && !m.cook ? m.place : null });
           })
           .filter(Boolean)
       : [];
@@ -308,19 +325,14 @@ export const useHealthStore = defineStore('health', () => {
     const home = useHomeStore();
     const published = home.extrasOf(personaId, yd).filter((x) => x.source === 'health');
     const yPrep = published.length
-      ? published.map((x) => {
-          const done = home.markOn(personaId, yd, `extra:${x.id}`)?.status === 'done';
-          return `- ${x.name}${x.meal ? `（给${x.meal}）` : ''}：${done ? '做了' : `没做（在家务里没勾）${x.backup ? `，备案：${x.backup}` : ''}`}`;
-        })
-      : (y?.prep ?? []).map((t) => `- ${t.name}${t.meal ? `（给${t.meal}）` : ''}：不知道做没做（没开家务系统）${t.backup ? `，备案：${t.backup}` : ''}`);
-    return [
-      ls.length ? `最近 7 天的运动：\n${ls.map((l) => `- ${workoutLine(l)}`).join('\n')}` : '最近 7 天没有运动记录',
-      cooked.length ? `最近自己做的饭：${cooked.join('；')}` : '',
-      yMeals.length ? `昨天排的饭：${yMeals.join('；')}` : '',
-      yPrep.length ? `昨天要提前做的：\n${yPrep.join('\n')}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+      ? published.map((x) => t('health.recent.prep', { name: x.name, meal: x.meal, state: home.markOn(personaId, yd, `extra:${x.id}`)?.status === 'done' ? t('health.recent.prepDone') : t('health.recent.prepMissed', { backup: x.backup }) }))
+      : (y?.prep ?? []).map((x) => t('health.recent.prep', { name: x.name, meal: x.meal, state: t('health.recent.prepUnknown', { backup: x.backup }) }));
+    return t('health.recent', {
+      workouts: ls.map((l) => t('health.recent.workout', { line: workoutLine(l, t) })),
+      cooked,
+      meals: yMeals,
+      prep: yPrep,
+    });
   }
 
   // —— 附近能吃的、能买的（接了 Google 地图时） ——
@@ -330,7 +342,7 @@ export const useHealthStore = defineStore('health', () => {
     const found = await searchNearby(persona, task);
     // 家附近的那一份留着：云端到点排的时候用（云端查不了 Google 地图，Key 只在这台设备上）
     if (found.home) nearbyMemo[persona.id] = { at: Date.now(), found };
-    return healthNearbyText(found, task, date);
+    return healthNearbyText(found, task, date, hx());
   }
 
   /** 每个人设上次按家搜到的附近的店（只在内存里，地图那边本来缓存一天） */
@@ -403,7 +415,7 @@ export const useHealthStore = defineStore('health', () => {
         healthNearby: nearby.text,
         healthToday: todayText(date),
         healthRecent: recentText(persona.id, date),
-        healthAsk: healthWeekAsk(date, weekStart),
+        healthAsk: healthWeekAsk(date, weekStart, hx()),
       }, parseHealthWeek);
       if (!r.ok) {
         errors[persona.id] = { reason: r.reason, detail: r.detail, notConnected: r.notConnected };
@@ -448,9 +460,9 @@ export const useHealthStore = defineStore('health', () => {
         ...fills,
         healthNearby: nearby.text,
         healthToday: todayText(date),
-        healthWeek: healthWeekText(week, date),
+        healthWeek: healthWeekText(week, date, hx()),
         healthRecent: recentText(persona.id, date),
-        healthAsk: healthDayAsk(date, week, persona.health?.weekMinutes ?? []),
+        healthAsk: healthDayAsk(date, week, persona.health?.weekMinutes ?? [], hx()),
       }, parseHealthDay);
       if (!r.ok) {
         errors[persona.id] = { reason: r.reason, detail: r.detail, notConnected: r.notConnected };
@@ -474,7 +486,8 @@ export const useHealthStore = defineStore('health', () => {
   function cloudContext(persona: Persona): HealthPlanContext | null {
     const h = persona.health;
     const fills = base(persona);
-    const preset = useLibraryStore().presetForUse('health');
+    // 预设带上合好的程序文字（云端按它拼"今天""这周"这些块）
+    const preset = withTexts(useLibraryStore().presetForUse('health'));
     if (!h || !fills || !preset || !useAiStore().isLive('health')) return null;
     const date = today();
     const memo = nearbyMemo[persona.id]?.found;
@@ -489,7 +502,7 @@ export const useHealthStore = defineStore('health', () => {
       weekMinutes: [...h.weekMinutes],
       home: homeFor(persona),
       days: [date, shiftDate(date, 1)].map((d) => {
-        const nearby = memo ? healthNearbyText(memo, 'plan-day', d) : null;
+        const nearby = memo ? healthNearbyText(memo, 'plan-day', d, hx()) : null;
         return { date: d, today: todayText(d), recent: recentText(persona.id, d), nearby: nearby?.text ?? '', near: nearby?.near ?? '' };
       }),
       weeks: [weekOf(persona.id, weekStartOf(date)), weekOf(persona.id, weekStartOf(shiftDate(date, 7)))].filter((w): w is HealthWeekPlan => !!w),

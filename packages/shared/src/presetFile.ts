@@ -33,6 +33,8 @@ export interface PresetFile {
   sampler: SamplerParams;
   formats?: Partial<PresetFormats>;
   regex?: RegexScript[];
+  /** 程序文字（键 → 模板，见 programText.ts） */
+  texts?: Record<string, string>;
   /** 从 SillyTavern 导入的预设：导回 ST 时要用的原始字段 */
   source?: Preset['source'];
   extra?: Record<string, unknown>;
@@ -111,6 +113,7 @@ export function parsePresetFile(json: unknown, fileName = ''): ParsedPresetFile 
     sampler,
     formats: { ...DEFAULT_PRESET_FORMATS, ...(isObj(j.formats) ? (j.formats as Partial<PresetFormats>) : {}) },
     regex,
+    ...(isObj(j.texts) ? { texts: Object.fromEntries(Object.entries(j.texts).filter(([, v]) => typeof v === 'string')) as Record<string, string> } : {}),
     ...(isObj(j.source) ? { source: j.source as Preset['source'] } : {}),
     ...(isObj(j.extra) ? { extra: j.extra } : {}),
     defaultFor,
@@ -133,6 +136,7 @@ export function toPresetFile(p: Preset, defaultFor: PresetUseId[] = []): PresetF
     sampler: p.sampler,
     formats: p.formats,
     regex: p.regex,
+    ...(p.texts && Object.keys(p.texts).length ? { texts: p.texts } : {}),
     ...(p.source ? { source: p.source } : {}),
     ...(p.extra ? { extra: p.extra } : {}),
   };

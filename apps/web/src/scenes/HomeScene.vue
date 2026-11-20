@@ -12,7 +12,7 @@ import { useMicLink } from '@/composables/useMicLink';
 import { services } from '@/services';
 import { choreMusic } from '@/services/musicPlayer';
 import { choreSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
@@ -141,12 +141,19 @@ const streamingText = computed(() => (stream.value ? (chat.list(chatId.value).fi
 /** 边做边聊时这一段说过的几句（你的、她的） */
 const talk = ref<{ who: 'her' | 'you'; text: string }[]>([]);
 
+/** 这个场景的程序文字（"共同的家"用途的预设里的 homeScene.*） */
+function st() {
+  return sceneText('scene:home', her.value);
+}
 function remainingText(): string {
   const left = items.value.filter((it) => it.mark.status !== 'done' && !it.early);
-  return left.length ? `今天还没做的：${left.map((it) => it.label).join('、')}` : '今天要做的家务都做完了';
+  return st()('homeScene.remaining', { items: left.map((it) => it.label) });
 }
 function progressLine(): string {
-  return `今天的家务做完了 ${doneCount.value} / ${items.value.length} 件`;
+  return st()('homeScene.progress', { done: doneCount.value, total: items.value.length });
+}
+function effectText(it: ChoreItem): string {
+  return effectLine(it.chore, userName.value, st()) || st()('homeScene.effect.none');
 }
 /** 做饭这件对应今天计划里的哪一顿（那顿是现做的才有菜谱；外食、带便当的那顿不算；要提前做的饭看它自己的做法） */
 function mealFor(it: ChoreItem | null): { key: MealKey; meal: PlanMeal } | null {
@@ -211,14 +218,17 @@ async function start(it: ChoreItem) {
   talk.value = [];
   tab.value = mealFor(it) || prepOf(it) ? 'recipe' : 'talk';
   const recipe = mealFor(it);
+  const t = st();
   await reply('chore-start', [
-    `${userName.value}开始做：${it.label}（大概要 ${it.chore.minutes} 分钟）`,
-    it.extra ? `这是健康计划里要提前做的${it.extra.meal ? `，给${it.extra.meal}备的` : ''}` : '',
-    it.mark.later ? `这件之前说了晚点做，拖了 ${it.mark.later} 次` : it.carriedFrom ? `这件是之前该做没做、拖到今天的` : it.overdue ? '已经过了该做的时间' : '',
-    it.missedDays > 1 ? `之前已经 ${it.missedDays} 天没做了` : '',
-    recipe ? `今天计划做：${recipe.meal.name}` : it.chore.kind === 'cooking' && it.chore.effectNote ? `你最想吃${userName.value}做的：${it.chore.effectNote}` : '',
+    t('homeScene.start', {
+      user: userName.value, label: it.label, minutes: it.chore.minutes,
+      extra: !!it.extra, meal: it.extra?.meal,
+      later: it.mark.later || null, carried: !it.mark.later && !!it.carriedFrom, overdue: !it.mark.later && !it.carriedFrom && it.overdue,
+      missedDays: it.missedDays > 1 ? it.missedDays : null,
+      recipe: recipe?.meal.name, wish: !recipe && it.chore.kind === 'cooking' ? it.chore.effectNote : null,
+    }),
     progressLine(),
-  ], undefined, `开始${it.label}`);
+  ], undefined, t('homeScene.cue.start', { label: it.label }));
 }
 
 async function finish(it: ChoreItem) {
@@ -232,15 +242,16 @@ async function finish(it: ChoreItem) {
   postCard({ ...it, mark: m }, 'done', minutes);
   if (link.state.on && !doing.value) void link.hangUp();
   const recipe = mealFor(it);
+  const t = st();
   await reply('chore-done', [
-    `${userName.value}做完了：${it.label}${minutes ? `，做了 ${minutes} 分钟` : '（直接打了勾）'}`,
-    wasLater ? `之前拖了 ${wasLater} 次` : '',
-    it.overdue || it.missedDays ? `没做时你会：${effectLine(it.chore, userName.value) || '不在意'}（现在做完了）` : '',
-    recipe ? `做的是今天计划里的：${recipe.meal.name}` : '',
-    it.extra?.meal ? `${it.extra.meal}的饭备好了` : '',
+    t('homeScene.done', {
+      user: userName.value, label: it.label, minutes, later: wasLater || null,
+      effect: it.overdue || it.missedDays ? effectText(it) : null,
+      recipe: recipe?.meal.name, meal: it.extra?.meal,
+    }),
     progressLine(),
     remainingText(),
-  ], undefined, `做完${it.label}`);
+  ], undefined, t('homeScene.cue.done', { label: it.label }));
 }
 
 async function procrastinate(it: ChoreItem) {
@@ -250,14 +261,14 @@ async function procrastinate(it: ChoreItem) {
   postCard({ ...it, mark: m }, 'later');
   if (link.state.on) void link.hangUp();
   chars.setExpression(her.value.id, (m.later ?? 1) > 1 ? 'pout' : 'neutral');
+  const t = st();
   await reply('chore-later', [
-    `${userName.value}说"${it.label}"晚点再做（这是第 ${m.later ?? 1} 次拖）`,
-    `这件没做时你会：${effectLine(it.chore, userName.value) || '不在意'}`,
-    it.extra?.backup ? `这是健康计划里要提前做的${it.extra.meal ? `（给${it.extra.meal}）` : ''}，没来得及做的备案：${it.extra.backup}` : '',
-    it.overdue ? '已经过了该做的时间' : '',
-    it.missedDays > 1 ? `之前已经 ${it.missedDays} 天没做了` : '',
+    t('homeScene.later', {
+      user: userName.value, label: it.label, times: m.later ?? 1, effect: effectText(it),
+      backup: it.extra?.backup, meal: it.extra?.meal, overdue: it.overdue, missedDays: it.missedDays > 1 ? it.missedDays : null,
+    }),
     remainingText(),
-  ], undefined, `拖延${it.label}`);
+  ], undefined, t('homeScene.cue.later', { label: it.label }));
 }
 
 async function undo(it: ChoreItem) {
@@ -278,7 +289,7 @@ async function sendText() {
   text.value = '';
   talk.value.push({ who: 'you', text: t });
   const it = doing.value;
-  await reply('chore-chat', [it ? `${userName.value}正在做：${it.label}（做了 ${Math.max(1, Math.round(elapsedSec.value / 60))} 分钟）` : `${userName.value}没在做家务，在家里跟你聊天`, nowLine(), progressLine()], t, it ? it.label : '在家');
+  await reply('chore-chat', [doingLine(), nowLine(), progressLine()], t, it ? it.label : st()('homeScene.cue.chat'));
 }
 
 // —— 边做边聊：连麦（说话她就听得到，用她的声音回你） ——
@@ -295,28 +306,26 @@ function newSpeech(o: { onSentence?(text: string, i: number): void } = {}): Spee
   return q;
 }
 function nowLine(): string {
-  const parts = [`现在 ${hhmm(Date.now())}`];
   const s = choreMusic.current();
-  if (s && choreMusic.state.playing) parts.push(`在放《${s.title}》- ${s.artist}${choreMusic.state.demo ? '（示例歌曲）' : ''}`);
-  return `${parts.join('，')}。`;
+  const playing = !!s && choreMusic.state.playing;
+  return st()('homeScene.now', { time: hhmm(Date.now()), song: playing ? s.title : null, artist: s?.artist, demo: playing && choreMusic.state.demo });
+}
+/** 你在做哪件、做了多久（没在做时是在家聊天） */
+function doingLine(): string {
+  const it = doing.value;
+  return st()(it ? 'homeScene.doing' : 'homeScene.idle', { user: userName.value, label: it?.label, minutes: Math.max(1, Math.round(elapsedSec.value / 60)) });
 }
 const link = useMicLink({
   chatId,
   character: her,
   userName,
   newSpeech: (o) => newSpeech({ onSentence: o.onSentence }),
-  context: () => {
-    const it = doing.value;
-    return `${nowLine()}${it ? `${userName.value}在做：${it.label}（做了 ${Math.max(1, Math.round(elapsedSec.value / 60))} 分钟）。` : ''}${progressLine()}。`;
-  },
+  context: () => st()('homeScene.linkContext', { now: nowLine(), doing: doing.value ? doingLine() : null, progress: progressLine() }),
   herBusy: () => false,
   onInterrupt: () => undefined,
   autoWhisper: () => false,
   tasks: { reply: 'chore-call' },
-  input: (kind, info) =>
-    kind === 'open'
-      ? `${info.context}你们刚连上麦，${userName.value}一边做家务一边跟你说话。先开口说第一句，1–2 个短句。`
-      : `${info.context}连麦中（已经连了 ${info.linked}）。回${userName.value}刚才说的话。`,
+  input: (kind, info) => st()(kind === 'open' ? 'homeScene.link.open' : 'homeScene.link.reply', { context: info.context, user: userName.value, linked: info.linked }),
 });
 const linkStatus = computed(() => {
   const s = link.state;

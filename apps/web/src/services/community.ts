@@ -2,8 +2,8 @@ import { characterPronoun } from '@app/shared';
 import { buildCommunityMessages, communityFeedInput, communityMemberPostInput, communityMembersFill, errorText, isAbortError, samplerRequest, socialCharacterFill, socialNowFill, type CommunityPromptInput } from '@app/ai';
 import {
   commentsFromDrafts, COMMUNITY_CATCH_UP_MS, communityFromDraft, communityInfoText, communityJobs, communityPostMemory, communityPostText, isNetizen, MOMENT_USER, netizenName,
-  parseCommunityBatch, parseCommunityDraft, parseCommunityReaction, parseMemberReaction, postsFromDrafts, shiftDate, socialDayText, zonedDateKey,
-  type Character, type Community, type CommunityContext, type CommunityImageMoment, type CommunityPost, type MomentImage, type Preset,
+  parseCommunityBatch, parseCommunityDraft, parseCommunityReaction, parseMemberReaction, postsFromDrafts, shiftDate, socialDayText, textFn, zonedDateKey,
+  type Character, type Community, type CommunityContext, type CommunityImageMoment, type CommunityPost, type MomentImage, type Preset, type TextFn,
 } from '@app/shared';
 import { onRemote } from '@/db/idb';
 import { putAsset } from './assets';
@@ -18,7 +18,7 @@ import { useCommunityStore } from '@/stores/community';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useGalleryStore } from '@/stores/gallery';
 import { useHubStore } from '@/stores/hub';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore, withTexts } from '@/stores/library';
 import { useMemoryStore } from '@/stores/memory';
 import { uid } from '@/utils/id';
 
@@ -69,7 +69,7 @@ function withoutImpostors(list: CommunityPost[]): CommunityPost[] {
  * 这个社群最近的几帖写成文字（进提示词），几帖按设置里的"给模型看最近几帖"。
  * except：这一帖不算（正要回应的那帖）；characterId：按这个角色眼里你的名字
  */
-export function communityFeedText(communityId: string, opts: { except?: string; characterId?: string } = {}): string {
+export function communityFeedText(communityId: string, t: TextFn, opts: { except?: string; characterId?: string } = {}): string {
   const store = useCommunityStore();
   const n = store.settings.contextPosts;
   if (!n) return '';
@@ -79,7 +79,7 @@ export function communityFeedText(communityId: string, opts: { except?: string; 
     .timelineOf(communityId)
     .filter((p) => p.id !== opts.except)
     .slice(-n)
-    .map((p) => communityPostText(p, names, { timeZone, comments: 2, textMax: 200 }))
+    .map((p) => communityPostText(p, names, t, { timeZone, comments: 2, textMax: 200 }))
     .join('\n');
 }
 
@@ -87,7 +87,7 @@ export function communityFeedText(communityId: string, opts: { except?: string; 
  * 社群记忆候选：她在哪些社群里（和你互关），
  * 和每个社群最近三天的几帖（几帖按设置里的"聊天时带最近几帖"）——由记忆拼装器按相关性和总预算选择
  */
-export function communityMemoryLines(character: Character): { text: string; at: number | null }[] {
+export function communityMemoryLines(character: Character, t: TextFn): { text: string; at: number | null }[] {
   const store = useCommunityStore();
   const mine = store.communitiesOf(character.id);
   if (!mine.length) return [];
@@ -102,8 +102,8 @@ export function communityMemoryLines(character: Character): { text: string; at: 
     const others = ours.length < max ? recent.filter((p) => isNetizen(p.authorId)).slice(ours.length - max) : [];
     const lines = [...others, ...ours]
       .sort((a, b) => a.createdAt - b.createdAt)
-      .map((p) => ({ text: `「${c.name}」：${communityPostText(p, names, isNetizen(p.authorId) ? { timeZone, comments: 0, textMax: 80 } : { timeZone, comments: 4, textMax: 300 })}`, at: p.createdAt }));
-    return [{ text: `「${c.name}」：${c.description}`, at: null }, ...lines];
+      .map((p) => ({ text: t('memory.community.post', { community: c.name, post: communityPostText(p, names, t, isNetizen(p.authorId) ? { timeZone, comments: 0, textMax: 80 } : { timeZone, comments: 4, textMax: 300 }) }), at: p.createdAt }));
+    return [{ text: t('memory.community.info', { community: c.name, description: c.description }), at: null }, ...lines];
   });
 }
 
@@ -111,7 +111,8 @@ export function communityMemoryLines(character: Character): { text: string; at: 
 
 /** 使用"社群"用途选中的预设。 */
 export function communityPreset(): Preset | undefined {
-  return useLibraryStore().presetForUse('community');
+  // 带上合好的程序文字（拼这次的输入、上传云端都按它写）
+  return withTexts(useLibraryStore().presetForUse('community')) ?? undefined;
 }
 
 /** 社群能不能调模型（"社媒"的 API 接通了、有社群预设）；不能时说明原因 */
@@ -161,13 +162,14 @@ export function createCommunity(keyword: string): Promise<Result<{ community: Co
     const preset = communityPreset()!;
     const timeZone = useEnvironmentStore().settings.timezone;
     const userName = socialPersona().name;
-    const existing = store.communities.map((c) => c.name).join('、');
+    const existing = store.communities.map((c) => c.name);
     const now = Date.now();
+    const t = textFn(preset.texts);
     const { value, result } = await ask({
       task: 'community-create', characterName: '', userName, communityName: '', now: new Date(now), timeZone,
       fills: {
-        socialNow: socialNowFill(now, timeZone).text,
-        socialAsk: `这一次：${userName}搜了「${word}」，没有对应的社群。按这个关键字建一个。${existing ? `\n已有的社群（名字不要重复）：${existing}` : ''}`,
+        socialNow: socialNowFill(now, timeZone, t).text,
+        socialAsk: t('community.ask.create', { user: userName, word, existing }),
       },
     }, preset, parseCommunityDraft);
     return { ok: true, community: store.addCommunity(communityFromDraft(value, { id: uid('community'), now, source: 'generated', joined: false, keyword: word, model: result.model })) };
@@ -188,7 +190,7 @@ function contextOf(c: Community, preset: Preset | null): CommunityContext {
     settings: { perDay, batchSize, memberPerDay, notify },
     awake: { from: env.wakeTime, to: env.sleepTime },
     members: membersOf(c).map((m) => ({ id: m.id, name: m.name })),
-    feed: communityFeedText(c.id),
+    feed: communityFeedText(c.id, textFn(textsFor(preset))),
     preset,
     preview: useHubStore().config.preview,
   };
@@ -248,7 +250,7 @@ export function memberPost(communityId: string, characterId: string, opts: { id?
     if (!status.ok) return status;
     const preset = communityPreset()!;
     const now = Date.now();
-    const { value, result } = await ask(communityMemberPostInput({ ...contextOf(c, preset), feed: communityFeedText(c.id, { characterId: ch.id }) }, socialContextOf(ch, null), now), preset, parseCommunityBatch);
+    const { value, result } = await ask(communityMemberPostInput({ ...contextOf(c, preset), feed: communityFeedText(c.id, textFn(preset.texts), { characterId: ch.id }) }, socialContextOf(ch, null), now), preset, parseCommunityBatch);
     const [post] = store.addPosts(postsFromDrafts(value.slice(0, 1), {
       communityId, batchId: opts.id ?? uid('cpost'), now, source: 'device', model: result.model, known: knownNames(), authorId: ch.id, unread: !!opts.id,
     }));
@@ -352,7 +354,7 @@ export async function drawPostImage(postId: string, index = 0, priority: 'user' 
         // 社群的配图始终参考节律里的衣着（不看服装参考开关）
         characterId: author?.id ?? '', caption: img.caption, use: 'community-image', moment, outfitRef: true,
         ...(author ? {} : { free: true, authorName: communityNames()(p.authorId) }),
-        ...(recent ? { recent: [`这一帖：${recent.slice(0, 300)}`] } : {}),
+        ...(recent ? { recent: [textFn(textsFor(useLibraryStore().presetForUse('community-image')))('community.imageRecent', { post: recent.slice(0, 300) })] } : {}),
       },
       { priority },
     );
@@ -378,15 +380,15 @@ export async function drawPostImage(postId: string, index = 0, priority: 'user' 
 // —— 回应 ——
 
 /** 回应时都要的那几块：社群、认识的人、现在、别的帖子、这一帖 */
-function reactFills(c: Community, p: CommunityPost, userName: string, characterId?: string) {
+function reactFills(c: Community, p: CommunityPost, userName: string, t: TextFn, characterId?: string) {
   const timeZone = useEnvironmentStore().settings.timezone;
-  const others = communityFeedText(c.id, { except: p.id, characterId });
+  const others = communityFeedText(c.id, t, { except: p.id, characterId });
   return {
-    communityInfo: communityInfoText(c),
-    communityMembers: communityMembersFill(userName, membersOf(c)),
-    socialNow: socialNowFill(Date.now(), timeZone).text,
-    communityFeed: others ? `社群里别的帖子：\n${others}` : '',
-    communityPost: `这一帖和下面的回复：\n${communityPostText(p, communityNames(characterId), { timeZone, comments: 12 })}`,
+    communityInfo: communityInfoText(c, t),
+    communityMembers: communityMembersFill(userName, membersOf(c), t),
+    socialNow: socialNowFill(Date.now(), timeZone, t).text,
+    communityFeed: others ? t('community.others', { feed: others }) : '',
+    communityPost: t('community.thisPost', { post: communityPostText(p, communityNames(characterId), t, { timeZone, comments: 12 }) }),
   };
 }
 
@@ -407,13 +409,14 @@ export function netizensReact(postId: string, kind: 'new' | 'reply', target?: st
     const userName = socialPersona().name;
     const names = communityNames();
     const said = [...p.comments].reverse().find((x) => x.authorId === MOMENT_USER)?.text ?? '';
+    const t = textFn(preset.texts);
     const { value } = await ask({
       task: 'community-react', characterName: '', userName, communityName: c.name, now: new Date(), timeZone: useEnvironmentStore().settings.timezone,
       fills: {
-        ...reactFills(c, p, userName),
+        ...reactFills(c, p, userName, t),
         socialAsk: kind === 'new'
-          ? `这一次：${userName}刚发了这一帖。写网友们的回应：新增的赞和顶，还有回复。`
-          : `这一次：${userName}在这一帖下面${target ? `回复了 ${names(target)}` : '回了帖'}：「${said}」。写${target ? `${names(target)}（别的网友也可以插一句）` : '网友们'}接下来的回复；likes、bumps 写 0。`,
+          ? t('community.ask.react', { user: userName })
+          : t('community.ask.reply', { user: userName, target: target ? names(target) : null, said }),
       },
     }, preset, parseCommunityReaction);
     if (!store.postById(postId)) return { ok: true };
@@ -445,20 +448,21 @@ export function memberReact(postId: string, characterId: string, kind: 'new' | '
     const timeZone = useEnvironmentStore().settings.timezone;
     const chat = useChatStore().chatOfCharacter(characterId);
     const day = dayOf(characterId);
-    const at = socialNowFill(Date.now(), timeZone);
+    const t = textFn(preset.texts);
+    const at = socialNowFill(Date.now(), timeZone, t);
     const mine = p.authorId === characterId;
     const said = [...p.comments].reverse().find((x) => x.authorId === MOMENT_USER)?.text ?? '';
     const { value } = await ask({
       task: 'community-member-react', characterName: ch.name, pronoun: ch.pronoun, userName, communityName: c.name, now: new Date(), timeZone,
       fills: {
-        ...reactFills(c, p, userName, characterId),
-        socialCharacter: socialCharacterFill({ id: ch.id, name: ch.name, pronoun: ch.pronoun, card: ch.card }, userName),
-        socialLife: day ? socialDayText(day, at.minute) : '',
-        socialMemories: memoriesText(ch, userName),
-        socialRecent: chat ? `最近的聊天：\n${useChatStore().recentLines(chat.id, 8).join('\n')}` : '',
+        ...reactFills(c, p, userName, t, characterId),
+        socialCharacter: socialCharacterFill({ id: ch.id, name: ch.name, pronoun: ch.pronoun, card: ch.card }, userName, t),
+        socialLife: day ? socialDayText(day, at.minute, t) : '',
+        socialMemories: memoriesText(ch, t),
+        socialRecent: chat ? t('social.recent', { recent: useChatStore().recentLines(chat.id, 8).join('\n') }) : '',
         socialAsk: kind === 'new'
-          ? `这一次：${userName}刚在社群里发了这一帖，${ch.name}刷到了。决定点不点赞、要不要顶帖、要不要回复。`
-          : `这一次：${userName}在${mine ? `${ch.name}的这一帖` : '这一帖'}下面对${ch.name}说了「${said}」，${ch.name}回复这一句（like、bump 写 false）。`,
+          ? t('community.ask.memberReact', { user: userName, char: ch.name })
+          : t('community.ask.memberReply', { user: userName, char: ch.name, mine, said }),
       },
     }, preset, parseMemberReaction);
     if (!store.postById(postId)) return { ok: true };
@@ -488,7 +492,7 @@ export function rememberPost(postId: string, characterId: string) {
   const c = store.byId(p?.communityId);
   if (!p || !c || !mem.ready || !useCharacterStore().byId(characterId) || !c.members.includes(characterId)) return;
   if (p.authorId !== characterId && p.authorId !== MOMENT_USER) return;
-  const content = communityPostMemory(p, c.name, characterId, communityNames(characterId), useEnvironmentStore().settings.timezone);
+  const content = communityPostMemory(p, c.name, characterId, communityNames(characterId), textFn(textsFor(communityPreset())), useEnvironmentStore().settings.timezone);
   const known = p.memoryIds?.[characterId];
   if (known) {
     const old = mem.memoryById(known);

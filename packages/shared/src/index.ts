@@ -39,6 +39,7 @@ export * from './proactiveContext.ts';
 export * from './presetUses.ts';
 export * from './poke.ts';
 export * from './presetFile.ts';
+export * from './programText.ts';
 export * from './spritePreset.ts';
 export * from './lrc.ts';
 export * from './math.ts';

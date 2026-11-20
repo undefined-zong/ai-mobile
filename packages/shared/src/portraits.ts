@@ -1,6 +1,7 @@
 import { EXPRESSION_LABELS, EXPRESSIONS, isExpression, OUTFITS, POSES, type Expression, type Outfit, type Pose } from './expressions.ts';
 import { matchOutfit } from './outfitMatch.ts';
 import type { ControlTagKind } from './tags.ts';
+import type { TextFn } from './programText.ts';
 import type { DayOutfit, OutfitKind } from './types/rhythm.ts';
 import type { HotspotShape, Portrait, PortraitPose, PortraitSet } from './types/sprite.ts';
 
@@ -336,19 +337,20 @@ export function portraitTags(allowed: readonly ControlTagKind[], set: PortraitSe
   return [...allowed, 'pose'];
 }
 
-const DEFAULT_EXPRESSION_LINE = `可用表情：${EXPRESSIONS.join(' ')}`;
-
-/** 提示词里"可用表情 / 可用动作"那几行：有立绘时只列她有图的表情（带说明）；没有立绘时是占位小人会的那几种 */
-export function expressionPromptLines(set: PortraitSet | null | undefined, opts: { poses?: boolean } = {}): string {
+/**
+ * 提示词里"可用表情 / 可用动作"那几行（程序文字 expr.*）：有立绘时只列她有图的表情（带说明）；没有立绘时是占位小人会的那几种
+ */
+export function expressionPromptLines(set: PortraitSet | null | undefined, t: TextFn, opts: { poses?: boolean } = {}): string {
   const exprs = availableExpressions(set);
-  if (!exprs.length) return DEFAULT_EXPRESSION_LINE;
+  if (!exprs.length) return t('expr.default', { items: [...EXPRESSIONS] });
   const item = (id: string, label: string, hint?: string) => {
-    const note = [id === label ? '' : label, hint ?? ''].filter(Boolean).join('：');
-    return note ? `${id}（${note}）` : id;
+    const name = id === label ? '' : label;
+    const note = name && hint ? t('expr.note', { label: name, hint }) : name || hint || '';
+    return t('expr.item', { id, note });
   };
-  const lines = [`可用表情：${exprs.map((e) => item(e.id, e.label, e.hint)).join('、')}`];
+  const lines = [t('expr.list', { items: exprs.map((e) => item(e.id, e.label, e.hint)) })];
   const poses = availablePoses(set);
-  if (opts.poses && poses.length >= 2) lines.push(`可用动作：${poses.map((p) => item(p.id, p.label, p.hint)).join('、')}`);
+  if (opts.poses && poses.length >= 2) lines.push(t('expr.poses', { items: poses.map((p) => item(p.id, p.label, p.hint)) }));
   return lines.join('\n');
 }
 

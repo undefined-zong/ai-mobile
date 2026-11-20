@@ -1,4 +1,4 @@
-import { buildRhythmMessages, errorReport, errorText, samplerRequest, planDayInput, type RhythmFill } from '@app/ai';
+import { buildRhythmMessages, errorReport, errorText, samplerRequest, planDayInput, rhythmWorldFill, type RhythmFill } from '@app/ai';
 import {
   dayFromTemplate,
   DEFAULT_RHYTHM_SETTINGS,
@@ -34,6 +34,9 @@ import {
   type RhythmSlot,
   type RhythmTemplate,
   type World,
+  type Character,
+  type TextFn,
+  textFn,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -41,7 +44,7 @@ import { useAiStore } from './ai';
 import { useCharacterStore } from './characters';
 import { useChatStore } from './chat';
 import { useMemoryStore } from './memory';
-import { useLibraryStore } from './library';
+import { textsFor, useLibraryStore } from './library';
 import { useEnvironmentStore } from './environment';
 import { useHubStore } from './hub';
 import { autoSave, getEntries, write, type RemoteChange } from '@/db/idb';
@@ -297,7 +300,13 @@ export const useRhythmStore = defineStore('rhythm', () => {
 
   // —— 交给「节律」——
 
+  /** 节律预设的程序文字 */
+  function rhythmText(c?: Pick<Character, 'presetId'> | null): TextFn {
+    return textFn(textsFor(useLibraryStore().presetForUse('rhythm', c)));
+  }
+
   function promiseLines(characterId: string): string {
+    const t = rhythmText(useCharacterStore().byId(characterId));
     const chat = useChatStore();
     const c = chat.chatOfCharacter(characterId);
     if (!c) return '';
@@ -307,7 +316,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
       .map((s) => s.text)
       .join('\n');
     const recent = chat.recentLines(c.id, 8);
-    return [summary ? `最近的聊天摘要：\n${summary}` : '', recent.length ? `最近的聊天：\n${recent.join('\n')}` : ''].filter(Boolean).join('\n');
+    return [summary ? t('rhythm.promises.summary', { summary }) : '', recent.length ? t('rhythm.promises.recent', { recent: recent.join('\n') }) : ''].filter(Boolean).join('\n');
   }
 
   function userName(characterId: string): string {
@@ -324,6 +333,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
     const lib = useLibraryStore();
     return { character: { id: c.id, name: c.name, pronoun: c.pronoun, card: c.card }, userName: userName(characterId),
       timezone: useEnvironmentStore().settings.timezone, settings: cfg.settings, template,
+      // 预设带上合好的程序文字（排今天的输入、云端拼的都按它写）
       world: worldOf(characterId), people: cfg.people, preset: lib.withLorebooks(lib.presetForUse('rhythm', c), c) ?? null,
       promises: promiseLines(characterId) };
   }
@@ -415,7 +425,8 @@ export const useRhythmStore = defineStore('rhythm', () => {
     busy[characterId] = 'build';
     try {
       const user = userName(characterId);
-      const r = await callRhythm(characterId, 'build-world', { rhythmCharacter: characterLines(c, user), rhythmSource: sourceLines(c, user) }, parseBuiltWorld);
+      const t = rhythmText(c);
+      const r = await callRhythm(characterId, 'build-world', { rhythmCharacter: characterLines(c, user, t), rhythmSource: sourceLines(c, user, t) }, parseBuiltWorld);
       if (!r.ok) return r;
       const spec = r.value.value;
       const built = worldFromSpec(characterId, c.name, spec);
@@ -427,18 +438,6 @@ export const useRhythmStore = defineStore('rhythm', () => {
     } finally {
       delete busy[characterId];
     }
-  }
-
-  /** "她的世界"那一块：地点 id、名字、室内外、能一起做的事、一句话，和身边的人（排今天、画小镇都用这个格式） */
-  function worldLines(w: World, people: RhythmPerson[]): string {
-    return [
-      `${w.name}：${w.blurb}`,
-      '地点（id：名字 · 室内或室外 · 能一起做的事 · 一句话）：',
-      ...w.locations.map((l) => `- ${l.id}：${l.name} · ${l.indoor ? '室内' : '室外'} · ${l.activities.map((a) => a.label).join('、') || '—'}${l.blurb ? ` · ${l.blurb}` : ''}`),
-      people.length ? `身边的人：\n${people.map((p) => `- ${p.name}（${p.relation}）${p.note ? `：${p.note}` : ''}`).join('\n')}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
   }
 
   /** 她的像素小镇蓝图；AI 还没画过时是 null（小镇按地名猜一份示例的样子） */
@@ -463,7 +462,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
       const r = await callRhythm(
         characterId,
         'draw-town',
-        { rhythmCharacter: characterLines(c, user), rhythmSource: sourceLines(c, user), rhythmWorld: worldLines(w, configOf(characterId).people) },
+        { rhythmCharacter: characterLines(c, user, rhythmText(c)), rhythmSource: sourceLines(c, user, rhythmText(c)), rhythmWorld: rhythmWorldFill(w, configOf(characterId).people, rhythmText(c)) },
         (v) => parseTownDesign(v, resolve),
       );
       if (!r.ok) return r;

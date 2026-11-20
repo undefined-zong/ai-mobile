@@ -27,6 +27,8 @@ import {
   type Character,
   type OutfitKind,
   type Persona,
+  type TextFn,
+  textFn,
   type Portrait,
   type PortraitGen,
   type Preset,
@@ -42,7 +44,7 @@ import { addGeneratedPortrait, ensurePortraitSet, ensureOutfit } from './portrai
 import { useAiStore } from '@/stores/ai';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import { usePersonaStore } from '@/stores/personas';
 import { useRhythmStore } from '@/stores/rhythm';
 import { alignFit, alphaInfo, faceInImage, novelaiImage, rectMask, referenceImage, type FaceGuess } from '@/utils/spriteImage';
@@ -140,20 +142,27 @@ function userName(c: Character): string {
 }
 
 /** 写 tags 的输入：角色卡、世界书、现在的长相 */
+/** 立绘预设的程序文字 */
+function sx(c?: Character): TextFn {
+  return textFn(textsFor(spritePresetFor(c)));
+}
+
 function lookFills(c: Character): Partial<Record<SpriteFill, string>> {
+  const t = sx(c);
   const user = userName(c);
   const today = useRhythmStore().outfitFor(c.id, null);
   return {
-    spriteCharacter: characterLines(c, user),
-    spriteSource: sourceLines(c, user),
-    spriteLooks: [
-      `现在的外观 tags：${c.appearanceTags.trim() || '（还没有）'}`,
-      isFandom(c) ? `同人角色：角色 tag ${c.fandom?.characterTag}，作品 tag ${c.fandom?.copyrightTag || '（没填）'}（NovelAI 认得的话外观 tags 只补它认不全的地方）` : '',
-      c.negativeTags.trim() ? `负面 tags：${c.negativeTags.trim()}` : '',
-      today ? `今天穿：${today.name}（${today.tags}）` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    spriteCharacter: characterLines(c, user, t),
+    spriteSource: sourceLines(c, user, t),
+    spriteLooks: t('sprite.looks', {
+      appearance: c.appearanceTags.trim(),
+      fandom: isFandom(c),
+      characterTag: c.fandom?.characterTag,
+      copyrightTag: c.fandom?.copyrightTag,
+      negative: c.negativeTags.trim(),
+      outfit: today?.name,
+      outfitTags: today?.tags,
+    }),
   };
 }
 
@@ -181,7 +190,7 @@ function forCharacter(c: Character) {
 
 /** 写外观 tags（还有一套常穿的衣服）：先给你看，"就用这个"再存（applyLooks） */
 export function writeLooks(c: Character, signal?: AbortSignal): Promise<{ value: SpriteLooks; model: string }> {
-  return callSprite(forCharacter(c), 'sprite-tags', '写外观 tags', parseSpriteLooks, signal);
+  return callSprite(forCharacter(c), 'sprite-tags', sx(c)('sprite.ask.tags'), parseSpriteLooks, signal);
 }
 
 /** 存外观 tags；衣服记成立绘的一套服装（还没有节律衣柜时，画底图默认穿它） */
@@ -202,7 +211,7 @@ export function applyLooks(c: Character, looks: SpriteLooks) {
 
 /** 给预设里没有的表情 / 动作写 tags */
 export function writeLabelTags(c: Character, kind: 'expression' | 'pose', name: string, signal?: AbortSignal): Promise<{ value: SpriteLabelTags; model: string }> {
-  return callSprite(forCharacter(c), 'sprite-label', `${kind === 'expression' ? '表情' : '动作'}：${name}`, parseSpriteLabel, signal);
+  return callSprite(forCharacter(c), 'sprite-label', sx(c)(kind === 'expression' ? 'sprite.ask.expression' : 'sprite.ask.pose', { name }), parseSpriteLabel, signal);
 }
 
 /** 把一个表情 / 动作加进立绘预设（别的角色也能用） */
@@ -425,22 +434,17 @@ function paintBase(
 // —— "你"的立绘（人设 → 生图）：和角色一样先让 AI 写外观 tags，再按立绘预设画一张底图 ——
 
 function personaFills(p: Persona): Partial<Record<SpriteFill, string>> {
+  const t = sx();
   const img = p.image;
   return {
-    spriteCharacter: [`名字：${p.name}`, p.description.trim() ? `人设：${p.description.trim()}` : ''].filter(Boolean).join('\n'),
-    spriteLooks: [
-      `现在的外观 tags：${img?.appearanceTags.trim() || '（还没有）'}`,
-      img?.negativeTags.trim() ? `负面 tags：${img.negativeTags.trim()}` : '',
-      img?.outfitTags.trim() ? `常穿：${img.outfitTags.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    spriteCharacter: t('sprite.persona', { name: p.name, description: p.description.trim() }),
+    spriteLooks: t('sprite.personaLooks', { appearance: img?.appearanceTags.trim(), negative: img?.negativeTags.trim(), outfit: img?.outfitTags.trim() }),
   };
 }
 
 /** 按人设写"你"的外观 tags（还有常穿的一套）：先给你看，"就用这个"再存（applyPersonaLooks） */
 export function writePersonaLooks(p: Persona, signal?: AbortSignal): Promise<{ value: SpriteLooks; model: string }> {
-  return callSprite({ preset: spritePresetFor(), name: p.name, userName: '', fills: personaFills(p) }, 'sprite-tags', '写外观 tags', parseSpriteLooks, signal);
+  return callSprite({ preset: spritePresetFor(), name: p.name, userName: '', fills: personaFills(p) }, 'sprite-tags', sx()('sprite.ask.tags'), parseSpriteLooks, signal);
 }
 
 export function applyPersonaLooks(p: Persona, looks: SpriteLooks) {

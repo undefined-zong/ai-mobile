@@ -382,5 +382,29 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "community.info": "社群：{{name}}\n简介：{{description}}\n风气：{{vibe}}\n标签：{{tags}}\n成员：{{members}} 人",
+    "community.postHead": "{{author}}发帖：[[《{{title}}》]][[「{{text}}」]][[（{{extras}}）]]",
+    "community.htmlFallback": "一页卡片",
+    "community.postStats": "  赞 {{likes}}[[（有 {{liked}}）]] · 顶 {{bumps}}[[（有 {{bumped}}）]]",
+    "community.post": "{{stamp}} {{head}}",
+    "community.memory.head": "{{day}} 在社群「{{community}}」里，{{head}}",
+    "community.memory.liked": "点了赞",
+    "community.memory.bumped": "顶了帖",
+    "community.memory.did": "{{name}}{{did|、}}",
+    "community.memory.talk": "回复里 {{items|；}}",
+    "community.members": "社群里的熟人（真实的用户，和用户邀请进来的角色）：\n- {{user}}：用这个 App 的人，社群成员\n{{members|\\n}}",
+    "community.member": "- {{name}}：{{user}}邀请进来的，和{{user}}互相关注",
+    "community.feed": "最近的帖子（不要重复发过的内容）：\n{{feed}}",
+    "community.ask.feed": "这一次：写 {{n}} 帖，是 {{n}} 个不同的网友发的。",
+    "community.ask.memberPost": "这一次：{{char}}在社群「{{community}}」里发一帖。",
+    "community.ask.create": "这一次：{{user}}搜了「{{word}}」，没有对应的社群。按这个关键字建一个。\n已有的社群（名字不要重复）：{{existing}}",
+    "community.others": "社群里别的帖子：\n{{feed}}",
+    "community.thisPost": "这一帖和下面的回复：\n{{post}}",
+    "community.ask.react": "这一次：{{user}}刚发了这一帖。写网友们的回应：新增的赞和顶，还有回复。",
+    "community.ask.reply": "这一次：{{user}}在这一帖下面[[回复了 {{target}}]][[{{!target}}回了帖]]：「{{said}}」。写[[{{target}}（别的网友也可以插一句）]][[{{!target}}网友们]]接下来的回复；likes、bumps 写 0。",
+    "community.ask.memberReact": "这一次：{{user}}刚在社群里发了这一帖，{{char}}刷到了。决定点不点赞、要不要顶帖、要不要回复。",
+    "community.ask.memberReply": "这一次：{{user}}在[[{{?mine}}{{char}}的这一帖]][[{{!mine}}这一帖]]下面对{{char}}说了「{{said}}」，{{char}}回复这一句（like、bump 写 false）。"
+  }
 }

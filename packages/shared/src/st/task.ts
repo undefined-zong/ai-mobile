@@ -16,7 +16,7 @@ import { scanWorldInfo } from './worldinfo.ts';
  */
 
 /** 任务预设：块、采样参数（上下文上限 contextTokens）、"使用世界书"开关；lorebooks 是调用方按这次的角色带上的世界书 */
-export type TaskPresetLike = Pick<Preset, 'blocks'> & Partial<Pick<Preset, 'id' | 'worldInfoEnabled'>> & { sampler?: Pick<Preset['sampler'], 'contextTokens'>; lorebooks?: Lorebook[] };
+export type TaskPresetLike = Pick<Preset, 'blocks'> & Partial<Pick<Preset, 'id' | 'worldInfoEnabled' | 'texts'>> & { sampler?: Pick<Preset['sampler'], 'contextTokens'>; lorebooks?: Lorebook[] };
 
 const WORLD_INFO_BLOCKS = new Set(['worldInfoBefore', 'worldInfoAfter']);
 

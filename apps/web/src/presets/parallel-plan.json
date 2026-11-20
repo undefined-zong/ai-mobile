@@ -97,5 +97,12 @@
         "depth": 4
       }
     }
-  ]
+  ],
+  "texts": {
+    "parallel.sources.empty": "{{user}}这一天几份计划里都还没有东西",
+    "parallel.sources": "{{user}}这一天几份计划里的事：\n{{items|\\n}}",
+    "parallel.sources.item": "- [{{ref}}] {{time}} {{title}}（{{tags|；}}）",
+    "parallel.sources.fixed": "定死的，不能挪",
+    "parallel.ask.plan": "这一次：把{{user}} {{date}} 这一天的几份计划整理成平行时空里的一份计划。"
+  }
 }
