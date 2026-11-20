@@ -46,12 +46,16 @@ import SpriteBlockFields from '@/components/settings/SpriteBlockFields.vue';
 import SpriteParamsForm from '@/components/settings/SpriteParamsForm.vue';
 import { useDragSort } from '@/composables/useDragSort';
 import PageHeader from '@/layouts/PageHeader.vue';
+import { lastInjection } from '@/services/markerInjections';
 import { useCharacterStore } from '@/stores/characters';
 import { useLibraryStore } from '@/stores/library';
+import { hhmm, monthDay } from '@/utils/time';
 
 /**
  * 编辑一个预设（自带的和导入的一样）：
- * - 提示词：每一块的名字、内容、角色、位置都能改，能加块、删块、开关；长按一块拖动调顺序（电脑上按住直接拖）；程序填充的块内容由程序填，其余都能改；
+ * - 提示词：每一块的名字、内容、角色、位置都能改，能加块、删块、开关；长按一块拖动调顺序（电脑上按住直接拖）；
+ *   程序填充的块直接显示上一次注入的内容（services/markerInjections.ts 记的），块里也能写内容：空着原样发程序填的，
+ *   写了就按写的发，{{original}} 换成程序填的（聊天记录、示例对话是一条条消息，不能套）；
  *   "加程序块"可选所有用途的程序块（角色卡、你的人设、场景、聊天记录……）；
  *   一块或者多选几块能复制一份、复制到别的预设（目标里已经有的程序块会跳过）；
  * - 采样参数；正则（导入、改、拖动调顺序，见 components/settings/PresetRegex.vue）；名字、说明、分类（所有分类都能互换）；
@@ -91,9 +95,21 @@ function where(b: PromptBlock): string {
   if (!roleplay.value || b.injection.position !== 'absolute') return '按顺序';
   return b.injection.depth === 0 ? '插在聊天记录最后' : `插在聊天记录倒数第 ${b.injection.depth} 条前`;
 }
+/** 聊天记录、示例对话是一条条消息，没有一段"注入内容"，也不能套用块里写的内容 */
+const MESSAGE_MARKERS = new Set(['chatHistory', 'dialogueExamples']);
+function injected(b: PromptBlock) {
+  return b.marker ? lastInjection(preset.value?.id, b.identifier) : undefined;
+}
 function line(b: PromptBlock): string {
-  if (b.marker) return `程序填充：${markerName(b.identifier) ?? b.name}`;
+  if (b.marker) {
+    if (MESSAGE_MARKERS.has(b.identifier)) return `程序填充：${markerName(b.identifier) ?? b.name}`;
+    const last = injected(b)?.content.replace(/\s+/g, ' ').trim();
+    return last || `程序填充：${markerName(b.identifier) ?? b.name}（还没注入过）`;
+  }
   return b.content.replace(/\s+/g, ' ').trim() || '（空）';
+}
+function injectedAt(ts: number): string {
+  return `${monthDay(ts)} ${hhmm(ts)}`;
 }
 
 // —— 一块一块地改 ——
@@ -531,9 +547,41 @@ const HINT: Record<PresetCategory, string> = {
         <div class="sheet-title">{{ editing.marker ? '程序填充的块' : '编辑这一块' }}</div>
         <label class="field-label" for="be-name">名字</label>
         <input id="be-name" v-model="editing.name" class="input" autocomplete="off" @change="touch" />
-        <p v-if="editing.marker" class="text-[12.5px] text-ink-3 mt-2 mb-0 leading-relaxed">
-          内容由程序填：{{ markerName(editing.identifier) ?? editing.identifier }}。可以改名字、角色{{ roleplay ? '、位置' : '' }}，或者关掉、删掉。
-        </p>
+        <template v-if="editing.marker">
+          <p class="text-[12.5px] text-ink-3 mt-2 mb-0 leading-relaxed">
+            程序填：{{ markerName(editing.identifier) ?? editing.identifier }}。可以改名字、角色{{ roleplay ? '、位置' : '' }}、内容，或者关掉、删掉。
+          </p>
+          <template v-if="MESSAGE_MARKERS.has(editing.identifier)">
+            <p class="text-[12.5px] text-ink-3 mt-1.5 mb-0 leading-relaxed">这一块是一条条消息，每一条在"查看提示词"里能看到。</p>
+          </template>
+          <template v-else>
+            <div class="field-label">上一次注入的内容</div>
+            <template v-if="injected(editing)">
+              <div class="text-[11.5px] text-ink-3 mb-1.5" data-testid="marker-injected-meta">
+                {{ injectedAt(injected(editing)!.at) }}<template v-if="injected(editing)!.source"> · {{ injected(editing)!.source }}</template><template v-if="!injected(editing)!.sent"> · 没发送{{ injected(editing)!.note ? `（${injected(editing)!.note}）` : '' }}</template>
+              </div>
+              <pre class="injected" data-testid="marker-injected">{{ injected(editing)!.content }}</pre>
+              <template v-if="injected(editing)!.filled !== undefined">
+                <div class="text-[11.5px] text-ink-3 mt-2 mb-1.5">程序填的原内容（{{ '{{original}}' }}）</div>
+                <pre class="injected">{{ injected(editing)!.filled }}</pre>
+              </template>
+            </template>
+            <p v-else class="text-[12.5px] text-ink-3 mt-0 mb-0 leading-relaxed" data-testid="marker-injected">还没注入过：用一次这个预设（对应的功能），这里就显示注入了什么。</p>
+            <label class="field-label" for="be-content">这一块发什么</label>
+            <textarea
+              id="be-content"
+              v-model="editing.content"
+              class="textarea"
+              rows="5"
+              spellcheck="false"
+              placeholder="空着 = 原样发送程序填的内容"
+              @change="touch"
+            />
+            <p class="text-[12px] text-ink-3 mt-1.5 mb-0 leading-relaxed">
+              写了就按你写的发，{{ '{{original}}' }} 换成程序填的内容（不写 {{ '{{original}}' }} 就整块换成你写的）；程序这一次没内容时这一块不发。
+            </p>
+          </template>
+        </template>
         <template v-else>
           <label class="field-label" for="be-content">内容</label>
           <textarea id="be-content" v-model="editing.content" class="textarea" rows="9" spellcheck="false" @change="touch" />
@@ -758,6 +806,21 @@ const HINT: Record<PresetCategory, string> = {
 }
 .marker-row.has {
   opacity: 0.7;
+}
+/* 程序块上一次注入的内容：原样显示（保留换行），太长在框里滚 */
+.injected {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 /* 长按拖动：不选中文字、不弹系统菜单 */
 .sortable {
