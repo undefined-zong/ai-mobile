@@ -64,3 +64,4 @@ export * from './weread.ts';
 export * from './assistantEdits.ts';
 export * from './brawl.ts';
 export * from './kingdom/index.ts';
+export * from './watchWorkout.ts';

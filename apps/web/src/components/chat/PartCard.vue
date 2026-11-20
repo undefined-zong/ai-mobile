@@ -364,6 +364,7 @@ async function connectToys() {
     <div class="flex items-center gap-2 text-[12.5px] text-ink-2">
       <span :class="part.mode === 'plan' ? 'i-lucide-dumbbell' : 'i-lucide-footprints'" style="color: var(--tone)" />
       <span class="truncate">{{ part.mode === 'plan' && part.plan ? `健身 · ${part.plan.title}` : `运动记录 · ${part.sport}` }}</span>
+      <span v-if="part.source === 'watch'" class="ml-auto shrink-0 inline-flex items-center gap-1 text-[11.5px] text-ink-3" :title="part.watch?.note"><span class="i-lucide-watch" />{{ part.watch?.device || '手表' }}</span>
     </div>
     <div class="grid grid-cols-3 gap-2 mt-2">
       <div><div class="big num">{{ clock(part.durationSec) }}</div><div class="label">用时</div></div>

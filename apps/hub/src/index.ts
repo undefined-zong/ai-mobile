@@ -17,6 +17,7 @@ import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './
 import { bilibiliIds, searchBilibili } from './video.ts';
 import { wereadMcp } from './weread.ts';
 import { publicPage } from './publicPages.ts';
+import { INGEST_POST_PATHS, ingestApi, ingestPost, ingestStatus } from './ingest.ts';
 
 const body = <T>(request: Request): Promise<T> => readJson<T>(request);
 function https(value: string): boolean {
@@ -63,6 +64,9 @@ async function api(request: Request, env: Env): Promise<Response> {
     if (page) return page;
   }
   if (path === '/v1/auth/login' && request.method === 'POST') return login(request, env);
+  // 手表的运动数据：快捷指令、Health Auto Export 推上来，用单独的上报令牌（ingest.ts）
+  const ingestKind = INGEST_POST_PATHS[path];
+  if (ingestKind && request.method === 'POST') return ingestPost(request, env, ingestKind);
   const token = request.headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1];
   if (!token) throw new HttpError(401, '需要登录');
   const device = await env.DB.prepare('SELECT id FROM devices WHERE token_hash = ? AND expires_at > ?').bind(await digest(token), Date.now()).first<{ id: string }>();
@@ -102,6 +106,9 @@ async function api(request: Request, env: Env): Promise<Response> {
   // 多设备同步：聊天、朋友圈、社群、记忆、角色、设置……（按条推拉），图片和文件按哈希存
   if (path.startsWith('/v1/sync/')) return syncApi(request, env, url, device.id);
 
+  // 手表的运动数据：建 / 换上报令牌，拉推上来的运动
+  if (path.startsWith('/v1/ingest/')) return ingestApi(request, env, url);
+
   if (path === '/v1/auth/session' && request.method === 'DELETE') {
     await env.DB.prepare('DELETE FROM devices WHERE id = ?').bind(device.id).run();
     return json({ ok: true });
@@ -109,7 +116,7 @@ async function api(request: Request, env: Env): Promise<Response> {
 
   if (path === '/v1/status' && request.method === 'GET') {
     const [enabled, lastCronAt, lastError, configured, channels, rhythmConfigured, lastRhythmError, memoryConfigured, lastMemoryError, socialConfigured, lastSocialError, lastCommunityError,
-      plannerConfigured, lastPlannerError, plannerMcp, parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured, lastHealthError, mapsConfigured] = await Promise.all([
+      plannerConfigured, lastPlannerError, plannerMcp, parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured, lastHealthError, mapsConfigured, ingest] = await Promise.all([
       getMeta(env, 'enabled', false), getMeta<number | null>(env, 'lastCronAt', null), getMeta<string | null>(env, 'lastError', null),
       env.DB.prepare("SELECT id FROM secrets WHERE id = 'proactive'").first(),
       env.DB.prepare('SELECT id, kind, label, last_ok_at AS lastOkAt FROM push_channels').all(),
@@ -123,12 +130,13 @@ async function api(request: Request, env: Env): Promise<Response> {
       getMeta<string | null>(env, 'lastParallelPlanError', null),
       env.DB.prepare("SELECT id FROM secrets WHERE id = 'health'").first(), getMeta<string | null>(env, 'lastHealthError', null),
       env.DB.prepare("SELECT id FROM secrets WHERE id = 'maps'").first(),
+      ingestStatus(env),
     ]);
     return json({ enabled, lastCronAt, lastError, configured: !!configured, rhythmConfigured: !!rhythmConfigured, lastRhythmError,
       memoryConfigured: !!memoryConfigured, lastMemoryError, socialConfigured: !!socialConfigured, lastSocialError, lastCommunityError,
       plannerConfigured: !!plannerConfigured, lastPlannerError, plannerMcp: plannerMcp.results.map((r) => r.server_id),
       parallelConfigured: !!parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured: !!healthConfigured, lastHealthError, mapsConfigured: !!mapsConfigured,
-      weread: true, mcpCall: true, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
+      weread: true, mcpCall: true, ...ingest, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
   }
   if (path === '/v1/proactive/enabled' && request.method === 'PUT') {
     const { enabled } = await body<{ enabled: boolean }>(request);

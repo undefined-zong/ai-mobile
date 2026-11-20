@@ -1,4 +1,4 @@
-import { characterPronoun } from '@app/shared';
+import { characterPronoun, paceText } from '@app/shared';
 import {
   AGENT_META,
   allowedInviteGames,
@@ -1019,6 +1019,28 @@ export const useChatStore = defineStore('chat', () => {
    * 通话里你开口打断了她：她这条只留下已经说出口的部分（设计文档 §11.2"保留已说的部分"）。
    * 这是正常的对话，不算"回复被打断"；一句都没说出口就把这条删掉
    */
+  /**
+   * 运动卡片换成手表的数（健康计划对上了快捷指令、Health Auto Export 推来的那次）：
+   * 找到带这条运动记录的卡片，时长、距离、配速、心率、消耗、步数改成记录里的。只找内存里有的（最近的）消息
+   */
+  function patchWorkoutCard(logId: string, log: { durationSec: number; distanceKm?: number; steps?: number; hrAvg?: number; hrMax?: number; kcal?: number; watch?: { device?: string; note?: string } }) {
+    for (const list of Object.values(messages.value)) {
+      for (const msg of list ?? []) {
+        const part = msg.parts.find((p): p is Extract<MessagePart, { type: 'workout' }> => p.type === 'workout' && p.logId === logId);
+        if (!part) continue;
+        part.durationSec = log.durationSec;
+        if (log.distanceKm) Object.assign(part, { distanceKm: log.distanceKm, pace: paceText(log.durationSec / log.distanceKm) });
+        if (log.hrAvg) part.heartRate = { avg: log.hrAvg, ...(log.hrMax ? { max: log.hrMax } : {}) };
+        if (log.kcal) part.kcal = log.kcal;
+        if (log.steps) part.steps = log.steps;
+        part.source = 'watch';
+        part.watch = { ...(log.watch?.device ? { device: log.watch.device } : {}), ...(log.watch?.note ? { note: log.watch.note } : {}) };
+        msg.updatedAt = Date.now();
+        return;
+      }
+    }
+  }
+
   function keepSpoken(chatId: string, id: string, spoken: string) {
     const msg = find(chatId, id);
     if (!msg) return;
@@ -1303,6 +1325,7 @@ export const useChatStore = defineStore('chat', () => {
     swipe,
     regenerate,
     editMessage,
+    patchWorkoutCard,
     keepSpoken,
     deleteMessage,
     redraw,

@@ -3,17 +3,33 @@ import { services } from './index';
 import { distanceKm } from './maps';
 
 /**
- * 健身时的进阶记录（设计文档 §9.1）：先只做安卓。
- * - 心率：蓝牙心率带、手表的心率广播（标准的蓝牙心率服务，安卓 Chrome 的 Web Bluetooth 能连）；
+ * 健身时的进阶记录（设计文档 §9.1）：
+ * - 心率：蓝牙心率带、手表的心率广播（标准的蓝牙心率服务，安卓 Chrome 的 Web Bluetooth 能连）；只有安卓——
+ *   iPhone 上的浏览器都没有 Web Bluetooth，心率靠手表的数据练完补上（watchWorkouts：快捷指令或 Health Auto Export）；
  * - 步数：手机的加速度传感器（Accelerometer；没有时用 devicemotion）按波峰数步，手机要带在身上；
- * - 距离、配速：GPS（室外的运动），屏幕亮着时记（"健身"开着时保持常亮）。
- * 别的手机（iPhone、电脑）不开这些，结束时手动填手表上的数。以后的安卓壳可以换成 Health Connect，接口不变。
+ *   iPhone 的 devicemotion 要先在点击里问"运动与方向"的权限（DeviceMotionEvent.requestPermission）；
+ * - 距离、配速：GPS（室外的运动），屏幕亮着时记（"健身"开着时保持常亮）。iPhone 锁屏、切到后台就停了（网页做不了后台定位）。
+ * 电脑不开这些，结束时手动填手表上的数。以后的安卓壳可以换成 Health Connect，接口不变。
  */
 
-/** 安卓（浏览器或以后的安卓壳）：进阶记录只在这里开 */
+/** 安卓（浏览器或以后的安卓壳） */
 export function isAndroid(): boolean {
   return services.native.platform === 'android' || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent));
 }
+
+/** iPhone、iPad（iPad 的 Safari 默认装成电脑：Mac 的 UA 加上触屏） */
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
+/** 这台设备上能自动记什么：GPS 和数步在手机上都行，心率只有安卓（Web Bluetooth） */
+export function trackingSupport(): { gps: boolean; steps: boolean; heartRate: boolean } {
+  const phone = isAndroid() || isIOS();
+  return { gps: phone, steps: phone, heartRate: isAndroid() };
+}
+
+type MotionPermission = { requestPermission?: () => Promise<'granted' | 'denied'> };
 
 // —— 心率：Web Bluetooth 的标准心率服务（0x180D / 0x2A37） ——
 
@@ -161,6 +177,29 @@ export function createStepCounter() {
     if (a && a.x != null && a.y != null && a.z != null) sample(a.x, a.y, a.z);
   }
 
+  /** devicemotion：iPhone 要先问权限（必须在点击里调用，这里同步发出请求），允许了才收得到 */
+  function listenMotion() {
+    const ask = (typeof DeviceMotionEvent !== 'undefined' ? (DeviceMotionEvent as unknown as MotionPermission) : {}).requestPermission;
+    state.source = 'motion';
+    if (typeof ask !== 'function') {
+      window.addEventListener('devicemotion', onMotion);
+      return;
+    }
+    ask.call(DeviceMotionEvent)
+      .then((r) => {
+        if (!state.on) return;
+        if (r === 'granted') window.addEventListener('devicemotion', onMotion);
+        else {
+          state.on = false;
+          state.error = '没有允许"运动与方向"，数不了步：关掉 App 再打开，开练时点"允许"（iPhone 设置 → Safari → 高级 → 网站数据里清掉这个网站也能重新问）';
+        }
+      })
+      .catch((e) => {
+        state.on = false;
+        state.error = `数不了步：${e instanceof Error ? e.message : String(e)}`;
+      });
+  }
+
   function start() {
     if (state.on) return;
     state.error = '';
@@ -183,8 +222,9 @@ export function createStepCounter() {
         state.error = '这台手机读不到加速度，数不了步';
         return;
       }
-      window.addEventListener('devicemotion', onMotion);
-      state.source = 'motion';
+      state.on = true;
+      listenMotion();
+      return;
     }
     state.on = true;
   }

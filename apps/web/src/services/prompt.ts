@@ -174,7 +174,7 @@ export function workoutText(p: Extract<MessagePart, { type: 'workout' }>): strin
     p.heartRate?.avg ? `平均心率 ${p.heartRate.avg}${p.heartRate.max ? `、最高 ${p.heartRate.max}` : ''}` : '',
     p.kcal ? `约 ${p.kcal} 千卡` : '',
   ].filter(Boolean);
-  return `${head}；${parts.join('；')}`;
+  return `${head}；${parts.join('；')}${p.source === 'watch' ? '（手表记的）' : ''}`;
 }
 
 /** mapText：只改文字部分（正则只改你写的、她说的，不动卡片的描述） */

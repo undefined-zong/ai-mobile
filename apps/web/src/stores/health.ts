@@ -35,15 +35,23 @@ import {
   type MealSpot,
   type Persona,
   type PrepTask,
+  matchWatchLog,
+  mergeWatch,
+  overlapShare,
+  watchSportName,
+  type WatchSource,
+  type WatchWorkout,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
 import { autoSave, getOne } from '@/db/idb';
 import { services } from '@/services';
+import { loadFitnessSession, sessionSpan } from '@/services/fitnessSession';
 import { countryAt } from '@/utils/shopping';
 import { useAiStore } from './ai';
 import { useAppStore } from './app';
 import { useCharacterStore } from './characters';
+import { useChatStore } from './chat';
 import { useEnvironmentStore } from './environment';
 import { useHomeStore } from './home';
 import { useLibraryStore } from './library';
@@ -74,6 +82,8 @@ export interface WorkoutLog {
   /** 家务日（凌晨 4 点算起） */
   date: ISODate;
   startedAt: number;
+  /** 结束的时刻（旧记录没有：按开始 + 时长算） */
+  endedAt?: number;
   durationSec: number;
   mode: 'plan' | 'free';
   /** 随便动动的方式（跑步、跳绳……），照计划练的是计划的标题 */
@@ -85,13 +95,66 @@ export interface WorkoutLog {
   hrAvg?: number;
   hrMax?: number;
   kcal?: number;
-  source: 'auto' | 'manual' | 'estimate';
+  /** 这些数从哪来：auto 安卓自动记的 / manual 手动填的 / estimate 估的 / watch 手表的（快捷指令、Health Auto Export 推来的） */
+  source: 'auto' | 'manual' | 'estimate' | 'watch';
+  /** 对上了手表的运动（或者是只在手表上练的那次） */
+  watch?: WorkoutWatchInfo;
+}
+
+/** 一条运动记录用了哪次手表的运动、怎么用的 */
+export interface WorkoutWatchInfo {
+  id: string;
+  source: WatchSource;
+  device?: string;
+  /** 用了手表的数没有（手表忘了停、又没有逐分钟的数时没用） */
+  used: boolean;
+  note?: string;
+  /** 没开 App、只在手表上练的：这条记录是照手表那次记的 */
+  only?: boolean;
+  /** 用的是那次的哪个版本（同一次再推来、数变了要重新用） */
+  sig: string;
+}
+
+/** 手表的数据从哪来（"我的 → 手表数据"） */
+export type WatchMode = 'off' | 'shortcut' | 'hae';
+export interface WatchSettings {
+  mode: WatchMode;
+  /** 快捷指令叫什么（"用手表的数据更新"按这个名字打开它） */
+  shortcutName: string;
+  /** 什么时候开的：这之前的、只在手表上练的不单独记（Health Auto Export 第一次会把以前的都推上来） */
+  since: number;
+}
+export const DEFAULT_WATCH: WatchSettings = { mode: 'off', shortcutName: '运动回填', since: 0 };
+
+/** 对手表的运动的结果（横幅里说一句） */
+export interface WatchOutcome {
+  kind: 'updated' | 'created';
+  log: WorkoutLog;
+  workout: WatchWorkout;
 }
 
 interface Saved {
   weeks?: HealthWeekPlan[];
   days?: HealthDayPlan[];
   logs?: WorkoutLog[];
+  watch?: WatchSettings;
+  /** 最近收到的手表运动（对上的、没对上的都留着，"手表数据"页里看得到） */
+  watchInbox?: WatchWorkout[];
+}
+
+const KEEP_INBOX = 40;
+/** 只在手表上练的：结束 2 小时以后还没有对得上的 App 记录，才单独记一条（留时间在 App 里发给她） */
+const WATCH_ONLY_AFTER_MS = 2 * 3600_000;
+/** 太久以前的不单独记 */
+const WATCH_ONLY_WITHIN_MS = 3 * 86_400_000;
+
+/** 同一次手表运动的"版本"：这些数变了就要重新用 */
+export const watchSig = (w: WatchWorkout) => JSON.stringify([w.startedAt, w.endedAt, w.durationSec, w.kcal, w.km, w.steps, w.hrAvg, w.hrMax, w.minutes?.length ?? 0]);
+
+function hashId(s: string): string {
+  let h = 5381;
+  for (const ch of s) h = ((h << 5) + h + ch.codePointAt(0)!) >>> 0;
+  return h.toString(36);
 }
 
 const KEEP_WEEKS = 6;
@@ -141,13 +204,15 @@ export const useHealthStore = defineStore('health', () => {
   const weeks = ref<HealthWeekPlan[]>([]);
   const days = ref<HealthDayPlan[]>([]);
   const logs = ref<WorkoutLog[]>([]);
+  const watch = ref<WatchSettings>({ ...DEFAULT_WATCH });
+  const watchInbox = ref<WatchWorkout[]>([]);
   /** 正在排（按人设） */
   const busy = reactive<Record<string, 'week' | 'day' | undefined>>({});
   /** 最近一次排失败的原因（只在内存里） */
   const errors = reactive<Record<string, { reason: string; detail?: string; notConnected?: boolean } | undefined>>({});
 
   // 别的设备排的健康计划、运动记录（同步）：放进来
-  const saver = autoSave('settings', () => [{ key: 'health', value: { weeks: weeks.value, days: days.value, logs: logs.value } }], () => [weeks.value, days.value, logs.value],
+  const saver = autoSave('settings', () => [{ key: 'health', value: { weeks: weeks.value, days: days.value, logs: logs.value, watch: watch.value, watchInbox: watchInbox.value } }], () => [weeks.value, days.value, logs.value, watch.value, watchInbox.value],
     { apply: ([c]) => { if (c && !c.deleted) load(c.value as Saved); } });
 
   async function hydrate() {
@@ -161,6 +226,8 @@ export const useHealthStore = defineStore('health', () => {
       if (Array.isArray(saved.weeks)) weeks.value = saved.weeks.filter((w) => w && Array.isArray(w.days)).map((w) => ({ ...w, shopping: parseShopping(w.shopping) }));
       if (Array.isArray(saved.days)) days.value = saved.days.filter((d) => d && d.meals && typeof d.date === 'string');
       if (Array.isArray(saved.logs)) logs.value = saved.logs.filter((l) => l && typeof l.durationSec === 'number');
+      if (saved.watch && typeof saved.watch === 'object') watch.value = { ...DEFAULT_WATCH, ...saved.watch };
+      if (Array.isArray(saved.watchInbox)) watchInbox.value = saved.watchInbox.filter((w) => w && typeof w.id === 'string' && typeof w.startedAt === 'number');
     }
   }
 
@@ -500,13 +567,145 @@ export const useHealthStore = defineStore('health', () => {
     return m?.status ?? 'todo';
   }
 
-  function addLog(l: WorkoutLog) {
-    logs.value = [clone(l), ...logs.value.filter((x) => x.id !== l.id)].slice(0, KEEP_LOGS);
+  function putLog(l: WorkoutLog) {
+    logs.value = [clone(l), ...logs.value.filter((x) => x.id !== l.id)].sort((a, b) => b.startedAt - a.startedAt).slice(0, KEEP_LOGS);
+  }
+  /** 记一次运动（"健身"发给她的时候）；收件箱里有对得上的手表运动就马上用上 */
+  function addLog(l: WorkoutLog): WatchOutcome[] {
+    putLog(l);
+    return reconcileWatch();
   }
   function updateLog(id: string, patch: Partial<WorkoutLog>) {
     const l = logs.value.find((x) => x.id === id);
     if (l) Object.assign(l, patch);
   }
+  function removeLog(id: string) {
+    logs.value = logs.value.filter((l) => l.id !== id);
+  }
 
-  return { weeks, days, logs, busy, errors, cloudErrors, hydrate, today, weekOf, dayOf, logsOf, planWeek, planDay, syncPrep, prepState, addLog, updateLog, cloudContext, ingestCloud, tickSchedule };
+  // —— 手表的运动数据（"我的 → 手表数据"；services/watchWorkouts 见 packages/shared/src/watchWorkout.ts） ——
+
+  function setWatch(patch: Partial<WatchSettings>) {
+    const next = { ...watch.value, ...patch };
+    // 第一次打开时记下时刻：这之前、只在手表上练的不单独记
+    if (next.mode !== 'off' && !next.since) next.since = Date.now();
+    next.shortcutName = next.shortcutName.trim() || DEFAULT_WATCH.shortcutName;
+    watch.value = next;
+  }
+
+  /** 把手表的数用到 App 记的这一次上（记录和聊天里的运动卡片一起改） */
+  function applyWatch(log: WorkoutLog, w: WatchWorkout): WorkoutLog {
+    const m = mergeWatch(log, w);
+    const info: WorkoutWatchInfo = { id: w.id, source: w.source, used: m.used, sig: watchSig(w), ...(w.device ? { device: w.device } : {}), ...(m.note ? { note: m.note } : {}) };
+    const patch: Partial<WorkoutLog> = { watch: info };
+    if (m.used) {
+      patch.source = 'watch';
+      if (m.durationSec) patch.durationSec = m.durationSec;
+      if (m.endedAt) patch.endedAt = m.endedAt;
+      if (m.kcal !== undefined) patch.kcal = m.kcal;
+      if (m.distanceKm !== undefined) patch.distanceKm = m.distanceKm;
+      if (m.steps !== undefined) patch.steps = m.steps;
+      if (m.hrAvg !== undefined) patch.hrAvg = m.hrAvg;
+      if (m.hrMax !== undefined) patch.hrMax = m.hrMax;
+    }
+    updateLog(log.id, patch);
+    const next = logs.value.find((l) => l.id === log.id) ?? { ...log, ...patch };
+    if (m.used) useChatStore().patchWorkoutCard(log.id, next);
+    return next;
+  }
+
+  /** 只在手表上练的（没开 App）：照手表那次单独记一条（记在默认人设上，她平时聊天也知道你练了） */
+  function logFromWatch(w: WatchWorkout, existing?: WorkoutLog): WorkoutLog {
+    const log: WorkoutLog = {
+      id: existing?.id ?? `watch-${hashId(w.id)}`,
+      personaId: existing?.personaId ?? usePersonaStore().defaultPersona.id,
+      characterId: existing?.characterId ?? null,
+      date: rhythmDate(new Date(w.startedAt), useEnvironmentStore().settings.timezone),
+      startedAt: w.startedAt,
+      endedAt: w.endedAt,
+      durationSec: w.durationSec,
+      mode: 'free',
+      sport: watchSportName(w.name),
+      outdoor: w.indoor === false,
+      ...(w.km !== undefined ? { distanceKm: w.km } : {}),
+      ...(w.steps !== undefined ? { steps: w.steps } : {}),
+      ...(w.hrAvg !== undefined ? { hrAvg: w.hrAvg } : {}),
+      ...(w.hrMax !== undefined ? { hrMax: w.hrMax } : {}),
+      ...(w.kcal !== undefined ? { kcal: Math.round(w.kcal) } : {}),
+      source: 'watch',
+      watch: { id: w.id, source: w.source, used: true, only: true, sig: watchSig(w), ...(w.device ? { device: w.device } : {}) },
+    };
+    putLog(log);
+    return log;
+  }
+
+  /**
+   * 把收件箱里的手表运动和运动记录对一遍：
+   * - 对上了 App 记的那一次（带了 logId 的按 id，否则按时间重叠）：用手表的数（mergeWatch 管手表、App 谁忘了停）；
+   *   同一次推来的数变了（Health Auto Export 后来补全了）就再用一次；先单独记了的那条删掉（App 那次后来发出来了）；
+   * - 没对上：从 App 里按按钮跑的那种（带 logId）等那次发给她；只在手表上练的，结束 2 小时以后单独记一条。
+   * 关着"手表数据"时不动
+   */
+  function reconcileWatch(): WatchOutcome[] {
+    if (watch.value.mode === 'off' || !watchInbox.value.length) return [];
+    const out: WatchOutcome[] = [];
+    const session = loadFitnessSession();
+    const busySpan = session ? sessionSpan(session) : null;
+    const now = Date.now();
+    for (const w of watchInbox.value) {
+      const sig = watchSig(w);
+      const own = logs.value.find((l) => l.watch?.id === w.id && l.watch.only);
+      const match = matchWatchLog(w, logs.value.filter((l) => !l.watch?.only));
+      if (match) {
+        if (own) removeLog(own.id);
+        if (match.watch?.id === w.id && match.watch.sig === sig) continue;
+        // 这一次已经用了另一次手表的数（快捷指令和 Health Auto Export 都推了）：留着先用上的
+        if (match.watch && match.watch.id !== w.id && match.watch.used) continue;
+        out.push({ kind: 'updated', log: applyWatch(match, w), workout: w });
+        continue;
+      }
+      if (own) {
+        if (own.watch?.sig !== sig) out.push({ kind: 'updated', log: logFromWatch(w, own), workout: w });
+        continue;
+      }
+      if (w.logId) continue;
+      const since = watch.value.since;
+      if (!since || w.startedAt < since - 10 * 60_000) continue;
+      if (now - w.endedAt < WATCH_ONLY_AFTER_MS || now - w.endedAt > WATCH_ONLY_WITHIN_MS) continue;
+      if (busySpan && overlapShare(busySpan[0], busySpan[1], w.startedAt, w.endedAt) >= 0.5) continue;
+      out.push({ kind: 'created', log: logFromWatch(w), workout: w });
+    }
+    return out;
+  }
+
+  /** 云端拉来的手表运动：放进收件箱（同一次换成新的），再对一遍 */
+  function ingestWatch(items: WatchWorkout[]): WatchOutcome[] {
+    if (items.length) {
+      const byId = new Map(watchInbox.value.map((w) => [w.id, w]));
+      for (const w of items) byId.set(w.id, w);
+      watchInbox.value = [...byId.values()].sort((a, b) => b.startedAt - a.startedAt).slice(0, KEEP_INBOX);
+    }
+    return reconcileWatch();
+  }
+
+  /** "健身"练完还没发给她的这一次（logId、开始、结束）对得上的手表运动：练完页上先填进去 */
+  function watchFor(logId: string, start: number, end: number): WatchWorkout | null {
+    if (watch.value.mode === 'off') return null;
+    const byId = watchInbox.value.find((w) => w.logId === logId);
+    if (byId) return byId;
+    const taken = new Set(logs.value.filter((l) => l.watch && !l.watch.only && l.id !== logId).map((l) => l.watch!.id));
+    let best: WatchWorkout | null = null;
+    let bestShare = 0.5;
+    for (const w of watchInbox.value) {
+      if (w.logId || taken.has(w.id)) continue;
+      const share = overlapShare(start, end, w.startedAt, w.endedAt);
+      if (share >= bestShare) {
+        best = w;
+        bestShare = share;
+      }
+    }
+    return best;
+  }
+
+  return { weeks, days, logs, watch, watchInbox, busy, errors, cloudErrors, hydrate, today, weekOf, dayOf, logsOf, planWeek, planDay, syncPrep, prepState, addLog, updateLog, removeLog, setWatch, ingestWatch, reconcileWatch, watchFor, cloudContext, ingestCloud, tickSchedule };
 });

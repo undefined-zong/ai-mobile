@@ -45,6 +45,7 @@ import BackupPage from '@/pages/me/BackupPage.vue';
 import CachePage from '@/pages/me/CachePage.vue';
 import VoicePage from '@/pages/me/VoicePage.vue';
 import WatchSettingsPage from '@/pages/me/WatchSettingsPage.vue';
+import WorkoutDataPage from '@/pages/me/WorkoutDataPage.vue';
 import ReadSettingsPage from '@/pages/me/ReadSettingsPage.vue';
 
 /** 社媒上次停在哪一页（朋友圈 / 社群）：从别的页签回来时还在那一页 */
@@ -90,6 +91,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/me/personas/:id/housework', component: PersonaHouseworkPage, meta: { title: '家务系统' } },
   { path: '/me/personas/:id/health', component: PersonaHealthPage, meta: { title: '健康系统' } },
   { path: '/me/health', component: HealthPlanPage, meta: { title: '健康计划' } },
+  { path: '/me/workout-data', component: WorkoutDataPage, meta: { title: '手表数据' } },
   { path: '/me/personas/:id/planner', component: PersonaPlannerPage, meta: { title: '日程系统' } },
   { path: '/me/personas/:id/image', component: PersonaImagePage, meta: { title: '生图' } },
   { path: '/me/planner', component: PlannerPage, meta: { title: '日程计划' } },
