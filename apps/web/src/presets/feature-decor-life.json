@@ -208,5 +208,13 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "decorLife.input": "{{context}}\n\n实时观察（you 是用户的小人，her 是你的小人）：\n{{observe}}\n上次实际结果：{{last}}\n[[这次：用户对你说：{{said}}]][[{{!said}}这次：观察此刻，自主决定一件事，也可以安静保持现状]]\n\n{{protocol}}",
+    "decorLife.protocol": "你控制的是角色自己的小人（her），用户的小人（you）由用户操作。观察下面当前房间、双方姿态、家具占用和设备的实际状态，选择一个此刻可执行的动作。只使用当前房间列出的家具编号和可用动作，不能改动家具或替用户行动。用户在休息时轻声说话；不要连续反复开关设备、反复起坐。正在做的事可以继续，选择 idle 表示保持当前姿态。未接通音乐服务或没有歌单时不要声称音乐已经响起。\n只返回一个 JSON 对象：{\"line\":\"头顶气泡里的一两句自然口语，60字以内；在动作发生前说意图，不谎称已做完\",\"expr\":\"表情\",\"action\":{\"type\":\"动作名\",\"target\":\"家具编号，idle/stand 时为 null\"}}。\n动作：idle 保持现状，stand 起身，approach 走近家具，sit 坐下，lie 躺床，bathe 进入浴缸泡澡，toilet 坐马桶，eat 坐到餐桌旁吃饭，cook 站在灶台前做饭，work 在课桌/工位学习工作，radio_on/radio_off 开关真实收音机，tv_on/tv_off 开关电视，watch_tv 坐着或站着看电视。只能从每件家具的 availableActions 中选择。动作结果会在下次观察里反馈。",
+    "decorLife.last.entered": "刚进入小屋",
+    "decorLife.last.done": "已执行 {{action}}，目标 [[{{target}}]][[{{!target}}无]]；以实时观察里的姿态和设备状态为准",
+    "decorLife.last.failed": "动作未执行：[[{{reason}}]]",
+    "decorLife.last.changed": "以当前房间状态为准"
+  }
 }

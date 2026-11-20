@@ -2,7 +2,7 @@
 import { isFlightPreset, parseControlTags, type MessagePart, type PresetUseId } from '@app/shared';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -115,9 +115,19 @@ function clean(v: unknown, max: number): string {
   return typeof v === 'string' ? parseControlTags(v, []).visible.replace(/\s+/g, ' ').trim().slice(0, max) : '';
 }
 
-/** 格子的效果："前进 2 格，再掷一次" */
+/** 这个游戏的程序文字（"一起游戏 · 飞行棋"用途的预设里的 flight.*） */
+function fx() {
+  return sceneText(USE, her.value);
+}
+/** 格子的效果："前进 2 格，再掷一次"（界面上和给她看的是同一句） */
 function effectOf(c: Cell): string {
-  return [c.move > 0 ? `前进 ${c.move} 格` : c.move < 0 ? `后退 ${-c.move} 格` : '', c.again ? '再掷一次' : '', c.skip ? '停一轮' : ''].filter(Boolean).join('，');
+  const t = fx();
+  const parts = [
+    c.move > 0 ? t('flight.effect.forward', { n: c.move }) : c.move < 0 ? t('flight.effect.back', { n: -c.move }) : '',
+    c.again ? t('flight.effect.again') : '',
+    c.skip ? t('flight.effect.skip') : '',
+  ].filter(Boolean);
+  return t('flight.effect', { parts });
 }
 /** 棋盘上格子角落的小标记 */
 function effectMark(c: Cell | null): string {
@@ -146,20 +156,16 @@ function parseCells(nums: number[]) {
 
 const togetherLine = computed(() => {
   const mode = chat.chatById(chatId.value)?.togetherMode;
-  if (mode === 'visit') return `${userName.value}来你这边了，坐在你旁边`;
-  if (mode === 'bring') return `你在${userName.value}这边`;
-  return `连线（${userName.value}在自己那边，你在你那边）`;
+  return fx()(mode === 'visit' ? 'flight.together.visit' : mode === 'bring' ? 'flight.together.bring' : 'flight.together.remote', { user: userName.value });
 });
 
 /** 这一次的输入，只放数据：怎么在一起、棋盘和你们各走到哪，加上这一步的情况 */
 function stateInput(extra: (string | false)[]): string {
-  return [`你们怎么在一起：${togetherLine.value}`, `棋盘「${boardName.value}」一共 ${SIZE} 格：${userName.value}在第 ${pos.you} 格，${her.value.name}在第 ${pos.her} 格`, ...extra]
-    .filter(Boolean)
-    .join('\n');
+  return fx()('flight.state', { together: togetherLine.value, board: boardName.value, size: SIZE, user: userName.value, you: pos.you, char: her.value.name, her: pos.her, extra: extra.filter((x): x is string => !!x) });
 }
 function cellLines(n: number): string[] {
   const c = cells.value[n - 1];
-  return [`这一格：第 ${n} 格`, c ? `任务：${c.task}` : '', c && effectOf(c) ? `效果：${effectOf(c)}` : ''];
+  return [fx()('flight.cell', { n, task: c?.task, effect: c ? effectOf(c) : null })];
 }
 
 // —— 设计格子：照棋盘预设的"棋盘设计"那一块 ——
@@ -168,14 +174,14 @@ function design(nums: number[]): Promise<void> {
   const todo = nums.filter((n) => !cells.value[n - 1] && !pending.has(n));
   if (!todo.length) return Promise.all(nums.map((n) => pending.get(n))).then(() => undefined);
   const contiguous = todo.every((n, i) => i === 0 || n === todo[i - 1]! + 1);
-  const which = contiguous && todo.length > 1 ? `第 ${todo[0]}–${todo.at(-1)} 格` : `第 ${todo.join('、')} 格`;
+  const which = contiguous && todo.length > 1 ? fx()('flight.range', { from: todo[0], to: todo.at(-1) }) : fx()('flight.cells', { cells: todo.map(String) });
   designingJobs.value += 1;
   const signal = gameAbort.signal;
   const job = (async () => {
     try {
       const res = await chat.sceneJson(
         chatId.value,
-        { name: 'fly-make', input: [`你们怎么在一起：${togetherLine.value}`, `棋盘一共 ${SIZE} 格；这一次设计：${which}`].join('\n') },
+        { name: 'fly-make', input: fx()('flight.make', { together: togetherLine.value, size: SIZE, which }) },
         parseCells(todo),
         signal,
         { use: USE },
@@ -266,7 +272,7 @@ function start() {
   line.value = '';
   phase.value = 'playing';
   report();
-  chat.push(chatId.value, 'narrator', [{ type: 'text', text: `飞行棋开始了：棋盘「${boardName.value}」，一共 ${SIZE} 格，${userName.value}先掷。` }], {
+  chat.push(chatId.value, 'narrator', [{ type: 'text', text: fx()('flight.narrator.start', { board: boardName.value, size: SIZE, user: userName.value }) }], {
     meta: { scene: 'game', cue: '开局' },
   });
   for (let from = 1; from <= SIZE; from += CHUNK) void design(Array.from({ length: Math.min(CHUNK, SIZE - from + 1) }, (_, i) => from + i));
@@ -309,7 +315,7 @@ async function present(d = dice.value) {
   const cell = await ensureCell(n);
   busy.value = false;
   if (!alive || !cell) return;
-  narrate(`${nameOf(who)}掷出 ${d}，走到第 ${n} 格：${cell.task}${effectOf(cell) ? `（${effectOf(cell)}）` : ''}`);
+  narrate(fx()('flight.narrator.landed', { who: nameOf(who), dice: d, n, task: cell.task, effect: effectOf(cell) }));
   if (who === 'her') {
     await herReply('fly-do', undefined, cellLines(n));
     applyEffects('her', cell);
@@ -322,8 +328,8 @@ async function youDo(kind: 'done' | 'skip') {
   if (turn.value !== 'you' || step.value !== 'task' || !c || busy.value) return;
   const text = doneText.value.trim();
   doneText.value = '';
-  const said = kind === 'skip' ? '这一格我跳过……' : text ? `做完了：${text}` : '做完了！';
-  const result = kind === 'skip' ? `${userName.value}没做，跳过了` : `${userName.value}做完了${text ? `：${text}` : ''}`;
+  const said = kind === 'skip' ? fx()('flight.say.skip') : fx()('flight.say.done', { text });
+  const result = fx()(kind === 'skip' ? 'flight.result.skip' : 'flight.result.done', { user: userName.value, text });
   step.value = 'after';
   await herReply('fly-react', said, [...cellLines(n), result]);
   applyEffects('you', c);
@@ -343,21 +349,21 @@ function applyEffects(who: Who, c: Cell) {
     const before = pos[who];
     pos[who] = Math.max(0, Math.min(SIZE, pos[who] + c.move));
     if (pos[who] !== before) {
-      notes.push(`${c.move > 0 ? '前进' : '后退'} ${Math.abs(pos[who] - before)} 格，到第 ${pos[who]} 格`);
+      notes.push(fx()(c.move > 0 ? 'flight.note.forward' : 'flight.note.back', { n: Math.abs(pos[who] - before), at: pos[who] }));
       scrollTo(pos[who]);
     }
   }
   if (c.again) {
     againWho.value = who;
-    notes.push('再掷一次');
+    notes.push(fx()('flight.note.again'));
   }
   if (c.skip) {
     skipNext[who] = true;
-    notes.push('下一回合停一轮');
+    notes.push(fx()('flight.note.skip'));
   }
   if (pos[who] >= SIZE) winner.value = who;
   if (notes.length && alive) {
-    effectNote.value = `${nameOf(who)}${notes.join('，')}`;
+    effectNote.value = fx()('flight.narrator.effect', { who: nameOf(who), notes });
     narrate(effectNote.value);
   }
   step.value = 'after';
@@ -371,7 +377,7 @@ function nextTurn() {
   againWho.value = null;
   if (skipNext[who]) {
     skipNext[who] = false;
-    narrate(`${nameOf(who)}停一轮`);
+    narrate(fx()('flight.narrator.skipped', { who: nameOf(who) }));
     who = who === 'you' ? 'her' : 'you';
   }
   turn.value = who;
@@ -387,7 +393,7 @@ async function talk() {
   const t = talkText.value.trim();
   if (!t || busy.value) return;
   talkText.value = '';
-  await herReply('fly-chat', t, [`现在：第 ${turns.value} 回合刚结束，下一回合轮到${nameOf(nextWho.value)}`]);
+  await herReply('fly-chat', t, [fx()('flight.between', { n: turns.value, next: nameOf(nextWho.value) })]);
 }
 
 // —— 不玩了 / 有人到了终点：发对局卡片，她说说这一局 ——
@@ -405,7 +411,7 @@ async function end() {
   chat.postCard(chatId.value, 'user', card);
   emit('done', summary());
   emit('progress', null);
-  await herReply('fly-end', undefined, [winner.value ? `结果：${nameOf(winner.value)}先到了终点` : '结果：没下完，不玩了']);
+  await herReply('fly-end', undefined, [winner.value ? fx()('flight.end.won', { who: nameOf(winner.value) }) : fx()('flight.end.quit')]);
 }
 
 function again() {

@@ -1,3 +1,4 @@
+import type { TextFn } from '@app/shared';
 
 import { ROOM_FURNISHINGS } from './furnishings';
 import { STYLE_CATALOG } from './styleCatalog';
@@ -844,35 +845,37 @@ export function sanitizeRooms(list: unknown, legacy?: unknown): DecorRoom[] | nu
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
 /** 屋子现在的样子（编号、位置、朝向、颜色、谁放的） */
-export function describeRoom(room: DecorRoom, names: { you: string; her: string }, rooms: readonly DecorRoom[] = [room]): string {
+/** 屋子现在的样子写给模型看（程序文字 decor.room*，在装修小屋用途的预设里） */
+export function describeRoom(room: DecorRoom, names: { you: string; her: string }, t: TextFn, rooms: readonly DecorRoom[] = [room]): string {
   const wallName = WALL_FINISHES.find((f) => f.id === room.wall.finish)?.name ?? room.wall.finish;
   const floorName = FLOOR_FINISHES.find((f) => f.id === room.floor.finish)?.name ?? room.floor.finish;
-  const who = (i: DecorItem) => (i.by === 'her' ? `${names.her}放的` : i.by === 'you' ? `${names.you}放的` : '一开始就有');
+  const who = (i: DecorItem) => (i.by === 'her' ? t('decor.by', { name: names.her }) : i.by === 'you' ? t('decor.by', { name: names.you }) : t('decor.by.initial'));
   const line = (i: DecorItem) => {
     const c = catalogItem(i.kind)!;
     const where =
       c.place === 'wall'
-        ? `${i.wall === 'left' ? '左墙' : '后墙'}上，沿墙 ${fmt(i.wall === 'left' ? i.z : i.x)}，离地 ${fmt(i.y ?? c.wallY ?? 1.4)}`
+        ? t('decor.where.wall', { side: t(i.wall === 'left' ? 'decor.wall.left' : 'decor.wall.back'), along: fmt(i.wall === 'left' ? i.z : i.x), height: fmt(i.y ?? c.wallY ?? 1.4) })
         : i.on
-          ? `放在 ${i.on}（${catalogItem(room.items.find((s) => s.id === i.on)?.kind ?? '')?.name ?? ''}）上`
-          : `在 (${fmt(i.x)}, ${fmt(i.z)})${c.place === 'rug' ? '' : `，${TURN_LABELS[i.turn]}`}`;
-    return `${i.id} ${c.name}：${where}，${colorName(itemColor(i))}，${who(i)}`;
+          ? t('decor.where.on', { id: i.on, name: catalogItem(room.items.find((s) => s.id === i.on)?.kind ?? '')?.name })
+          : t('decor.where.floor', { x: fmt(i.x), z: fmt(i.z), turn: c.place === 'rug' ? null : TURN_LABELS[i.turn] });
+    return t('decor.item', { id: i.id, name: c.name, where, color: colorName(itemColor(i)), by: who(i) });
   };
-  return [
-    rooms.length > 1 ? `这套小屋一共 ${rooms.length} 个房间：${rooms.map((r) => `${r.name}（${r.items.length} 件）`).join('、')}。现在在「${room.name}」，下面说的、能改的都是这一间` : '',
-    `房间「${room.name}」：地面 ${room.w} × ${room.d} 格（x 从左墙往右 0–${room.w}，z 从后墙往前 0–${room.d}；后墙在 z = 0，左墙在 x = 0，墙高 ${WALL_H}）`,
-    `墙：${colorName(room.wall.color)} · ${wallName}；地面：${colorName(room.floor.color)} · ${floorName}`,
-    room.items.length ? `现在摆着（编号 名字：位置，颜色，谁放的）：\n${room.items.map(line).join('\n')}` : '现在还是空的',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  return t('decor.room', {
+    rooms: rooms.length > 1 ? rooms.map((r) => t('decor.room.entry', { name: r.name, n: r.items.length })) : [],
+    count: rooms.length, name: room.name, w: room.w, d: room.d, wallH: WALL_H,
+    wallColor: colorName(room.wall.color), wallName, floorColor: colorName(room.floor.color), floorName,
+    items: room.items.map(line),
+  });
 }
 
-/** 能摆的家具（给模型挑） */
-export function describeCatalog(): string {
+/** 能摆的家具（程序文字 decor.catalog*，给模型挑） */
+export function describeCatalog(t: TextFn): string {
   const place = (c: CatalogItem) =>
-    c.place === 'wall' ? `挂墙，宽 ${c.w} 高 ${c.h}` : c.place === 'top' ? `小东西，${c.w} × ${c.d}，能放在桌台上` : c.place === 'rug' ? `地毯，${c.w} × ${c.d}` : `${c.w} × ${c.d}${c.top ? `，台面高 ${c.top} 能放小东西` : ''}${c.seats ? '，能坐' : ''}${c.beds ? '，能躺' : ''}`;
-  return CATEGORIES.map((cat) => `${cat.label}：${CATALOG.filter((c) => c.cat === cat.id).map((c) => `${c.id}（${c.name}，${place(c)}）`).join('；')}`).join('\n');
+    c.place === 'wall' ? t('decor.catalog.wall', { w: c.w, h: c.h })
+      : c.place === 'top' ? t('decor.catalog.top', { w: c.w, d: c.d })
+        : c.place === 'rug' ? t('decor.catalog.rug', { w: c.w, d: c.d })
+          : t('decor.catalog.floor', { w: c.w, d: c.d, top: c.top || null, seats: !!c.seats, beds: !!c.beds });
+  return CATEGORIES.map((cat) => t('decor.catalog.category', { label: cat.label, items: CATALOG.filter((c) => c.cat === cat.id).map((c) => t('decor.catalog.item', { id: c.id, name: c.name, place: place(c) })) })).join('\n');
 }
 
 // —— 她的布置方案 ——
@@ -958,7 +961,7 @@ export function parsePlanActions(v: unknown, max = 8): PlanAction[] {
  * 照她的方案一步步改；放不下的跳过（找附近的空地，实在没有就算了）。
  * 返回改好的屋子、做成了的几步（中文，存进聊天）、新放的家具 id（画面上一件件冒出来）。
  */
-export function applyPlan(room: DecorRoom, actions: PlanAction[]): { room: DecorRoom; done: string[]; skipped: string[]; added: string[]; touched: string[] } {
+export function applyPlan(room: DecorRoom, actions: PlanAction[], t: TextFn): { room: DecorRoom; done: string[]; skipped: string[]; added: string[]; touched: string[] } {
   let r = room;
   const done: string[] = [];
   const skipped: string[] = [];
@@ -978,8 +981,8 @@ export function applyPlan(room: DecorRoom, actions: PlanAction[]): { room: Decor
       if (res) {
         r = res.room;
         added.push(res.item.id);
-        done.push(`添了${a.color ? colorName(a.color) : ''}${c.name}`);
-      } else skipped.push(`${c.name}放不下`);
+        done.push(t('decor.log.add', { color: a.color ? colorName(a.color) : null, name: c.name }));
+      } else skipped.push(t('decor.skip.noRoom', { name: c.name }));
     } else if (a.do === 'move' || a.do === 'turn') {
       const it = r.items.find((i) => i.id === a.id);
       if (!it) continue;
@@ -999,26 +1002,26 @@ export function applyPlan(room: DecorRoom, actions: PlanAction[]): { room: Decor
       if (res.ok) {
         r = res.room;
         touched.push(a.id);
-        done.push(a.do === 'turn' ? `把${c.name}转了个方向` : `挪了${c.name}`);
-      } else skipped.push(`${c.name}挪不过去（${res.reason}）`);
+        done.push(t(a.do === 'turn' ? 'decor.log.turn' : 'decor.log.move', { name: c.name }));
+      } else skipped.push(t('decor.skip.move', { name: c.name, reason: res.reason }));
     } else if (a.do === 'color') {
       if (!r.items.some((i) => i.id === a.id)) continue;
       const name = nameOf(a.id);
       r = { ...r, items: r.items.map((i) => (i.id === a.id ? { ...i, color: a.color } : i)) };
       touched.push(a.id);
-      done.push(`把${name}换成了${colorName(a.color)}`);
+      done.push(t('decor.log.color', { name, color: colorName(a.color) }));
     } else if (a.do === 'remove') {
       if (!r.items.some((i) => i.id === a.id)) continue;
       const name = nameOf(a.id);
       r = removeItem(r, a.id);
-      done.push(`收起了${name}`);
+      done.push(t('decor.log.remove', { name }));
     } else {
       const key = a.do;
       const cur = r[key];
       const next = { finish: a.finish ?? cur.finish, color: a.color ?? cur.color };
       r = { ...r, [key]: next };
       const list = key === 'wall' ? WALL_FINISHES : FLOOR_FINISHES;
-      done.push(`把${key === 'wall' ? '墙' : '地面'}换成了${colorName(next.color)}${list.find((f) => f.id === next.finish)?.name ?? ''}`);
+      done.push(t('decor.log.surface', { what: t(key === 'wall' ? 'decor.surface.wall' : 'decor.surface.floor'), color: colorName(next.color), finish: list.find((f) => f.id === next.finish)?.name }));
     }
   }
   return { room: r, done, skipped, added, touched };

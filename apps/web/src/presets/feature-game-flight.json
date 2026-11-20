@@ -386,5 +386,35 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "flight.effect": "{{parts|，}}",
+    "flight.together.visit": "{{user}}来你这边了，坐在你旁边",
+    "flight.together.bring": "你在{{user}}这边",
+    "flight.together.remote": "连线（{{user}}在自己那边，你在你那边）",
+    "flight.state": "你们怎么在一起：{{together}}\n棋盘「{{board}}」一共 {{size}} 格：{{user}}在第 {{you}} 格，{{char}}在第 {{her}} 格\n{{extra|\\n}}",
+    "flight.cell": "这一格：第 {{n}} 格\n任务：{{task}}\n效果：{{effect}}",
+    "flight.range": "第 {{from}}–{{to}} 格",
+    "flight.cells": "第 {{cells}} 格",
+    "flight.make": "你们怎么在一起：{{together}}\n棋盘一共 {{size}} 格；这一次设计：{{which}}",
+    "flight.narrator.start": "飞行棋开始了：棋盘「{{board}}」，一共 {{size}} 格，{{user}}先掷。",
+    "flight.narrator.landed": "{{who}}掷出 {{dice}}，走到第 {{n}} 格：{{task}}[[（{{effect}}）]]",
+    "flight.say.skip": "这一格我跳过……",
+    "flight.say.done": "[[做完了：{{text}}]][[{{!text}}做完了！]]",
+    "flight.result.skip": "{{user}}没做，跳过了",
+    "flight.result.done": "{{user}}做完了[[：{{text}}]]",
+    "flight.note.forward": "前进 {{n}} 格，到第 {{at}} 格",
+    "flight.note.back": "后退 {{n}} 格，到第 {{at}} 格",
+    "flight.note.again": "再掷一次",
+    "flight.note.skip": "下一回合停一轮",
+    "flight.narrator.effect": "{{who}}{{notes|，}}",
+    "flight.narrator.skipped": "{{who}}停一轮",
+    "flight.between": "现在：第 {{n}} 回合刚结束，下一回合轮到{{next}}",
+    "flight.end.won": "结果：{{who}}先到了终点",
+    "flight.end.quit": "结果：没下完，不玩了",
+    "flight.effect.forward": "前进 {{n}} 格",
+    "flight.effect.back": "后退 {{n}} 格",
+    "flight.effect.again": "再掷一次",
+    "flight.effect.skip": "停一轮"
+  }
 }

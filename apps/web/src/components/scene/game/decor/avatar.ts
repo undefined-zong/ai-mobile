@@ -1,3 +1,4 @@
+import type { TextFn } from '@app/shared';
 import { parseColor } from './model';
 import studioData from './avatar-data/studio.json';
 import looks from './avatar-data/looks.json';
@@ -383,18 +384,17 @@ export function parseAvatar(v: unknown, base: Avatar = DEFAULT_AVATAR): Avatar {
 }
 
 /** 给模型挑的选项 */
-export function describeAvatarOptions(): string {
+export function describeAvatarOptions(t: TextFn): string {
   const opts = AVATAR_FIELDS.map((f) => {
     const label = f.label.replace(/（.*）$/, '');
-    if (f.toggle) return `${f.key}（${label}）：true / false`;
-    if (f.options) return `${f.key}（${label}${f.multi ? '，可以挑好几个，写成数组，不戴写 []' : ''}）：${f.options.map((o) => `${o.id}=${o.name}`).join('、')}`;
-    return `${f.key}（${label}）：${f.colors!.map((c) => c.name).join('、')}，也可以写 #rrggbb${f.none ? `；${f.none}写 ""` : ''}`;
+    if (f.toggle) return t('decor.avatar.toggle', { key: f.key, label });
+    if (f.options) return t('decor.avatar.options', { key: f.key, label, multi: f.multi ? t('decor.avatar.multi') : null, options: f.options.map((o) => `${o.id}=${o.name}`) });
+    return t('decor.avatar.colors', { key: f.key, label, colors: f.colors!.map((c) => c.name), none: f.none });
   });
-  return [
-    ...opts,
-    ...AVATAR_PROPORTIONS.map((p) => `${p.key}（${p.label}）：${p.min}–${p.max}，${p.default} 是标准`),
-    '穿套装时（suit 不是 none）不用写上衣和下装；不穿套装时 suit 写 none',
-  ].join('\n');
+  return t('decor.avatar.all', {
+    options: opts,
+    proportions: AVATAR_PROPORTIONS.map((p) => t('decor.avatar.proportion', { key: p.key, label: p.label, min: p.min, max: p.max, standard: p.default })),
+  });
 }
 
 const nameIn = (key: keyof Avatar, id: string) => FIELD[key]?.options?.find((o) => o.id === id)?.name ?? id;
@@ -402,12 +402,20 @@ const colorIn = (key: keyof Avatar, hex: string) => FIELD[key]?.colors?.find((c)
 const patternIn = (id: string) => (id === 'plain' ? '' : (PATTERNS.find((p) => p.id === id)?.name ?? ''));
 
 /** 一句话说这个小人什么样（存进聊天、给模型看） */
-export function describeAvatar(a: Avatar): string {
-  const hair = `${colorIn('hairColor', a.hairColor)}色${a.hairColor2 ? `渐变${colorIn('hairColor2', a.hairColor2)}色` : ''}${nameIn('hair', a.hair)}（${nameIn('bangs', a.bangs)}${a.hairTop === 'flat' ? '' : `、${nameIn('hairTop', a.hairTop)}`}）`;
+export function describeAvatar(a: Avatar, t: TextFn): string {
+  const hair = t('decor.avatar.hair', {
+    color: colorIn('hairColor', a.hairColor), color2: a.hairColor2 ? colorIn('hairColor2', a.hairColor2) : null,
+    hair: nameIn('hair', a.hair), bangs: nameIn('bangs', a.bangs), top: a.hairTop === 'flat' ? null : nameIn('hairTop', a.hairTop),
+  });
   const clothes =
     a.suit !== 'none'
       ? `${colorIn('suitColor', a.suitColor)}${patternIn(a.suitPattern)}${nameIn('suit', a.suit)}`
-      : `${colorIn('topColor', a.topColor)}${patternIn(a.topPattern)}${nameIn('top', a.top)}、${colorIn('bottomColor', a.bottomColor)}${patternIn(a.bottomPattern)}${nameIn('bottom', a.bottom)}`;
-  const acc = a.acc.length ? `，戴着${colorIn('accColor', a.accColor)}的${a.acc.map((id) => nameIn('acc', id)).join('、')}` : '';
-  return `${hair}，${colorIn('eyeColor', a.eyeColor)}色眼睛（${nameIn('eyes', a.eyes)}），穿${clothes}${acc}`;
+      : t('decor.avatar.topBottom', {
+        top: `${colorIn('topColor', a.topColor)}${patternIn(a.topPattern)}${nameIn('top', a.top)}`,
+        bottom: `${colorIn('bottomColor', a.bottomColor)}${patternIn(a.bottomPattern)}${nameIn('bottom', a.bottom)}`,
+      });
+  return t('decor.avatar', {
+    hair, eyeColor: colorIn('eyeColor', a.eyeColor), eyes: nameIn('eyes', a.eyes), clothes,
+    accColor: a.acc.length ? colorIn('accColor', a.accColor) : null, acc: a.acc.map((id) => nameIn('acc', id)),
+  });
 }
