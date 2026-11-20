@@ -61,7 +61,7 @@ function reply(c: MomentComment) {
       <div class="name">{{ name(moment.authorId) }}</div>
       <p v-if="moment.text" class="text">{{ moment.text }}</p>
 
-      <PostMedia :images="moment.images" :html="moment.html" :drawing="drawing" :redraw="moment.authorId === MOMENT_USER ? undefined : (i: number) => drawMomentImage(moment.id, i, 'user', { redo: true })" @draw="(i) => drawMomentImage(moment.id, i, 'user')" />
+      <PostMedia :images="moment.images" :html="moment.html" :drawing="drawing" :album="moment.authorId === MOMENT_USER ? undefined : { characterId: moment.authorId, scene: 'moments', at: moment.createdAt, place: moment.location, text: moment.text }" :redraw="moment.authorId === MOMENT_USER ? undefined : (i: number) => drawMomentImage(moment.id, i, 'user', { redo: true })" @draw="(i) => drawMomentImage(moment.id, i, 'user')" />
 
       <div v-if="moment.location" class="location"><span class="i-lucide-map-pin text-[12px]" />{{ moment.location }}</div>
 

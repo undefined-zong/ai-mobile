@@ -562,7 +562,7 @@ async function urlOf(item: GalleryItem): Promise<string | null> {
 }
 async function preview(start: number) {
   const list = phase.value === 'end' ? sessionArt.value : art.value ? [art.value] : [];
-  const { images, start: at } = await shotViewerImages(list, Math.min(start, list.length - 1));
+  const { images, start: at } = await shotViewerImages(list, Math.min(start, list.length - 1), { characterId: her.value.id, scene: 'date' });
   if (images.length) previewImages(images, { startPosition: at });
   else showToast('本机找不到这张图了');
 }

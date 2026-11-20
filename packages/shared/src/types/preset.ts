@@ -139,7 +139,7 @@ export interface RegexScript {
  * 前三类默认使用角色扮演的程序填充块，和 SillyTavern 的对话预设一样（角色卡、世界书、聊天记录……）；
  * 后几类是一次性的任务，程序填充块是这件任务的输入（要整理的聊天、要画的画面、她的世界……）。
  */
-export type PresetCategory = 'chat' | 'feature' | 'proactive' | 'theater' | 'summary' | 'image' | 'rhythm' | 'health' | 'planner' | 'parallel' | 'device' | 'novel' | 'sprite' | 'social' | 'assistant';
+export type PresetCategory = 'chat' | 'feature' | 'proactive' | 'theater' | 'summary' | 'image' | 'rhythm' | 'health' | 'planner' | 'parallel' | 'device' | 'novel' | 'sprite' | 'social' | 'diary' | 'assistant';
 
 export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: string; icon: string }> = {
   chat: { label: '对话', desc: '主对话：聊天气泡和剧场模式。每个角色选一个（角色设定 → 预设）', icon: 'i-lucide-message-circle-heart' },
@@ -180,6 +180,11 @@ export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: st
     desc: '朋友圈和社群，各选一个预设。朋友圈：Ta按今天的节律和最近的聊天发朋友圈（正文、要配的图、缴费单 / 小票之类的一小页 HTML），给你的朋友圈点赞评论、回你的评论。社群：搜不到时按关键字建一个社群，网友每天发帖、回应你的帖子，加入社群的角色发帖、回应你（都用"社媒"的 API）',
     icon: 'i-lucide-aperture',
   },
+  diary: {
+    label: '日记',
+    desc: 'Ta的日记：开了"主动写日记"的角色每晚 22:00 按今天的节律写一篇当天的日记（云端写，App 关着也写），回忆页里也能让Ta现在写。写的是Ta自己的一天，不全围着你转；可以配一张图（写画面，交给生图画）。写什么、多长、口吻、多久配一次图都在这里改（用"日记"的 API）',
+    icon: 'i-lucide-notebook-tabs',
+  },
   assistant: {
     label: '助手',
     desc: '"我的 → 助手"用：检测导入的预设、世界书、角色卡哪些和 App 的格式不合、改成适配的（尽量只改格式），批量编辑，做角色卡、补全设定。助手怎么说话、改东西的规矩、修改的写法都在这里改',
@@ -187,7 +192,7 @@ export const PRESET_CATEGORIES: Record<PresetCategory, { label: string; desc: st
   },
 };
 
-export const PRESET_CATEGORY_ORDER: PresetCategory[] = ['chat', 'feature', 'proactive', 'social', 'theater', 'summary', 'image', 'rhythm', 'health', 'planner', 'parallel', 'device', 'novel', 'sprite', 'assistant'];
+export const PRESET_CATEGORY_ORDER: PresetCategory[] = ['chat', 'feature', 'proactive', 'social', 'diary', 'theater', 'summary', 'image', 'rhythm', 'health', 'planner', 'parallel', 'device', 'novel', 'sprite', 'assistant'];
 
 /** 默认提供角色扮演编辑选项的分类（所有分类都可以互相复制）。 */
 export const ROLEPLAY_CATEGORIES: PresetCategory[] = ['chat', 'feature', 'proactive'];
@@ -249,7 +254,7 @@ export type LifeFlag = keyof typeof LIFE_FLAGS;
  * 任务类预设（小剧场、总结、生图）的程序填充块：只放这件任务每次的输入（要整理的聊天、要画的画面……）。
  * 说明、规则、输出格式都是预设里的普通块，可以改。
  */
-export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | 'health' | 'planner' | 'parallel' | 'device' | 'novel' | 'sprite' | 'social' | 'assistant', Record<string, string>> = {
+export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | 'health' | 'planner' | 'parallel' | 'device' | 'novel' | 'sprite' | 'social' | 'diary' | 'assistant', Record<string, string>> = {
   theater: {
     storyCharacter: '角色',
     storyWorld: 'Ta的世界（作息、手头的事、身边的人）',
@@ -349,6 +354,15 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
     communityMembers: '社群里你认识的人（你、你邀请进来的角色）',
     communityFeed: '社群最近的帖子',
     communityPost: '这一帖和下面的回复（回应时）',
+  },
+  diary: {
+    diaryCharacter: '角色（名字、描述、性格、场景）',
+    diaryDay: 'Ta今天的节律（作息、三餐、穿着、手头的事、今天的小事）',
+    diaryNow: '现在（日期、星期、时间、天气）',
+    diaryUser: '今天和你（聊天里说过的、一起做过的事）',
+    diaryMemories: 'Ta记得的关于你的事',
+    diaryPrevious: '最近几篇日记（不要重复）',
+    diaryAsk: '这一次要写的',
   },
   assistant: {
     assistantFormats: '特殊格式（App 认的写法、参照的自带预设，按要看的对象挑）',

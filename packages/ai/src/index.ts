@@ -86,6 +86,7 @@ export * from './mcp/oauth.ts';
 export * from './agents/device.ts';
 export * from './agents/sprite.ts';
 export * from './agents/social.ts';
+export * from './agents/diary.ts';
 export * from './agents/parallel.ts';
 export * from './agents/community.ts';
 export * from './places.ts';

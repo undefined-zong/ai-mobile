@@ -22,7 +22,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import HScroll from '@/components/common/HScroll.vue';
 import RealMap from '@/components/map/RealMap.vue';
 import WorldMap from '@/components/map/WorldMap.vue';
-import { mockToday } from '@/mock/activity';
+import { dayEvents, dayStats, todayDate, type DayEvent } from '@/services/myDay';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -49,7 +49,6 @@ const app = useAppStore();
 const chars = useCharacterStore();
 const chat = useChatStore();
 const real = useRealWorldStore();
-const today = mockToday();
 const now = new Date();
 
 /** "建世界"生成的世界登记在 @app/shared 里（不是响应式的）：读一下节律里的世界，建好以后地图跟着更新 */
@@ -163,6 +162,19 @@ const suggestion = computed(() => {
   const activity = loc.activities.find((a) => a.sceneId === t.scene) ?? loc.activities[0]!;
   return { loc, activity, text: `「${t.text}」` };
 });
+
+// —— 我的世界 · 今天的你：全是真的记录（聊天里的运动卡、饭卡、学习卡……，运动记录，家务，哄睡），见 services/myDay.ts ——
+const myEvents = computed(() => dayEvents(todayDate()));
+const myStats = computed(() => dayStats(todayDate(), myEvents.value));
+const mealCount = computed(() => (['breakfast', 'lunch', 'dinner'] as const).filter((k) => myStats.value.meals[k]).length);
+const sleepText = computed(() => {
+  const s = myStats.value.sleep;
+  return s ? (s.hours !== null ? `${s.hours}h` : hhmm(s.bed)) : '—';
+});
+const myDayLimit = ref(6);
+function openEvent(e: DayEvent) {
+  if (e.chatId) void router.push({ path: `/chat/${e.chatId}`, query: e.messageId ? { at: e.messageId } : {} });
+}
 
 // —— 共同的家：她的世界"一起做点什么"里，紧挨着打电话，一直在（地点是你的家） ——
 const homeStore = useHomeStore();
@@ -475,13 +487,37 @@ watch(
         </div>
         <p v-else class="note">还没有足迹。和Ta们连线一起做事、或者带Ta们出门之后，你这边的地点会记在这里。</p>
 
-        <div class="group-title">今天的你</div>
-        <div class="grid grid-cols-4 gap-2 px-4">
-          <div class="stat"><span class="i-lucide-footprints" /><b class="num">{{ (today.steps / 1000).toFixed(1) }}k</b><small>步数</small></div>
-          <div class="stat"><span class="i-lucide-utensils" /><b>{{ [today.meals.breakfast, today.meals.lunch, today.meals.dinner].filter(Boolean).length }}/3</b><small>三餐</small></div>
-          <div class="stat"><span class="i-lucide-book-open" /><b class="num">{{ today.studyMin }}′</b><small>学习</small></div>
-          <div class="stat"><span class="i-lucide-moon-star" /><b class="num">{{ today.lastSleep.hours }}h</b><small>睡眠</small></div>
+        <div class="group-title">今天的你<span class="text-[11.5px]">· 真实记录</span></div>
+        <div class="grid grid-cols-4 gap-2 px-4" data-testid="my-day-stats">
+          <div class="stat" :title="myStats.steps ? `${myStats.steps} 步` : ''">
+            <span class="i-lucide-dumbbell" /><b class="num">{{ myStats.workoutMin ? `${myStats.workoutMin}′` : '—' }}</b>
+            <small>{{ myStats.steps ? `${(myStats.steps / 1000).toFixed(1)}k 步` : myStats.km ? `${myStats.km} 公里` : '运动' }}</small>
+          </div>
+          <div class="stat"><span class="i-lucide-utensils" /><b>{{ mealCount }}/3</b><small>三餐</small></div>
+          <div class="stat"><span class="i-lucide-book-open" /><b class="num">{{ myStats.studyMin ? `${myStats.studyMin}′` : '—' }}</b><small>学习</small></div>
+          <div class="stat"><span class="i-lucide-moon-star" /><b class="num">{{ sleepText }}</b><small>{{ myStats.sleep?.hours != null ? '睡眠' : myStats.sleep ? '入睡' : '睡眠' }}</small></div>
         </div>
+        <div v-if="myStats.chores || myStats.lastSong" class="flex flex-wrap gap-2 px-4 mt-2 text-[12px] text-ink-2">
+          <RouterLink v-if="myStats.chores" to="/scene/home?at=real:home" class="pill"><span class="i-lucide-house" />家务 {{ myStats.chores.done }}/{{ myStats.chores.total }}</RouterLink>
+          <span v-if="myStats.lastSong" class="pill"><span class="i-lucide-music-2" />《{{ myStats.lastSong }}》</span>
+        </div>
+
+        <div class="group-title">我的一天<span class="text-[11.5px]">{{ myEvents.length ? `· ${myEvents.length} 件` : '' }}</span></div>
+        <ol v-if="myEvents.length" class="my-day px-4" data-testid="my-day">
+          <li v-for="e in myEvents.slice(-myDayLimit).reverse()" :key="e.key">
+            <component :is="e.chatId ? 'button' : 'div'" type="button" class="day-row" :class="{ press: !!e.chatId }" @click="openEvent(e)">
+              <span class="time num">{{ hhmm(e.at) }}</span>
+              <span class="near-icon !w-[34px] !h-[34px] !text-[17px]"><span :class="e.icon" /></span>
+              <div class="flex-1 min-w-0 text-left">
+                <div class="text-[14px] font-600 truncate">{{ e.title }}</div>
+                <div v-if="e.detail" class="text-[12px] text-ink-3 truncate">{{ e.detail }}</div>
+              </div>
+              <Avatar v-if="e.characterId && chars.byId(e.characterId)" :character="chars.byId(e.characterId)!" :size="24" />
+            </component>
+          </li>
+        </ol>
+        <div v-if="myEvents.length > myDayLimit" class="px-4 mt-2"><van-button size="small" round block @click="myDayLimit += 20">再看 {{ Math.min(20, myEvents.length - myDayLimit) }} 件</van-button></div>
+        <p v-if="!myEvents.length" class="note">今天还没有记录。和Ta一起健身、吃饭、学习、看片、哄睡之后，这里会按时间记下来（凌晨 4 点算新的一天）。</p>
       </template>
     </div>
 
@@ -702,6 +738,41 @@ watch(
 .stat small {
   color: var(--ink-3);
   font-size: 11.5px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.my-day {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  list-style: none;
+}
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: inherit;
+}
+.day-row .time {
+  width: 40px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  text-align: left;
+  flex-shrink: 0;
 }
 .loc-icon {
   display: inline-flex;

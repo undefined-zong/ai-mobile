@@ -5,7 +5,7 @@ import type { AgentRoute } from '@app/shared';
  * 第一次打开时各功能的设置。API 设置按功能分：每个功能自己选渠道、填地址、Key、模型。
  * - 主对话还没设置：选渠道、填 Key 之后真的调用；
  * - 「陪伴 · 快速」先跟随主对话，想用便宜快的模型就单独设置；
- * - 生图提示词、节律、控制指令、约会跟随「陪伴 · 快速」；番外、创作 · 小说、总结、健康计划、主动消息、社媒（朋友圈和社群）、平行时空、助手、识图跟随主对话；
+ * - 生图提示词、节律、控制指令、约会跟随「陪伴 · 快速」；番外、创作 · 小说、总结、健康计划、主动消息、社媒（朋友圈和社群）、日记、平行时空、助手、识图跟随主对话；
  * - 向量化、语音合成、语音识别先选好硅基流动，生图先选好 NovelAI，只差 Key。
  * 没填 Key 的功能继续用演示模型，所以不填也能逛。
  */
@@ -36,6 +36,8 @@ export function defaultRoutes(): AgentRoute[] {
     { role: 'proactive', follow: 'main', api: null, backup: null, runsOn: 'hub' },
     // 社媒（朋友圈、社群）：朋友圈要像她本人写的，默认跟随主对话（每日上限不设，想省钱在 API 设置里填）
     { role: 'social', follow: 'main', api: null, backup: null, runsOn: 'auto', params: { temperature: 1 } },
+    // 日记：要像她本人写的，默认跟随主对话；每晚 22:00 在云端写（没连云端时 App 开着照样写）
+    { role: 'diary', follow: 'main', api: null, backup: null, runsOn: 'auto', params: { temperature: 1 } },
     // 平行时空：留言要像她本人写的、改日程要拿主意，默认跟随主对话；她自己留言在云端跑（没连云端时 App 开着照样留）
     { role: 'parallel', follow: 'main', api: null, backup: null, runsOn: 'auto' },
     // 助手：要读整份预设、照规矩改格式，默认跟随主对话（想用上下文更长、更听话的模型就单独设置）

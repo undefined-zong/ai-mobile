@@ -88,7 +88,7 @@ function reply(c: CommunityComment) {
 
     <h3 v-if="post.title" class="title">{{ post.title }}</h3>
     <p v-if="post.text" class="text">{{ post.text }}</p>
-    <PostMedia :images="post.images" :html="post.html" :drawing="drawing" :redraw="(i: number) => drawPostImage(post.id, i, 'user', { redo: true })" @draw="(i) => drawPostImage(post.id, i, 'user')" />
+    <PostMedia :images="post.images" :html="post.html" :drawing="drawing" :album="{ characterId: chars.byId(post.authorId) ? post.authorId : null, scene: 'community', at: post.createdAt, text: post.title || post.text }" :redraw="(i: number) => drawPostImage(post.id, i, 'user', { redo: true })" @draw="(i) => drawPostImage(post.id, i, 'user')" />
 
     <div class="bar">
       <button type="button" class="stat press" :class="{ on: liked }" :aria-pressed="liked" :aria-label="`点赞，现在 ${likes} 个`" @click="userLikePost(post.id)">

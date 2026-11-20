@@ -12,7 +12,7 @@ import { assetUrl } from '@/services/assets';
 import { chapterLabel } from '@/services/workshop';
 import type { IllustrateStage } from '@/services/types';
 import { useAiStore } from '@/stores/ai';
-import { useWorkshopStore, type Drawing } from '@/stores/workshop';
+import { drawingAlbum, useWorkshopStore, type Drawing } from '@/stores/workshop';
 
 /**
  * 创意工坊 · 画画（设计文档 §9.11）：你写想画什么，生图提示词智能体按"创意工坊 · 画画"的生图预设（game-workshop-image）写成 tags，再调生图 API。
@@ -138,7 +138,7 @@ async function preview() {
   const r = result.value;
   if (!r) return;
   const url = r.assetKey ? await assetUrl(r.assetKey) : r.url;
-  if (url) previewImages([url]);
+  if (url) previewImages([{ url, name: r.title, album: drawingAlbum(r) }]);
   else showToast('本机找不到这张图了');
 }
 

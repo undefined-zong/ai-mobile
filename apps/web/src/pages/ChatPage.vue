@@ -29,6 +29,7 @@ import { personaOf, presetFor } from '@/services/prompt';
 import { pendingForSummary, type SummaryOutcome } from '@/services/summary';
 import { loadOlder, syncState } from '@/services/sync';
 import { useAiStore } from '@/stores/ai';
+import { useAlbumStore } from '@/stores/album';
 import { useAppStore } from '@/stores/app';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useCharacterStore } from '@/stores/characters';
@@ -403,6 +404,24 @@ function openImage(p: MessagePart) {
 }
 function redrawImage() {
   if (imagePart.value) chatStore.redraw(chatId.value, imagePart.value);
+}
+// —— 存到相册（回忆 → 相册）：生成的配图 ——
+const album = useAlbumStore();
+const imageInAlbum = computed(() => {
+  const p = imagePart.value;
+  return p?.type === 'image' && !!p.assetKey && !!album.find({ assetKey: p.assetKey });
+});
+function keepImage() {
+  const p = imagePart.value;
+  if (p?.type !== 'image' || !p.assetKey || p.photo) return;
+  const msg = chatStore.list(chatId.value).find((m) => m.parts.includes(p));
+  const scene = p.use?.startsWith('image:') ? p.use.slice('image:'.length) : 'chat';
+  const r = album.add({
+    assetKey: p.assetKey, characterId: character.value?.id ?? null, title: p.title ?? '', caption: p.caption, scene, at: msg?.createdAt ?? Date.now(),
+    ...(p.prompt ? { prompt: p.prompt } : {}), ...(p.seed != null ? { seed: p.seed } : {}), ...(p.model ? { model: p.model } : {}),
+  });
+  if (!r.ok) showToast(r.reason);
+  else showToast(r.existed ? '已经在相册里了' : '存到相册了（回忆 → 相册）');
 }
 /** 保存图片：手机上弹系统分享（能存进相册），电脑上下载成文件；本机清掉了缓存的先从云端取回来；服务商只给了链接的新开一页打开 */
 async function saveImage() {
@@ -780,6 +799,7 @@ const timeChip = computed(() => [hhmm(Date.now()), stageWeather.value ? weatherS
         <div v-if="imagePart.seed || imagePart.model" class="text-[12px] text-ink-3 num">{{ [imagePart.seed ? `种子：${imagePart.seed}` : '', imagePart.model ?? ''].filter(Boolean).join(' · ') }}</div>
         <div class="flex gap-2 mt-3">
           <van-button size="small" round block :disabled="!imagePart.generated && !imagePart.error" @click="redrawImage">重新生成</van-button>
+          <van-button size="small" round block :disabled="!imagePart.assetKey" :icon="imageInAlbum ? 'success' : undefined" data-testid="chat-image-album" @click="keepImage">{{ imageInAlbum ? '已在相册' : '存到相册' }}</van-button>
           <van-button size="small" round block type="primary" :disabled="!imagePart.assetKey" @click="saveImage">保存图片</van-button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue';
 import { showToast, type ImagePreviewInstance } from 'vant';
 import { saveFiles } from '@/services/download';
 import { imageViewer, type ViewerImage } from '@/services/imageViewer';
+import { useAlbumStore } from '@/stores/album';
 
 /** 全屏看图：和原来的 vant 看图一样，底下多一个"下载"（services/imageViewer.ts 的 previewImages 打开） */
 const urls = computed(() => imageViewer.images.map((i) => i.url));
@@ -40,6 +41,21 @@ async function redraw(compare = false) {
     next.delete(img);
     redrawing.value = next;
   }
+}
+
+// —— 存到相册（生成的图）——
+const album = useAlbumStore();
+/** 这一张已经在相册里了（重画换了图之后按新图算） */
+const inAlbum = computed(() => {
+  const a = current.value?.album;
+  return !!a && !!album.find(a);
+});
+function keep() {
+  const a = current.value?.album;
+  if (!a) return;
+  const r = album.add(a);
+  if (!r.ok) showToast(r.reason);
+  else showToast(r.existed ? '已经在相册里了' : '存到相册了（回忆 → 相册）');
 }
 
 async function save() {
@@ -82,6 +98,10 @@ async function save() {
         <button v-if="current?.compareVibe" type="button" class="viewer-btn press" :disabled="busy" data-testid="viewer-compare-vibe" @click.stop="redraw(true)">
           <span class="i-lucide-columns-2" />
           <span>去掉 Vibe 对比</span>
+        </button>
+        <button v-if="current?.album" type="button" class="viewer-btn press" :class="{ kept: inAlbum }" :aria-label="inAlbum ? '已在相册里' : '存到相册'" data-testid="viewer-album" @click.stop="keep">
+          <span :class="inAlbum ? 'i-lucide-images' : 'i-lucide-image-plus'" />
+          <span>{{ inAlbum ? '已在相册' : '存到相册' }}</span>
         </button>
         <button type="button" class="viewer-btn press" :disabled="saving" aria-label="下载这张图" data-testid="viewer-save" @click.stop="save">
           <span :class="saving ? 'i-lucide-loader-circle animate-spin' : 'i-lucide-download'" />
@@ -129,6 +149,10 @@ async function save() {
   font-size: 14px;
   backdrop-filter: blur(8px);
   white-space: nowrap;
+}
+.viewer-btn.kept {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.18);
 }
 .viewer-btn:disabled {
   opacity: 0.6;

@@ -149,6 +149,7 @@ export type AgentRole =
   | 'device'
   | 'proactive'
   | 'social'
+  | 'diary'
   | 'assistant'
   | 'vision'
   | 'tts'
@@ -336,6 +337,13 @@ export const AGENT_META: Record<
     capability: 'chat',
     runsOn: 'both',
     icon: 'i-lucide-aperture',
+  },
+  diary: {
+    label: '日记',
+    desc: '开了"主动写日记"的角色每晚 22:00 按今天的节律写一篇当天的日记（云端写，App 关着也写），回忆 → 日记里也能让Ta现在写。要像Ta本人写的，默认跟随主对话；要配的图交给"生图"画',
+    capability: 'chat',
+    runsOn: 'both',
+    icon: 'i-lucide-notebook-tabs',
   },
   assistant: {
     label: '助手',

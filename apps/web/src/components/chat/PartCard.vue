@@ -102,7 +102,7 @@ async function previewShots(start: number) {
   const p = props.part;
   if ((p.type !== 'study' && p.type !== 'meal' && p.type !== 'date') || !p.images?.length) return;
   // 图库里还有的那几张能重新生成（重画后卡片跟着换）
-  const { images, start: at } = await shotViewerImages(p.images, Math.min(start, p.images.length - 1));
+  const { images, start: at } = await shotViewerImages(p.images, Math.min(start, p.images.length - 1), { characterId: props.character.id, scene: p.type });
   if (images.length) previewImages(images, { startPosition: at });
   else showToast('本机找不到这几张图了');
 }

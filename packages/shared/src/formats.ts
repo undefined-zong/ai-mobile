@@ -251,6 +251,8 @@ const KEY_TASK_MARKERS = new Set([
   'spriteCharacter',
   'spriteAsk',
   'socialAsk',
+  'diaryCharacter',
+  'diaryAsk',
   'assistantTargets',
   'assistantAsk',
 ]);

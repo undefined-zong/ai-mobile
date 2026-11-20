@@ -114,14 +114,42 @@ export interface MemoryProfile extends SyncMeta {
   lines: ProfileLine[];
 }
 
-/** 角色日记：每晚由总结智能体用角色口吻写 */
+/** 日记里的一张配图：模型写画面，手机用"生图"画（云端不画） */
+export interface DiaryImage {
+  /** 要画的画面（中文一句话） */
+  caption: string;
+  /** 本机素材库的 key；还没画、没画成时为空 */
+  assetKey: string | null;
+  /** 服务商只给了链接时 */
+  url?: string;
+  /** 生图提示词智能体起的标题 */
+  title?: string;
+  /** 没画成的原因 */
+  error?: string;
+}
+
+/**
+ * 角色日记：开了"主动写日记"的角色每晚 22:00（Ta所在时区）按今天的节律写一篇（"日记"预设、"日记"的 API）；
+ * 也可以在回忆页里让Ta现在写。云端写好、手机拉下来后再画配图。
+ */
 export interface DiaryEntry extends SyncMeta {
   characterId: string;
+  /** 写的是哪一天（节律日，凌晨 4 点算起）："2026-11-18" */
   date: ISODate;
+  /** 标题（可以没有） */
+  title?: string;
   weather: string;
   mood: string;
   text: string;
+  /** 这一天的几个关键词（回忆页里的小标签） */
   highlights: string[];
+  /** 配图（0–1 张） */
+  images?: DiaryImage[];
+  /** 谁写的：手机 / 云端 */
+  source?: 'device' | 'hub';
+  model?: string;
+  /** 还没看过 */
+  unread?: boolean;
 }
 
 /** 检索打分 = similarity·w1 + recency·w2 + importance·w3，新近度按半衰期衰减 */

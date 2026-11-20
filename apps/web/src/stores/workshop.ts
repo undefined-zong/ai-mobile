@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { autoSave, getOne } from '@/db/idb';
 import { uid } from '@/utils/id';
+import type { AlbumDraft } from './album';
 
 /**
  * 一起游戏 · 创意工坊的存档：你写的小说（和写作助手的讨论、写好的章节和番外）、你画的画。
@@ -39,6 +40,15 @@ export interface Novel {
   talk: NovelTalk[];
   createdAt: number;
   updatedAt: number;
+}
+
+/** 创意工坊的一张画存到相册时记下的 */
+export function drawingAlbum(d: Drawing): AlbumDraft | undefined {
+  if (!d.assetKey && !d.url) return undefined;
+  return {
+    assetKey: d.assetKey, ...(d.url ? { url: d.url } : {}), characterId: d.characterId ?? null, title: d.title, caption: d.caption,
+    scene: 'workshop', at: d.at, prompt: d.prompt, seed: d.seed, model: d.model,
+  };
 }
 
 export interface Drawing {

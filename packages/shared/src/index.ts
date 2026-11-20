@@ -57,6 +57,7 @@ export * from './parallel.ts';
 export * from './parallelCapture.ts';
 export * from './date.ts';
 export * from './social.ts';
+export * from './diary.ts';
 export * from './community.ts';
 export * from './formats.ts';
 export * from './presetBlocks.ts';
