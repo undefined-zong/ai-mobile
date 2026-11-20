@@ -5,6 +5,7 @@ import {
   parseCommunityBatch, parseCommunityDraft, parseCommunityReaction, parseMemberReaction, postsFromDrafts, shiftDate, socialDayText, zonedDateKey,
   type Character, type Community, type CommunityContext, type CommunityImageMoment, type CommunityPost, type MomentImage, type Preset,
 } from '@app/shared';
+import { onRemote } from '@/db/idb';
 import { putAsset } from './assets';
 import { describePhoto } from './photos';
 import { MissingPresetError } from './prompt';
@@ -290,6 +291,14 @@ let scheduleStarted = false;
 export function startCommunitySchedule() {
   if (scheduleStarted) return;
   scheduleStarted = true;
+  // Key 只存在各自的设备上，帖子连同配图的失败原因却会多设备同步：别的设备自动画失败的图，这台设备用自己的生图 API 再自动画一次
+  const store = useCommunityStore();
+  onRemote('communityPosts', (changes) => {
+    for (const c of changes) {
+      const p = c.deleted ? undefined : store.postById(c.key);
+      if (p?.images[0]?.error) void drawPostImage(p.id, 0, 'auto');
+    }
+  });
   // 等云端状态同步回来再看要不要自己发
   setTimeout(() => void localTick(), 45_000);
   setInterval(() => void localTick(), 5 * 60_000);
@@ -303,6 +312,9 @@ export function receiveHubPosts(list: CommunityPost[]): CommunityPost[] {
 }
 
 // —— 配图 ——
+
+/** 这台设备这次打开以来自动画过的图（`image:帖子:第几张`） */
+const autoTried = new Set<string>();
 
 /**
  * 画这一帖的第 index 张图（发帖时模型写了画面，这里交给生图）：用"社群配图"的生图预设。
@@ -320,6 +332,9 @@ export async function drawPostImage(postId: string, index = 0, priority: 'user' 
   if ((img.assetKey || img.url) && !opts.redo) return { ok: true };
   if (priority === 'auto') {
     if (!store.settings.autoImage) return { ok: false, reason: '自动画关着' };
+    // 每张图这台设备只自动画一次：两台设备都画不出来时，失败结果互相同步过去也不会来回重画
+    if (autoTried.has(key)) return { ok: false, reason: '这台设备已经自动画过这张' };
+    autoTried.add(key);
     const check = useGalleryStore().autoCheck({ ignoreSwitch: true });
     if (!check.ok) {
       img.error = check.reason;
