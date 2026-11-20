@@ -71,6 +71,7 @@ function blockFrom(raw: unknown, i: number, warnings: string[]): PromptBlock | n
     injection: { position: inj.position === 'absolute' ? 'absolute' : 'relative', depth: num(inj.depth, 4), ...(typeof inj.order === 'number' ? { order: inj.order } : {}) },
     ...(raw.forbidOverrides === true ? { forbidOverrides: true } : {}),
     ...(Array.isArray(raw.triggers) && raw.triggers.length ? { triggers: raw.triggers.map(String) } : {}),
+    ...(isObj(raw.variants) ? { variants: Object.fromEntries(Object.entries(raw.variants).filter(([, v]) => typeof v === 'string' && v.trim())) as Record<string, string> } : {}),
     ...(raw.origin === 'app' ? { origin: 'app' as const } : {}),
     ...(isObj(raw.extra) ? { extra: raw.extra } : {}),
   };

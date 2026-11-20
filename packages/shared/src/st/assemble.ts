@@ -3,7 +3,7 @@ import { characterPronoun } from '../pronouns.ts';
 import type { LoreTimedState, Lorebook } from '../types/lorebook.ts';
 import type { Preset, PromptBlock } from '../types/preset.ts';
 import { substituteMacros, type MacroContext } from './macros.ts';
-import { markerContent, reportMarkerInjections } from './markers.ts';
+import { markerContent, reportMarkerInjections, type MarkerContext } from './markers.ts';
 import { estimateTokens } from './tokens.ts';
 import { scanWorldInfo, type WorldInfoResult } from './worldinfo.ts';
 
@@ -54,6 +54,8 @@ export interface AssembleInput {
    * 没写触发条件的块照常发送
    */
   task?: string;
+  /** 这一次在哪个场景（程序块按场景写的内容、记"上一次注入的内容"用）；不给时不分场景 */
+  context?: MarkerContext;
   /**
    * 你人设里开着的系统（housework 家务、health 健康，见 LIFE_FLAGS）：触发条件里写了它们的块只在开着时发送
    * （"家务：你怎么反应"那一块，没开家务系统时不发）
@@ -283,7 +285,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const fill = (b: PromptBlock): { content: string; source: string; filled?: string } => {
     const r = programFill(b);
     if (!b.marker) return r;
-    const content = markerContent(b.content, r.content, ctx);
+    const content = markerContent(b, input.context?.keys ?? [], r.content, ctx);
     return content === r.content ? r : { content, source: `${r.source} · 套用了这一块写的内容`, filled: r.content };
   };
 
@@ -543,6 +545,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   if (!input.dryRun) {
     reportMarkerInjections(
       preset.id,
+      input.context ?? { keys: [], who: character.name },
       reports
         .filter((r) => r.marker && r.identifier !== 'chatHistory' && r.identifier !== 'dialogueExamples')
         .map((r) => ({ identifier: r.identifier, content: r.content, filled: r.filled, source: r.source, sent: r.sent, note: r.note })),

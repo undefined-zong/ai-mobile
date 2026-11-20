@@ -468,6 +468,8 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
     dryRun: opts.dryRun,
     model,
     task: opts.task?.name,
+    // 程序块按场景写的内容、上一次注入的内容：按这一轮的用途（chat、scene:meal、proactive……），场景里的某一步再细一层
+    context: { keys: opts.task?.name ? [`${use}|${opts.task.name}`, use] : [use], who: character.name },
     flags,
   });
   const request = buildChatRequest(result, preset, model);

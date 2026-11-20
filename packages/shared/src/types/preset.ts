@@ -20,6 +20,11 @@ export interface PromptBlock {
   forbidOverrides?: boolean;
   /** 只在这些生成类型里发送；为空表示都发送（ST 的 injection_trigger） */
   triggers?: string[];
+  /**
+   * 程序块按场景写的内容：键是这一次的场景 / 用途（对话：chat、scene:meal、proactive……，场景里的某一步再加 |步骤名；
+   * 任务：触发条件名 plan-day、seat……），这一次的场景写了就用它，没写用 content。写法和 content 一样（{{original}} 换成程序填的）。
+   */
+  variants?: Record<string, string>;
   /** 这一块是 App 自己补的（记忆、环境、场景规则……），不是来自导入的预设 */
   origin?: 'app';
   /** ST 里其余没有对应字段的设置（system_prompt 等），导出时原样写回 */

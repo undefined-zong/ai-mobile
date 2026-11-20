@@ -19,6 +19,8 @@ import {
   markerName,
   momentLabel,
   PRESET_CATEGORIES,
+  PRESET_USES,
+  presetUse,
   RHYTHM_TASKS,
   PRESET_CATEGORY_ORDER,
   SCENES,
@@ -34,6 +36,7 @@ import {
   TRUTH_DARE_LEVEL,
   type Preset,
   type PresetCategory,
+  type PresetUseId,
   type PromptBlock,
 } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
@@ -46,7 +49,7 @@ import SpriteBlockFields from '@/components/settings/SpriteBlockFields.vue';
 import SpriteParamsForm from '@/components/settings/SpriteParamsForm.vue';
 import { useDragSort } from '@/composables/useDragSort';
 import PageHeader from '@/layouts/PageHeader.vue';
-import { lastInjection } from '@/services/markerInjections';
+import { injectionsOf } from '@/services/markerInjections';
 import { useCharacterStore } from '@/stores/characters';
 import { useLibraryStore } from '@/stores/library';
 import { hhmm, monthDay } from '@/utils/time';
@@ -54,8 +57,9 @@ import { hhmm, monthDay } from '@/utils/time';
 /**
  * 编辑一个预设（自带的和导入的一样）：
  * - 提示词：每一块的名字、内容、角色、位置都能改，能加块、删块、开关；长按一块拖动调顺序（电脑上按住直接拖）；
- *   程序填充的块直接显示上一次注入的内容（services/markerInjections.ts 记的），块里也能写内容：空着原样发程序填的，
- *   写了就按写的发，{{original}} 换成程序填的（聊天记录、示例对话是一条条消息，不能套）；
+ *   程序填充的块按场景显示上一次注入的内容（services/markerInjections.ts 记的），块里也能写内容：所有场景一份、
+ *   某个场景单独一份（没写的场景用所有场景的）；空着原样发程序填的，写了就按写的发，{{original}} 换成程序填的
+ *   （聊天记录、示例对话是一条条消息，不能套）；
  *   "加程序块"可选所有用途的程序块（角色卡、你的人设、场景、聊天记录……）；
  *   一块或者多选几块能复制一份、复制到别的预设（目标里已经有的程序块会跳过）；
  * - 采样参数；正则（导入、改、拖动调顺序，见 components/settings/PresetRegex.vue）；名字、说明、分类（所有分类都能互换）；
@@ -97,16 +101,67 @@ function where(b: PromptBlock): string {
 }
 /** 聊天记录、示例对话是一条条消息，没有一段"注入内容"，也不能套用块里写的内容 */
 const MESSAGE_MARKERS = new Set(['chatHistory', 'dialogueExamples']);
-function injected(b: PromptBlock) {
-  return b.marker ? lastInjection(preset.value?.id, b.identifier) : undefined;
-}
 function line(b: PromptBlock): string {
   if (b.marker) {
     if (MESSAGE_MARKERS.has(b.identifier)) return `程序填充：${markerName(b.identifier) ?? b.name}`;
-    const last = injected(b)?.content.replace(/\s+/g, ' ').trim();
-    return last || `程序填充：${markerName(b.identifier) ?? b.name}（还没注入过）`;
+    const last = injectionsOf(preset.value?.id, b.identifier)[0];
+    const text = last?.content.replace(/\s+/g, ' ').trim();
+    if (!last || !text) return `程序填充：${markerName(b.identifier) ?? b.name}（还没注入过）`;
+    return last.scene ? `${sceneLabel(last.scene)}：${text}` : text;
   }
   return b.content.replace(/\s+/g, ' ').trim() || '（空）';
+}
+const variantCount = (b: PromptBlock) => Object.keys(b.variants ?? {}).length;
+
+// —— 程序块按场景：同一块在不同场景（日常聊天、一起吃饭、主动消息……；任务里的画什么、排什么）注入的内容不一样，
+// 每个场景显示自己上一次注入的，也能单独写这个场景发什么 ——
+/** 正在看哪个场景：null = 所有场景（默认的写法） */
+const scene = ref<string | null>(null);
+const injections = computed(() => (editing.value?.marker ? injectionsOf(preset.value?.id, editing.value.identifier) : []));
+/** 正在看的场景上一次注入的内容；所有场景时显示最近的一次（不管哪个场景） */
+const shown = computed(() => (scene.value === null ? injections.value[0] : injections.value.find((x) => x.scene === scene.value)));
+/** 任务类预设能分开写的场景：触发条件名（画什么 / 时刻、排什么……）；只做一件事的任务没有场景之分 */
+const TASK_SCENES: Partial<Record<PresetCategory, Record<string, string>>> = {
+  image: { ...IMAGE_MODES, ...Object.assign({}, ...Object.values(IMAGE_MOMENTS)), ...COMMUNITY_IMAGE_MOMENTS },
+  rhythm: RHYTHM_TASKS,
+  health: HEALTH_TASKS,
+  planner: PLANNER_TASKS,
+  parallel: PARALLEL_TASKS,
+  social: { ...SOCIAL_TASKS, ...COMMUNITY_TASKS },
+  sprite: SPRITE_TASKS,
+};
+/** 场景的名字：对话类是用途（日常聊天、一起吃饭……，场景里的某一步加在后面），任务类是触发条件 */
+function sceneLabel(key: string): string {
+  if (!key) return '这个任务';
+  if (roleplay.value) {
+    const [use = '', step] = key.split('|');
+    const name = use === 'chat' ? '日常聊天' : (presetUse(use as PresetUseId)?.label ?? use);
+    return step ? `${name} · ${triggerLabel(step)}` : name;
+  }
+  return key.split('+').map(triggerLabel).join(' + ');
+}
+/** 还没注入过、也没写过的场景也能先写：对话类列所有对话用途，任务类列这一类的触发条件 */
+const sceneOptions = computed((): string[] => {
+  const p = preset.value;
+  if (!p) return [];
+  if (roleplay.value) return ['chat', ...PRESET_USES.filter((u) => isRoleplayCategory(u.category)).map((u) => u.id)];
+  return Object.keys(TASK_SCENES[p.category] ?? {});
+});
+/** 小标签：注入过的（最近的在前）、写过内容的、刚选的 */
+const sceneChips = computed(() => {
+  const b = editing.value;
+  if (!b?.marker) return [];
+  const keys = [...injections.value.map((x) => x.scene), ...Object.keys(b.variants ?? {}), ...(scene.value ? [scene.value] : [])];
+  return [...new Set(keys)].filter(Boolean).map((key) => ({ key, label: sceneLabel(key), written: !!b.variants?.[key]?.trim() }));
+});
+const morePicking = ref(false);
+const moreScenes = computed(() => sceneOptions.value.filter((k) => !sceneChips.value.some((c) => c.key === k)).map((k) => ({ name: sceneLabel(k), key: k })));
+function setVariant(b: PromptBlock, key: string, text: string) {
+  const vs = { ...(b.variants ?? {}) };
+  if (text.trim()) vs[key] = text;
+  else delete vs[key];
+  if (Object.keys(vs).length) b.variants = vs;
+  else delete b.variants;
 }
 function injectedAt(ts: number): string {
   return `${monthDay(ts)} ${hhmm(ts)}`;
@@ -115,6 +170,8 @@ function injectedAt(ts: number): string {
 // —— 一块一块地改 ——
 const editing = ref<PromptBlock | null>(null);
 const editOpen = computed({ get: () => !!editing.value, set: (v) => !v && (editing.value = null) });
+// 换一块就回到"所有场景"
+watch(editing, () => (scene.value = null));
 // 直接换到另一个预设（同一个页面换参数）：正在改的那一块属于上一个预设，关掉
 watch(
   () => route.params.id,
@@ -465,6 +522,7 @@ const HINT: Record<PresetCategory, string> = {
               <span class="block-tags">
                 <span class="tag">{{ ROLE[b.role] }}</span>
                 <span v-if="b.marker" class="tag accent">程序填充</span>
+                <span v-if="b.marker && variantCount(b)" class="tag">按场景写了 {{ variantCount(b) }} 处</span>
                 <span v-if="b.triggers?.length" class="tag">只在 {{ b.triggers.map(triggerLabel).join(' / ') }}</span>
               </span>
             </div>
@@ -555,30 +613,58 @@ const HINT: Record<PresetCategory, string> = {
             <p class="text-[12.5px] text-ink-3 mt-1.5 mb-0 leading-relaxed">这一块是一条条消息，每一条在"查看提示词"里能看到。</p>
           </template>
           <template v-else>
-            <div class="field-label">上一次注入的内容</div>
-            <template v-if="injected(editing)">
-              <div class="text-[11.5px] text-ink-3 mb-1.5" data-testid="marker-injected-meta">
-                {{ injectedAt(injected(editing)!.at) }}<template v-if="injected(editing)!.source"> · {{ injected(editing)!.source }}</template><template v-if="!injected(editing)!.sent"> · 没发送{{ injected(editing)!.note ? `（${injected(editing)!.note}）` : '' }}</template>
+            <template v-if="sceneOptions.length || sceneChips.length">
+              <div class="field-label">场景</div>
+              <div class="scene-chips" data-testid="marker-scenes">
+                <button type="button" class="opt" :class="{ on: scene === null }" @click="scene = null">所有场景</button>
+                <button v-for="c in sceneChips" :key="c.key" type="button" class="opt" :class="{ on: scene === c.key }" :data-scene="c.key" @click="scene = c.key">
+                  {{ c.label }}<span v-if="c.written" class="i-lucide-pencil ml-1 align-[-1px] text-[11px]" aria-label="单独写了" />
+                </button>
+                <button v-if="moreScenes.length" type="button" class="opt" @click="morePicking = true"><span class="i-lucide-plus mr-0.5 align-[-1px]" />别的场景</button>
               </div>
-              <pre class="injected" data-testid="marker-injected">{{ injected(editing)!.content }}</pre>
-              <template v-if="injected(editing)!.filled !== undefined">
-                <div class="text-[11.5px] text-ink-3 mt-2 mb-1.5">程序填的原内容（{{ '{{original}}' }}）</div>
-                <pre class="injected">{{ injected(editing)!.filled }}</pre>
+            </template>
+            <div class="field-label">{{ scene === null ? '上一次注入的内容' : `在「${sceneLabel(scene)}」上一次注入的内容` }}</div>
+            <template v-if="shown">
+              <div class="text-[11.5px] text-ink-3 mb-1.5" data-testid="marker-injected-meta">
+                {{ injectedAt(shown.at) }}<template v-if="scene === null && shown.scene"> · {{ sceneLabel(shown.scene) }}</template><template v-if="shown.who"> · {{ shown.who }}</template><template v-if="shown.source"> · {{ shown.source }}</template><template v-if="!shown.sent"> · 没发送{{ shown.note ? `（${shown.note}）` : '' }}</template>
+              </div>
+              <pre class="injected" data-testid="marker-injected">{{ shown.content }}</pre>
+              <template v-if="shown.filled !== undefined">
+                <div class="text-[11.5px] text-ink-3 mt-2 mb-1.5">程序填的原内容（<code v-pre>{{original}}</code>）</div>
+                <pre class="injected">{{ shown.filled }}</pre>
               </template>
             </template>
-            <p v-else class="text-[12.5px] text-ink-3 mt-0 mb-0 leading-relaxed" data-testid="marker-injected">还没注入过：用一次这个预设（对应的功能），这里就显示注入了什么。</p>
-            <label class="field-label" for="be-content">这一块发什么</label>
-            <textarea
-              id="be-content"
-              v-model="editing.content"
-              class="textarea"
-              rows="5"
-              spellcheck="false"
-              placeholder="空着 = 原样发送程序填的内容"
-              @change="touch"
-            />
+            <p v-else class="text-[12.5px] text-ink-3 mt-0 mb-0 leading-relaxed" data-testid="marker-injected">
+              {{ scene === null ? '还没注入过' : `在「${sceneLabel(scene)}」还没注入过` }}：用一次就显示注入了什么。
+            </p>
+            <template v-if="scene === null">
+              <label class="field-label" for="be-content">所有场景发什么</label>
+              <textarea
+                id="be-content"
+                v-model="editing.content"
+                class="textarea"
+                rows="5"
+                spellcheck="false"
+                placeholder="空着 = 原样发送程序填的内容"
+                @change="touch"
+              />
+            </template>
+            <template v-else>
+              <label class="field-label" for="be-variant">在「{{ sceneLabel(scene) }}」发什么</label>
+              <textarea
+                id="be-variant"
+                :value="editing.variants?.[scene] ?? ''"
+                class="textarea"
+                rows="5"
+                spellcheck="false"
+                :placeholder="editing.content.trim() ? '空着 = 用「所有场景」的写法' : '空着 = 用「所有场景」的写法（现在也是空的：原样发送程序填的内容）'"
+                @input="setVariant(editing, scene, ($event.target as HTMLTextAreaElement).value)"
+                @change="touch"
+              />
+            </template>
             <p class="text-[12px] text-ink-3 mt-1.5 mb-0 leading-relaxed">
-              写了就按你写的发，{{ '{{original}}' }} 换成程序填的内容（不写 {{ '{{original}}' }} 就整块换成你写的）；程序这一次没内容时这一块不发。
+              写了就按你写的发，<code v-pre>{{original}}</code> 换成程序这一次填的内容（不写 <code v-pre>{{original}}</code> 就整块换成你写的）；程序这一次没内容时这一块不发。
+              单独写了的场景用自己的，没写的用「所有场景」的。
             </p>
           </template>
         </template>
@@ -687,6 +773,15 @@ const HINT: Record<PresetCategory, string> = {
         </div>
       </div>
     </van-popup>
+
+    <van-action-sheet
+      v-model:show="morePicking"
+      title="单独写哪个场景"
+      :actions="moreScenes"
+      cancel-text="取消"
+      close-on-click-action
+      @select="(a: { key: string }) => (scene = a.key)"
+    />
 
     <van-popup v-model:show="markerOpen" position="bottom" round :style="{ maxHeight: '80%' }">
       <div class="sheet" data-testid="marker-picker">
@@ -806,6 +901,12 @@ const HINT: Record<PresetCategory, string> = {
 }
 .marker-row.has {
   opacity: 0.7;
+}
+/* 程序块的场景：一行放不下就换行 */
+.scene-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 /* 程序块上一次注入的内容：原样显示（保留换行），太长在框里滚 */
 .injected {

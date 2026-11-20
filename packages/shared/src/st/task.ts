@@ -1,7 +1,7 @@
 import type { Lorebook } from '../types/lorebook.ts';
 import { markerName, type Preset, type PromptBlock } from '../types/preset.ts';
 import { substituteMacros, type MacroContext } from './macros.ts';
-import { markerContent, reportMarkerInjections } from './markers.ts';
+import { markerContent, reportMarkerInjections, type MarkerContext } from './markers.ts';
 import { estimateTokens } from './tokens.ts';
 import { scanWorldInfo } from './worldinfo.ts';
 
@@ -68,6 +68,9 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
   const blocks: TaskBlockReport[] = [];
   const types = new Set(['normal', ...(Array.isArray(input.type) ? input.type : [input.type])].filter((t): t is string => !!t));
   const fills = { ...taskWorldInfo(input, ctx), ...input.fills };
+  // 程序块按场景写的内容、上一次注入的内容都按这一次的类型（任务没有类型时不分场景）
+  const own = [...types].filter((t) => t !== 'normal');
+  const context: MarkerContext = { keys: own.length > 1 ? [own.join('+'), ...own] : own, who: ctx.char || undefined };
   const supplied = new Set(input.preset.blocks.filter((b) => b.marker).map((b) => b.identifier));
   const missing = Object.keys(fills).filter((identifier) => !supplied.has(identifier));
   const inputBlock = (identifier: string, role: PromptBlock['role']): PromptBlock => ({
@@ -83,7 +86,7 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
   for (const b of list) {
     const known = !b.marker || b.identifier in fills;
     const filled = b.marker ? (fills[b.identifier] ?? '').replace(/\r/g, '') : '';
-    const content = (b.marker ? markerContent(b.content, filled, ctx) : substituteMacros(b.content, ctx)).replace(/\r/g, '');
+    const content = (b.marker ? markerContent(b, context.keys, filled, ctx) : substituteMacros(b.content, ctx)).replace(/\r/g, '');
     const report: TaskBlockReport = { identifier: b.identifier, name: b.name, role: b.role, enabled: b.enabled, marker: b.marker, content, tokens: estimateTokens(content), sent: false };
     if (b.marker && filled !== content) report.filled = filled;
     blocks.push(report);
@@ -105,6 +108,7 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
   fitContext(sent, input.preset.sampler?.contextTokens);
   reportMarkerInjections(
     input.preset.id,
+    context,
     blocks.filter((r) => r.marker).map((r) => ({ identifier: r.identifier, content: r.content, filled: r.filled, sent: r.sent, note: r.note })),
   );
   for (const r of sent.filter((x) => x.sent)) {
