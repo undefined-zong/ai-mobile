@@ -69,11 +69,19 @@ export function useTogether(
     return l && !isRealPlace(l) ? l : null;
   });
 
+  /**
+   * 能做这件事的地点。"建世界"是 AI 挑的地点和活动，可能哪儿都没写某件常用的事（比如没有影院就没有一起观影）：
+   * 常用的那几件这时放在她家做，格子不会因为重建了世界就不见。
+   */
   function placesFor(sceneId: SceneId) {
-    return world.value.locations.filter((l) => l.activities.some((a) => a.sceneId === sceneId));
+    const w = world.value;
+    const places = w.locations.filter((l) => l.activities.some((a) => a.sceneId === sceneId));
+    if (places.length || !COMMON.includes(sceneId)) return places;
+    const home = w.locations.find((l) => l.id === w.homeId) ?? w.locations[0];
+    return home ? [home] : [];
   }
   function activityAt(l: MapLocation, sceneId: SceneId): LocationActivity {
-    return l.activities.find((a) => a.sceneId === sceneId) ?? (l.activities[0] as LocationActivity);
+    return l.activities.find((a) => a.sceneId === sceneId) ?? { sceneId, label: SCENES.find((s) => s.id === sceneId)?.name ?? sceneId };
   }
   /** 默认去哪：她现在在的地方能做就去那儿，否则去最常去的那个 */
   function defaultPlace(sceneId: SceneId): MapLocation | null {
