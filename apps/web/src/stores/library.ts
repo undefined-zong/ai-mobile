@@ -309,6 +309,12 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     replaced: { sceneRule: ["镜头是{{user}}的眼睛：pov，{{char}}离镜头很近，看着镜头（looking at viewer），像下一秒就要靠过来。光线柔和，暖色，浅景深。只画到暧昧为止，不画露骨的内容。"] },
   },
   {
+    // 负面词不再固定写 loli, child, underage：额外负面词会影响出图
+    id: 'restrictions:format:16',
+    file: "image-heart-intimate.json",
+    replaced: { format: ["只输出下面这样的两行，不要任何其他文字（### 和它前面的英文词别改，程序按它读）：\nimage###逗号分隔的英文 tags###\nnegative###loli, child, underage（再加别的要避开的）###"] },
+  },
+  {
     // 日程系统：她知道你今天的计划时怎么反应（触发条件 planner，没开日程系统时不发）
     id: 'planner:rules',
     files: [
