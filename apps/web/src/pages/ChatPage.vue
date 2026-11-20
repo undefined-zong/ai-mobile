@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { characterPronoun } from '@app/shared';
-import { saveFiles } from '@/services/download';
 import type { ImageMode, MessagePart } from '@app/shared';
 import { closeToast, showConfirmDialog, showLoadingToast, showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -10,9 +9,8 @@ import Composer from '@/components/chat/Composer.vue';
 import PhotoSendSheet from '@/components/chat/PhotoSendSheet.vue';
 import DrawSheet from '@/components/chat/DrawSheet.vue';
 import MessageItem from '@/components/chat/MessageItem.vue';
+import MessageImageViewer from '@/components/chat/MessageImageViewer.vue';
 import Avatar from '@/components/common/Avatar.vue';
-import ErrorDetails from '@/components/common/ErrorDetails.vue';
-import GenImage from '@/components/figure/GenImage.vue';
 import DialogBox from '@/components/stage/DialogBox.vue';
 import Wallpaper from '@/components/common/Wallpaper.vue';
 import BackgroundEditor from '@/components/settings/BackgroundEditor.vue';
@@ -29,7 +27,6 @@ import { personaOf, presetFor } from '@/services/prompt';
 import { pendingForSummary, type SummaryOutcome } from '@/services/summary';
 import { loadOlder, syncState } from '@/services/sync';
 import { useAiStore } from '@/stores/ai';
-import { useAlbumStore } from '@/stores/album';
 import { useAppStore } from '@/stores/app';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useCharacterStore } from '@/stores/characters';
@@ -368,12 +365,6 @@ async function sendPicked(text: string) {
   const r = await chatStore.sendPhotos(target, photos, text);
   if (r.notConnected) showToast({ message: `识图还没接通，${character.value?.name ?? 'Ta'}看不到照片内容：${r.notConnected}`, duration: 3500 });
 }
-/** 照片查看器里"重新识图" */
-function relook() {
-  const p = imagePart.value;
-  const m = p?.type === 'image' ? messages.value.find((x) => x.parts.includes(p)) : undefined;
-  if (m) void chatStore.lookAt(chatId.value, m.id, true);
-}
 
 /** 歌曲卡片"一起听"：去一起听歌，按歌名 + 歌手搜这首放 */
 function openMusic(p: MessagePart) {
@@ -401,34 +392,6 @@ const imagePart = ref<MessagePart | null>(null);
 function openImage(p: MessagePart) {
   imagePart.value = p;
   imageOpen.value = true;
-}
-function redrawImage() {
-  if (imagePart.value) chatStore.redraw(chatId.value, imagePart.value);
-}
-// —— 存到相册（回忆 → 相册）：生成的配图 ——
-const album = useAlbumStore();
-const imageInAlbum = computed(() => {
-  const p = imagePart.value;
-  return p?.type === 'image' && !!p.assetKey && !!album.find({ assetKey: p.assetKey });
-});
-function keepImage() {
-  const p = imagePart.value;
-  if (p?.type !== 'image' || !p.assetKey || p.photo) return;
-  const msg = chatStore.list(chatId.value).find((m) => m.parts.includes(p));
-  const scene = p.use?.startsWith('image:') ? p.use.slice('image:'.length) : 'chat';
-  const r = album.add({
-    assetKey: p.assetKey, characterId: character.value?.id ?? null, title: p.title ?? '', caption: p.caption, scene, at: msg?.createdAt ?? Date.now(),
-    ...(p.prompt ? { prompt: p.prompt } : {}), ...(p.seed != null ? { seed: p.seed } : {}), ...(p.model ? { model: p.model } : {}),
-  });
-  if (!r.ok) showToast(r.reason);
-  else showToast(r.existed ? '已经在相册里了' : '存到相册了（回忆 → 相册）');
-}
-/** 保存图片：手机上弹系统分享（能存进相册），电脑上下载成文件；本机清掉了缓存的先从云端取回来；服务商只给了链接的新开一页打开 */
-async function saveImage() {
-  const p = imagePart.value;
-  if (p?.type !== 'image' || !p.assetKey) return;
-  const { missing } = await saveFiles([{ key: p.assetKey, name: p.title || p.caption || 'image' }]);
-  if (missing) showToast('找不到这张图了');
 }
 
 // —— 消息操作：平时藏着，点头像展开（重试 / 编辑 / 复制 / 删除）；点别处收起 ——
@@ -785,33 +748,7 @@ const timeChip = computed(() => [hhmm(Date.now()), stageWeather.value ? weatherS
       <DrawSheet v-if="drawOpen" :character="character" @draw="onDraw" @close="drawOpen = false" />
     </van-popup>
 
-    <van-popup v-model:show="imageOpen" round class="w-[88%] max-w-[400px]">
-      <div v-if="imagePart && imagePart.type === 'image' && imagePart.photo" class="p-3 max-h-[86vh] overflow-y-auto" data-testid="photo-viewer">
-        <GenImage :part="imagePart" :character="character" class="rounded-[16px] overflow-hidden" />
-        <div class="mt-3 text-[13px] font-600">识图看到的</div>
-        <p v-if="imagePart.seen" class="text-[13.5px] leading-relaxed text-ink-2 mt-1 whitespace-pre-wrap">{{ imagePart.seen }}</p>
-        <p v-else-if="imagePart.assetKey && chatStore.lookingKeys.has(imagePart.assetKey)" class="text-[13px] text-ink-3 mt-1">正在看…</p>
-        <p v-else class="text-[13px] text-warn mt-1">{{ imagePart.seenError || '还没识图' }}</p>
-        <div v-if="imagePart.seenModel" class="text-[12px] text-ink-3 mt-1">{{ imagePart.seenModel }} · 聊天里{{ character.name }}看到的是这段描述</div>
-        <div class="flex gap-2 mt-3">
-          <van-button v-if="!imagePart.seen" size="small" round block :disabled="!!imagePart.assetKey && chatStore.lookingKeys.has(imagePart.assetKey)" @click="relook">重新识图</van-button>
-          <van-button size="small" round block type="primary" :disabled="!imagePart.assetKey" @click="saveImage">保存图片</van-button>
-        </div>
-      </div>
-      <div v-else-if="imagePart && imagePart.type === 'image'" class="p-3 max-h-[86vh] overflow-y-auto" data-testid="image-viewer">
-        <GenImage :part="imagePart" :character="character" class="rounded-[16px] overflow-hidden" />
-        <div class="mt-3 text-[15px] font-600">{{ imagePart.title || imagePart.caption }}</div>
-        <div v-if="imagePart.title" class="text-[12px] text-ink-3 mt-0.5">画的是：{{ imagePart.caption }}</div>
-        <ErrorDetails v-if="imagePart.error" :detail="imagePart.errorDetail ?? imagePart.error" :title="imagePart.error" max-height="30vh" />
-        <div class="mt-1 text-[12px] text-ink-3 break-all max-h-[96px] overflow-y-auto">提示词：{{ imagePart.prompt ?? (imagePart.error ? '—' : '生成中…') }}</div>
-        <div v-if="imagePart.seed || imagePart.model" class="text-[12px] text-ink-3 num">{{ [imagePart.seed ? `种子：${imagePart.seed}` : '', imagePart.model ?? ''].filter(Boolean).join(' · ') }}</div>
-        <div class="flex gap-2 mt-3">
-          <van-button size="small" round block :disabled="!imagePart.generated && !imagePart.error" @click="redrawImage">重新生成</van-button>
-          <van-button size="small" round block :disabled="!imagePart.assetKey" :icon="imageInAlbum ? 'success' : undefined" data-testid="chat-image-album" @click="keepImage">{{ imageInAlbum ? '已在相册' : '存到相册' }}</van-button>
-          <van-button size="small" round block type="primary" :disabled="!imagePart.assetKey" @click="saveImage">保存图片</van-button>
-        </div>
-      </div>
-    </van-popup>
+    <MessageImageViewer v-model:show="imageOpen" :part="imagePart" :character="character" :chat-id="chatId" />
   </div>
   <div v-else class="page items-center justify-center text-ink-3" data-page="chat-missing">找不到这个聊天</div>
 </template>
