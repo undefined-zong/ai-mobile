@@ -44,7 +44,7 @@ export type MomentGenerator = typeof generateMoment;
  * 云端自己排的今天（每天变化的节律）；没有时用手机上传的那份。手机上改过今天的（节律页里改的、平行时空里你请她改的）以手机的为准。
  * 社群里角色发帖、平行时空里她留言时也用
  */
-export async function todayOf(env: Env, context: Pick<SocialContext, 'character' | 'timezone' | 'day'>, now: number): Promise<SocialDay | null> {
+export async function todayOf(env: Env, context: Pick<SocialContext, 'timezone' | 'day'> & { character: Pick<SocialContext['character'], 'id'> }, now: number): Promise<SocialDay | null> {
   const id = context.character.id;
   const date = rhythmDate(new Date(now), context.timezone);
   if (context.day?.date === date && context.day.edited) return context.day;
