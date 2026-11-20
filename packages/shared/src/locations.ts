@@ -597,14 +597,9 @@ export function isRealPlace(l: MapLocation | null | undefined): boolean {
   return l?.area === 'real';
 }
 
-/** 背景是这些的地方都能坐下来吃饭 */
-const DINING_BACKDROPS = new Set(['dining', 'kitchen', 'restaurant', 'canteen', 'bar', 'cafe']);
-const DINING_NAME = /餐|饭|食堂|酒屋|居酒|酒馆|酒吧|酒肆|面馆|小吃|料理|烧烤|烤肉|火锅|咖啡|茶室|茶馆|甜品|饮食|厨房|restaurant|diner|cafe|café|bar|pub|izakaya|tavern|kitchen/i;
-/** 能一起吃饭的地方：在家、地点里能"一起吃饭"，或者本来就是吃饭的店（餐厅、食堂、居酒屋、咖啡厅…） */
+/** 能一起吃饭的地方：小世界里这个地点能做的事里有"一起吃饭" */
 export function canDineAt(l: MapLocation | null | undefined): boolean {
-  if (!l) return false;
-  if (l.area === 'home' || l.activities.some((a) => a.sceneId === 'meal')) return true;
-  return DINING_BACKDROPS.has(l.backdrop) || DINING_NAME.test(l.name);
+  return !!l?.activities.some((a) => a.sceneId === 'meal');
 }
 
 /** 这个角色有没有自己的小世界（导入的角色在"建世界"之前没有） */

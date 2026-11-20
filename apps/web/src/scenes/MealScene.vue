@@ -126,7 +126,7 @@ const herMealSlot = computed(() => (herSlot.value ? mealOfStatus(herSlot.value.s
 /** 她在哪：带她来时是这家店，否则按她的作息（没有作息时用地图上点进来的地方） */
 const herLocId = computed(() => (together.value === 'bring' ? (location.value?.id ?? null) : (herSlot.value?.locationId ?? location.value?.id ?? null)));
 const herPlace = computed(() => getLocation(herLocId.value)?.name ?? location.value?.name ?? '');
-/** 她在能一起吃饭的地方（家、餐厅、食堂、居酒屋…） */
+/** 她此刻在的地方（节律里这一段的地点，小世界里的）能一起吃饭 */
 const herDines = computed(() => canDineAt(getLocation(herLocId.value) ?? location.value));
 /** 能不能共同吃饭：她在能吃饭的地方、作息里正好在吃饭、或者带她出门吃（她就在你对面） */
 const canTogether = computed(() => herDines.value || !!herMealSlot.value || together.value === 'bring');
