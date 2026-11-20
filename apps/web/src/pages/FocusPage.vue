@@ -28,7 +28,7 @@ import { hhmm } from '@/utils/time';
 /**
  * 聚焦主题的首页：打开就是她，不是一张列表。
  * - 整屏是她此刻在的地方（背景按她的地点、时段、天气）和她（立绘位置在「立绘设置 → 各场景的位置和大小 → 聚焦主题 · 首页」里调），能戳；
- * - 下面是她刚说的那句（长回复上下滚动，点「完整对话」看聊天记录），她给的选项，直接回她的输入栏；输入栏最前面的「一起」就地挑一件事去做；
+ * - 下面是她刚说的那句（点开 / 上滑 = 完整对话），她给的选项，直接回她的输入栏；输入栏最前面的「一起」就地挑一件事去做；
  * - 左边一列去别处（地图、回忆、我的），右边一列她们的动态和找她（社媒、电话、视频、平行时空），两列顶端对齐；
  * - 左上角换人（也是消息列表：谁说了什么、几条没看），在她身上左右划也能换；中间是她在哪、几点，右上角是那边的天气。
  */
@@ -69,7 +69,7 @@ const lastAi = computed(() => [...messages.value].reverse().find((m) => m.role =
 const line = computed(() => (her.value ? messagePreview(lastAi.value, her.value) : ''));
 const choices = computed(() => (stream.value ? [] : (lastAi.value?.meta.choices ?? [])));
 const failed = computed(() => !stream.value && !!lastAi.value?.meta.error);
-/** 进来之前她连着发了几条（首页显示最后一条，提醒打开完整对话） */
+/** 进来之前她连着发了几条（首页只露最后一句，提醒上滑看完整的） */
 const unseen = ref(0);
 function seeAll() {
   const t = thread.value;
@@ -151,7 +151,7 @@ const { bubble, combo, onPoke } = usePoke(
   () => thread.value?.id,
 );
 
-// —— 手势：在她身上左右划换人，回复区域使用原生纵向滚动 ——
+// —— 手势：在她身上左右划换人；在她那句话上往上划看完整对话 ——
 const SWIPE = 56;
 let press: { x: number; y: number; id: number } | null = null;
 function pressDown(e: PointerEvent) {
@@ -166,6 +166,10 @@ function moved(e: PointerEvent) {
 function stageUp(e: PointerEvent) {
   const d = moved(e);
   if (d && Math.abs(d.x) > SWIPE && Math.abs(d.x) > Math.abs(d.y) * 1.5) step(d.x < 0 ? 1 : -1);
+}
+function lineUp(e: PointerEvent) {
+  const d = moved(e);
+  if (d && -d.y > SWIPE * 0.75 && -d.y > Math.abs(d.x)) openChat();
 }
 
 // —— 两侧：左边去别处，右边她们的动态和找她 ——
@@ -273,24 +277,20 @@ async function openTogether() {
 
       <!-- 下面：她刚说的、她给的选项、回她 -->
       <section class="bottom">
-        <div class="line-card" data-testid="focus-line">
-          <div class="line-heading">
-            <span class="name-tag">
-              {{ her.name }}
-              <span v-if="stream && (stream.thinking || !line)" class="inline-flex gap-1 ml-1">
-                <span class="typing-dot !w-1 !h-1" /><span class="typing-dot !w-1 !h-1" /><span class="typing-dot !w-1 !h-1" />
-              </span>
+        <button class="line-card" data-testid="focus-line" aria-label="看完整对话" @pointerdown="pressDown" @pointerup="lineUp" @pointercancel="press = null" @click="openChat">
+          <span class="grab" aria-hidden="true" />
+          <span class="name-tag">
+            {{ her.name }}
+            <span v-if="stream && (stream.thinking || !line)" class="inline-flex gap-1 ml-1">
+              <span class="typing-dot !w-1 !h-1" /><span class="typing-dot !w-1 !h-1" /><span class="typing-dot !w-1 !h-1" />
             </span>
-            <button class="open-chat" aria-label="看完整对话" @click="openChat">
-              完整对话<span class="i-lucide-chevron-up" aria-hidden="true" />
-            </button>
-          </div>
-          <div :key="lastAi?.id ?? her.id" class="line" :class="{ 'stream-caret': stream && !stream.thinking && line }" role="region" :aria-label="`${her.name}的最新回复`" tabindex="0">
+          </span>
+          <span class="line" :class="{ 'stream-caret': stream && !stream.thinking && line }">
             <span v-for="(s, i) in splitActions(line)" :key="i" :class="{ action: s.action }">{{ s.text }}</span>
-          </div>
+          </span>
           <span v-if="failed" class="line-note bad">回复没出来 · 点开对话重试</span>
-          <span v-else-if="unseen > 1" class="line-note">{{ her.pronoun }}发来 {{ unseen }} 条 · 点「完整对话」查看</span>
-        </div>
+          <span v-else-if="unseen > 1" class="line-note">{{ her.pronoun }}发来 {{ unseen }} 条 · 上滑看完整对话</span>
+        </button>
         <div v-if="choices.length" class="choices">
           <button v-for="c in choices" :key="c" class="choice press" @click="send(c)">{{ c }}</button>
         </div>
@@ -361,10 +361,6 @@ async function openTogether() {
 .focus-page {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto minmax(0, 1fr);
-  row-gap: 8px;
   overflow: hidden;
   background: #000;
   color: var(--ink);
@@ -476,24 +472,18 @@ async function openTogether() {
   background: var(--accent);
 }
 .rail {
-  position: relative;
+  position: absolute;
   z-index: 12;
-  grid-row: 1;
-  align-self: start;
-  margin-top: calc(var(--safe-top) + 68px);
+  top: calc(var(--safe-top) + 68px);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .rail-left {
-  grid-column: 1;
-  justify-self: start;
-  margin-left: 8px;
+  left: 8px;
 }
 .rail-right {
-  grid-column: 2;
-  justify-self: end;
-  margin-right: 8px;
+  right: 8px;
 }
 .rail-item {
   display: flex;
@@ -581,24 +571,14 @@ async function openTogether() {
 }
 /* 下面一块压在画面上：底下垫一层渐暗，台词卡和输入栏是毛玻璃 */
 .bottom {
-  position: relative;
-  z-index: 11;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  align-self: end;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: 100%;
-  padding: 0 12px;
-  pointer-events: none;
-}
-.bottom::before {
-  content: '';
   position: absolute;
-  z-index: -1;
-  inset: -36px 0 0;
+  z-index: 11;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 36px 12px 0;
   background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.42) 46%);
+  pointer-events: none;
 }
 .bottom > * {
   pointer-events: auto;
@@ -608,7 +588,6 @@ async function openTogether() {
   flex-direction: column;
   align-items: flex-start;
   width: 100%;
-  min-height: 0;
   padding: 6px 16px 13px;
   border-radius: 22px;
   background: var(--glass);
@@ -618,28 +597,22 @@ async function openTogether() {
   box-shadow: var(--shadow-sm);
   color: var(--ink);
   text-align: left;
+  touch-action: pan-x;
 }
-.line-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  flex-shrink: 0;
-}
-.open-chat {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  flex-shrink: 0;
-  color: var(--ink-2);
-  font-size: 12px;
+.grab {
+  align-self: center;
+  width: 34px;
+  height: 4px;
+  margin-bottom: 8px;
+  border-radius: 2px;
+  background: var(--ink-3);
+  opacity: 0.5;
 }
 .name-tag {
   display: inline-flex;
   align-items: center;
   height: 22px;
+  margin-bottom: 6px;
   padding: 0 10px;
   border-radius: 99px;
   background: var(--accent);
@@ -648,15 +621,11 @@ async function openTogether() {
   font-weight: 650;
 }
 .line {
-  width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
   min-height: 1.6em;
-  max-height: min(30dvh, 12.8em);
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-3) transparent;
   font-size: 16px;
   line-height: 1.6;
   letter-spacing: 0.02em;
@@ -668,7 +637,6 @@ async function openTogether() {
   font-style: italic;
 }
 .line-note {
-  flex-shrink: 0;
   margin-top: 6px;
   color: var(--ink-3);
   font-size: 12px;
@@ -678,7 +646,6 @@ async function openTogether() {
 }
 .choices {
   display: flex;
-  flex-shrink: 0;
   gap: 8px;
   margin-top: 10px;
   overflow-x: auto;
@@ -705,7 +672,6 @@ async function openTogether() {
 }
 /* 输入栏不要整条的底，只留输入框和按钮 */
 .bottom .focus-composer {
-  flex-shrink: 0;
   margin: 0 -12px;
   padding-bottom: calc(var(--safe-bottom) + 4px);
   background: none;
