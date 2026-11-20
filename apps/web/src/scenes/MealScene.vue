@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
-import { errorText, parseJsonLoose } from '@app/ai';
+import { errorText, parseJsonLoose, splitSentences } from '@app/ai';
 import { canDineAt, getLocation, IMAGE_MOMENTS, MEAL_LABEL, mealOfStatus, toMinutes, wallDate, worldOf, type MealSlot, type MessagePart, type PlanMeal, type VideoHit } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
@@ -29,6 +29,7 @@ import { mealMusic } from '@/services/musicPlayer';
 import { lookWith } from '@/services/photos';
 import { mealSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
+import { ttsLiveFor } from '@/services/ai';
 import { SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
@@ -449,6 +450,7 @@ async function reply(task: string, lines: string[], userText?: string, last = fa
   }
   notConnected.value = '';
   herLine.value = r.message.text;
+  readOut(r.message.text);
 }
 
 // —— 你这顿吃的：写一句，或者拍一张 / 从相册选，识图认出是什么 ——
@@ -616,6 +618,42 @@ function newSpeech(o: { onSentence?(text: string, i: number): void } = {}): Spee
   });
   return q;
 }
+
+// —— 朗读（右上角视频下面的音量按钮）：开着时她回的每一句都用她的声音读出来；连着麦时麦里本来就在说，不重复读 ——
+const READ_KEY = 'ai-mobile:meal:read-aloud:v1';
+const readAloud = ref(false);
+try {
+  readAloud.value = localStorage.getItem(READ_KEY) === '1';
+} catch {
+  // 本机存不了：默认关
+}
+let readQ: SpeechQueue | null = null;
+function stopReading() {
+  if (readQ && speech === readQ) {
+    readQ.stop();
+    speech = null;
+    mealMusic.duck(false);
+  }
+  readQ = null;
+}
+function readOut(text: string) {
+  if (!readAloud.value || link.state.on || !text.trim()) return;
+  const q = newSpeech();
+  readQ = q;
+  q.pushAll(splitSentences(text));
+  q.end();
+}
+function toggleReadAloud() {
+  readAloud.value = !readAloud.value;
+  try {
+    localStorage.setItem(READ_KEY, readAloud.value ? '1' : '0');
+  } catch {
+    // 本机存不了：这次有效
+  }
+  if (!readAloud.value) return stopReading();
+  if (!ttsLiveFor(her.value)) showToast(`${her.value.name}的声音还没配好（设置里接通语音合成），先只显示字`);
+}
+
 const link = useMicLink({
   chatId,
   character: her,
@@ -1145,7 +1183,7 @@ const figureHidden = computed(() => {
         </template>
 
         <!-- 右上角：音乐、观影，竖着排在顶栏下面。开始前、吃完后只在音乐还响着时留着音乐（好关掉） -->
-        <div v-if="view !== 'split' || musicPlaying || musicOpen" class="side-tools">
+        <div v-if="view !== 'split' || musicPlaying || musicOpen || readAloud" class="side-tools">
           <button
             type="button"
             class="pill-btn plain"
@@ -1169,6 +1207,19 @@ const figureHidden = computed(() => {
             @click="watchOpen = true"
           >
             <span class="i-lucide-tv" />
+          </button>
+          <!-- 朗读：开着时她回的话自动读出来 -->
+          <button
+            v-if="view !== 'split' || readAloud"
+            type="button"
+            class="pill-btn plain"
+            :class="{ on: readAloud }"
+            :aria-pressed="readAloud"
+            :aria-label="readAloud ? `朗读：开着，${her.pronoun}的话会读出来（点一下关掉）` : `朗读：点一下打开，${her.pronoun}的话自动读出来`"
+            data-testid="meal-read-btn"
+            @click="toggleReadAloud"
+          >
+            <span :class="readAloud ? 'i-lucide-volume-2' : 'i-lucide-volume-x'" />
           </button>
         </div>
 
@@ -1356,6 +1407,18 @@ const figureHidden = computed(() => {
 }
 .done-say :deep(.bubble) {
   max-height: min(9.6em, calc(50vh - 120px));
+}
+/* 一起吃饭的对话气泡：全透明，不挡背景图；字加一圈阴影，压在亮图上也看得清 */
+.meal :deep(.bubble) {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.45);
 }
 .split-panel {
   position: absolute;
