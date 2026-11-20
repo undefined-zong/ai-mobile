@@ -386,7 +386,6 @@ const streamingText = computed(() => (stream.value ? (chat.list(chatId.value).fi
 /** 连麦时是她说出口的那句（跟着声音走），平时是正在写的、最近一次回复 */
 const lastSpoken = computed(() => [...link.state.captions].reverse().find((c) => c.who === 'her')?.text ?? '');
 const shownLine = computed(() => (link.state.on && lastSpoken.value) || streamingText.value || herLine.value);
-const chatLink = computed(() => `/chat/${chatId.value}?mode=stage`);
 const cue = computed(() => {
   if (phase.value === 'setup') return '开饭前';
   if (phase.value === 'done') return '吃完';
@@ -882,7 +881,7 @@ const figureHidden = computed(() => {
             </div>
           </div>
           <div v-else-if="shownLine || stream" class="done-say">
-            <StudyBubble side="her" :text="shownLine" :typing="!!stream && !streamingText" :to="chatLink" :label="`去和${her.name}聊天`" />
+            <StudyBubble side="her" :text="shownLine" :typing="!!stream && !streamingText" />
           </div>
 
           <section class="split-panel" :aria-label="phase === 'setup' ? '这顿怎么吃' : '吃完了'">
@@ -1034,7 +1033,7 @@ const figureHidden = computed(() => {
             <div class="her-card" data-testid="her-card">
               <div class="flex items-center gap-2">
                 <Avatar :character="her" :size="24" live />
-                <span class="flex-1 min-w-0 text-[12px] text-ink-2 truncate">{{ her.name }}{{ herPlace ? ` · ${herPlace}` : '' }}</span>
+                <span class="card-name flex-1 min-w-0 text-[12px] truncate">{{ her.name }}{{ herPlace ? ` · ${herPlace}` : '' }}</span>
               </div>
               <div class="card-task">
                 <template v-if="herMeal">在吃：{{ herMeal }}</template>
@@ -1043,7 +1042,7 @@ const figureHidden = computed(() => {
               </div>
             </div>
             <MicLinkBar v-if="link.state.on" :link="link" :pronoun="her.pronoun" data-testid="meal-link" />
-            <StudyBubble v-if="shownLine || stream" side="her" :text="shownLine" :typing="!!stream && !streamingText" :to="chatLink" :label="`去和${her.name}聊天`" />
+            <StudyBubble v-if="shownLine || stream" side="her" :text="shownLine" :typing="!!stream && !streamingText" />
             <div v-if="notConnected" class="mini-notice">
               <span class="i-lucide-plug-zap shrink-0" /><span class="flex-1 min-w-0">{{ notConnected }}</span>
               <button class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=companion')">去设置</button>
@@ -1594,12 +1593,14 @@ const figureHidden = computed(() => {
   display: block;
   width: 100%;
   padding: 9px 12px 10px;
-  border-radius: 16px;
-  background: var(--veil);
-  border: 1px solid var(--glass-line);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: var(--shadow-sm);
+  /* 同对话气泡：全透明，不挡背景图；白字加阴影 */
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.45);
+}
+.card-name {
+  color: rgba(255, 255, 255, 0.85);
 }
 .card-task {
   display: -webkit-box;
