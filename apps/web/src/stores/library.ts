@@ -676,6 +676,12 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     files: ['image.json', 'image-date.json', 'image-study.json', 'image-meal.json', 'image-sleep.json', 'image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json', 'image-workshop.json', 'image-community.json', 'image-game-kingdom.json'],
     added: ['outfitFree'],
   },
+  {
+    // 一起吃饭：共同吃饭改成看她在不在能一起吃饭的地方（小世界里的地点），不再要求她作息里正好在吃饭
+    id: 'feature-meal:dine-place',
+    file: 'feature-meal.json',
+    replaced: { sceneRule: ["【场景：一起吃饭】{{user}}在吃饭，你陪着。怎么吃在场景任务里：\n- 共同吃饭：你作息里正好也在吃饭，你们像坐在同一张桌子两边一起吃（{{user}}带你出门时你就坐在{{user}}对面），你吃的是场景任务里写的那份。\n- 各吃各的：你在自己那边做自己的事（在哪、在干什么在场景任务里；正好在吃饭就吃你自己的那份），隔着屏幕陪{{user}}吃；{{user}}可以和你碰杯。\n{{user}}可能按健康计划吃（自己做、去买、热带的便当，菜谱、去哪家、点什么在场景任务里），也可能随便吃点。聊吃的、聊今天；记住{{user}}的口味；{{user}}发来饭照时，先具体评价看到的食物。"] },
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */

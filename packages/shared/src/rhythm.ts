@@ -45,8 +45,8 @@ export function slotIn<T extends { from: string; to: string }>(schedule: T[], no
   return schedule.find((s) => (toMinutes(s.from) ?? 0) <= t && t < (toMinutes(s.to) ?? 0)) ?? schedule.at(-1);
 }
 
-/** 吃饭的说法（"吃午饭""食堂吃饭""吃夜宵""用餐""晚酌""吃烤鱼"……）；"做饭""饭后散步"这类不算在吃 */
-const EATING = /吃(?!力|惊|亏|苦|醋|透|准|不消)|(?:早|午|中|晚)(?:饭|餐|膳)|用餐|就餐|进餐|聚餐|用膳|进食|享用|品尝|晚宴|宴席|酌|喝(?:一)?杯|喝酒|饮酒|夜宵|宵夜|下午茶|早茶|食堂|觅食/;
+/** 吃饭的说法（"吃午饭""食堂吃饭""吃夜宵""用餐"……）；"做饭""饭后散步"这类不算在吃 */
+const EATING = /吃(?:早|午|中|晚)?(?:饭|餐)|吃东西|吃点东西|(?:早|午|中|晚)(?:饭|餐)|用餐|就餐|进餐|聚餐|夜宵|宵夜|下午茶|早茶|食堂|觅食/;
 const NOT_EATING = /做饭|煮饭|买饭|备餐|饭后|餐后/;
 
 /**
@@ -58,7 +58,7 @@ export function mealOfStatus(status: string, from?: string): MealSlot | null {
   if (!s || NOT_EATING.test(s) || !EATING.test(s)) return null;
   if (/早(?:饭|餐|茶)/.test(s)) return 'breakfast';
   if (/(?:午|中)(?:饭|餐)/.test(s)) return 'lunch';
-  if (/晚(?:饭|餐|膳|宴|酌)/.test(s)) return 'dinner';
+  if (/晚(?:饭|餐)/.test(s)) return 'dinner';
   if (/夜宵|宵夜|下午茶/.test(s)) return 'snack';
   const m = from ? toMinutes(from) : null;
   if (m === null) return 'lunch';

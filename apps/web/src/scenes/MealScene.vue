@@ -2,7 +2,7 @@
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
 import { errorText, parseJsonLoose } from '@app/ai';
-import { canDineAt, getLocation, IMAGE_MOMENTS, MEAL_LABEL, mealOfStatus, toMinutes, wallDate, worldOf, type MealSlot, type MessagePart, type PlanMeal, type VideoHit } from '@app/shared';
+import { canDineAt, getLocation, IMAGE_MOMENTS, MEAL_LABEL, toMinutes, wallDate, worldOf, type MealSlot, type MessagePart, type PlanMeal, type VideoHit } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -120,44 +120,43 @@ const dayKey = (t: number) => {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 };
 
-// —— 她那边：今天的作息此刻是不是在吃饭 ——
+// —— 她那边：节律里此刻这一段在哪，小世界里那个地方能不能一起吃饭 ——
 const herSlot = computed(() => rhythm.slotNow(her.value.id, new Date(now.value)));
-const herMealSlot = computed(() => (herSlot.value ? mealOfStatus(herSlot.value.status, herSlot.value.from) : null));
 /** 她在哪：带她来时是这家店，否则按她的作息（没有作息时用地图上点进来的地方） */
 const herLocId = computed(() => (together.value === 'bring' ? (location.value?.id ?? null) : (herSlot.value?.locationId ?? location.value?.id ?? null)));
 const herPlace = computed(() => getLocation(herLocId.value)?.name ?? location.value?.name ?? '');
 /** 她此刻在的地方（节律里这一段的地点，小世界里的）能一起吃饭 */
 const herDines = computed(() => canDineAt(getLocation(herLocId.value) ?? location.value));
-/** 能不能共同吃饭：她在能吃饭的地方、作息里正好在吃饭、或者带她出门吃（她就在你对面） */
-const canTogether = computed(() => herDines.value || !!herMealSlot.value || together.value === 'bring');
+/** 能不能共同吃饭：她在能一起吃饭的地方，或者带她出门吃（她就在你对面） */
+const canTogether = computed(() => herDines.value || together.value === 'bring');
 /** "在家看书"本身带"在"，"自习中"不带：拼成"在…"时不重复 */
 const doing = (status: string) => (status.startsWith('在') ? status : `在${status}`);
 function herFoodOf(s: MealSlot): string {
   if (s === 'snack') return '';
   return rhythm.mealsOf(her.value.id)?.[s] || (rhythm.hasWorld(her.value.id) ? worldOf(her.value.id).life.meals[s] : '');
 }
-/** 她这顿吃的：她正在吃饭时是节律里这顿的饭；带她出门时是在这家店点的 */
+/** 她这顿吃的：共同吃饭时是节律里这顿的饭；带她出门时是在这家店点的 */
 const herMeal = computed(() => {
   if (together.value === 'bring') return `在${location.value?.name ?? '这家店'}点的`;
-  return herMealSlot.value ? herFoodOf(herMealSlot.value) : '';
+  return how.value === 'together' && herDines.value ? herFoodOf(slot.value) : '';
 });
-/** 她今天接下来哪一段在吃饭（不能共同吃饭时告诉你什么时候能） */
-const herNextMeal = computed(() => {
+/** 她今天接下来哪一段在能一起吃饭的地方（不能共同吃饭时告诉你什么时候能） */
+const herNextDine = computed(() => {
   const day = rhythm.todayOf(her.value.id);
   if (!day) return null;
   const cur = herSlot.value;
   // 按模板的今天每次读出来都是新的一份：按时间段找，不按对象找
   const i = cur ? day.schedule.findIndex((s) => s.from === cur.from && s.to === cur.to) : -1;
-  return day.schedule.slice(i + 1).find((s) => mealOfStatus(s.status, s.from)) ?? null;
+  return day.schedule.slice(i + 1).find((s) => canDineAt(getLocation(s.locationId))) ?? null;
 });
 const togetherHint = computed(() => {
   const p = her.value.pronoun;
   if (together.value === 'bring') return `${p}来${herPlace.value || '你这边'}陪你吃，坐在你对面；背景画${p}在对面吃饭的样子`;
-  if (herMealSlot.value) return `${p}现在正好在${herSlot.value?.status}（${herPlace.value}），像坐在一张桌子两边一起吃；背景画${p}在对面吃饭的样子`;
-  if (herDines.value) return `${p}在${herPlace.value}${herSlot.value ? `（${herSlot.value.status}）` : ''}，那里能坐下来一起吃，像坐在一张桌子两边；背景画${p}在对面吃饭的样子`;
-  if (!herSlot.value) return `${p}今天还没有作息，不知道${p}什么时候吃饭，先各吃各的（作息在"我的 → 节律"里）`;
-  const next = herNextMeal.value;
-  return `${p}现在${doing(herSlot.value.status)}，不在吃饭，只能各吃各的${next ? `；${next.from} ${p}${next.status}，到时候再来共同吃饭` : ''}`;
+  if (herDines.value) return `${p}在${herPlace.value}，那里能一起吃饭，像坐在一张桌子两边一起吃；背景画${p}在对面吃饭的样子`;
+  if (!herSlot.value) return `${p}今天还没有作息，不知道${p}在哪，先各吃各的（作息在"我的 → 节律"里）`;
+  const next = herNextDine.value;
+  const nextPlace = next ? getLocation(next.locationId)?.name : '';
+  return `${p}现在${doing(herSlot.value.status)}${herPlace.value ? `（${herPlace.value}）` : ''}，那里不能一起吃饭，只能各吃各的${next ? `；${next.from} ${p}去${nextPlace}，到时候再来共同吃饭` : ''}`;
 });
 
 // —— 怎么吃：共同吃饭 / 各吃各的；共同吃饭时按计划吃 / 随便吃点（吃法记在本机） ——
@@ -224,7 +223,7 @@ function slotByClock(): MealSlot {
   return (sorted.find((s) => !eaten.value[s.k]) ?? sorted[0]!).k;
 }
 const pickedSlot = ref<MealSlot | null>(null);
-const slot = computed<MealSlot>(() => pickedSlot.value ?? (how.value === 'together' && herMealSlot.value ? herMealSlot.value : slotByClock()));
+const slot = computed<MealSlot>(() => pickedSlot.value ?? slotByClock());
 const label = computed(() => MEAL_LABEL[slot.value]);
 
 // —— 今天健康计划里的这顿 ——
@@ -410,9 +409,7 @@ function contextLines(): string[] {
     lines.push(
       together.value === 'bring'
         ? `共同吃饭：${her.value.name}来${herPlace.value || userName.value + '这边'}陪${userName.value}吃，坐在${userName.value}对面`
-        : herMealSlot.value
-          ? `共同吃饭：${her.value.name}作息里正好在${s?.status ?? '吃饭'}（在${herPlace.value}），你们像坐在同一张桌子两边一起吃`
-          : `共同吃饭：${her.value.name}在${herPlace.value}${s ? `（本来在${s.status}，先停下来）` : ''}，那里能坐下来吃，你们像坐在同一张桌子两边一起吃`,
+        : `共同吃饭：${her.value.name}在${herPlace.value}${s ? `（作息里这会儿：${s.status}）` : ''}，你们像坐在同一张桌子两边一起吃`,
     );
   } else {
     lines.push(`各吃各的：${her.value.name}在${herPlace.value || '自己那边'}${s ? `，${s.status}` : ''}；${userName.value}在${yourPlace.value || '自己那边'}吃饭，你隔着屏幕陪着`);
@@ -832,15 +829,14 @@ const figureHidden = computed(() => {
                 <div class="text-[12px] text-ink-2 truncate">{{ her.pronoun }}那边{{ herPlace ? ` · ${herPlace}` : '' }}</div>
                 <div class="text-[14.5px] leading-snug mt-0.5">
                   <template v-if="together === 'bring'">{{ her.pronoun }}来陪你吃饭了，坐在你对面</template>
-                  <template v-else-if="herMealSlot">{{ her.pronoun }}正在{{ herSlot?.status }}<template v-if="herMeal"><span class="text-ink-2">：</span>{{ herMeal }}</template></template>
-                  <template v-else-if="herSlot">{{ her.pronoun }}{{ doing(herSlot.status) }}<template v-if="!herDines">，不在吃饭</template></template>
+                  <template v-else-if="herSlot">{{ her.pronoun }}{{ doing(herSlot.status) }}<template v-if="!herDines">，那里不能一起吃饭</template></template>
                   <template v-else>不知道{{ her.pronoun }}现在在干什么</template>
                 </div>
               </div>
             </div>
             <div v-if="herSlot && together !== 'bring'" class="plan-slots">
               <span class="slot now"><span class="num">{{ herSlot.from }}–{{ herSlot.to }}</span>{{ herSlot.status }}</span>
-              <span v-if="!canTogether && herNextMeal" class="slot"><span class="num">{{ herNextMeal.from }}</span>{{ herNextMeal.status }}</span>
+              <span v-if="!canTogether && herNextDine" class="slot"><span class="num">{{ herNextDine.from }}</span>{{ herNextDine.status }}</span>
             </div>
           </div>
           <div v-else-if="shownLine || stream" class="done-say">
