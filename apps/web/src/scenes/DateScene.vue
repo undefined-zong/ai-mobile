@@ -11,6 +11,7 @@ import AssetImg from '@/components/common/AssetImg.vue';
 import { SCENE_LOCATION } from '@/components/scene/location';
 import PlaylistMusic from '@/components/scene/PlaylistMusic.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
+import { scenePlaces } from '@/composables/useTogether';
 import { assetUrl } from '@/services';
 import { dateMusic } from '@/services/musicPlayer';
 import { dateSearches } from '@/services/playlistSearches';
@@ -49,8 +50,8 @@ const chatId = computed(() => chat.chatOfCharacter(her.value.id)?.id ?? '');
 const userName = computed(() => personaOf(chat.chatById(chatId.value)).name);
 const location = inject(SCENE_LOCATION, ref(null));
 
-/** 她的世界里能约会的地方 */
-const datePlaces = computed(() => worldOf(her.value.id).locations.filter((l) => l.activities.some((a) => a.sceneId === 'date')));
+/** 她的世界里能约会的地方（一个都没写时是她家，约会不能因为地图上没地方就进不去） */
+const datePlaces = computed(() => scenePlaces(worldOf(her.value.id), 'date'));
 /** 地点卡片的颜色按背景来 */
 const TONE: Record<string, string> = {
   cafe: '#d9a77a',

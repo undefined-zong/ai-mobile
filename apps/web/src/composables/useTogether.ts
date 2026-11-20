@@ -10,6 +10,7 @@ import {
   type MapLocation,
   type SceneId,
   type TimeOfDay,
+  type World,
 } from '@app/shared';
 import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 import { useRouter } from 'vue-router';
@@ -34,6 +35,26 @@ export interface TogetherTile {
 
 /** 格子里常用的排前面 */
 const COMMON: SceneId[] = ['study', 'meal', 'exercise', 'sleep', 'music', 'date', 'watch', 'game', 'read', 'poke'];
+/** 共同的家、心跳、出逃另有一直在的入口，不进活动格子 */
+const OWN_ENTRY = new Set<SceneId>(['home', 'heart', 'escape']);
+/** "一起做点什么"里的活动：除了另有入口的那三个，一个都不能少（和她的世界里有没有地方无关） */
+export const TOGETHER_SCENES = SCENES.filter((s) => !OWN_ENTRY.has(s.id));
+
+/**
+ * 在她的世界里，这件事在哪做。"建世界"是 AI 挑的地点和活动，可能哪儿都没写某件事（比如没有影院就没有一起观影）：
+ * 这时就在她家做——功能不能因为地图上没有地方就不见。
+ */
+export function scenePlaces(w: World, sceneId: SceneId): MapLocation[] {
+  const places = w.locations.filter((l) => l.activities.some((a) => a.sceneId === sceneId));
+  if (places.length || OWN_ENTRY.has(sceneId)) return places;
+  const home = w.locations.find((l) => l.id === w.homeId) ?? w.locations[0];
+  return home ? [home] : [];
+}
+/** 在这个地点做这件事（地点上没写这件事时就是这件事本身，不拿地点的第一个活动顶替） */
+export function sceneActivity(l: MapLocation, sceneId: SceneId): LocationActivity {
+  return l.activities.find((a) => a.sceneId === sceneId) ?? { sceneId, label: SCENES.find((s) => s.id === sceneId)?.name ?? sceneId };
+}
+
 /** 她在家时"此刻"按时段推荐 */
 const TIME_SCENE: Record<TimeOfDay, SceneId> = {
   dawn: 'exercise',
@@ -69,12 +90,8 @@ export function useTogether(
     return l && !isRealPlace(l) ? l : null;
   });
 
-  function placesFor(sceneId: SceneId) {
-    return world.value.locations.filter((l) => l.activities.some((a) => a.sceneId === sceneId));
-  }
-  function activityAt(l: MapLocation, sceneId: SceneId): LocationActivity {
-    return l.activities.find((a) => a.sceneId === sceneId) ?? (l.activities[0] as LocationActivity);
-  }
+  const placesFor = (sceneId: SceneId) => scenePlaces(world.value, sceneId);
+  const activityAt = sceneActivity;
   /** 默认去哪：她现在在的地方能做就去那儿，否则去最常去的那个 */
   function defaultPlace(sceneId: SceneId): MapLocation | null {
     const c = who.value;
@@ -85,6 +102,8 @@ export function useTogether(
   function goScene(sceneId: SceneId) {
     const loc = defaultPlace(sceneId);
     if (loc) void go(loc, activityAt(loc, sceneId));
+    // 她的世界一个地点都没有：直接进场景，场景页自己定在哪
+    else withHer(`/scene/${sceneId}`);
   }
 
   /** "此刻"那一件事：她在外面能一起做的就做那个，否则按时段 */
@@ -116,7 +135,7 @@ export function useTogether(
   const tiles = computed((): TogetherTile[] => {
     const c = who.value;
     if (!c) return [];
-    const scenes = SCENES.filter((s) => s.id !== 'home' && s.id !== 'heart' && s.id !== 'escape' && placesFor(s.id).length).sort((a, b) => rank(a.id) - rank(b.id));
+    const scenes = [...TOGETHER_SCENES].sort((a, b) => rank(a.id) - rank(b.id));
     const home = sceneDef('home');
     const heart = sceneDef('heart');
     const escape = sceneDef('escape');
