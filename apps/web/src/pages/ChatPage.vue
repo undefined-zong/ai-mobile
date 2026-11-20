@@ -567,7 +567,15 @@ watch(combo, () => (firstPoke.value = false));
 const logOpen = ref(false);
 const autoOn = ref(false);
 const voiceOn = ref(true);
-const stageText = computed(() => lastAi.value?.text || character.value?.card.firstMes || '');
+/**
+ * 剧场对话框里的那句：她最近一条说了话的回复。新回复还在想（正文还是空的）、回复失败、只发了图片 / 歌曲卡片时接着显示上一条说了话的，
+ * 开始往外写字了就显示正在写的这条。聊天里没有她说过的话就空着，不拿角色卡的开场白顶替（那句不在聊天记录里）
+ */
+const stageText = computed(() => {
+  const s = stream.value;
+  const said = [...messages.value].reverse().find((m) => m.role === 'assistant' && (m.text.trim() || (m.id === s?.messageId && !s.thinking)));
+  return said?.text ?? '';
+});
 /** 她在哪、那里的天气：顶栏、剧场的背景和时间条用 */
 const { herWeatherText, loc: stageLoc, placeKnown, weather: stageWeather, mapLink, backdrop: stageBackdrop, rain: stageRain } = useHerPlace(character);
 const weatherStore = useWeatherStore();

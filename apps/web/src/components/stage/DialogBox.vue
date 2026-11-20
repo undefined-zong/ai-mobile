@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { characterPronoun, type Character } from '@app/shared';
-import { nextTick, ref } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import { splitActions } from '@/utils/messagePreview';
 
-/** 视觉小说式对话框：名字、正文（流式时带光标）、选项、工具条、回复输入 */
+/**
+ * 视觉小说式对话框：名字、正文（流式时带光标）、选项、工具条、回复输入。
+ * 正文最高 maxHeight，长了在框里滚动，工具条和回复框不被顶出屏幕；流式时跟着新写出来的字往下滚（往上翻了就不跟），换成另一条时回到开头。
+ */
 const props = withDefaults(
   defineProps<{
     name: string;
@@ -18,8 +21,10 @@ const props = withDefaults(
     showTools?: boolean;
     /** 回复失败时的完整报错 */
     error?: string;
+    /** 正文最高多高（CSS 长度），超出在框里滚动 */
+    maxHeight?: string;
   }>(),
-  { streaming: false, thinking: false, choices: () => [], voiceOn: false, autoOn: false, showTools: true, error: '' },
+  { streaming: false, thinking: false, choices: () => [], voiceOn: false, autoOn: false, showTools: true, error: '', maxHeight: '30dvh' },
 );
 const emit = defineEmits<{
   (e: 'reply', text: string): void;
@@ -28,6 +33,31 @@ const emit = defineEmits<{
   (e: 'toggle-voice'): void;
   (e: 'toggle-auto'): void;
 }>();
+
+const line = ref<HTMLElement | null>(null);
+/** 正文在最底下（或者放得下不用滚）：流式写出来的字跟着往下滚 */
+let follow = true;
+function atBottom(el: HTMLElement) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= parseFloat(getComputedStyle(el).lineHeight);
+}
+function onLineScroll() {
+  if (line.value) follow = atBottom(line.value);
+}
+watch(
+  () => props.text,
+  (now, before) => {
+    const el = line.value;
+    if (!el) return;
+    // 不是同一条接着写（新的回复、换成上一条）：回到开头，从头读
+    if (!now.startsWith(before) && !before.startsWith(now)) {
+      el.scrollTop = 0;
+      follow = true;
+    } else if (props.streaming && follow) {
+      el.scrollTop = el.scrollHeight;
+    }
+  },
+  { flush: 'post' },
+);
 
 const replying = ref(false);
 const draft = ref('');
@@ -60,7 +90,7 @@ function submit() {
           <span class="typing-dot !w-1 !h-1" /><span class="typing-dot !w-1 !h-1" /><span class="typing-dot !w-1 !h-1" />
         </span>
       </div>
-      <p class="line" :class="{ 'stream-caret': streaming && !thinking }">
+      <p ref="line" class="line" :class="{ 'stream-caret': streaming && !thinking }" :style="{ maxHeight }" @scroll.passive="onLineScroll">
         <template v-for="(s, i) in splitActions(text)" :key="i">
           <span :class="{ action: s.action }">{{ s.text }}</span>
         </template>
@@ -123,6 +153,8 @@ function submit() {
   letter-spacing: 0.02em;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .action {
   opacity: 0.6;
