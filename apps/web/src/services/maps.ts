@@ -94,7 +94,7 @@ async function geocodeRequest(params: Record<string, string>, key: string, signa
   if (json.status !== 'OK') {
     const hint =
       json.status === 'REQUEST_DENIED'
-        ? '（Key 不对、没开通 Geocoding API，或者 Key 的网站限制里没有这个地址）'
+        ? '（可能是项目结算已停用、Key 不对、Geocoding API 未启用，或 Key 的限制不允许）'
         : json.status === 'OVER_QUERY_LIMIT'
           ? '（超过了用量或没绑结算账号）'
           : '';

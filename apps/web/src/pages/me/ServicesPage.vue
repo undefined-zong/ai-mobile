@@ -63,6 +63,7 @@ async function testMusic() {
 }
 
 // —— Google 地图 ——
+const mapsWebsitePattern = `${location.origin}/*`;
 const mapsDraft = ref(svc.mapsKey);
 const mapsTest = ref<TestResult | null>(null);
 const mapsTesting = ref(false);
@@ -245,8 +246,9 @@ const quality = computed({
       </div>
       <div class="note leading-relaxed">
         在 Google Cloud 控制台建一个 API Key，给它开通这三个 API：<b>Maps JavaScript API</b>（画地图）、<b>Geocoding API</b>（家的地址换成坐标）、<b>Places API (New)</b>（附近的地方；排健康计划时也用它找附近能吃饭的地方和超市）。
-        记得在 Key 的"应用限制"里选"网站"，只允许这个 App 的地址（例如 <code>https://undefined-zong.github.io/*</code>），"API 限制"里只勾这三个。
-        每月有免费额度：附近搜索结果缓存一天（健康计划找餐馆、超市也是一天最多各一次）、家的地址只查一次，自己用基本不花钱。换了 Key 以后刷新一下页面，地图才会用新的 Key。
+        Key 所属项目必须关联有效的结算账号；账号关闭或付款方式失效导致结算停用时，免费额度也不能让接口继续工作。
+        "API 限制"里只勾这三个。只供浏览器使用的 Key 可以设置网站限制，当前网站是 <code>{{ mapsWebsitePattern }}</code>；更换部署域名后也要更新限制。浏览器和云端共用同一把 Key 时，"应用限制"选"无"，不要设网站限制。
+        附近搜索结果缓存一天（健康计划找餐馆、超市也是一天最多各一次）、家的地址只查一次，实际费用以 Google Cloud 账单为准。换了 Key 或恢复结算后刷新页面。
       </div>
 
       <!-- 天气 -->

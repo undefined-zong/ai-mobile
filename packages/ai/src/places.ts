@@ -83,7 +83,7 @@ export async function placesNearby(opts: {
   if (!res.ok) {
     const msg = json.error?.message ?? '';
     const hint = res.status === 403 || /not been used|disabled|PERMISSION_DENIED/i.test(msg)
-      ? '（这个 Key 没开通 Places API (New)，或者 Key 的限制不允许）'
+      ? '（可能是项目结算已停用、Places API (New) 未启用，或 Key 的限制不允许）'
       : res.status === 400 && /API key/i.test(msg)
         ? '（Key 不对）'
         : '';
