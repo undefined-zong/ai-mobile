@@ -123,6 +123,13 @@ export interface CharacterDiary {
   image?: boolean;
 }
 
+/**
+ * 头像怎么显示：
+ * - fixed 固定：用你上传的图；没上传时用 avatarPortrait 那张立绘按头像框裁，不随表情、动作、服装换；
+ * - portrait 跟随立绘：按头像框裁Ta此刻的立绘（表情、动作、今天穿的那套），上传的图留着、不显示。
+ */
+export type AvatarMode = 'fixed' | 'portrait';
+
 export interface Character extends SyncMeta {
   live2d?: import('./live2d.ts').CharacterLive2D;
   name: string;
@@ -130,6 +137,10 @@ export interface Character extends SyncMeta {
   pronoun: '他' | '她' | 'Ta';
   /** 资源 key（R2 内容哈希）；为空时用占位头像 */
   avatar: string | null;
+  /** 头像固定还是跟随立绘；没选过时按 avatarModeOf（上传过图 = 固定，没上传 = 跟随立绘） */
+  avatarMode?: AvatarMode;
+  /** 固定头像、没上传图时用哪张立绘（立绘 id）；没有或这张已删 = 默认表情那张 */
+  avatarPortrait?: string;
   /** 角色主题色，界面点缀色跟随它 */
   accent: string;
   /** 占位立绘用的发色（导入立绘后不再需要） */

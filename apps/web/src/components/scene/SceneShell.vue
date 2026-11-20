@@ -2,8 +2,9 @@
 import { previewImages } from '@/services/imageViewer';
 import { getLocation, getScene, hasMath, type BackgroundPlace, type PokeHotspot, type TimeOfDay } from '@app/shared';
 import { showToast } from 'vant';
-import { computed, inject, ref } from 'vue';
+import { computed, inject, provide, ref } from 'vue';
 import Avatar from '@/components/common/Avatar.vue';
+import { FIGURE_LOOK } from '@/components/figure/look';
 import RichText from '@/components/common/RichText.vue';
 import StageView from '@/components/stage/StageView.vue';
 import { adjustFigureLayout, backdropAt, backgroundPlaceAt, SCENE_LOCATION, titleAt } from './location';
@@ -91,6 +92,13 @@ const expr = computed(() => props.expression ?? chars.expression[character.value
 /** 节律里她今天在这个场景穿的那套：有立绘时按它挑服装 */
 const rhythm = useRhythmStore();
 const dayOutfit = computed(() => rhythm.outfitFor(character.value.id, props.sceneId));
+const figureOutfit = computed(() => props.outfit ?? scene.value.outfit);
+const figurePose = computed(() => props.pose ?? scene.value.pose);
+/** 场景里跟随立绘的头像照这张立绘裁 */
+provide(
+  FIGURE_LOOK,
+  computed(() => ({ characterId: character.value.id, expression: expr.value, outfit: figureOutfit.value, pose: figurePose.value, dayOutfit: dayOutfit.value })),
+);
 /** 场景给的位置叠上这个角色在这个场景的微调（立绘设置 → 各场景的位置和大小） */
 const layout = computed(() =>
   adjustFigureLayout(props.layout ?? { left: 50, bottom: 40, height: 50 }, character.value.portraits?.sceneLayouts?.[props.layoutKey ?? props.sceneId]),
@@ -107,8 +115,8 @@ function openArt() {
     <StageView
       :character="character"
       :expression="expr"
-      :outfit="outfit ?? scene.outfit"
-      :pose="pose ?? scene.pose"
+      :outfit="figureOutfit"
+      :pose="figurePose"
       :day-outfit="dayOutfit"
       :backdrop="backdrop ?? backdropAt(location, sceneId)"
       :location="backgroundLocation ?? backgroundPlaceAt(location, sceneId)"

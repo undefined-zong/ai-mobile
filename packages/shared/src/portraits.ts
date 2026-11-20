@@ -1,6 +1,7 @@
 import { EXPRESSION_LABELS, EXPRESSIONS, isExpression, OUTFITS, POSES, type Expression, type Outfit, type Pose } from './expressions.ts';
 import { matchOutfit } from './outfitMatch.ts';
 import type { ControlTagKind } from './tags.ts';
+import type { AvatarMode, Character } from './types/character.ts';
 import type { DayOutfit, OutfitKind } from './types/rhythm.ts';
 import type { HotspotShape, Portrait, PortraitPose, PortraitSet } from './types/sprite.ts';
 
@@ -224,7 +225,8 @@ export function expressionTiers(want: string | null | undefined, set: Pick<Portr
   return tiers;
 }
 
-function shown(set: PortraitSet): Portrait[] {
+/** 参与自动挑选的立绘（都标了备用时用全部） */
+export function shownPortraits(set: PortraitSet): Portrait[] {
   const visible = set.portraits.filter((p) => !p.hidden);
   return visible.length ? visible : set.portraits;
 }
@@ -238,13 +240,13 @@ export interface ExpressionOption {
 /** 这个角色有图的表情（按她自己的顺序） */
 export function availableExpressions(set: PortraitSet | null | undefined): ExpressionOption[] {
   if (!set) return [];
-  const have = new Set(shown(set).map((p) => p.expression));
+  const have = new Set(shownPortraits(set).map((p) => p.expression));
   return set.expressions.filter((e) => have.has(e.id)).map((e) => ({ id: e.id, label: e.label, hint: e.hint }));
 }
 
 export function availablePoses(set: PortraitSet | null | undefined): PortraitPose[] {
   if (!set) return [];
-  const have = new Set(shown(set).map((p) => p.pose));
+  const have = new Set(shownPortraits(set).map((p) => p.pose));
   return set.poses.filter((p) => have.has(p.id));
 }
 
@@ -305,7 +307,7 @@ function poseTarget(set: PortraitSet, want: PortraitWant, has: Set<string>): str
  */
 export function pickPortrait(set: PortraitSet | null | undefined, want: PortraitWant = {}): Portrait | null {
   if (!hasPortraits(set)) return null;
-  const pool = shown(set);
+  const pool = shownPortraits(set);
   const outfit = outfitTarget(set, want, new Set(pool.map((p) => p.outfit)));
   const pose = poseTarget(set, want, new Set(pool.filter((p) => !outfit || p.outfit === outfit).map((p) => p.pose)));
   const tiers = expressionTiers(want.expression, set);
@@ -326,6 +328,19 @@ export function pickPortrait(set: PortraitSet | null | undefined, want: Portrait
   }
   const seed = Math.abs(Math.trunc(want.seed ?? 0));
   return top[seed % top.length] ?? null;
+}
+
+// —— 头像 ——
+
+/** 头像固定还是跟随立绘：选过的按选的；没选过时上传过图 = 固定，没上传 = 跟随立绘 */
+export function avatarModeOf(c: Pick<Character, 'avatarMode'>, hasUpload: boolean): AvatarMode {
+  return c.avatarMode ?? (hasUpload ? 'fixed' : 'portrait');
+}
+
+/** 固定头像用的那张立绘：指定的那张（还在的话），否则默认表情、默认动作和服装那张；不看此刻的表情、动作、节律 */
+export function fixedAvatarPortrait(set: PortraitSet | null | undefined, pinned: string | null | undefined): Portrait | null {
+  if (!hasPortraits(set)) return null;
+  return (pinned ? set.portraits.find((p) => p.id === pinned) : undefined) ?? pickPortrait(set);
 }
 
 // —— 给模型看的 ——

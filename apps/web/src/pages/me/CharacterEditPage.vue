@@ -9,6 +9,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import ImagePick from '@/components/common/ImagePick.vue';
 import Segmented from '@/components/common/Segmented.vue';
+import AvatarModeField from '@/components/settings/AvatarModeField.vue';
 import PresetPicker from '@/components/settings/PresetPicker.vue';
 import Live2DSettings from '@/components/settings/Live2DSettings.vue';
 import LooksWriter from '@/components/settings/portraits/LooksWriter.vue';
@@ -37,7 +38,9 @@ const lib = useLibraryStore();
 const looks = useAppearanceStore();
 async function pickAvatar(file: File) {
   try {
-    showToast((await looks.pickAvatar('character', character.value.id, file)) ? '头像换好了' : '换好了，但本机存储不够，下次打开会恢复原样');
+    const saved = await looks.pickAvatar('character', character.value.id, file);
+    chars.showUploadedAvatar(character.value.id);
+    showToast(saved ? '头像换好了' : '换好了，但本机存储不够，下次打开会恢复原样');
   } catch {
     showToast('这张图读不出来，换一张试试');
   }
@@ -201,6 +204,8 @@ const PERSONALITY = { clingy: '粘人', balanced: '适中', independent: '独立
                 { value: 'Ta', label: 'Ta' },
               ]"
             />
+            <label class="field-label">头像（点上面的头像上传图片）</label>
+            <AvatarModeField :character="character" />
             <label class="field-label" for="ce-weather">住在哪座城市（{{ character.pronoun }}那边的天气）</label>
             <input
               id="ce-weather"
