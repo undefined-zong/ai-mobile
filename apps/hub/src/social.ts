@@ -1,5 +1,5 @@
 import { AgentSystem, AiError, buildSocialMessages, samplerRequest, socialPostInput } from '@app/ai';
-import { estimateTokens, hubMomentId, momentDueTimes, momentExtras, parseMomentDraft, rhythmDate, shiftDate, socialDayOf, zonedDateKey,
+import { estimateTokens, hubMomentId, momentDueTimes, momentExtras, parseMomentDraft, rhythmDate, shiftDate, socialDayOf, textFn, zonedDateKey,
   type HubNotification, type Moment, type ProactiveCredentials, type RhythmContext, type RhythmDay, type SocialContext, type SocialDay } from '@app/shared';
 import { unseal } from './crypto.ts';
 import type { Env } from './env.ts';
@@ -26,7 +26,7 @@ export function socialRequest(context: SocialContext, now: number, day: SocialDa
 
 export async function generateMoment(context: SocialContext, credentials: ProactiveCredentials, id: string, now: number, day: SocialDay | null): Promise<{ moment: Moment; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent characters.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters, jsonRetry: () => context.preset?.texts?.['common.jsonRetry'] });
   const { value, result } = await system.json('social', socialRequest(context, now, day), parseMomentDraft, { signal: AbortSignal.timeout(150_000) });
   const moment: Moment = {
     id, authorId: context.character.id, text: value.text,
@@ -58,7 +58,7 @@ export async function todayOf(env: Env, context: Pick<SocialContext, 'timezone' 
 }
 
 function notificationFor(context: SocialContext, moment: Moment): HubNotification {
-  const body = moment.text || momentExtras(moment) || '发了一条朋友圈';
+  const body = moment.text || momentExtras(moment, textFn(context.preset?.texts)) || '发了一条朋友圈';
   return {
     title: context.preview === 'hidden' ? 'AI 陪伴' : context.character.name,
     body: context.preview === 'full' ? `朋友圈：${body.slice(0, 300)}` : context.preview === 'name-only' ? '发了一条朋友圈' : '朋友圈有新动态',
@@ -89,8 +89,9 @@ async function postOne(env: Env, row: ContextRow, slot: number, dueAt: number, d
       env.DB.prepare('SELECT data FROM social_posts WHERE character_id = ? AND done_at > ? AND data IS NOT NULL ORDER BY done_at DESC LIMIT 6')
         .bind(id, row.updated_at).all<{ data: string }>(),
     ]);
+    const t = textFn(context.preset?.texts);
     const mine = later.results.map((r) => JSON.parse(r.data) as Moment).reverse()
-      .map((m) => `${zonedDateKey(m.createdAt, context.timezone)} ${context.character.name}发了朋友圈：${m.text ? `「${m.text}」` : ''}${momentExtras(m) ? `（${momentExtras(m)}）` : ''}`);
+      .map((m) => t('moment.head', { stamp: zonedDateKey(m.createdAt, context.timezone), author: context.character.name, text: m.text, extras: momentExtras(m, t) }));
     const current: SocialContext = { ...context, feed: [context.feed, ...mine].filter(Boolean).join('\n') };
     const route = credentials.routes.find((r) => r.role === 'social');
     const request = socialRequest(current, now, day);

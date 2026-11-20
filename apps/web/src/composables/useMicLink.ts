@@ -1,5 +1,6 @@
 import { errorText } from '@app/ai';
-import type { Character, ControlTagKind, ParsedReply, PresetUseId } from '@app/shared';
+import { sceneUse, type Character, type ControlTagKind, type ParsedReply, type PresetUseId } from '@app/shared';
+import { sceneText } from '@/services/prompt';
 import { computed, reactive, watch, type Ref } from 'vue';
 import { services } from '@/services';
 import { CallListener, looksLikeEcho } from '@/services/listener';
@@ -261,10 +262,9 @@ export function useMicLink(opts: MicLinkOptions) {
   function taskInput(kind: 'open' | 'reply' | 'whisper'): string {
     const ctx = opts.context();
     if (opts.input) return opts.input(kind, { context: ctx, linked: clock(state.seconds), quietMin: quietMinutes() });
-    const user = opts.userName.value;
-    if (kind === 'open') return `${ctx}你们刚连上麦，${user}躺在床上。先小声开口说第一句，1–2 个短句。`;
-    if (kind === 'whisper') return `${ctx}连麦中（已经连了 ${clock(state.seconds)}），${user}已经安静了 ${quietMinutes()} 分钟，可能快睡着了。`;
-    return `${ctx}连麦中（已经连了 ${clock(state.seconds)}）。回${user}刚才说的话。`;
+    // 没给写法时是哄睡连麦（程序文字 sleep.link.*，在这个场景用的预设里）
+    const t = sceneText(opts.use ?? sceneUse(useChatStore().chatById(opts.chatId.value)?.currentScene) ?? 'chat', opts.character.value);
+    return t(`sleep.link.${kind}`, { context: ctx, user: opts.userName.value, linked: clock(state.seconds), quiet: quietMinutes() });
   }
 
   /** custom：场景里的一件事让她开口（健身做完一个动作），用这件事自己的任务名和输入 */

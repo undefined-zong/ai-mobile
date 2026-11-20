@@ -214,5 +214,34 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "moment.image.photoSeen": "照片：{{seen}}",
+    "moment.image.photo": "一张照片",
+    "moment.image.caption": "配图：{{caption}}",
+    "moment.image.plain": "一张图",
+    "moment.html": "附：{{title}}",
+    "moment.htmlFallback": "一张单据",
+    "moment.location": "在 {{location}}",
+    "moment.extras": "{{items|；}}",
+    "moment.comment": "  {{author}}[[ 回复 {{replyTo}}]]：{{text}}",
+    "moment.head": "{{stamp}} {{author}}发了朋友圈：[[「{{text}}」]][[（{{extras}}）]]",
+    "moment.likes": "  点赞：{{names}}",
+    "moment.memory": "{{parts|，}}",
+    "moment.memory.head": "{{day}} {{who}}发了朋友圈：[[「{{text}}」]][[（{{extras}}）]]",
+    "moment.memory.liked": "{{name}}点了赞",
+    "moment.memory.talk": "评论里 {{items|；}}",
+    "moment.memory.talkItem": "{{name}}：{{text}}",
+    "day.slot": "- {{from}}–{{to}} {{place}} · {{status}}[[{{?now}}  ← 现在]]",
+    "day.block": "今天的作息：\n{{slots|\\n}}\n三餐：早饭{{breakfast}}；午饭{{lunch}}；晚饭{{dinner}}\n今天穿：{{outfit}}\n手头的事：{{task}}\n今天的小事：{{events|；}}",
+    "social.character": "名字：{{name}}（界面里称呼\"{{pronoun}}\"）\n描述：{{description}}\n性格：{{personality}}\n场景：{{scenario}}",
+    "social.now": "现在：{{date}} {{weekday}} {{time}}",
+    "social.recent": "最近的聊天：\n{{recent}}",
+    "social.feed": "最近的朋友圈（不要重复发过的内容）：\n{{feed}}",
+    "social.ask.post": "这一次：{{char}}现在发一条朋友圈。",
+    "social.ask.react": "这一次：{{user}}刚发了这条朋友圈，{{char}}刷到了。决定点不点赞、要不要评论。",
+    "social.ask.reply": "这一次：{{user}}在[[{{?mine}}{{char}}的这条朋友圈]][[{{!mine}}这条朋友圈的评论区]]里说了「{{said}}」，{{char}}回复这一句（like 写 false）。",
+    "social.feedBefore": "之前的朋友圈：\n{{feed}}",
+    "social.post": "这条朋友圈和下面的评论：\n{{post}}"
+  }
 }

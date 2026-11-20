@@ -1,6 +1,6 @@
 import { fromOpenAIBody, imageUseMoments, parseSecondaryReply } from '@app/ai';
 import { cardFlags, getScene, IMAGE_MODES, PRESET_USES, type Character, type Chat, type Message } from '@app/shared';
-import { assembleForChat, type ChatAssembleOptions } from './prompt';
+import { assembleForChat, sceneText, type ChatAssembleOptions } from './prompt';
 import { useAiStore } from '@/stores/ai';
 import { useLibraryStore } from '@/stores/library';
 
@@ -16,23 +16,25 @@ export async function secondaryChat(chat: Chat, character: Character, history: M
   const api = ai.effectiveRoute('image').api;
   const imageLive = ai.isLive('image');
   const models = [...new Set([api?.model, ...(api?.models ?? [])].filter((m): m is string => !!m))];
-  const lines = [`场景：${getScene(chat.currentScene ?? 'free').name}`];
-  if (opts.task) lines.push(`主对话这一轮在做的事：${opts.task.name}\n${opts.task.input}`);
-  lines.push(`本轮可用标签：${tags.join('、') || '没有'}`);
+  // 这一轮的输入怎么写在副对话预设的程序文字里（secondary.*）
+  const t = sceneText('secondary', character);
+  const pair = (id: string, label: string) => t('secondary.option', { id, label });
+  const lines = [t('secondary.scene', { scene: getScene(chat.currentScene ?? 'free').name, task: opts.task?.name, input: opts.task?.input, tags })];
   if (tags.includes('cg')) {
-    if (!imageLive) lines.push('生图：没接通，这一轮不写 [cg:]');
+    if (!imageLive) lines.push(t('secondary.image.off'));
     else {
       const uses = PRESET_USES.filter((u) => u.category === 'image').map((u) => {
-        const preset = lib.presetForUse(u.id, character)?.name;
         const moments = imageUseMoments(u.id);
-        return `- ${u.id}（${u.label}${preset ? `，预设「${preset}」` : ''}）${moments ? `；moment 可选：${Object.entries(moments).map(([id, label]) => `${id}（${label}）`).join('、')}` : ''}`;
+        return t('secondary.image.use', {
+          id: u.id, label: u.label, preset: lib.presetForUse(u.id, character)?.name,
+          moments: moments ? Object.entries(moments).map(([id, label]) => pair(id, label)) : null,
+        });
       });
-      lines.push(
-        '生图：已接通',
-        `mode 可选：${Object.entries(IMAGE_MODES).map(([id, label]) => `${id}（${label}）`).join('、')}`,
-        `use 可选：\n${uses.join('\n')}`,
-        models.length ? `model 可选：${models.join('、')}${api?.model ? `；不写用 ${api.model}` : ''}` : '',
-      );
+      lines.push(t('secondary.image.on', {
+        modes: Object.entries(IMAGE_MODES).map(([id, label]) => pair(id, label)),
+        uses,
+        models, defaultModel: api?.model,
+      }));
     }
   }
   const prompt = assembleForChat(chat, character, history, {

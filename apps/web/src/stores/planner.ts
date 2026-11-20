@@ -4,6 +4,8 @@ import {
   DEFAULT_PLANNER,
   plannerDate,
   shiftDate,
+  textFn,
+  type TextFn,
   weekStartOn,
   type ISODate,
   type Persona,
@@ -23,7 +25,7 @@ import { useAiStore } from './ai';
 import { useCharacterStore } from './characters';
 import { useEnvironmentStore } from './environment';
 import { useHubStore } from './hub';
-import { useLibraryStore } from './library';
+import { textsFor, useLibraryStore, withTexts } from './library';
 import { usePersonaStore } from './personas';
 
 /**
@@ -158,24 +160,31 @@ export const usePlannerStore = defineStore('planner', () => {
   // —— 拼给「日程计划」的材料 ——
 
   /** 家务和健康（开了这两套系统时）：家务按每天、每周写；健康是目标和今天的计划 */
+  /** 计划预设的程序文字 */
+  function px(): TextFn {
+    return textFn(textsFor(useLibraryStore().presetForUse('planner')));
+  }
+
   function lifeText(p: Persona): string {
+    const t = px();
     const parts: string[] = [];
     const hw = p.housework;
     if (hw?.enabled && hw.chores.length) {
-      parts.push(`【家务】${p.name}每天、每周要做的：\n${hw.chores.map((c) => `- ${c.name}：${choreSchedule(c)}，约 ${c.minutes} 分钟`).join('\n')}`);
+      parts.push(t('planner.life.chores', { user: p.name, items: hw.chores.map((c) => t('planner.life.chore', { name: c.name, schedule: choreSchedule(c), minutes: c.minutes })) }));
     }
-    const health = healthLines(p);
+    const health = healthLines(p, t);
     if (health) parts.push(health);
     if (!parts.length) return '';
     const tz = useEnvironmentStore().settings.timezone;
     // 按半小时取整：上传云端的那份不会每分钟都算"变了"
     const step = 30 * 60_000;
     const at = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(Math.floor(Date.now() / step) * step);
-    return `（截至 ${at}）\n${parts.join('\n')}`;
+    return t('planner.life', { at, parts });
   }
 
   /** 最近三天的计划和勾了哪些（排今天时把没做完的挪过来） */
   function recentText(p: Persona): string {
+    const t = px();
     const date = today(p);
     const rows: string[] = [];
     for (let i = 1; i <= 3; i++) {
@@ -184,16 +193,17 @@ export const usePlannerStore = defineStore('planner', () => {
       if (!plan) continue;
       const done = doneOf(p.id, d);
       const left = plan.items.filter((_, j) => !done.has(j)).map((it) => it.title);
-      rows.push(`${d}：${plan.summary || '（没写概览）'}；做完 ${done.size}/${plan.items.length} 项${left.length ? `；没勾的：${left.slice(0, 8).join('、')}` : ''}${plan.todos.length ? `；待办：${plan.todos.map((t) => t.title).join('、')}` : ''}`);
+      rows.push(t('planner.recent.day', { date: d, summary: plan.summary || t('planner.recent.noSummary'), done: done.size, total: plan.items.length, left: left.slice(0, 8), todos: plan.todos.map((x) => x.title) }));
     }
-    return rows.length ? rows.join('\n') : '最近几天还没有排过计划';
+    return rows.length ? rows.join('\n') : t('planner.recent.none');
   }
 
   /** 上传云端 / 本机排计划用的那一份；日程系统没开或者没有"计划"预设时为空 */
   function context(personaId: string): PlannerContext | null {
     const p = usePersonaStore().byId(personaId);
     if (!p?.planner?.enabled) return null;
-    const preset = useLibraryStore().presetForUse('planner');
+    // 预设带上合好的程序文字（排计划时按它写输入）
+    const preset = withTexts(useLibraryStore().presetForUse('planner'));
     if (!preset) return null;
     const s = p.planner;
     const c = useCharacterStore().byId(s.characterId);

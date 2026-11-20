@@ -438,5 +438,13 @@
       "removeBackground": true,
       "extra": {}
     }
+  },
+  "texts": {
+    "sprite.looks": "现在的外观 tags：[[{{appearance}}]][[{{!appearance}}（还没有）]]\n{{?fandom}}同人角色：角色 tag {{characterTag}}，作品 tag [[{{copyrightTag}}]][[{{!copyrightTag}}（没填）]]（NovelAI 认得的话外观 tags 只补它认不全的地方）\n负面 tags：{{negative}}\n今天穿：{{outfit}}（{{outfitTags}}）",
+    "sprite.persona": "名字：{{name}}\n人设：{{description}}",
+    "sprite.personaLooks": "现在的外观 tags：[[{{appearance}}]][[{{!appearance}}（还没有）]]\n负面 tags：{{negative}}\n常穿：{{outfit}}",
+    "sprite.ask.tags": "写外观 tags",
+    "sprite.ask.expression": "表情：{{name}}",
+    "sprite.ask.pose": "动作：{{name}}"
   }
 }

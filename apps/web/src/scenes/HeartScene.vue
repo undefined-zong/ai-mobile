@@ -21,7 +21,7 @@ import PresetPicker from '@/components/settings/PresetPicker.vue';
 import { useMicLink } from '@/composables/useMicLink';
 import { heartMusic } from '@/services/musicPlayer';
 import { heartSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { ReplyTimeline, type TimedCommand } from '@/services/toyPlayer';
 import { useAiStore } from '@/stores/ai';
@@ -182,21 +182,27 @@ const stream = computed(() => (chatId.value ? chat.streams[chatId.value] : undef
 const streamingText = computed(() => (stream.value ? (chat.list(chatId.value).find((m) => m.id === stream.value!.messageId)?.text ?? '') : ''));
 
 /** 现在的情况：几点、怎么在一起、玩具（写进场景任务） */
+/** 这个场景的程序文字（"心跳"用途的预设里的 heartScene.*） */
+function hx() {
+  return sceneText('scene:heart', her.value);
+}
 function situation(): string {
-  const how =
-    mode.value === 'visit'
-      ? `${userName.value}来到了你身边（在${herWhere.value}）`
-      : mode.value === 'bring'
-        ? `你在${userName.value}那边，在${userName.value}身边`
-        : `连线：你在${herWhere.value}，${userName.value}在${yourPlace.value}`;
-  return [`现在 ${hhmm(Date.now())}`, how, toyLine()].filter(Boolean).join('\n');
+  const t = hx();
+  const v = { user: userName.value, herWhere: herWhere.value, yourPlace: yourPlace.value };
+  const how = t(mode.value === 'visit' ? 'heartScene.how.visit' : mode.value === 'bring' ? 'heartScene.how.bring' : 'heartScene.how.remote', v);
+  return t('heartScene.situation', { time: hhmm(Date.now()), how, toy: toyLine() });
 }
 function toyLine(): string {
-  if (!toys.live) return `${userName.value}没连玩具`;
-  const names = toys.ready ? toys.devices.map((d) => d.name).join('、') : '（没连真的玩具，只在界面上显示）';
-  const line = `${userName.value}连着玩具：${names}；玩具现在：${toys.nowLine()}`;
-  if (toys.settings.source !== 'inline') return line;
-  return `${line}\n能写的键：\n${toys.toysLine()}\n${toys.speedLine()}`;
+  const t = hx();
+  if (!toys.live) return t('heartScene.toy.none', { user: userName.value });
+  return t('heartScene.toy', {
+    user: userName.value,
+    names: toys.ready ? toys.devices.map((d) => d.name).join('、') : t('heartScene.toy.simulated'),
+    now: toys.nowLine(t),
+    inline: toys.settings.source === 'inline',
+    toys: toys.settings.source === 'inline' ? toys.toysLine(t) : null,
+    speed: toys.settings.source === 'inline' ? toys.speedLine(t) : null,
+  });
 }
 
 async function herTurn(task: 'heart-open' | 'heart-chat') {
@@ -213,7 +219,7 @@ async function herTurn(task: 'heart-open' | 'heart-chat') {
     for (let i = 0; i < 40 && chat.streams[id]; i += 1) await sleep(50);
   }
   const tl = newTimeline('read');
-  const input = task === 'heart-open' ? `${situation()}\n${userName.value}刚来到"心跳"。你先开口。` : `${situation()}\n回${userName.value}刚才说的话。`;
+  const input = hx()(task === 'heart-open' ? 'heartScene.open' : 'heartScene.reply', { situation: situation(), user: userName.value });
   const msgId = await chat.generate(id, undefined, { agent: 'main', task: { name: task, input }, allowedTags: replyTags(), flags: replyFlags(), onParsed });
   const msg = msgId ? chat.list(id).find((m) => m.id === msgId) : undefined;
   if (!msg || msg.meta.interrupted) return;
@@ -284,12 +290,7 @@ const link = useMicLink({
     noteReply();
     void direct(t, timeline);
   },
-  input: (kind, info) =>
-    kind === 'open'
-      ? `${info.context}\n你们刚连上麦，${userName.value}戴着耳机。你先开口，1–2 个短句。`
-      : kind === 'whisper'
-        ? `${info.context}\n连麦中（已经连了 ${info.linked}），${userName.value}安静了 ${info.quietMin} 分钟。`
-        : `${info.context}\n连麦中（已经连了 ${info.linked}）。回${userName.value}刚才说的话。`,
+  input: (kind, info) => hx()(`heartScene.link.${kind}`, { context: info.context, user: userName.value, linked: info.linked, quiet: info.quietMin }),
 });
 const linkStatus = computed(() => {
   const s = link.state;
@@ -359,10 +360,12 @@ let repliesSinceArt = 0;
 let autoNoted = false;
 
 function captionFor(moment: 'open' | 'now'): string {
-  const how = mode.value === 'visit' ? `${userName.value}坐在${her.value.pronoun}旁边` : `${her.value.name}在${herWhere.value}，和${userName.value}连线`;
-  if (moment === 'open') return `${userName.value}刚来，${her.value.name}在等${userName.value}；${how}`;
-  const heat = toys.intensity >= 60 ? '；气氛正浓，心跳很快' : toys.intensity > 0 ? '；气氛渐渐升温' : '';
-  return `${her.value.name}此刻的样子（按最近的对话）；${how}${heat}`;
+  const t = hx();
+  const v = { user: userName.value, char: her.value.name, pronoun: her.value.pronoun, herWhere: herWhere.value };
+  const how = t(mode.value === 'visit' ? 'heartScene.caption.visit' : 'heartScene.caption.remote', v);
+  if (moment === 'open') return t('heartScene.caption.open', { ...v, how });
+  const heat = toys.intensity >= 60 ? t('heartScene.caption.hot') : toys.intensity > 0 ? t('heartScene.caption.warm') : null;
+  return t('heartScene.caption.now', { ...v, how, heat });
 }
 async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
   if (priority === 'auto') {

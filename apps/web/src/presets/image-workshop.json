@@ -163,5 +163,8 @@
       }
     }
   ],
-  "regex": []
+  "regex": [],
+  "texts": {
+    "workshop.draw.reference": "参考：小说《{{title}}》[[（{{genre}}）]]\n设定和人物：{{setting}}\n文风：{{style}}\n最近一篇「{{last}}」的开头：{{opening}}"
+  }
 }

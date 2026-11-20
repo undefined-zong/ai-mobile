@@ -1,4 +1,4 @@
-import { assembleTaskPrompt, communityInfoText, socialDayText, type CommunityContext, type CommunityTask, type SocialContext, type SocialDay } from '@app/shared';
+import { assembleTaskPrompt, communityInfoText, socialDayText, textFn, type CommunityContext, type CommunityTask, type SocialContext, type SocialDay, type TextFn } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import { socialCharacterFill, socialNowFill, type SocialFill } from './social.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -40,25 +40,23 @@ export function buildCommunityMessages(input: CommunityPromptInput, preset: Task
 }
 
 /** "社群里你认识的人"那一块：你和你邀请进来的角色。网友不能用这些名字发帖、回复 */
-export function communityMembersFill(userName: string, members: { name: string }[]): string {
-  return [
-    '社群里的熟人（真实的用户，和用户邀请进来的角色）：',
-    `- ${userName}：用这个 App 的人，社群成员`,
-    ...members.map((m) => `- ${m.name}：${userName}邀请进来的，和${userName}互相关注`),
-  ].join('\n');
+export function communityMembersFill(userName: string, members: { name: string }[], t: TextFn): string {
+  return t('community.members', { user: userName, members: members.map((m) => t('community.member', { name: m.name, user: userName })) });
 }
 
 /** 网友发一批帖子的输入：按上传的上下文（手机拼好的文字）和此刻的时间拼 */
 export function communityFeedInput(context: CommunityContext, now: number): CommunityPromptInput {
   const n = context.settings.batchSize;
+  // 说明文字都在社群预设的程序文字里（上传的预设已经合好了自带预设文件里的）
+  const t = textFn(context.preset?.texts);
   return {
     task: 'community-feed', characterName: '', userName: context.userName, communityName: context.community.name, now: new Date(now), timeZone: context.timezone,
     fills: {
-      communityInfo: communityInfoText(context.community),
-      communityMembers: communityMembersFill(context.userName, context.members),
-      socialNow: socialNowFill(now, context.timezone).text,
-      communityFeed: context.feed ? `最近的帖子（不要重复发过的内容）：\n${context.feed}` : '',
-      socialAsk: `这一次：写 ${n} 帖，是 ${n} 个不同的网友发的。`,
+      communityInfo: communityInfoText(context.community, t),
+      communityMembers: communityMembersFill(context.userName, context.members, t),
+      socialNow: socialNowFill(now, context.timezone, t).text,
+      communityFeed: context.feed ? t('community.feed', { feed: context.feed }) : '',
+      socialAsk: t('community.ask.feed', { n }),
     },
   };
 }
@@ -71,19 +69,20 @@ export function communityMemberPostInput(context: CommunityContext, member: Soci
   const c = member.character;
   // 她眼里你的名字（和她那条聊天选的人设）：和她记得的事、最近的聊天里的称呼一致
   const userName = member.userName || context.userName;
-  const at = socialNowFill(now, context.timezone);
+  const t = textFn(context.preset?.texts);
+  const at = socialNowFill(now, context.timezone, t);
   return {
     task: 'community-member-post', characterName: c.name, pronoun: c.pronoun, userName, communityName: context.community.name, now: new Date(now), timeZone: context.timezone,
     fills: {
-      socialCharacter: socialCharacterFill(c, userName),
-      socialLife: day ? socialDayText(day, at.minute) : '',
+      socialCharacter: socialCharacterFill(c, userName, t),
+      socialLife: day ? socialDayText(day, at.minute, t) : '',
       socialNow: at.text,
       socialMemories: member.memories,
-      socialRecent: member.recent ? `最近的聊天：\n${member.recent}` : '',
-      communityInfo: communityInfoText(context.community),
-      communityMembers: communityMembersFill(userName, context.members),
-      communityFeed: context.feed ? `最近的帖子（不要重复发过的内容）：\n${context.feed}` : '',
-      socialAsk: `这一次：${c.name}在社群「${context.community.name}」里发一帖。`,
+      socialRecent: member.recent ? t('social.recent', { recent: member.recent }) : '',
+      communityInfo: communityInfoText(context.community, t),
+      communityMembers: communityMembersFill(userName, context.members, t),
+      communityFeed: context.feed ? t('community.feed', { feed: context.feed }) : '',
+      socialAsk: t('community.ask.memberPost', { char: c.name, community: context.community.name }),
     },
   };
 }

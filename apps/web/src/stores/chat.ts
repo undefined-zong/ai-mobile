@@ -1,4 +1,4 @@
-import { characterPronoun, paceText } from '@app/shared';
+import { characterPronoun, paceText, textFn } from '@app/shared';
 import {
   AGENT_META,
   describeCommand,
@@ -28,6 +28,7 @@ import { computed, reactive, ref } from 'vue';
 import { useAiStore } from './ai';
 import { useAppStore } from './app';
 import { useCharacterStore } from './characters';
+import { textsFor } from './library';
 import { useRealWorldStore } from './realworld';
 import { autoSave, chatMessageKeys, getAll, msgKey, recentMessages, splitMsgKey, write, writeTogether, type RemoteChange } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
@@ -36,7 +37,7 @@ import { services } from '@/services';
 import { putAsset } from '@/services/assets';
 import { describePhoto } from '@/services/photos';
 import { sessionSummary as musicSummary, stop as stopMusic } from '@/services/musicPlayer';
-import { assembleForChat, messageToText, personaOf, sceneTags, storeRegex, toLLMMessages, type ChatPrompt } from '@/services/prompt';
+import { assembleForChat, messageToText, personaOf, presetForTurn, sceneTags, storeRegex, toLLMMessages, type ChatPrompt } from '@/services/prompt';
 import { latestRecall, noteRecallUsed, prefetchRecall } from '@/services/recall';
 import { backfillChat, pendingForSummary, summarizeChat, type BackfillProgress, type SummaryOutcome } from '@/services/summary';
 import { useMemoryStore } from './memory';
@@ -692,7 +693,7 @@ export const useChatStore = defineStore('chat', () => {
     const upTo = msgs.slice(0, at + 1).filter((m) => !m.meta.error);
     const said = [...upTo].reverse().find((m) => m.role === 'user');
     const user = personaOf(chat).name;
-    const text = said ? messageToText(said, character, user) : '';
+    const text = said ? messageToText(said, character, textFn(textsFor(presetForTurn(chat, character).preset)), user) : '';
     try {
       await prefetchRecall(chat, character, text, said?.id ?? null, signal);
     } catch {

@@ -423,5 +423,16 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "readScene.book": "书名：《{{title}}》[[（{{author}}）]]\n{{?wereadFull}}来源：微信读书的全书正文，附有{{user}}的划线和想法；这次提供的是当前读到的段落\n{{?wereadNotes}}来源：微信读书里{{user}}的划线和想法（旧版笔记集）",
+    "readScene.yourNote": "  {{user}}的想法：{{text}}",
+    "readScene.pdfText": "（第 {{page}} 页从 PDF 文字层读出来的，公式可能是乱的）{{text}}",
+    "readScene.batch": "{{book}}\n这一章：{{chapter}}\n前情提要：[[{{summary}}]][[{{!summary}}（刚开始读）]]\n话量：{{talk}}（{{talkHint}}）\n接下来几页的段落（编号 正文）：\n{{paras|\\n}}",
+    "readScene.para": "#{{n}} [[{{text}}]]",
+    "readScene.unscanned": "（第 {{page}} 页，还没转成文字）[[{{text}}]]",
+    "readScene.note": "{{book}}\n[[{{chapter}} ]]第 {{n}} 段：[[{{text}}]]\n{{user}}划了：「{{quote}}」",
+    "readScene.chapterEnd": "{{book}}\n刚读完：{{title}}\n前情提要：[[{{summary}}]][[{{!summary}}（没有）]]",
+    "readScene.chat": "{{book}}\n读到：[[{{chapter}}]]（[[第 {{page}} 页，]]全书 {{progress}}%）\n前情提要：[[{{summary}}]][[{{!summary}}（刚开始读）]]"
+  }
 }

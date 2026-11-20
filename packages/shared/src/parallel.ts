@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { CHORE_KINDS } from './housework.ts';
 import { MEAL_LABEL } from './health.ts';
 import { nullable, shortDay, shortStamp, str } from './modelText.ts';
@@ -277,9 +278,10 @@ export function parallelSourcesBasis(sources: ParallelEntry[]): string {
 }
 
 /** 几份计划里的事写成几行给模型看（每项带编号 S1、S2…，写着从哪份来、几点、补充） */
-export function parallelSourcesText(sources: ParallelEntry[], userName: string): string {
-  if (!sources.length) return `${userName}这一天几份计划里都还没有东西`;
-  return `${userName}这一天几份计划里的事：\n${sources.map((e, i) => `- [S${i + 1}] ${e.time || '不定时'} ${e.title}（${[e.source, e.sub, e.fixed ? '定死的，不能挪' : ''].filter(Boolean).join('；')}）`).join('\n')}`;
+export function parallelSourcesText(sources: ParallelEntry[], userName: string, t: TextFn): string {
+  if (!sources.length) return t('parallel.sources.empty', { user: userName });
+  const items = sources.map((e, i) => t('parallel.sources.item', { ref: `S${i + 1}`, time: e.time || t('capture.untimed'), title: e.title, tags: [e.source, e.sub, e.fixed ? t('parallel.sources.fixed') : ''].filter(Boolean) }));
+  return t('parallel.sources', { user: userName, items });
 }
 
 /**
@@ -502,62 +504,73 @@ export function resolveParallelRef(ref: string | null | undefined, her: Parallel
 /** 她今天的节律写成几行（每段带编号）；ids：写上地点 id（改日程时她要写去哪） */
 export function parallelHerText(
   entries: ParallelEntry[],
+  t: TextFn,
   extras: { meals?: RhythmMeals | null; outfit?: string; task?: string; events?: string[] } = {},
   opts: { ids?: boolean } = {},
 ): string {
-  const lines = entries.map((e, i) => {
-    const where = e.place ? ` · ${e.place}${opts.ids && e.placeId ? `（地点 id：${e.placeId}）` : ''}` : '';
-    return `- [${entryRef('her', i)}] ${e.time} ${e.title}${where}${e.fixed ? '（固定的事，不能挪）' : ''}${e.now ? '  ← 现在' : ''}`;
-  });
+  const slots = entries.map((e, i) =>
+    t('parallel.her.slot', { ref: entryRef('her', i), time: e.time, title: e.title, place: e.place, placeId: opts.ids ? e.placeId : null, fixed: !!e.fixed, now: !!e.now }),
+  );
   const m = extras.meals;
-  return [
-    lines.length ? `今天的作息：\n${lines.join('\n')}` : '今天还没有作息',
-    m ? `三餐：早饭${m.breakfast || '—'}；午饭${m.lunch || '—'}；晚饭${m.dinner || '—'}` : '',
-    extras.outfit ? `今天穿：${extras.outfit}` : '',
-    extras.task ? `手头的事：${extras.task}` : '',
-    extras.events?.length ? `今天的小事：${extras.events.join('；')}` : '',
-  ].filter(Boolean).join('\n');
+  const none = t('common.none');
+  return t('parallel.her', {
+    slots,
+    meals: !!m,
+    breakfast: m?.breakfast || none,
+    lunch: m?.lunch || none,
+    dinner: m?.dinner || none,
+    outfit: extras.outfit,
+    task: extras.task,
+    events: extras.events,
+  });
 }
 
 /** 你今天的安排写成几行（每项带编号、从哪来、做没做） */
-export function parallelMineText(entries: ParallelEntry[], userName: string): string {
-  if (!entries.length) return `${userName}今天还没有安排（家务、健康、日程系统都没排出东西，平行时空里也没记事）`;
+/** 清单（程序文字 parallel.checklist / parallel.checkItem） */
+export function checklistText(list: { text: string; done: boolean }[] | undefined, t: TextFn): string {
+  return list?.length ? t('parallel.checklist', { items: list.map((c) => t('parallel.checkItem', { text: c.text, done: c.done })) }) : '';
+}
+
+export function parallelMineText(entries: ParallelEntry[], userName: string, t: TextFn): string {
+  if (!entries.length) return t('parallel.mine.empty', { user: userName });
   const line = (e: ParallelEntry, i: number) => {
-    const from = [e.source, e.sub, e.fixed ? '定死的' : '', e.edited ? `${userName}改过` : ''].filter(Boolean).join('，');
-    const list = e.checklist?.length ? `；清单：${e.checklist.map((c) => `${c.text}${c.done ? '✓' : ''}`).join('、')}` : '';
-    const state = e.done ? ' ✓做完了' : e.overdue ? '（过了时间还没做）' : '';
-    return `- [${entryRef('me', i)}] ${entryLabel(e)}（${from}）${list}${state}`;
+    const from = [e.source, e.sub, e.fixed ? t('parallel.mine.fixed') : '', e.edited ? t('parallel.mine.edited', { user: userName }) : ''].filter(Boolean);
+    return t('parallel.mine.item', { ref: entryRef('me', i), label: entryLabel(e), from, checklist: checklistText(e.checklist, t), done: !!e.done, overdue: !e.done && !!e.overdue });
   };
   const untimed = entries.filter((e) => e.start === null).length;
   const rows = entries.map(line);
-  return [
-    untimed ? `不定时：\n${rows.slice(0, untimed).join('\n')}` : '',
-    rows.length > untimed ? `时间线：\n${rows.slice(untimed).join('\n')}` : '',
-  ].filter(Boolean).join('\n');
+  return t('parallel.mine', { untimed: rows.slice(0, untimed), timeline: rows.slice(untimed) });
 }
 
 /** 一条留言写成几行（进提示词）：谁留的、说的是哪一项、请她改日程的结果、下面的回复 */
-export function parallelNoteText(n: ParallelNote, names: (id: string) => string, timeZone?: string, opts: { replies?: number } = {}): string {
-  const her = names(n.characterId);
-  const head = n.kind === 'request'
-    ? `${shortStamp(n.at, timeZone)} ${names(n.authorId)}请${her}改今天的日程：「${n.text}」`
-    : `${shortStamp(n.at, timeZone)} ${names(n.authorId)}留言：「${n.text}」`;
-  const about = n.about ? `（说的是：${n.about.label}）` : '';
-  const result = !n.request ? '' : n.request.status === 'accepted'
-    ? ` → ${her}答应了${n.request.changes.length ? `，改成：${n.request.changes.join('；')}` : ''}`
-    : ` → ${her}没答应`;
-  const replies = n.replies.slice(-(opts.replies ?? 8)).map((r) => `  ${names(r.authorId)}：${r.text}`);
-  return [`${head}${about}${result}`, ...replies].join('\n');
+export function parallelNoteText(n: ParallelNote, names: (id: string) => string, t: TextFn, timeZone?: string, opts: { replies?: number } = {}): string {
+  const vars = {
+    stamp: shortStamp(n.at, timeZone),
+    author: names(n.authorId),
+    her: names(n.characterId),
+    text: n.text,
+    about: n.about?.label,
+    accepted: n.request?.status === 'accepted',
+    declined: !!n.request && n.request.status !== 'accepted',
+    changes: n.request?.changes ?? [],
+  };
+  const head = t(n.kind === 'request' ? 'parallel.note.request' : 'parallel.note.post', vars);
+  const replies = n.replies.slice(-(opts.replies ?? 8)).map((r) => t('parallel.note.reply', { author: names(r.authorId), text: r.text }));
+  return [head, ...replies].join('\n');
 }
 
 /** 一条留言对她来说要记住的一句话（写进记忆） */
-export function parallelNoteMemory(n: ParallelNote, names: (id: string) => string, timeZone?: string): string {
-  const her = names(n.characterId);
-  const who = names(n.authorId);
-  const head = n.kind === 'request' ? `${who}在平行时空里请${her}改日程：「${n.text.slice(0, 120)}」` : `${who}在平行时空里留言：「${n.text.slice(0, 120)}」`;
-  const result = !n.request ? '' : n.request.status === 'accepted' ? `，${her}答应了${n.request.changes[0] ? `（${n.request.changes.join('；').slice(0, 120)}）` : ''}` : `，${her}没答应`;
-  const talk = n.replies.slice(-4).map((r) => `${names(r.authorId)}：${r.text.slice(0, 80)}`);
-  return `${shortDay(n.at, timeZone)} ${head}${result}${talk.length ? `；来回说了 ${talk.join('；')}` : ''}`;
+export function parallelNoteMemory(n: ParallelNote, names: (id: string) => string, t: TextFn, timeZone?: string): string {
+  return t(n.kind === 'request' ? 'parallel.memory.request' : 'parallel.memory.post', {
+    day: shortDay(n.at, timeZone),
+    who: names(n.authorId),
+    her: names(n.characterId),
+    text: n.text.slice(0, 120),
+    accepted: n.request?.status === 'accepted',
+    declined: !!n.request && n.request.status !== 'accepted',
+    changes: n.request?.changes.join('；').slice(0, 120),
+    talk: n.replies.slice(-4).map((r) => t('moment.memory.talkItem', { name: names(r.authorId), text: r.text.slice(0, 80) })),
+  });
 }
 
 // —— 读模型的输出 ——

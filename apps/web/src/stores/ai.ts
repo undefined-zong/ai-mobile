@@ -35,6 +35,7 @@ import { showToast } from 'vant';
 import { markRaw, reactive, ref } from 'vue';
 import { autoSave, getEntries, getOne, write } from '@/db/idb';
 import { defaultRoutes } from '@/mock/api';
+import { textsFor } from './library';
 
 const ROLES = Object.keys(AGENT_META) as AgentRole[];
 
@@ -275,6 +276,8 @@ export const useAiStore = defineStore('ai', () => {
     new AgentSystem({
       config,
       audioCache: new MemoryAudioCache(64),
+      // 要 JSON 的智能体没按要求输出时发回去的提醒：自带预设文件里的程序文字（common.jsonRetry）
+      jsonRetry: () => textsFor(null)['common.jsonRetry'],
       onFailover: (role, from, to, error) => {
         noteError(role, error);
         if (Date.now() - lastFailoverToast < 3000) return;

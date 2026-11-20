@@ -1,4 +1,4 @@
-import { assembleTaskPrompt, calendarParts, type MemoryType } from '@app/shared';
+import { assembleTaskPrompt, calendarParts, type MemoryType, textFn, type TextFn } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
 
@@ -79,22 +79,22 @@ export function dayLabel(at: number, timeZone?: string): string {
 }
 
 /** 这一次的输入：填进"总结"预设的程序填充块 */
-export function summaryFills(input: SummaryInput): Record<string, string> {
+export function summaryFills(input: SummaryInput, t: TextFn): Record<string, string> {
   const tz = input.timeZone;
   const now = input.now.getTime();
   return {
-    summaryNow: `现在：${dayLabel(now, tz)} ${lineTime(now, tz).slice(6)}${tz ? `（${tz}）` : ''}`,
-    summaryPrevious: input.previousSummary ? `上一段梗概：${input.previousSummary}` : '',
+    summaryNow: t('summary.now', { day: dayLabel(now, tz), time: lineTime(now, tz).slice(6), timeZone: tz }),
+    summaryPrevious: input.previousSummary ? t('summary.previous', { text: input.previousSummary }) : '',
     summaryMemories: input.memories?.length
-      ? `已有记忆（和这段聊天可能有关的）：\n${input.memories.map((m) => `- [${m.id}]${m.at ? ` (${dayLabel(m.at, tz)})` : ''} ${m.content}`).join('\n')}`
+      ? t('summary.memories', { items: input.memories.map((m) => t('summary.memory', { id: m.id, day: m.at ? dayLabel(m.at, tz) : null, content: m.content })) })
       : '',
-    summaryTranscript: `要整理的聊天（#行号 [时间] 名字: 内容）：\n${input.lines.map((l) => `#${l.n} [${lineTime(l.at, tz)}] ${l.who}: ${l.text}`).join('\n')}`,
+    summaryTranscript: t('summary.transcript', { lines: input.lines.map((l) => t('summary.line', { n: l.n, time: lineTime(l.at, tz), who: l.who, text: l.text })) }),
   };
 }
 
-/** 按"总结"预设拼提示词 */
+/** 按"总结"预设拼提示词（说明文字在预设的程序文字 summary.* 里） */
 export function buildSummaryMessages(input: SummaryInput, preset: TaskPreset): ChatMessage[] {
-  return assembleTaskPrompt({ preset, fills: summaryFills(input), macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.user.name, now: input.now } }).messages;
+  return assembleTaskPrompt({ preset, fills: summaryFills(input, textFn(preset.texts)), macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.user.name, now: input.now } }).messages;
 }
 
 const strings = (v: unknown, max: number): string[] =>

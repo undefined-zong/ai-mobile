@@ -5,8 +5,9 @@ import {
   hashUnit,
   parseControlTags,
   planTouchpoints,
-  PROACTIVE_HINTS,
   substituteMacros,
+  textFn,
+  type TextFn,
   type Character,
   type Chat,
   type Message,
@@ -24,8 +25,14 @@ import { useMemoryStore } from './memory';
 import { DEMO_PROACTIVE, GENERIC_PROACTIVE } from '@/mock/proactive';
 import { useEnvironmentStore } from './environment';
 import { useHubStore } from './hub';
+import { textsFor, useLibraryStore } from './library';
 import { services } from '@/services';
 import { assembleForChat, personaOf, storeRegex, toLLMMessages } from '@/services/prompt';
+
+/** 主动消息用的程序文字：这个角色"主动消息"用途的预设里的（时段要她做的事、【主动消息】那一块怎么写） */
+function proactiveText(c: Character): TextFn {
+  return textFn(textsFor(useLibraryStore().presetForUse('proactive', c)));
+}
 
 /** 自动排期、检测和生成由 Cloudflare 执行；本机仅展示计划和手动试一试。 */
 
@@ -64,7 +71,7 @@ export const useProactiveStore = defineStore('proactive', () => {
     if (!c) return [];
     const env = useEnvironmentStore().settings;
     const cloud = new Map(useHubStore().points.map((t) => [t.id, t]));
-    return planTouchpoints({ character: c, rules, env, day, followups: followupsOf(c.id) }).map((t) => {
+    return planTouchpoints({ character: c, rules, env, day, followups: followupsOf(c.id), t: proactiveText(c) }).map((t) => {
       const remote = cloud.get(t.id);
       if (!remote) return { ...t, synced: false };
       const reason = remote.lastError || remote.pushError || remote.skipReason;
@@ -103,7 +110,7 @@ export const useProactiveStore = defineStore('proactive', () => {
     const macros = { char: c.name, user: persona.name, now, timeZone };
     const hint = substituteMacros(t.hint, macros);
     const time = substituteMacros('{{isodate}} {{time}}', macros);
-    const quiet = `【主动消息】现在是 ${time}（${timeZone}），${persona.name}还没有来找你，由${c.name}先开口。这一次要做的事：${hint}。`;
+    const quiet = proactiveText(c)('proactive.quiet', { time, timeZone, user: persona.name, char: c.name, hint });
     const prompt = assembleForChat(ch, c, chat.list(ch.id), { type: 'quiet', dryRun: true, quiet, agent: 'proactive', now });
     const r = await services.llm.chat({
       agent: 'proactive',
@@ -175,7 +182,7 @@ export const useProactiveStore = defineStore('proactive', () => {
       timezone: useEnvironmentStore().settings.timezone,
       dueAt: now,
       action: 'message',
-      hint: PROACTIVE_HINTS['miss-you'] ?? '',
+      hint: proactiveText(c)('proactive.hint.miss-you'),
       status: 'planned',
     };
     return fireManual(c, t);

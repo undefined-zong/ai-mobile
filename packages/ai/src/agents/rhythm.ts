@@ -1,5 +1,5 @@
 import { characterPronoun } from '@app/shared';
-import { assembleTaskPrompt, backgroundLibraryPrompt, OUTFIT_KINDS, solarTermNote, substituteMacros, type RhythmContext, type RhythmDay, type RhythmSlot, type RhythmTask } from '@app/shared';
+import { assembleTaskPrompt, backgroundLibraryPrompt, OUTFIT_KINDS, solarTermNote, substituteMacros, textFn, type RhythmContext, type RhythmDay, type RhythmPerson, type RhythmSlot, type RhythmTask, type TextFn, type World } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
 
@@ -41,34 +41,58 @@ export function rhythmTypes(input: Pick<RhythmPromptInput, 'task' | 'outfitMode'
 export function buildRhythmMessages(input: RhythmPromptInput, preset: TaskPreset): ChatMessage[] {
   const fills: Record<string, string> = {};
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
-  if (input.task === 'build-world') fills.rhythmAsk = [fills.rhythmAsk, backgroundLibraryPrompt()].filter(Boolean).join('\n\n');
+  if (input.task === 'build-world') fills.rhythmAsk = [fills.rhythmAsk, backgroundLibraryPrompt(textFn(preset.texts))].filter(Boolean).join('\n\n');
   return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName ?? '' }, type: rhythmTypes(input) }).messages;
+}
+
+/** "她的世界"那一块（程序文字 rhythm.world*）：地点 id、名字、室内外、能一起做的事、一句话，和身边的人（排今天、画小镇都用） */
+export function rhythmWorldFill(w: Pick<World, 'name' | 'blurb' | 'locations'>, people: RhythmPerson[], t: TextFn): string {
+  return t('rhythm.world', {
+    name: w.name,
+    blurb: w.blurb,
+    locations: w.locations.map((l) => t('rhythm.world.location', {
+      id: l.id, name: l.name, place: t(l.indoor ? 'common.indoor' : 'common.outdoor'),
+      activities: l.activities.map((a) => a.label).join('、') || t('common.none'), blurb: l.blurb,
+    })),
+    people: people.map((p) => t('rhythm.world.person', { name: p.name, relation: p.relation, note: p.note })),
+  });
 }
 
 /** Rebuilt at execution time: cloud dates and recent days never depend on an open PWA. */
 export function planDayInput(context: RhythmContext, date: string, recent: RhythmDay[]): RhythmPromptInput {
-  const { character: c, userName, settings, template: t, world: w, people } = context;
+  const { character: c, userName, settings, template: tpl, world: w, people } = context;
+  // 说明文字都在节律预设的程序文字里（上传的预设已经合好了自带预设文件里的）
+  const t = textFn(context.preset?.texts);
   const vary = settings.mode === 'daily' ? settings.vary : { schedule: false, meals: false, outfits: false };
   const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName, pronoun: c.pronoun }).trim();
-  const schedule = (slots: RhythmSlot[]) => slots.map((s) => `- ${s.from}–${s.to} ${w.locations.find((l) => l.id === s.locationId)?.name ?? s.locationId}（${s.locationId}）${s.status}${s.fixed ? '（固定，不能挪）' : ''}`).join('\n');
+  const schedule = (slots: RhythmSlot[]) => slots.map((s) => t('rhythm.slot', { from: s.from, to: s.to, place: w.locations.find((l) => l.id === s.locationId)?.name ?? s.locationId, id: s.locationId, status: s.status, fixed: !!s.fixed }));
   const d = new Date(`${date}T12:00:00`);
-  const term = solarTermNote(d);
   const weekday = d.getDay();
-  const asks = [vary.schedule ? '作息' : '', vary.meals ? '三餐' : '', vary.outfits ? '穿着' : '', '手头的事', '一两件小事'].filter(Boolean);
+  const none = t('common.none');
+  const asks = [vary.schedule ? t('rhythm.ask.schedule') : '', vary.meals ? t('rhythm.ask.meals') : '', vary.outfits ? t('rhythm.ask.outfits') : '', t('rhythm.ask.task'), t('rhythm.ask.events')].filter(Boolean);
   return {
     task: 'plan-day', outfitMode: vary.outfits ? settings.outfitMode : null, characterName: c.name, pronoun: c.pronoun, userName,
     fills: {
-      rhythmCharacter: [`名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`, c.card.description ? `描述：${sub(c.card.description)}` : '',
-        c.card.personality ? `性格：${sub(c.card.personality)}` : '', c.card.scenario ? `场景：${sub(c.card.scenario)}` : ''].filter(Boolean).join('\n'),
-      rhythmWorld: [`${w.name}：${w.blurb}`, '地点（id：名字 · 室内或室外 · 能一起做的事 · 一句话）：',
-        ...w.locations.map((l) => `- ${l.id}：${l.name} · ${l.indoor ? '室内' : '室外'} · ${l.activities.map((a) => a.label).join('、') || '—'}${l.blurb ? ` · ${l.blurb}` : ''}`),
-        people.length ? `身边的人：\n${people.map((p) => `- ${p.name}（${p.relation}）${p.note ? `：${p.note}` : ''}`).join('\n')}` : ''].filter(Boolean).join('\n'),
-      rhythmTemplate: [`作息模板：\n${schedule(t.schedule)}`, `三餐习惯：早饭${t.meals.breakfast || '—'}；午饭${t.meals.lunch || '—'}；晚饭${t.meals.dinner || '—'}`, t.task ? `最近手头的事：${t.task}` : ''].filter(Boolean).join('\n'),
-      rhythmWardrobe: vary.outfits || settings.mode === 'fixed' ? (t.wardrobe.length ? `衣柜：\n${t.wardrobe.map((o) => `- [${OUTFIT_KINDS[o.kind]}] ${o.name}：${o.tags}`).join('\n')}` : '衣柜：还是空的') : '',
-      rhythmToday: `今天：${date} ${['周日', '周一', '周二', '周三', '周四', '周五', '周六'][weekday]}（${weekday === 0 || weekday === 6 ? '周末' : '工作日'}）${term ? ` · ${term}` : ''}`,
-      rhythmRecent: recent.length ? `最近几天：\n${recent.map((day) => `- ${day.date}：${day.schedule.filter((s) => !/睡/.test(s.status)).map((s) => `${s.from} ${s.status}`).join('，')}；穿 ${Object.values(day.outfits).map((o) => o?.name).filter(Boolean).join('、')}；晚饭${day.meals.dinner}`).join('\n')}` : '',
+      rhythmCharacter: t('social.character', {
+        name: c.name, pronoun: characterPronoun(c),
+        description: c.card.description ? sub(c.card.description) : '', personality: c.card.personality ? sub(c.card.personality) : '', scenario: c.card.scenario ? sub(c.card.scenario) : '',
+      }),
+      rhythmWorld: rhythmWorldFill(w, people, t),
+      rhythmTemplate: t('rhythm.template', { schedule: schedule(tpl.schedule), breakfast: tpl.meals.breakfast || none, lunch: tpl.meals.lunch || none, dinner: tpl.meals.dinner || none, task: tpl.task }),
+      rhythmWardrobe: vary.outfits || settings.mode === 'fixed'
+        ? (tpl.wardrobe.length ? t('rhythm.wardrobe', { items: tpl.wardrobe.map((o) => t('rhythm.wardrobe.item', { kind: OUTFIT_KINDS[o.kind], name: o.name, tags: o.tags })) }) : t('rhythm.wardrobe.empty'))
+        : '',
+      rhythmToday: t('rhythm.today', { date, weekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][weekday], weekend: weekday === 0 || weekday === 6, term: solarTermNote(d, undefined, t) }),
+      rhythmRecent: recent.length
+        ? t('rhythm.recent', { days: recent.map((day) => t('rhythm.recent.day', {
+          date: day.date,
+          slots: day.schedule.filter((s) => !/睡/.test(s.status)).map((s) => `${s.from} ${s.status}`),
+          outfits: Object.values(day.outfits).map((o) => o?.name ?? '').filter(Boolean),
+          dinner: day.meals.dinner,
+        })) })
+        : '',
       rhythmPromises: context.promises,
-      rhythmAsk: `这次要排的：${asks.join('、')}${vary.schedule ? '' : '（作息按模板，不用写）'}`,
+      rhythmAsk: t('rhythm.ask', { asks, keepSchedule: !vary.schedule }),
     },
   };
 }

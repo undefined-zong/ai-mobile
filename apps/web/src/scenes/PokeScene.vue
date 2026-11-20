@@ -10,7 +10,7 @@ import { services } from '@/services';
 import { ttsLiveFor } from '@/services/ai';
 import { pokeMusic } from '@/services/musicPlayer';
 import { pokeSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SentenceStream, SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
@@ -210,27 +210,24 @@ function group(batch: Touch[]): PokePart[] {
   return out;
 }
 
-const togetherLine = computed(() => {
-  const mode = chat.chatById(chatId.value)?.togetherMode;
-  if (mode === 'remote') return `连线（${userName.value}在自己那边，隔着屏幕逗你）`;
-  if (mode === 'bring') return `你在${userName.value}那边，就在${userName.value}身边`;
-  return `${userName.value}来你这边了，就在你身边`;
-});
-
-/** 这一次的输入，只放数据：怎么在一起、碰了哪里、怎么碰、几下、在放什么歌。她怎么回应、尺度写在预设的块里 */
+/**
+ * 这一次的输入（程序文字 pokeScene.*，在戳戳乐用途的预设里），只放数据：怎么在一起、碰了哪里、怎么碰、几下、在放什么歌。
+ * 她怎么回应、尺度写在预设的块里
+ */
 function pokeInput(batch: Touch[], parts: PokePart[]): string {
+  const t = sceneText(USE, her.value);
   const you = userName.value;
-  const loose = [...new Set(batch.filter((t) => LOOSE_PARTS.has(t.part)).map((t) => t.label))];
+  const loose = [...new Set(batch.filter((x) => LOOSE_PARTS.has(x.part)).map((x) => x.label))];
   const song = pokeMusic.state.playing ? pokeMusic.current() : null;
-  return [
-    `你们怎么在一起：${togetherLine.value}`,
-    song ? `在放的歌：《${song.title}》- ${song.artist}${pokeMusic.state.demo ? '（示例歌曲）' : ''}` : '',
-    `${you}这一次：\n${parts.map((p) => `- ${pokeLine(p, you, her.value.name)}`).join('\n')}`,
-    loose.length ? `碰在"${loose.join('、')}"上的是没碰在具体的地方，在你身上乱碰` : '',
-    `今天在戳戳乐里一共被碰了 ${total.value} 下`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const mode = chat.chatById(chatId.value)?.togetherMode;
+  return t('pokeScene.input', {
+    together: t(mode === 'remote' ? 'pokeScene.together.remote' : mode === 'bring' ? 'pokeScene.together.bring' : 'pokeScene.together.visit', { user: you }),
+    song: song?.title, artist: song?.artist, demo: !!song && pokeMusic.state.demo,
+    user: you,
+    touches: parts.map((p) => t('pokeScene.touch', { line: pokeLine(p, you, her.value.name, t) })),
+    loose,
+    total: total.value,
+  });
 }
 
 /** 把攒着的这几下给她：先记进聊天，再让她回应；她还在写、还在读上一句时等她说完 */

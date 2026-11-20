@@ -370,5 +370,17 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "sleep.link.open": "{{context}}你们刚连上麦，{{user}}躺在床上。先小声开口说第一句，1–2 个短句。",
+    "sleep.link.whisper": "{{context}}连麦中（已经连了 {{linked}}），{{user}}已经安静了 {{quiet}} 分钟，可能快睡着了。",
+    "sleep.link.reply": "{{context}}连麦中（已经连了 {{linked}}）。回{{user}}刚才说的话。",
+    "sleepScene.now": "现在 {{time}}，[[{{?lightsOff}}已经熄灯了]][[{{!lightsOff}}灯还开着]][[{{?noise}}，开着白噪音]][[，在放《{{song}}》- {{artist}}[[{{?demo}}（示例歌曲）]]]]。",
+    "sleepScene.story": "{{now}}\n讲一个新的睡前故事。\n{{user}}刚才说：\"{{request}}\"。照这句话的意思来。\n题材：{{genre}}。\n{{?pick}}题材你来挑[[，和今晚讲过的（{{genres}}）不一样]]。\n今晚已经讲过：{{told}}，不要重复。",
+    "sleepScene.light.off": "已经熄灯了，只有一点月光",
+    "sleepScene.light.on": "床头灯还亮着",
+    "sleepScene.caption.mic": "睡前，{{char}}躺在床上和{{user}}连麦，刚连上，小声说着话；{{light}}",
+    "sleepScene.caption.now": "睡前，{{char}}躺在床上和{{user}}连麦，画{{pronoun}}此刻的样子[[：{{pronoun}}刚小声说\"{{said}}\"]]；{{light}}",
+    "sleepScene.timerEnd": "{{now}}定时到了。"
+  }
 }

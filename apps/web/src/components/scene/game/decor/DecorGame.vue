@@ -5,7 +5,7 @@ import { showConfirmDialog, showToast } from 'vant';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { putAsset } from '@/services/assets';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -140,7 +140,7 @@ onMounted(() => {
         const res = moveItem(room.value, id, to);
         if (!res.ok) return showToast(res.reason);
         const name = catalogItem(room.value.items.find((i) => i.id === id)?.kind ?? '')?.name ?? '';
-        commit(res.room, `挪了${name}`);
+        commit(res.room, dx()('decor.log.move', { name }));
       },
       invalid: (reason) => showToast(reason),
       tapChibi: () => undefined,
@@ -256,7 +256,7 @@ function goRoom(index: number) {
   if (index === home.value.current || busy.value) return;
   select(null);
   decor.setCurrent(her.value.id, index);
-  log.value.push(`${userName.value}去了${room.value.name}`);
+  log.value.push(dx()('decor.log.goRoom', { user: userName.value, room: room.value.name }));
 }
 function addRoom(type: string) {
   if (busy.value) return;
@@ -266,7 +266,7 @@ function addRoom(type: string) {
   if (!made) return showToast(`最多 ${MAX_ROOMS} 个房间`);
   undoStack.value = [];
   redoStack.value = [];
-  log.value.push(`${userName.value}添了一间新房间「${made.name}」`);
+  log.value.push(dx()('decor.log.addRoom', { user: userName.value, room: made.name }));
   if (phase.value !== 'playing') phase.value = 'playing';
   emit('progress', `装修小屋「${made.name}」`);
 }
@@ -284,7 +284,7 @@ async function removeRoom() {
   select(null);
   undoStack.value = [];
   redoStack.value = [];
-  if (decor.removeRoom(her.value.id, target.id)) log.value.push(`${userName.value}把「${target.name}」拆掉了`);
+  if (decor.removeRoom(her.value.id, target.id)) log.value.push(dx()('decor.log.removeRoom', { user: userName.value, room: target.name }));
 }
 
 // —— 选中的那件 ——
@@ -292,18 +292,18 @@ function turnSelected() {
   if (!selected.value) return;
   const res = turnItem(room.value, selected.value.id);
   if (!res.ok) return showToast(res.reason);
-  commit(res.room, `把${selectedCat.value?.name}转了个方向`);
+  commit(res.room, dx()('decor.log.turn', { name: selectedCat.value?.name }));
 }
 function recolor(hex: string) {
   const it = selected.value;
   if (!it || itemColor(it) === hex) return;
-  commit({ ...room.value, items: room.value.items.map((i) => (i.id === it.id ? { ...i, color: hex } : i)) }, `把${selectedCat.value?.name}换成了${colorName(hex)}`);
+  commit({ ...room.value, items: room.value.items.map((i) => (i.id === it.id ? { ...i, color: hex } : i)) }, dx()('decor.log.color', { name: selectedCat.value?.name, color: colorName(hex) }));
 }
 function duplicate() {
   if (!selected.value) return;
   const res = duplicateItem(room.value, selected.value.id);
   if (!res) return showToast('旁边放不下了');
-  commit(res.room, `又放了一个${selectedCat.value?.name}`);
+  commit(res.room, dx()('decor.log.another', { name: selectedCat.value?.name }));
   addedIds.value.add(res.item.id);
   select(res.item.id);
   engine.value?.pop([res.item.id]);
@@ -313,7 +313,7 @@ function stash() {
   if (!it) return;
   const name = selectedCat.value?.name ?? '';
   select(null);
-  commit(removeItem(room.value, it.id), `收起了${name}`);
+  commit(removeItem(room.value, it.id), dx()('decor.log.remove', { name }));
 }
 
 // —— 家具目录 ——
@@ -361,7 +361,7 @@ function addFromCatalog(kind: string) {
   if (!res) return showToast(`没地方放${c?.name ?? ''}了，先收起点东西`);
   catalogOpen.value = false;
   if (mode.value !== 'edit') mode.value = 'edit';
-  commit(res.room, `添了${c?.name}`);
+  commit(res.room, dx()('decor.log.add', { color: null, name: c?.name }));
   addedIds.value.add(res.item.id);
   select(res.item.id);
   engine.value?.pop([res.item.id]);
@@ -377,7 +377,7 @@ function applyStyle(style: RoomStyle) {
   select(null);
   nameDraft.value = '';
   decor.setRooms(her.value.id, next, current);
-  log.value.push(`把整套六个房间布置成了「${style.name}」`);
+  log.value.push(dx()('decor.log.style', { style: style.name }));
   for (const r of next) for (const item of r.items) addedIds.value.add(item.id);
   if (phase.value !== 'playing') phase.value = 'playing';
   emit('progress', `装修整套小屋「${style.name}」`);
@@ -388,12 +388,12 @@ function setFinish(key: 'wall' | 'floor', patch: { finish?: string; color?: stri
   const next = { ...room.value[key], ...patch };
   if (next.finish === room.value[key].finish && next.color === room.value[key].color) return;
   const list = key === 'wall' ? WALL_FINISHES : FLOOR_FINISHES;
-  commit({ ...room.value, [key]: next }, `把${key === 'wall' ? '墙' : '地面'}换成了${colorName(next.color)}${list.find((f) => f.id === next.finish)?.name ?? ''}`);
+  commit({ ...room.value, [key]: next }, dx()('decor.log.surface', { what: dx()(key === 'wall' ? 'decor.surface.wall' : 'decor.surface.floor'), color: colorName(next.color), finish: list.find((f) => f.id === next.finish)?.name }));
 }
 function setSize(w: number, d: number) {
   if (w === room.value.w && d === room.value.d) return;
   const res = resizeRoom(room.value, w, d);
-  commit(res.room, `把房间改成了 ${w} × ${d} 格`);
+  commit(res.room, dx()('decor.log.size', { w, d }));
   if (res.dropped) showToast(`放不下的 ${res.dropped} 件先收起来了，可以撤销`);
 }
 const nameDraft = ref('');
@@ -401,7 +401,7 @@ watch(finishOpen, (open) => {
   if (open) nameDraft.value = room.value.name;
   else {
     const n = nameDraft.value.trim().slice(0, 16);
-    if (n && n !== room.value.name) commit({ ...room.value, name: n }, `把房间的名字改成了「${n}」`);
+    if (n && n !== room.value.name) commit({ ...room.value, name: n }, dx()('decor.log.rename', { name: n }));
   }
 });
 
@@ -414,7 +414,7 @@ function openAvatar(who: 'you' | 'her') {
 }
 function saveAvatar(who: 'you' | 'her', a: Avatar) {
   decor.setAvatar(her.value.id, who, a);
-  log.value.push(`${who === 'you' ? `${userName.value}换了自己的样子` : `${userName.value}给${her.value.name}换了个样子`}：${describeAvatar(a)}`);
+  log.value.push(dx()(who === 'you' ? 'decor.log.selfAvatar' : 'decor.log.herAvatar', { user: userName.value, char: her.value.name, avatar: describeAvatar(a, dx()) }));
   if (who === 'her') engine.value?.herReact('blush');
 }
 
@@ -431,25 +431,26 @@ function fail(r: { reason: string; notConnected?: boolean }) {
   if (alive) emit('fail', r);
 }
 
+/** 这个游戏的程序文字（"一起游戏 · 装修小屋"用途的预设里的 decor.*） */
+function dx() {
+  return sceneText(USE, her.value);
+}
 const togetherLine = computed(() => {
   const m = chat.chatById(chatId.value)?.togetherMode;
-  if (m === 'visit') return `${userName.value}来你这边了，坐在你旁边，一起在平板上装修`;
-  if (m === 'bring') return `你在${userName.value}这边，一起在平板上装修`;
-  return `连线（${userName.value}在自己那边，你在你那边，一起装修同一间小屋）`;
+  return dx()(m === 'visit' ? 'decor.together.visit' : m === 'bring' ? 'decor.together.bring' : 'decor.together.remote', { user: userName.value });
 });
 
 /** 这一次的输入，只放数据：怎么在一起、屋子现在的样子、你们俩的小人、这一次改了什么，加上这一步的情况 */
 function decorInput(extra: (string | false)[]): string {
-  return [
-    `你们怎么在一起：${togetherLine.value}`,
-    describeRoom(room.value, { you: userName.value, her: her.value.name }, rooms.value),
-    `小人：${userName.value}是${describeAvatar(home.value.you)}；你是${describeAvatar(home.value.her)}`,
-    engine.value ? `当前小人状态：${JSON.stringify(engine.value.observe().residents)}` : false,
-    log.value.length ? `这一次改了什么（按先后）：\n${log.value.slice(-14).join('\n')}` : '这一次还没动过',
-    ...extra,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const t = dx();
+  return t('decor.input', {
+    together: togetherLine.value,
+    room: describeRoom(room.value, { you: userName.value, her: her.value.name }, t, rooms.value),
+    user: userName.value, you: describeAvatar(home.value.you, t), her: describeAvatar(home.value.her, t),
+    residents: engine.value ? JSON.stringify(engine.value.observe().residents) : null,
+    log: log.value.slice(-14),
+    extra: extra.filter((x): x is string => !!x),
+  });
 }
 
 function clean(v: unknown, max: number): string {
@@ -554,16 +555,16 @@ async function herPlan() {
   busy.value = 'plan';
   line.value = '';
   try {
-    if (w) say('user', `帮我布置一下：${w}`);
+    if (w) say('user', dx()('decor.say.wish', { wish: w }));
     const res = await chat.sceneJson(
       chatId.value,
       {
         name: 'decor-plan',
         input: decorInput([
-          w ? `${userName.value}想要：${w}` : `${userName.value}说：你来布置一下吧`,
-          `能摆的家具（id（名字，占地））：\n${describeCatalog()}`,
-          `墙纸：${WALL_FINISHES.map((f) => `${f.id}=${f.name}`).join('、')}；地面：${FLOOR_FINISHES.map((f) => `${f.id}=${f.name}`).join('、')}`,
-          `调色盘：${PALETTE.map((p) => p.name).join('、')}`,
+          dx()('decor.plan.ask', { user: userName.value, wish: w }),
+          dx()('decor.plan.catalog', { catalog: describeCatalog(dx()) }),
+          dx()('decor.plan.finishes', { walls: WALL_FINISHES.map((f) => `${f.id}=${f.name}`), floors: FLOOR_FINISHES.map((f) => `${f.id}=${f.name}`) }),
+          dx()('decor.plan.palette', { colors: PALETTE.map((p) => p.name) }),
         ]),
       },
       parsePlan,
@@ -573,8 +574,8 @@ async function herPlan() {
     if (!alive) return;
     if (!res.ok) return fail(res);
     const plan = res.value;
-    const out = applyPlan(room.value, plan.actions);
-    const said = plan.line || (out.done.length ? '弄好啦，你看看～' : '');
+    const out = applyPlan(room.value, plan.actions, dx());
+    const said = plan.line || (out.done.length ? dx()('decor.plan.doneLine') : '');
     if (said) {
       line.value = said;
       say('assistant', said, { expression: plan.expr, agent: true });
@@ -614,8 +615,8 @@ async function design(who: 'you' | 'her'): Promise<Avatar | null> {
       {
         name: 'decor-avatar',
         input: decorInput([
-          who === 'her' ? `给谁捏：你自己（现在是${describeAvatar(base)}）` : `给谁捏：${userName.value}（现在是${describeAvatar(base)}）`,
-          `能挑的选项：\n${describeAvatarOptions()}`,
+          dx()(who === 'her' ? 'decor.avatarFor.her' : 'decor.avatarFor.user', { user: userName.value, avatar: describeAvatar(base, dx()) }),
+          dx()('decor.avatarOptions', { options: describeAvatarOptions(dx()) }),
         ]),
       },
       (v) => {
@@ -637,7 +638,7 @@ async function design(who: 'you' | 'her'): Promise<Avatar | null> {
       line.value = l;
       say('assistant', l, { expression: expr, agent: true });
     }
-    say('narrator', `${her.value.name}${who === 'her' ? '给自己' : `给${userName.value}`}捏了个小人：${describeAvatar(avatar)}`);
+    say('narrator', dx()(who === 'her' ? 'decor.narrator.herAvatar' : 'decor.narrator.userAvatar', { char: her.value.name, user: userName.value, avatar: describeAvatar(avatar, dx()) }));
     engine.value?.herReact(expr ?? 'smile');
     return avatar;
   } finally {
@@ -677,7 +678,7 @@ async function finish() {
   emit('progress', null);
   phase.value = 'end';
   const changes = [...log.value];
-  await herReply('decor-end', undefined, [changes.length ? '' : '（这一次没怎么改，就是来看看）'], '收工');
+  await herReply('decor-end', undefined, [changes.length ? '' : dx()('decor.end.nothing')], '收工');
   // 接着装就是新的一次
   log.value = [];
   addedIds.value = new Set();

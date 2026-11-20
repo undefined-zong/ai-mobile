@@ -4,7 +4,7 @@ import { showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import PresetPicker from '@/components/settings/PresetPicker.vue';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -167,11 +167,13 @@ function tally(who: Who): TruthDareTally {
   return skipped ? { ...t, skipped } : t;
 }
 
+/** 这个游戏的程序文字（"真心话大冒险"用途的预设里的 truthDare.*） */
+function tx() {
+  return sceneText(USE, her.value);
+}
 const togetherLine = computed(() => {
   const mode = chat.chatById(chatId.value)?.togetherMode;
-  if (mode === 'visit') return `${userName.value}来你这边了，坐在你旁边`;
-  if (mode === 'bring') return `你在${userName.value}这边`;
-  return `连线（${userName.value}在自己那边，你在你那边）`;
+  return tx()(mode === 'visit' ? 'truthDare.together.visit' : mode === 'bring' ? 'truthDare.together.bring' : 'truthDare.together.remote', { user: userName.value });
 });
 
 /**
@@ -179,16 +181,13 @@ const togetherLine = computed(() => {
  * 尺度不在这里：选的那个尺度的块按触发条件发送；每一步要她做什么写在预设那一步的块里
  */
 function tdInput(extra: (string | false)[]): string {
+  const t = tx();
   const past = rounds.value.filter((r) => r.card);
-  return [
-    `你们怎么在一起：${togetherLine.value}`,
-    past.length
-      ? `这一局出过的题：\n${past.map((r, i) => `${i + 1}. ${nameOf(r.who)}选了${r.choice}：${r.card}${r.skipped ? '（认罚了）' : r.answer ? ` → ${r.answer}` : ''}`).join('\n')}`
-      : '这一局出过的题：还没有',
-    ...extra,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  return t('truthDare.input', {
+    together: togetherLine.value,
+    past: past.map((r, i) => t('truthDare.past', { n: i + 1, who: nameOf(r.who), choice: r.choice, card: r.card, skipped: !!r.skipped, answer: r.skipped ? null : r.answer })),
+    extra: extra.filter((x): x is string => !!x),
+  });
 }
 
 function say(role: 'user' | 'assistant' | 'narrator', text: string, extra: { expression?: string; agent?: boolean; cue?: string } = {}) {
@@ -263,7 +262,7 @@ async function start() {
   firstWho.value = who;
   await sleep(reduceMotion ? 400 : 900);
   if (!alive || phase.value !== 'spin') return;
-  chat.push(chatId.value, 'narrator', [{ type: 'text', text: `真心话大冒险${gameLevel.value ? `（${gameLevel.value}）` : ''}开始了，瓶子转到了${nameOf(who)}。` }], { meta: { scene: 'game', cue: '开局' } });
+  chat.push(chatId.value, 'narrator', [{ type: 'text', text: tx()('truthDare.narrator.start', { level: gameLevel.value, who: nameOf(who) }) }], { meta: { scene: 'game', cue: '开局' } });
   nextRound(who);
 }
 
@@ -281,7 +280,7 @@ async function youChoose(choice: Choice) {
   const r = round.value;
   if (!r || r.who !== 'you' || r.choice || busy.value) return;
   r.choice = choice;
-  say('user', `我选${choice}！`);
+  say('user', tx()('truthDare.say.choose', { choice }));
   await herCard();
 }
 
@@ -290,7 +289,7 @@ async function herCard(swap = false) {
   if (!r?.choice || busy.value) return;
   if (swap) {
     if (r.swaps >= SWAPS || r.done) return;
-    say('user', '换一个！');
+    say('user', tx()('truthDare.say.swap'));
   }
   busy.value = 'card';
   line.value = '';
@@ -299,7 +298,7 @@ async function herCard(swap = false) {
       chatId.value,
       {
         name: r.choice === '真心话' ? 'td-ask-truth' : 'td-ask-dare',
-        input: tdInput([`这一轮：${userName.value}选了${r.choice}`, swap && `${userName.value}要换一题，换掉的是：${r.card}`]),
+        input: tdInput([tx()('truthDare.round.userChose', { user: userName.value, choice: r.choice }), swap && tx()('truthDare.round.swap', { user: userName.value, card: r.card })]),
       },
       parseCard,
       abort.signal,
@@ -322,16 +321,17 @@ async function youAnswer(kind: 'answer' | 'done' | 'skip') {
   if (!r?.choice || !r.card || r.done || busy.value) return;
   const text = input.value.trim();
   if (kind === 'answer' && !text) return showToast('先写下你的回答');
-  const verb = r.choice === '真心话' ? '答' : '做';
-  const said = kind === 'skip' ? `这个我不敢${verb}……认罚` : kind === 'answer' ? text : text ? `做完了：${text}` : '做完了！';
+  const t = tx();
+  const truth = r.choice === '真心话';
+  const said = kind === 'skip' ? t(truth ? 'truthDare.say.skipTruth' : 'truthDare.say.skipDare') : kind === 'answer' ? text : t('truthDare.say.done', { text });
   const result =
-    kind === 'skip' ? `${userName.value}不敢${verb}，认罚了` : kind === 'answer' ? `${userName.value}的回答：${text}` : `${userName.value}做完了${text ? `：${text}` : '（没说具体怎么做的）'}`;
+    kind === 'skip' ? t(truth ? 'truthDare.result.skipTruth' : 'truthDare.result.skipDare', { user: userName.value }) : kind === 'answer' ? t('truthDare.result.answer', { user: userName.value, text }) : t('truthDare.result.done', { user: userName.value, text });
   r.skipped = kind === 'skip';
-  r.answer = kind === 'skip' ? '' : (text || '做完了').slice(0, 80);
+  r.answer = kind === 'skip' ? '' : (text || t('truthDare.doneShort')).slice(0, 80);
   r.done = true;
   input.value = '';
   report();
-  await herReply('td-react', said, [`这一轮：${userName.value}选了${r.choice}`, `题目：${r.card}`, result]);
+  await herReply('td-react', said, [t('truthDare.round.userChose', { user: userName.value, choice: r.choice }), t('truthDare.round.card', { card: r.card }), result]);
 }
 
 // —— 轮到她：她选、你出题、她答 ——
@@ -344,7 +344,7 @@ async function herPick() {
     const t = tally('her');
     const res = await chat.sceneJson(
       chatId.value,
-      { name: 'td-pick', input: tdInput(['这一轮：轮到你', `你这一局选过：真心话 ${t.truth} 次、大冒险 ${t.dare} 次`]) },
+      { name: 'td-pick', input: tdInput([tx()('truthDare.round.yourTurn'), tx()('truthDare.round.tally', { truth: t.truth, dare: t.dare })]) },
       parsePick,
       abort.signal,
       { use: USE, flags: levelFlags.value },
@@ -367,7 +367,7 @@ async function suggest() {
   try {
     const res = await chat.sceneJson(
       chatId.value,
-      { name: 'td-suggest', input: tdInput([`这一轮：${her.value.name}选了${r.choice}`]) },
+      { name: 'td-suggest', input: tdInput([tx()('truthDare.round.herChose', { char: her.value.name, choice: r.choice })]) },
       parseOptions,
       abort.signal,
       { use: USE, flags: levelFlags.value },
@@ -391,14 +391,14 @@ async function pose() {
   r.card = q.slice(0, 120);
   input.value = '';
   suggestions.value = [];
-  await herAnswer(`【${r.choice}】${r.card}`);
+  await herAnswer(tx()('truthDare.say.card', { choice: r.choice, card: r.card }));
 }
 
 /** 她回答、照着做；没接通、出错时题目已经在聊天里了，再试时不再发一遍 */
 async function herAnswer(userText?: string) {
   const r = round.value;
   if (!r?.choice || !r.card || r.done || busy.value) return;
-  const ok = await herReply(herTask(r), userText, [`这一轮：你选了${r.choice}`, `${userName.value}出的题：${r.card}`]);
+  const ok = await herReply(herTask(r), userText, [tx()('truthDare.round.youChose', { choice: r.choice }), tx()('truthDare.round.userCard', { user: userName.value, card: r.card })]);
   if (!ok || !alive) return;
   r.answer = clean(line.value, 80);
   r.done = true;
@@ -411,7 +411,7 @@ async function talk() {
   const r = round.value;
   if (!t || !r || busy.value) return;
   talkText.value = '';
-  await herReply('td-chat', t, [`现在：第 ${rounds.value.length} 轮刚结束，下一轮轮到${nameOf(r.who === 'you' ? 'her' : 'you')}`]);
+  await herReply('td-chat', t, [tx()('truthDare.between', { n: rounds.value.length, next: nameOf(r.who === 'you' ? 'her' : 'you') })]);
 }
 
 // —— 不玩了：她说说这一局，发对局卡片 ——
@@ -431,7 +431,7 @@ async function end() {
   chat.postCard(chatId.value, 'user', card);
   emit('done', `真心话大冒险（${n} 轮）`);
   emit('progress', null);
-  await herReply('td-end', undefined, [`这一局玩了 ${n} 轮，结束了`], '结束');
+  await herReply('td-end', undefined, [tx()('truthDare.end', { n })], '结束');
 }
 
 function again() {

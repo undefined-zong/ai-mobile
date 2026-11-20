@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { toMinutes } from './rhythm.ts';
 import { shiftDate, zonedDateKey, zonedInstant, zonedParts } from './timezone.ts';
 import type { ISODate } from './types/common.ts';
@@ -288,18 +289,17 @@ export function argsDraft(schema: unknown): string {
 }
 
 /** 工具的参数写成一行（给模型看）："query: string（搜索条件）*必填" */
-export function toolParamsText(schema: unknown, max = 600): string {
+export function toolParamsText(schema: unknown, t: TextFn, max = 600): string {
   const s = isObj(schema) ? schema : {};
   const props = isObj(s.properties) ? s.properties : {};
   const required = new Set(Array.isArray(s.required) ? s.required.filter((x): x is string => typeof x === 'string') : []);
   const parts = Object.entries(props).map(([k, raw]) => {
     const p = isObj(raw) ? raw : {};
     const type = Array.isArray(p.type) ? p.type.join('|') : str(p.type, 40) || (Array.isArray(p.enum) ? 'enum' : 'any');
-    const values = Array.isArray(p.enum) ? `，可选 ${p.enum.slice(0, 8).map((x) => JSON.stringify(x)).join(' / ')}` : '';
-    const desc = str(p.description, 160);
-    return `${k}: ${type}${desc || values ? `（${desc}${values}）` : ''}${required.has(k) ? ' *必填' : ''}`;
+    const values = Array.isArray(p.enum) ? p.enum.slice(0, 8).map((x) => JSON.stringify(x)) : null;
+    return t('planner.param', { name: k, type, desc: str(p.description, 160), values, required: required.has(k) });
   });
-  const text = parts.join('；') || '不用参数';
+  const text = parts.length ? t('planner.params', { parts }) : t('planner.params.none');
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
@@ -428,32 +428,27 @@ export function parsePlannerWeek(v: unknown, weekStart: ISODate): Omit<PlannerWe
 
 const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-export function plannerWeekText(plan: PlannerWeekPlan | null | undefined, today?: ISODate): string {
+export function plannerWeekText(plan: PlannerWeekPlan | null | undefined, t: TextFn, today?: ISODate): string {
   if (!plan) return '';
   const rows = plan.days.map((d) => {
-    const parts = [d.focus, d.events.length ? `日程：${d.events.join('；')}` : '', d.todos.length ? `要做：${d.todos.join('；')}` : ''].filter(Boolean);
-    return `- ${WEEKDAY_NAMES[d.weekday]} ${d.date.slice(5)}：${parts.join('；') || '没有安排'}${d.date === today ? '  ← 今天' : ''}`;
+    const parts = [d.focus, d.events.length ? t('planner.week.events', { items: d.events }) : '', d.todos.length ? t('planner.week.todos', { items: d.todos }) : ''].filter(Boolean);
+    return t('planner.week.day', { weekday: WEEKDAY_NAMES[d.weekday], date: d.date.slice(5), parts, today: d.date === today });
   });
-  return [
-    `这周的计划（${plan.weekStart} 开始）${plan.focus ? `：${plan.focus}` : ''}`,
-    ...rows,
-    plan.deadlines.length ? `截止的事：${plan.deadlines.map((d) => `${d.date} ${d.title}`).join('；')}` : '',
-    plan.goals.length ? `这周要完成：${plan.goals.join('；')}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  return t('planner.week', {
+    weekStart: plan.weekStart,
+    focus: plan.focus,
+    days: rows,
+    deadlines: plan.deadlines.map((d) => t('planner.week.deadline', { date: d.date, title: d.title })),
+    goals: plan.goals,
+  });
 }
 
 /** 今天的计划写成几行；done：勾了的项（按下标） */
-export function plannerDayText(plan: PlannerDayPlan | null | undefined, done?: Set<number>): string {
+export function plannerDayText(plan: PlannerDayPlan | null | undefined, t: TextFn, done?: Set<number>): string {
   if (!plan) return '';
-  const items = plan.items.map((it, i) => `- ${[it.time, it.title].filter(Boolean).join(' ')}${it.minutes ? `（${it.minutes} 分钟）` : ''}${done?.has(i) ? ' ✓做完了' : ''}`);
-  const todos = plan.todos.map((t) => `${t.title}${t.due ? `（${t.due} 前）` : ''}`);
-  return [
-    plan.summary ? `今天：${plan.summary}` : '',
-    items.length ? `时间安排：\n${items.join('\n')}` : '',
-    todos.length ? `待办：${todos.join('；')}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  return t('planner.day', {
+    summary: plan.summary,
+    items: plan.items.map((it, i) => t('planner.day.item', { label: [it.time, it.title].filter(Boolean).join(' '), minutes: it.minutes || null, done: !!done?.has(i) })),
+    todos: plan.todos.map((x) => t('planner.day.todo', { title: x.title, due: x.due })),
+  });
 }

@@ -1,5 +1,6 @@
 // 别的 App 分享过来的链接：要在路由创建之前处理（见 shareTarget.ts）
 import './shareTarget';
+import './services/markerInjections';
 import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 // Vant 的函数式组件（Toast / Dialog / ImagePreview）不会被自动引入样式，这里手动引入

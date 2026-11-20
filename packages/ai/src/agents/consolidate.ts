@@ -1,4 +1,4 @@
-import { assembleTaskPrompt, type MemoryConsolidationContext, type MemoryOp, type MemoryType, type ProfileOp } from '@app/shared';
+import { assembleTaskPrompt, type MemoryConsolidationContext, type MemoryOp, type MemoryType, type ProfileOp, textFn, type TextFn } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { AgentSystem } from './system.ts';
 import { dayLabel, lineTime } from './summary.ts';
@@ -53,39 +53,42 @@ export type ConsolidateInput =
   | { task: 'tense'; items: TenseItem[] }
   | { task: 'profile'; lines: ProfileInputLine[]; memories: { content: string; type: MemoryType; at: number | null }[] };
 
-export function consolidateFills(ctx: ConsolidateContext, input: ConsolidateInput): Record<string, string> {
+export function consolidateFills(ctx: ConsolidateContext, input: ConsolidateInput, t: TextFn): Record<string, string> {
   const tz = ctx.timeZone;
   const now = ctx.now.getTime();
-  const day = (at: number | null) => (at ? dayLabel(at, tz) : '日期不详');
+  const day = (at: number | null) => (at ? dayLabel(at, tz) : t('consolidate.noDate'));
   let body = '';
   switch (input.task) {
     case 'merge':
-      body = `可能重复的记忆（每组判断一次）：\n${input.groups
-        .map((g) => `[${g.group}]\n${g.items.map((m) => `- (${m.id}) ${day(m.at)} · ${m.type} · 重要度 ${m.importance} · ${m.content}`).join('\n')}`)
-        .join('\n\n')}`;
+      body = t('consolidate.merge', {
+        groups: input.groups.map((g) => t('consolidate.merge.group', {
+          group: g.group,
+          items: g.items.map((m) => t('consolidate.merge.item', { id: m.id, day: day(m.at), type: m.type, importance: m.importance, content: m.content })),
+        })),
+      });
       break;
     case 'rollup':
-      body = `要合并的 ${input.segments.length} 段梗概（从旧到新）：\n${input.segments.map((s, i) => `${i + 1}. ${day(s.fromAt)} ~ ${day(s.toAt)}：${s.text}`).join('\n')}`;
+      body = t('consolidate.rollup', { n: input.segments.length, items: input.segments.map((s, i) => t('consolidate.rollup.item', { n: i + 1, from: day(s.fromAt), to: day(s.toAt), text: s.text })) });
       break;
     case 'tense':
-      body = `已经过了时间的待跟进：\n${input.items.map((m) => `- (${m.id}) 原定 ${lineTime(m.dueAt, tz)}：${m.content}`).join('\n')}`;
+      body = t('consolidate.tense', { items: input.items.map((m) => t('consolidate.tense.item', { id: m.id, due: lineTime(m.dueAt, tz), content: m.content })) });
       break;
     case 'profile':
-      body = [
-        input.lines.length ? `现在的画像卡：\n${input.lines.map((l) => `- (${l.id}) 【${l.section}】${l.text}`).join('\n')}` : '现在的画像卡：还是空的',
-        `最近新记下的事：\n${input.memories.map((m) => `- ${day(m.at)} · ${m.type} · ${m.content}`).join('\n')}`,
-      ].join('\n\n');
+      body = t('consolidate.profile', {
+        lines: input.lines.map((l) => t('consolidate.profile.line', { id: l.id, section: l.section, text: l.text })),
+        memories: input.memories.map((m) => t('consolidate.profile.memory', { day: day(m.at), type: m.type, content: m.content })),
+      });
       break;
   }
   return {
-    consolidateNow: `现在：${dayLabel(now, tz)} ${lineTime(now, tz).slice(6)}${tz ? `（${tz}）` : ''}`,
+    consolidateNow: t('summary.now', { day: dayLabel(now, tz), time: lineTime(now, tz).slice(6), timeZone: tz }),
     consolidateInput: body,
   };
 }
 
 /** 按"整理"预设拼提示词：块的触发条件写任务类型，只发这次的那几块 */
 export function buildConsolidateMessages(ctx: ConsolidateContext, input: ConsolidateInput, preset: TaskPreset): ChatMessage[] {
-  return assembleTaskPrompt({ preset, fills: consolidateFills(ctx, input), macros: { char: ctx.character.name, pronoun: ctx.character.pronoun, user: ctx.user.name, now: ctx.now }, type: input.task }).messages;
+  return assembleTaskPrompt({ preset, fills: consolidateFills(ctx, input, textFn(preset.texts)), macros: { char: ctx.character.name, pronoun: ctx.character.pronoun, user: ctx.user.name, now: ctx.now }, type: input.task }).messages;
 }
 
 const TYPES = new Set<MemoryType>(['fact', 'preference', 'event', 'promise', 'followup', 'emotion', 'relationship']);

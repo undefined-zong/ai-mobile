@@ -5,7 +5,8 @@ import type { Lorebook } from './types/lorebook.ts';
 import { IMAGE_MODES, LIFE_FLAGS, PROMPT_MARKERS, TASK_MARKERS, isRoleplayCategory, markerName, type Preset, type PresetCategory, type PromptBlock } from './types/preset.ts';
 import { IMAGE_MOMENTS, LEVEL_PREFIXES } from './presetUses.ts';
 import { SPRITE_EXPR, SPRITE_FRAME, SPRITE_POSE } from './spritePreset.ts';
-import { CONTROL_TAG_DOCS, CONTROL_TAG_KINDS, BLOCK_TAG_KINDS } from './tags.ts';
+import { tagDoc, CONTROL_TAG_KINDS, BLOCK_TAG_KINDS } from './tags.ts';
+import type { TextFn } from './programText.ts';
 
 /**
  * 特殊格式登记表：App 认的写法集中在这里（给人看的版本是 docs/FORMATS.md）。
@@ -38,37 +39,20 @@ export interface FormatIssue {
 
 // —— 一、App 认的写法 ——
 
-/** App 在 SillyTavern 的宏之外认的宏 */
-export const APP_MACROS: { name: string; desc: string }[] = [
-  { name: '{{char}} {{user}}', desc: '角色名、你的名字；SillyTavern 常用的宏都认（{{time}} {{date}} {{random::a::b}} {{setvar}} {{getvar}}……）' },
-  { name: '{{pronoun}} {{char_pronoun}}', desc: '当前角色选择的人称（他 / 她 / Ta）；未绑定角色时为 Ta' },
-  { name: '{{weather}}', desc: '天气一句话' },
-  { name: '{{char_appearance}}', desc: '生图预设：Ta的长相（原创是外观 tags；同人是角色 tag + 作品 tag）' },
-  { name: '{{char_outfit}}', desc: '生图预设：节律里Ta今天这个场景穿的那套' },
-  { name: '{{user_appearance}}', desc: '生图预设：你的长相' },
-  { name: '{{framing}} {{expression}} {{pose}}', desc: '立绘预设的画法块：这次画的构图、表情、动作' },
-  { name: '{{community}}', desc: '社群预设：这个社群的名字' },
+/** 触发条件里有特殊含义的写法（其余的是各功能的任务名，以自带预设为准）：写法由程序列，说明在程序文字 assistant.guide.trigger.<id> */
+export const TRIGGER_NOTES: { id: string; pattern: string; vars?: Record<string, string[]> }[] = [
+  { id: 'life', pattern: Object.keys(LIFE_FLAGS).join(' / ') },
+  { id: 'level', pattern: LEVEL_PREFIXES.map((p) => `${p}名字`).join(' / ') },
+  { id: 'image', pattern: Object.keys(IMAGE_MODES).join(' / '), vars: { modes: Object.values(IMAGE_MODES) } },
+  { id: 'outfitFree', pattern: 'outfit-free' },
+  { id: 'moments', pattern: Object.values(IMAGE_MOMENTS).flatMap((m) => Object.keys(m ?? {})).join(' / ') },
+  { id: 'sprite', pattern: [SPRITE_FRAME, SPRITE_EXPR, SPRITE_POSE].map((p) => `${p}名字`).join(' / ') },
+  { id: 'rest', pattern: '其余' },
 ];
 
-/** 触发条件里有特殊含义的写法（其余的是各功能的任务名，以自带预设为准） */
-export const TRIGGER_NOTES: { pattern: string; desc: string }[] = [
-  { pattern: Object.keys(LIFE_FLAGS).join(' / '), desc: '角色扮演预设：你人设里开了家务 / 健康系统时才发这块' },
-  { pattern: LEVEL_PREFIXES.map((p) => `${p}名字`).join(' / '), desc: '真心话大冒险 / 海龟汤 / 戳戳乐的尺度：一块一个尺度，名字是冒号后面的字' },
-  { pattern: Object.keys(IMAGE_MODES).join(' / '), desc: `生图预设：画什么（${Object.values(IMAGE_MODES).join('、')}），只发对应的那块` },
-  { pattern: 'outfit-free', desc: '生图预设：生图设置里关了"服装参考"时才发这块（不给角色和你的衣服，衣服由模型按画面自己设计）' },
-  {
-    pattern: Object.values(IMAGE_MOMENTS)
-      .flatMap((m) => Object.keys(m ?? {}))
-      .join(' / '),
-    desc: '一起做事时自动画图的时刻（陪伴学习、一起吃饭、约会、哄睡、心跳），场景的生图预设按时刻只发那一块',
-  },
-  { pattern: [SPRITE_FRAME, SPRITE_EXPR, SPRITE_POSE].map((p) => `${p}名字`).join(' / '), desc: '立绘预设：构图、表情、动作，一块一个，名字就是画出来的立绘标的名字' },
-  { pattern: '其余', desc: '各功能的任务名（排今天 plan-day、发朋友圈 post、约会的每一段 date-turn……）：程序做哪件事就只发写了它的块；以同一用途的自带预设为准' },
-];
-
-/** 隐藏控制标签的说明（一行一个） */
-export function controlTagLines(): string[] {
-  return [...CONTROL_TAG_KINDS, ...BLOCK_TAG_KINDS].map((k) => `- ${CONTROL_TAG_DOCS[k].syntax}：${CONTROL_TAG_DOCS[k].desc}`);
+/** 隐藏控制标签的说明（一行一个；写法和说明在程序文字 tags.* 里） */
+export function controlTagLines(t: TextFn): string[] {
+  return [...CONTROL_TAG_KINDS, ...BLOCK_TAG_KINDS].map((k) => t('tags.item', tagDoc(k, t)));
 }
 
 /** 这一类预设的程序填充块（identifier → 名字） */
@@ -201,22 +185,18 @@ function mentions(text: string, key: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_])${key}($|[^A-Za-z0-9_])`).test(text);
 }
 
-/** 不是 JSON 的输出格式：写给助手的说明（只在看这一类预设时给） */
-const OUTPUT_NOTES: Partial<Record<PresetCategory, string>> = {
-  image: [
-    '【生图预设的输出】不是 JSON，是几段"名字###内容###"，程序读了再拼成生图请求（标题、画幅、长相、衣服都由程序加）：',
-    ...IMAGE_PROMPT_SECTIONS.map((k) => `- ${k}###…###：${IMAGE_PROMPT_SECTION_DOCS[k]}`),
-    `- char / user 后面空一格写 ${IMAGE_PROMPT_MODIFIERS.filter((m) => m !== 'negative').join(' / ')} 是位置（例如 char left###…###），写 negative 是只针对这个人的负面 tags（例如 char negative###…###）`,
-    `- 两个人之间的动作写在各自那一份里，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出发起、承受、相互（char###girl, source#hug### 和 user###boy, target#hug###）；NovelAI V4 起分人物时认，单人图和不分人物的接口程序会去掉前缀`,
-    '- 每个人的那一份（char###、user###、| 后面的每段）各自带各自的负面 tags：Ta的是角色卡的负面 tags + char negative###，你的是人设的 + user negative###，别的人是 negative### 里同一个位置的那段',
-    '旧写法（{"caption", "tags", "negative", "size"} 的 JSON、characters 字段）程序不再读：照参照预设的输出格式那块换成这种写法，规则里讲到 negative、size、characters 的句子也跟着换成 negative###、size###、char### / user###。',
-  ].join('\n'),
-  device: [
-    '【控制指令预设的输出】不是 JSON：把Ta那一句照抄一遍、在要变的地方插 <device>"VIBRATE": 40</device>（键的写法同隐藏标签 <device>），程序按抄的字放回原话的位置；可以只抄到最后一个 <device> 为止，这一句不用变时原样抄、不插。',
-    '强度照 0–100 写，写多少发多少：超过每个头上限的由程序压到上限，预设里不要让模型压在上限以内。',
-    '旧写法 {"steps": [{"at": "…", "do": {…}}]} 程序不再读：照参照预设的输出格式那块换成这种写法，规则里讲到 at、steps 的句子也跟着换。',
-  ].join('\n'),
-};
+/** 不是 JSON 的输出格式：写给助手的说明（只在看这一类预设时给；程序文字 assistant.guide.output.<分类>） */
+function outputNote(c: PresetCategory, t: TextFn): string {
+  if (c === 'image') {
+    return t('assistant.guide.output.image', {
+      sections: IMAGE_PROMPT_SECTIONS.map((k) => t('assistant.guide.output.imageSection', { key: k, doc: IMAGE_PROMPT_SECTION_DOCS[k] })),
+      modifiers: IMAGE_PROMPT_MODIFIERS.filter((m) => m !== 'negative'),
+      actions: ACTION_TAG_PREFIXES.map((p) => `${p}#`),
+    });
+  }
+  if (c === 'device') return t('assistant.guide.output.device');
+  return '';
+}
 
 /** 这一类预设里程序不再读的旧输出写法：查到就是不适配 */
 const LEGACY_OUTPUTS: { category: PresetCategory; re: RegExp; message: string }[] = [
@@ -450,51 +430,43 @@ export function worstLevel(issues: FormatIssue[]): FormatLevel | null {
 
 // —— 五、写给助手看的 ——
 
-/** 参照预设的骨架：每块的 identifier、名字、角色、触发条件；带 JSON 字段或叫"……格式"的块连内容一起（照着改格式用） */
-export function referenceSkeleton(ref: Pick<Preset, 'name' | 'blocks'>): string {
-  const lines = [`参照：App 自带的预设「${ref.name}」`];
-  for (const b of ref.blocks) {
-    if (!b.enabled) continue;
-    const head = `- ${b.identifier}「${blockLabel(b)}」${b.marker ? '（程序填充）' : ''}${b.role !== 'system' ? ` [${b.role}]` : ''}${b.triggers?.length ? ` 只在 ${b.triggers.join(' / ')} 时发送` : ''}`;
+/** 参照预设的骨架（程序文字 assistant.guide.reference*）：每块的 identifier、名字、角色、触发条件；带 JSON 字段或叫"……格式"的块连内容一起（照着改格式用） */
+export function referenceSkeleton(ref: Pick<Preset, 'name' | 'blocks'>, t: TextFn): string {
+  const blocks = ref.blocks.filter((b) => b.enabled).map((b) => {
     const showBody = !b.marker && (jsonKeysOf(b.content).length > 0 || /格式/.test(b.name));
-    lines.push(showBody ? `${head}\n  内容：${b.content.trim().replace(/\n/g, '\n  ')}` : head);
-  }
-  return lines.join('\n');
+    const head = t('assistant.guide.reference.block', {
+      id: b.identifier, name: blockLabel(b), marker: b.marker, role: b.role !== 'system' ? t('assistant.guide.reference.role', { role: b.role }) : null,
+      triggers: b.triggers?.length ? b.triggers : null,
+    });
+    return showBody ? `${head}\n${t('assistant.guide.reference.body', { body: b.content.trim().replace(/\n/g, '\n  ') })}` : head;
+  });
+  return t('assistant.guide.reference', { name: ref.name, blocks });
 }
 
-/** 写给助手的格式说明：只放这次要看的东西用得上的部分 */
-export function formatGuide(opts: { categories: PresetCategory[]; lorebook?: boolean; character?: boolean; references?: Pick<Preset, 'name' | 'blocks'>[] }): string {
+/** 写给助手的格式说明（程序文字 assistant.guide.*）：只放这次要看的东西用得上的部分 */
+export function formatGuide(opts: { categories: PresetCategory[]; lorebook?: boolean; character?: boolean; references?: Pick<Preset, 'name' | 'blocks'>[]; t: TextFn }): string {
+  const t = opts.t;
   const parts: string[] = [];
   const roleplay = opts.categories.some(isRoleplayCategory) || opts.lorebook || opts.character;
   if (roleplay) {
-    parts.push(`【隐藏控制标签】角色扮演的回复里夹带，对方看不到、程序执行；兼容全角【expr：smile】。能用哪些、有哪些表情由程序按场景填在"当前场景规则 + 可用标签"里，预设和世界书里不用列表情：\n${controlTagLines().join('\n')}`);
-    parts.push(
-      `【别的写法 → App 的写法】导入的预设、世界书、角色卡里常见这些写法，App 不认或显示不一样：\n${FOREIGN_FORMATS.map((f) => `- ${f.label} → ${f.app}：${f.advice}`).join('\n')}`,
-    );
-    parts.push(
-      '【消息显示】聊天气泡是纯文字；"我的 → 消息设置"开了 HTML 渲染时，排版标签（<details> <b> <span style> <table> <img>……）按白名单显示，不认识的标签去掉标签、留下字，<style> <script> 去掉；整页 HTML（带 <html> <head> <body>）放在 ```html 代码块里才在沙盒小窗里运行。（动作）和 *动作* 显示得淡一点。',
-    );
+    parts.push(t('assistant.guide.tags', { tags: controlTagLines(t) }));
+    parts.push(t('assistant.guide.foreign', { items: FOREIGN_FORMATS.map((f) => t('assistant.guide.foreign.item', { label: f.label, app: f.app, advice: f.advice })) }));
+    parts.push(t('assistant.guide.display'));
   }
   for (const c of [...new Set(opts.categories)]) {
-    const note = OUTPUT_NOTES[c];
+    const note = outputNote(c, t);
     if (note) parts.push(note);
     const markers = categoryMarkers(c);
     if (Object.keys(markers).length) {
-      parts.push(`【${c} 类预设的程序填充块】marker 为 true、content 为空，程序每次填：\n${Object.entries(markers).map(([id, name]) => `- ${id}：${name}`).join('\n')}`);
+      parts.push(t('assistant.guide.markers', { category: c, items: Object.entries(markers).map(([id, name]) => t('assistant.guide.marker', { id, name })) }));
     }
   }
-  if (opts.categories.length) parts.push(`【触发条件里的写法】块的 triggers 写了值时，只在程序做这些事时发送：\n${TRIGGER_NOTES.map((t) => `- ${t.pattern}：${t.desc}`).join('\n')}`);
-  if (opts.categories.length) parts.push(`【宏】\n${APP_MACROS.map((m) => `- ${m.name}：${m.desc}`).join('\n')}`);
-  for (const r of opts.references ?? []) parts.push(referenceSkeleton(r));
-  if (opts.lorebook) {
-    parts.push(
-      '【世界书】条目按关键词（keys，中文按包含匹配）在最近的聊天里命中才发，constant 为 true 的常驻；position：before_char / after_char（角色定义前后）、at_depth（插在聊天记录倒数第 depth 条前，role 决定身份）、an_top / an_bottom、em_top / em_bottom；order 大的靠后。世界书的内容会进对话预设的提示词，所以里面写的"回复格式"（生图、状态栏……）也要用 App 的写法。',
-    );
+  if (opts.categories.length) {
+    parts.push(t('assistant.guide.triggers', { items: TRIGGER_NOTES.map((x) => t('assistant.guide.trigger.item', { pattern: x.pattern, desc: t(`assistant.guide.trigger.${x.id}`, x.vars ?? {}) })) }));
+    parts.push(t('assistant.guide.macros'));
   }
-  if (opts.character) {
-    parts.push(
-      '【角色卡】SillyTavern V2/V3 的字段：name、description（描述）、personality（性格）、scenario（场景）、firstMes（开场白）、alternateGreetings（备选开场白）、mesExample（示例对话，用 <START> 分段，{{char}}: / {{user}}: 开头）、systemPrompt、postHistoryInstructions、creatorNotes、tags。App 自己的：pronoun（他 / 她 / Ta）、appearanceTags（NovelAI 外观 tags，英文逗号分隔：发色、发型、眼睛、体型、常见特征，不写衣服、表情、动作）、negativeTags。',
-    );
-  }
+  for (const r of opts.references ?? []) parts.push(referenceSkeleton(r, t));
+  if (opts.lorebook) parts.push(t('assistant.guide.lorebook'));
+  if (opts.character) parts.push(t('assistant.guide.character'));
   return parts.join('\n\n');
 }

@@ -1,4 +1,5 @@
-import { anniversaryTitle, nextAnniversary } from './anniversary.ts';
+import { anniversaryTitleText, nextAnniversary } from './anniversary.ts';
+import type { TextFn } from './programText.ts';
 import { shiftDate, zonedDateKey, zonedInstant, zonedParts } from './timezone.ts';
 import type { Character, ProactivePersonality, Relationship } from './types/character.ts';
 import type { HHMM, ISODate } from './types/common.ts';
@@ -24,6 +25,8 @@ export interface ProactivePlanInput {
   date?: string;
   /** 这个角色记着的待跟进的事（到期时间在这一天的会排进去） */
   followups?: { id: string; content: string; dueAt: number }[];
+  /** 主动消息预设的程序文字：每个时段要她做的事（proactive.hint.*，里面的 {{user}} 发的时候再换） */
+  t: TextFn;
 }
 
 /** 按时间排的触发器（其余由事件触发） */
@@ -34,16 +37,6 @@ const PERSONALITY_FACTOR: Record<ProactivePersonality, number> = { clingy: 1.2, 
 const PERSONALITY_LABEL: Record<ProactivePersonality, string> = { clingy: '粘人', balanced: '适中', independent: '独立' };
 
 /** 这一次要她做什么（给写主动消息的模型看，计划页也显示这句）；{{user}} 是你的名字 */
-export const PROACTIVE_HINTS: Partial<Record<ProactiveTriggerId, string>> = {
-  'wake-call': '打电话叫{{user}}起床',
-  morning: '跟{{user}}说早安，可以顺带提一句今天的天气',
-  breakfast: '早饭时间：问问{{user}}吃早饭没有',
-  lunch: '午饭时间：暗示{{user}}该吃饭了，别直接说',
-  dinner: '晚饭时间："我有点饿了……你吃了吗？"这样的口吻',
-  sedentary: '{{user}}可能坐了很久：拉{{user}}起来走走、喝口水',
-  'miss-you': '有一阵没聊了：说想{{user}}了，或者分享身边的一件小事',
-  bedtime: '过了睡觉时间：催{{user}}去睡觉',
-};
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -123,7 +116,8 @@ export function planTouchpoints(input: ProactivePlanInput): Touchpoint[] {
   // 睡觉时间在中午以前（例如 00:30）算这一天的夜里，也就是第二天凌晨
   const sleep = sleepAt < 720 ? sleepAt + 1440 : sleepAt;
   const drafts: Draft[] = [];
-  const add = (ruleId: ProactiveTriggerId, minute: number, action: Touchpoint['action'] = 'message', hint = PROACTIVE_HINTS[ruleId] ?? '', key: string = ruleId) => {
+  const t = input.t;
+  const add = (ruleId: ProactiveTriggerId, minute: number, action: Touchpoint['action'] = 'message', hint = t(`proactive.hint.${ruleId}`), key: string = ruleId) => {
     // 时段只管一天里的钟点：跨到第二天凌晨的保留"第二天"
     const day = Math.floor(minute / 1440) * 1440;
     drafts.push({ ruleId, key, minute: day + clampToWindow(minute - day, rules.get(ruleId)), action, hint });
@@ -136,22 +130,22 @@ export function planTouchpoints(input: ProactivePlanInput): Touchpoint[] {
   if (on('dinner')) add('dinner', meal('dinner', 0.3, 0.3));
   if (on('sedentary')) add('sedentary', 14 * 60 + 30 + Math.round(120 * jitter('sedentary')));
   if (on('miss-you')) add('miss-you', 20 * 60 + 30 + Math.round(90 * jitter('miss-you')));
-  if (on('bedtime')) add('bedtime', sleep + 10 + Math.round(10 * jitter('bedtime')), p.allowCalls ? 'call' : 'message', p.allowCalls ? '过了睡觉时间还没睡：打电话催{{user}}睡觉' : undefined);
+  if (on('bedtime')) add('bedtime', sleep + 10 + Math.round(10 * jitter('bedtime')), p.allowCalls ? 'call' : 'message', p.allowCalls ? t('proactive.hint.bedtime-call') : undefined);
   if (on('followup')) {
     for (const f of input.followups ?? []) {
       if (zonedDateKey(f.dueAt, timeZone) !== date) continue;
       const parts = zonedParts(f.dueAt, timeZone);
       const minute = parts.hour * 60 + parts.minute;
-      add('followup', minute, 'message', `{{user}}之前提过的事到时间了，问问结果：${f.content}`, `followup:${f.id}`);
+      add('followup', minute, 'message', t('proactive.hint.followup', { content: f.content }), `followup:${f.id}`);
     }
   }
   if (on('anniversary')) {
     // 纪念日当天起床后一阵子来一次；同一天有好几个时一起说（规则冷却一天）
     const titles = (c.relationship?.anniversaries ?? []).flatMap((a) => {
       const o = nextAnniversary(a, date);
-      return o?.daysLeft === 0 ? [anniversaryTitle(o)] : [];
+      return o?.daysLeft === 0 ? [anniversaryTitleText(o, t)] : [];
     });
-    if (titles.length) add('anniversary', wake + 30 + Math.round(90 * jitter('anniversary')), 'message', `今天是${titles.join('，也是')}：记着这个日子，跟{{user}}说说`);
+    if (titles.length) add('anniversary', wake + 30 + Math.round(90 * jitter('anniversary')), 'message', t('proactive.hint.anniversary', { titles }));
   }
 
   drafts.sort((a, b) => a.minute - b.minute);

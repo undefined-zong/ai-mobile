@@ -354,5 +354,23 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "dateScene.moved": "{{user}}[[{{?roll}}心血来潮]]拉着{{char}}换了个地方：从{{from}}来到了{{to}}",
+    "dateScene.arrived": "先用旁白写来到这里看到的景象，再接着约会",
+    "dateScene.context": "约会地点：{{place}}（{{placeKind}}[[；{{blurb}}]]）\n[[{{?bring}}{{user}}带{{char}}来到{{user}}这边的{{place}}]][[{{!bring}}{{user}}去{{char}}那边，两个人一起来到{{place}}]]\n现在的天气：{{weather}}，{{temp}}°C[[{{?shelter}}（在室外，要躲雨）]]\n{{?full}}这是第 {{turn}} 段[[（约会开始了 {{minutes}} 分钟）]]\n{{?full}}{{cg}}\n{{?full}}{{user}}放着歌：《{{song}}》- {{artist}}[[{{?demo}}（示例歌曲）]]",
+    "dateScene.caption.cg": "{{cg}}；在{{place}}约会",
+    "dateScene.start": "你们刚到这里，约会开始了",
+    "dateScene.picked": "{{user}}选了[[「{{kind}}」]]：{{text}}",
+    "dateScene.said": "{{user}}没用你给的选项，自己说：{{text}}",
+    "dateScene.end": "{{user}}说今天的约会就到这里\n一共走了 {{turns}} 段，约 {{minutes}} 分钟\n今天留下的画面：{{art}}",
+    "dateScene.caption.keepsake": "约会快结束了，{{char}}在{{place}}和{{user}}留一张纪念照[[{{?rain}}，外面在下雨]][[；今天{{user}}总是{{mood}}]]",
+    "dateScene.caption.arrive": "{{char}}和{{user}}刚到{{place}}约会[[{{?rainOutside}}，外面在下雨]][[{{?rain}}，在下雨]][[；{{blurb}}]]",
+    "dateScene.beat.narration": "（{{text}}）",
+    "dateScene.beat.line": "{{char}}：{{text}}",
+    "dateScene.caption.now": "在{{place}}约会，画此刻的画面[[：{{said}}]]",
+    "dateScene.ownTalk": "自己找话说",
+    "dateScene.cg.ok": "这一段可以用 [cg:]（只在真正心动的时刻）",
+    "dateScene.cg.no": "这一段不要用 [cg:]"
+  }
 }

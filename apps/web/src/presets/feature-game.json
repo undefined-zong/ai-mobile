@@ -496,5 +496,23 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "soup.input": "海龟汤《{{title}}》\n汤面：{{surface}}\n汤底：{{truth}}\n{{?keys}}关键点：\n{{keys|\\n}}\n{{?qa}}之前的问答：\n{{qa|\\n}}\n{{!qa}}之前的问答：还没有\n{{extra|\\n}}",
+    "soup.qa": "{{n}}. {{who}}问：{{q}} 答：{{a}}",
+    "soup.narrator.start": "海龟汤《{{title}}》（{{mode}}）：{{surface}}",
+    "soup.make": "可以用的地点：{{places}}",
+    "soup.question": "这一问：{{q}}",
+    "soup.narrator.host": "主持人：{{text}}",
+    "soup.hintLevel": "提示等级：{{n}}",
+    "soup.narrator.hint": "主持人提示：{{hint}}",
+    "soup.say.answer": "我的答案：{{answer}}",
+    "soup.userAnswer": "{{user}}的答案：{{answer}}",
+    "soup.verdict": "[[{{?host}}主持人：]]{{verdict}}[[。{{line}}]]",
+    "soup.say.right": "猜对了！",
+    "soup.say.half": "对了一半",
+    "soup.say.wrong": "不对",
+    "soup.narrator.truth": "汤底：{{truth}}",
+    "soup.result": "结果：{{result}}"
+  }
 }

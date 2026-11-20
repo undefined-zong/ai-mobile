@@ -1,5 +1,5 @@
 import { AgentSystem, AiError, buildCommunityMessages, communityFeedInput, communityMemberPostInput, samplerRequest } from '@app/ai';
-import { COMMUNITY_CATCH_UP_MS, communityJobs, communityPostText, estimateTokens, isNetizen, MOMENT_USER, netizenName, parseCommunityBatch, postsFromDrafts, shiftDate, zonedDateKey,
+import { COMMUNITY_CATCH_UP_MS, communityJobs, communityPostText, estimateTokens, isNetizen, MOMENT_USER, netizenName, parseCommunityBatch, postsFromDrafts, shiftDate, textFn, zonedDateKey,
   type CommunityContext, type CommunityJob, type CommunityPost, type HubNotification, type ProactiveCredentials, type SocialContext, type SocialDay } from '@app/shared';
 import { unseal } from './crypto.ts';
 import type { Env } from './env.ts';
@@ -37,7 +37,7 @@ export function communityRequest(context: CommunityContext, now: number, member?
 export async function generateCommunityPosts(context: CommunityContext, credentials: ProactiveCredentials, job: CommunityJob, now: number,
   member?: { context: SocialContext; day: SocialDay | null }): Promise<{ posts: CommunityPost[]; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent communities.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters, jsonRetry: () => context.preset?.texts?.['common.jsonRetry'] });
   const { value, result } = await system.json('social', communityRequest(context, now, member), parseCommunityBatch, { signal: AbortSignal.timeout(150_000) });
   const posts = postsFromDrafts(member ? value.slice(0, 1) : value.slice(0, context.settings.batchSize), {
     communityId: context.community.id, batchId: job.id, now, source: 'hub', model: result.model, known: knownNames(context, member?.context), unread: true,
@@ -85,7 +85,7 @@ async function postOne(env: Env, due: Due, credentials: ProactiveCredentials, no
     ]);
     const names = (who: string) => (who === MOMENT_USER ? context.userName : isNetizen(who) ? netizenName(who) : (context.members.find((m) => m.id === who)?.name ?? who));
     const mine = later.results.reverse().flatMap((r) => JSON.parse(r.data) as CommunityPost[])
-      .map((p) => communityPostText(p, names, { timeZone: context.timezone, comments: 2, textMax: 200 }));
+      .map((p) => communityPostText(p, names, textFn(context.preset?.texts), { timeZone: context.timezone, comments: 2, textMax: 200 }));
     const current: CommunityContext = { ...context, feed: [context.feed, ...mine].filter(Boolean).join('\n') };
     const member = due.member ? { context: due.member, day } : undefined;
     const route = credentials.routes.find((r) => r.role === 'social');

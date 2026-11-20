@@ -1,4 +1,4 @@
-import { formatChoreBlock, MEAL_LABEL, plannerDayText, type AppBlockFill, type LifeFlag, type Persona } from '@app/shared';
+import { formatChoreBlock, MEAL_LABEL, plannerDayText, type AppBlockFill, type LifeFlag, type Persona, type TextFn } from '@app/shared';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useHealthStore, workoutLine } from '@/stores/health';
 import { useHomeStore } from '@/stores/home';
@@ -29,10 +29,10 @@ function todayPlan(persona: Persona) {
 }
 
 /** 日程这几行：今天的计划、勾掉了哪些 */
-export function plannerLines(persona: Persona): string {
+export function plannerLines(persona: Persona, t: TextFn): string {
   const plan = todayPlan(persona);
   if (!plan) return '';
-  return `【今天的计划】${persona.name}今天的安排（日程系统按邮件和日程排的）：\n${plannerDayText(plan, usePlannerStore().doneOf(persona.id, plan.date))}`;
+  return t('home.planner', { user: persona.name, plan: plannerDayText(plan, t, usePlannerStore().doneOf(persona.id, plan.date)) });
 }
 
 const FLAG_NAMES: Record<LifeFlag, string> = { housework: '家务', health: '健康', planner: '日程' };
@@ -49,7 +49,7 @@ function clockNow(timeZone: string, stepMin = 0): string {
 }
 
 /** 健康这几行：目标、今天练什么吃什么、今天练了没有 */
-export function healthLines(persona: Persona): string {
+export function healthLines(persona: Persona, t: TextFn): string {
   const h = persona.health;
   if (!h?.enabled) return '';
   const health = useHealthStore();
@@ -57,26 +57,35 @@ export function healthLines(persona: Persona): string {
   const day = health.dayOf(persona.id, today);
   const week = health.weekOf(persona.id);
   const done = health.logsOf(persona.id, today).filter((l) => l.date === today);
-  const target = h.targetWeightKg && h.weightKg ? `（${h.weightKg} → ${h.targetWeightKg} kg）` : '';
-  const lines = [`【健康】${persona.name}的目标：${h.goal.trim() || '保持健康'}${target}`];
-  if (day?.workout && !day.rest) lines.push(`今天的健身计划：${day.workout.title} · ${day.workout.minutes} 分钟（${done.some((l) => l.mode === 'plan') ? '练过了' : done.length ? '照计划的还没练' : '还没练'}）`);
-  else if (day?.rest) lines.push('今天的健身计划：休息');
+  const lines = [
+    t('home.health.goal', {
+      user: persona.name,
+      goal: h.goal.trim() || t('home.health.defaultGoal'),
+      weight: h.targetWeightKg && h.weightKg ? h.weightKg : null,
+      target: h.targetWeightKg && h.weightKg ? h.targetWeightKg : null,
+    }),
+  ];
+  if (day?.workout && !day.rest) {
+    const state = t(done.some((l) => l.mode === 'plan') ? 'home.health.workoutDone' : done.length ? 'home.health.workoutOtherDone' : 'home.health.workoutTodo');
+    lines.push(t('home.health.workoutPlan', { title: day.workout.title, minutes: day.workout.minutes, state }));
+  } else if (day?.rest) lines.push(t('home.health.rest'));
   else {
     const wd = new Date(`${today}T12:00:00Z`).getUTCDay();
     const planned = week?.days.find((d) => d.weekday === wd);
-    lines.push(planned ? `这周的计划里今天：${planned.rest ? '休息' : `${planned.workout} ${planned.minutes} 分钟`}` : '今天的健身计划还没排');
+    lines.push(!planned ? t('home.health.noPlan') : planned.rest ? t('home.health.weekRest') : t('home.health.weekWorkout', { workout: planned.workout, minutes: planned.minutes }));
   }
   if (day) {
     const meals = (['breakfast', 'lunch', 'dinner', 'snack'] as const)
       .map((k) => {
         const m = day.meals[k];
-        const how = m?.cook && m.minutes ? `（自己做，约 ${m.minutes} 分钟${m.prep ? '，顺手备一份' : ''}）` : m?.bento ? '（带提前做好的便当）' : m?.place ? `（去${m.place}吃）` : '';
-        return m ? `${MEAL_LABEL[k]} ${m.name}${how}` : '';
+        if (!m) return '';
+        const cook = !!(m.cook && m.minutes);
+        return t('home.health.meal', { meal: MEAL_LABEL[k], name: m.name, cook, minutes: m.minutes, prep: !!m.prep, bento: !cook && !!m.bento, place: !cook && !m.bento ? m.place : null });
       })
       .filter(Boolean);
-    if (meals.length) lines.push(`今天吃什么（计划）：${meals.join('；')}`);
+    if (meals.length) lines.push(t('home.health.meals', { items: meals }));
   }
-  if (done.length) lines.push(`今天练了：${done.map((l) => workoutLine(l, false)).join('；')}`);
+  if (done.length) lines.push(t('home.health.done', { items: done.map((l) => workoutLine(l, t, false)) }));
   return lines.join('\n');
 }
 
@@ -85,18 +94,18 @@ export function healthLines(persona: Persona): string {
  * 只填实际数据；角色怎么反应由当前选中的预设决定。
  * opts.stepMin：时间往前取整（上传云端时用 30）。
  */
-export function homeBlock(persona: Persona | undefined, opts: { stepMin?: number } = {}): AppBlockFill | null {
+export function homeBlock(persona: Persona | undefined, t: TextFn, opts: { stepMin?: number } = {}): AppBlockFill | null {
   const flags = lifeFlags(persona);
-  const parallel = persona ? parallelLines(persona) : '';
+  const parallel = persona ? parallelLines(persona, t) : '';
   if (!persona || (!flags.length && !parallel)) return null;
   const tz = useEnvironmentStore().settings.timezone;
   const parts: string[] = [];
   if (flags.includes('housework')) {
     const home = useHomeStore();
-    parts.push(formatChoreBlock({ userName: persona.name, items: home.itemsFor(persona), recent: home.recentFor(persona), nowText: clockNow(tz, opts.stepMin), timeZone: tz }));
+    parts.push(formatChoreBlock({ userName: persona.name, items: home.itemsFor(persona), recent: home.recentFor(persona), nowText: clockNow(tz, opts.stepMin), timeZone: tz, t }));
   }
-  if (flags.includes('health')) parts.push(healthLines(persona));
-  if (flags.includes('planner')) parts.push(plannerLines(persona));
+  if (flags.includes('health')) parts.push(healthLines(persona, t));
+  if (flags.includes('planner')) parts.push(plannerLines(persona, t));
   if (parallel) parts.push(parallel);
   const content = parts.filter(Boolean).join('\n');
   if (!content) return null;

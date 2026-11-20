@@ -4,7 +4,7 @@ import { expressionField, presetLevels, SOUP_LEVEL, worldOf, type MessagePart } 
 import { showToast } from 'vant';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -114,18 +114,20 @@ function fail(r: { reason: string; notConnected?: boolean }) {
 }
 
 /** 这一次的输入：汤面、（主持人才有的）汤底和关键点、之前的问答 */
+/** 这个游戏的程序文字（"一起游戏"用途的预设里的 soup.*） */
+function sx() {
+  return sceneText('scene:game', her.value);
+}
 function soupInput(withTruth: boolean, extra: string[] = []): string {
   const s = soup.value!;
-  return [
-    `海龟汤《${s.title}》`,
-    `汤面：${s.surface}`,
-    withTruth && s.truth ? `汤底：${s.truth}` : '',
-    withTruth && s.keys.length ? `关键点：\n${s.keys.map((k, i) => `${i + 1}. ${k}`).join('\n')}` : '',
-    qa.value.length ? `之前的问答：\n${qa.value.map((x, i) => `${i + 1}. ${x.by === 'her' ? her.value.name : userName.value}问：${x.q} 答：${x.a}`).join('\n')}` : '之前的问答：还没有',
-    ...extra,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const t = sx();
+  return t('soup.input', {
+    title: s.title, surface: s.surface,
+    truth: withTruth ? s.truth : null,
+    keys: withTruth ? s.keys.map((k, i) => `${i + 1}. ${k}`) : [],
+    qa: qa.value.map((x, i) => t('soup.qa', { n: i + 1, who: x.by === 'her' ? her.value.name : userName.value, q: x.q, a: x.a })),
+    extra,
+  });
 }
 
 /** 她那句话和汤底有连续 6 个字一样，就当泄底，不显示 */
@@ -151,7 +153,7 @@ function begin(s: Soup) {
   herLine.value = '';
   herIdea.value = '';
   phase.value = 'playing';
-  chat.push(chatId.value, 'narrator', [{ type: 'text', text: `海龟汤《${s.title}》（${MODES.value.find((m) => m.id === mode.value)?.label}）：${s.surface}` }], { meta: { scene: 'game', cue: '开局' } });
+  chat.push(chatId.value, 'narrator', [{ type: 'text', text: sx()('soup.narrator.start', { title: s.title, mode: MODES.value.find((m) => m.id === mode.value)?.label, surface: s.surface }) }], { meta: { scene: 'game', cue: '开局' } });
   if (mode.value === 'guest') void herTurn();
 }
 function beginMine() {
@@ -167,7 +169,7 @@ async function makeOne() {
   try {
     const places = worldOf(her.value.id).locations.map((l) => l.name).join('、');
     // 尺度不写在这里：选的那个尺度的块按触发条件发送
-    const made = await chat.sceneJson(chatId.value, { name: 'soup-make', input: `可以用的地点：${places}` }, parseSoup, undefined, { flags: soupFlags.value });
+    const made = await chat.sceneJson(chatId.value, { name: 'soup-make', input: sx()('soup.make', { places }) }, parseSoup, undefined, { flags: soupFlags.value });
     if (!made.ok) return fail(made);
     const check = await chat.sceneJson(
       chatId.value,
@@ -215,7 +217,7 @@ async function ask(text?: string) {
   busy.value = true;
   try {
     say('user', q);
-    const r = await chat.sceneJson(chatId.value, { name: mode.value === 'host' ? 'soup-judge' : 'soup-judge-coop', input: soupInput(true, [`这一问：${q}`]) }, parseJudge);
+    const r = await chat.sceneJson(chatId.value, { name: mode.value === 'host' ? 'soup-judge' : 'soup-judge-coop', input: soupInput(true, [sx()('soup.question', { q })]) }, parseJudge);
     if (!r.ok) return fail(r);
     const j = r.value;
     const fresh = j.hits.filter((i) => !hit.value.includes(i));
@@ -227,7 +229,7 @@ async function ask(text?: string) {
       say('assistant', herLine.value, { expression: j.expr ?? null, agent: true });
       if (j.expr) chars.setExpression(her.value.id, j.expr);
     } else {
-      say('narrator', `主持人：${j.answer}`);
+      say('narrator', sx()('soup.narrator.host', { text: j.answer }));
     }
     qa.value.push({ q, a: j.answer, by: 'you' });
     if (mode.value === 'coop' && (fresh.length || qa.value.length % 3 === 0)) void teammate();
@@ -250,7 +252,7 @@ async function hint() {
   if (busy.value || !soup.value) return;
   busy.value = true;
   hints.value += 1;
-  const level = `提示等级：${Math.min(3, hints.value)}`;
+  const level = sx()('soup.hintLevel', { n: Math.min(3, hints.value) });
   try {
     if (mode.value === 'host') {
       const r = await chat.sceneReply(chatId.value, { task: 'soup-hint', input: soupInput(true, [level]), cue: `第 ${hints.value} 次提示` });
@@ -261,8 +263,8 @@ async function hint() {
         v && typeof v === 'object' && typeof (v as { hint?: unknown }).hint === 'string' ? (v as { hint: string }).hint.trim() : null,
       );
       if (!r.ok) return fail(r);
-      say('narrator', `主持人提示：${r.value}`);
-      herLine.value = `主持人提示：${r.value}`;
+      say('narrator', sx()('soup.narrator.hint', { hint: r.value }));
+      herLine.value = sx()('soup.narrator.hint', { hint: r.value });
     }
   } finally {
     busy.value = false;
@@ -277,15 +279,15 @@ async function submitAnswer() {
   answerText.value = '';
   busy.value = true;
   try {
-    say('user', `我的答案：${a}`);
-    const r = await chat.sceneJson(chatId.value, { name: 'soup-final', input: soupInput(true, [`${userName.value}的答案：${a}`]) }, (v) => {
+    say('user', sx()('soup.say.answer', { answer: a }));
+    const r = await chat.sceneJson(chatId.value, { name: 'soup-final', input: soupInput(true, [sx()('soup.userAnswer', { user: userName.value, answer: a })]) }, (v) => {
       const o = v as { verdict?: unknown; line?: unknown } | null;
       const verdict = ['对', '半对', '不对'].find((x) => x === String(o?.verdict ?? '').trim());
       return verdict ? { verdict, line: typeof o?.line === 'string' ? o.line.trim() : '' } : null;
     });
     if (!r.ok) return fail(r);
     const { verdict, line } = r.value;
-    say(mode.value === 'host' ? 'assistant' : 'narrator', `${mode.value === 'host' ? '' : '主持人：'}${verdict}${line && !leaks(line) ? `。${line}` : ''}`, { agent: mode.value === 'host' });
+    say(mode.value === 'host' ? 'assistant' : 'narrator', sx()('soup.verdict', { host: mode.value !== 'host', verdict, line: line && !leaks(line) ? line : null }), { agent: mode.value === 'host' });
     if (verdict === '不对') return showToast('不对，再想想');
     result.value = verdict === '对' ? 'solved' : 'partial';
     await reveal();
@@ -316,7 +318,7 @@ async function answerHer(a: Answer) {
   await herTurn();
 }
 async function judgeHer(v: '对' | '半对' | '不对') {
-  say('user', v === '对' ? '猜对了！' : v === '半对' ? '对了一半' : '不对');
+  say('user', sx()(v === '对' ? 'soup.say.right' : v === '半对' ? 'soup.say.half' : 'soup.say.wrong'));
   if (v === '对') {
     result.value = 'solved';
     await reveal();
@@ -328,8 +330,8 @@ async function reveal() {
   const s = soup.value;
   if (!s) return;
   phase.value = 'reveal';
-  if (s.truth) chat.push(chatId.value, 'narrator', [{ type: 'text', text: `汤底：${s.truth}` }], { meta: { scene: 'game', cue: '揭晓' } });
-  const r = await chat.sceneReply(chatId.value, { task: 'soup-reveal', input: soupInput(true, [`结果：${{ solved: '猜出来了', partial: '猜对了一半', 'gave-up': '认输了' }[result.value ?? 'gave-up']}`]), cue: '揭晓' });
+  if (s.truth) chat.push(chatId.value, 'narrator', [{ type: 'text', text: sx()('soup.narrator.truth', { truth: s.truth }) }], { meta: { scene: 'game', cue: '揭晓' } });
+  const r = await chat.sceneReply(chatId.value, { task: 'soup-reveal', input: soupInput(true, [sx()('soup.result', { result: sx()(`history.soup.${result.value ?? 'gave-up'}`) })]), cue: '揭晓' });
   if (r.ok) herLine.value = r.message.text;
   else fail(r);
   const card: MessagePart = { type: 'game', logId: uid('game'), game: 'soup', title: s.title, mode: mode.value, result: result.value ?? 'gave-up', questions: qa.value.length, hints: hints.value, ...(s.truth ? { truth: s.truth } : {}) };

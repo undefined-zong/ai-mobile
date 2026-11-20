@@ -28,7 +28,7 @@ import { distanceText } from '@/services/maps';
 import { mealMusic } from '@/services/musicPlayer';
 import { lookWith } from '@/services/photos';
 import { mealSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
@@ -268,26 +268,25 @@ function placeArt(item: GalleryItem) {
   if (shapeOf(item) === 'portrait') tableArt.value = item;
   else sideArt.value = item;
 }
+/** 这个场景的程序文字（"一起吃饭"用途的预设里的 mealScene.*） */
+function mt() {
+  return sceneText('scene:meal', her.value);
+}
 function herSideLine(): string {
-  const s = herSlot.value;
-  return `${her.value.name}在${herPlace.value || '自己那边'}${s ? `，${s.status}` : ''}${herMeal.value ? `，在吃${herMeal.value}` : ''}`;
+  return mt()('mealScene.herSide', { char: her.value.name, place: herPlace.value, status: herSlot.value?.status, meal: herMeal.value });
 }
 function myFood(): string {
   return food.value.trim() || seen.value?.food || (planned.value && planMeal.value ? planMeal.value.name : '');
 }
+/** 要画的画面（程序文字 mealScene.caption.*）：对面、她那边、碰杯 */
 function captionFor(m: Moment, extra?: string): string {
-  const mine = myFood();
-  if (m === 'table') {
-    return [`${userName.value}和${her.value.name}坐在同一张桌子两边一起吃${label.value}`, herMeal.value ? `${her.value.name}吃的是${herMeal.value}` : '', mine ? `${userName.value}吃的是${mine}` : '', herPlace.value ? `在${herPlace.value}` : '', extra]
-      .filter(Boolean)
-      .join('；');
-  }
-  const where = how.value === 'together' ? `两个人坐在同一张桌子两边吃${label.value}${herMeal.value ? `，${her.value.name}吃的是${herMeal.value}` : ''}` : herSideLine();
-  const mineSide = together.value === 'visit'
-    ? `${userName.value}坐在${her.value.name}旁边吃${label.value}${mine ? `（${mine}）` : ''}`
-    : `${userName.value}在${yourPlace.value || '自己那边'}吃${label.value}，${her.value.name}隔着屏幕陪着（${userName.value}不在画面里）`;
-  if (m === 'side') return [where, mineSide, extra].filter(Boolean).join('；');
-  return [`${her.value.name}举起手边的杯子和${userName.value}碰杯（第 ${cheers.value} 次）`, where, extra].filter(Boolean).join('；');
+  const t = mt();
+  const v = { user: userName.value, char: her.value.name, meal: label.value, herMeal: herMeal.value, mine: myFood(), place: herPlace.value, yourPlace: yourPlace.value, cheers: cheers.value, extra };
+  if (m === 'table') return t('mealScene.caption.table', v);
+  const where = how.value === 'together' ? t('mealScene.caption.together', v) : herSideLine();
+  const mineSide = t(together.value === 'visit' ? 'mealScene.caption.mineVisit' : 'mealScene.caption.mineApart', v);
+  if (m === 'side') return t('mealScene.caption.side', { ...v, where, mineSide });
+  return t('mealScene.caption.cheers', { ...v, where });
 }
 function cardImage(i: GalleryItem) {
   return { assetKey: i.assetKey, ...(i.url ? { url: i.url } : {}), title: i.title, moment: i.moment };
@@ -391,37 +390,42 @@ const cue = computed(() => {
 });
 
 function planLine(m: PlanMeal): string {
+  const t = mt();
+  const none = t('mealScene.plan.none');
   if (m.cook) {
-    return `按健康计划自己做：${m.name}（约 ${m.minutes} 分钟）；食材：${m.ingredients.join('、') || '没写'}；做法：${m.steps.map((x, i) => `${i + 1}. ${x}`).join(' ') || '没写'}`;
+    return t('mealScene.plan.cook', {
+      name: m.name, minutes: m.minutes,
+      ingredients: m.ingredients.length ? m.ingredients.join('、') : none,
+      steps: m.steps.length ? m.steps.map((x, i) => `${i + 1}. ${x}`).join(' ') : none,
+    });
   }
-  if (m.bento) return `按健康计划吃带的便当：${m.name}${m.prep ? `；${m.prep}` : ''}`;
-  const place = m.spot?.name || m.place;
-  const far = typeof m.spot?.distanceKm === 'number' ? `（${distanceText(m.spot.distanceKm)}）` : '';
-  return `按健康计划去买：${m.name}${place ? `，去${place}${far}` : ''}${m.order?.length ? `，点${m.order.join('、')}` : ''}${m.note ? `；${m.note}` : ''}`;
+  if (m.bento) return t('mealScene.plan.bento', { name: m.name, prep: m.prep });
+  return t('mealScene.plan.buy', {
+    name: m.name, place: m.spot?.name || m.place,
+    distance: typeof m.spot?.distanceKm === 'number' ? distanceText(m.spot.distanceKm) : null,
+    order: m.order?.length ? m.order : null, note: m.note,
+  });
 }
-/** 这一次的场景任务里都带的：哪顿、怎么吃、她吃什么、你吃什么 */
+/** 这一次的场景任务里都带的（程序文字 mealScene.context）：哪顿、怎么吃、她吃什么、你吃什么 */
 function contextLines(): string[] {
+  const t = mt();
   const s = herSlot.value;
-  const lines = [`这一顿：${userName.value}的${label.value}`];
-  if (how.value === 'together') {
-    lines.push(
-      together.value === 'bring'
-        ? `共同吃饭：${her.value.name}来${herPlace.value || userName.value + '这边'}陪${userName.value}吃，坐在${userName.value}对面`
-        : `共同吃饭：${her.value.name}作息里正好在${s?.status ?? '吃饭'}（在${herPlace.value}），你们像坐在同一张桌子两边一起吃`,
-    );
-  } else {
-    lines.push(`各吃各的：${her.value.name}在${herPlace.value || '自己那边'}${s ? `，${s.status}` : ''}；${userName.value}在${yourPlace.value || '自己那边'}吃饭，你隔着屏幕陪着`);
-  }
-  if (herMeal.value) lines.push(`${her.value.name}这顿吃：${herMeal.value}`);
-  if (planned.value && planMeal.value) lines.push(planLine(planMeal.value));
-  else if (how.value === 'together') lines.push('随便吃点（没照计划）');
-  const mine = food.value.trim();
-  if (mine) lines.push(`${userName.value}这顿吃的：${mine}`);
-  if (seen.value) lines.push(`${userName.value}拍的饭照（识图看到的）：${seen.value.desc}`);
   const song = mealMusic.current();
-  if (song && mealMusic.state.playing) lines.push(`${userName.value}边吃边听歌：《${song.title}》- ${song.artist}${mealMusic.state.demo ? '（示例歌曲）' : ''}`);
-  if (video.value) lines.push(`${userName.value}边吃边看 B 站视频：《${video.value.title}》${video.value.author ? `（UP 主：${video.value.author}）` : ''}；${her.value.name}看不到画面、听不到声音，只知道这些`);
-  return lines;
+  const playing = !!song && mealMusic.state.playing;
+  return [t('mealScene.context', {
+    user: userName.value, char: her.value.name, meal: label.value,
+    bring: how.value === 'together' && together.value === 'bring',
+    sameTable: how.value === 'together' && together.value !== 'bring',
+    apart: how.value !== 'together',
+    herPlace: herPlace.value, herStatus: s?.status, yourPlace: yourPlace.value,
+    herMeal: herMeal.value,
+    plan: planned.value && planMeal.value ? planLine(planMeal.value) : null,
+    free: !(planned.value && planMeal.value) && how.value === 'together',
+    mine: food.value.trim(),
+    seen: seen.value?.desc,
+    song: playing ? song.title : null, artist: song?.artist, demo: playing && mealMusic.state.demo,
+    video: video.value?.title, author: video.value?.author,
+  })];
 }
 
 /** last：这是这一顿的最后一句（吃完了），连着麦时她说完就挂断 */
@@ -524,7 +528,7 @@ async function addPhoto(file: Blob) {
     { meta: { scene: 'meal', cue: cue.value } },
   );
   chars.setExpression(her.value.id, 'surprised');
-  await reply('meal-food', [...contextLines(), seen.value ? '' : `${userName.value}发来一张饭照，但识图没看成（${lookIssue.value?.text ?? ''}），你看不清照片里是什么`]);
+  await reply('meal-food', [...contextLines(), seen.value ? '' : mt()('mealScene.photoUnseen', { user: userName.value, issue: lookIssue.value?.text })]);
 }
 /** 只写了字：告诉她（你写的那句进聊天） */
 async function tellFood() {
@@ -544,13 +548,13 @@ async function clink() {
   services.native.vibrate(20);
   chars.setExpression(her.value.id, 'laugh');
   if (drawingNow.value?.priority !== 'user') void drawMoment('cheers', 'user');
-  await reply('meal-cheers', [...contextLines(), `${userName.value}举杯和${her.value.name}碰了一下（这是第 ${cheers.value} 次）`]);
+  await reply('meal-cheers', [...contextLines(), mt()('mealScene.cheers', { user: userName.value, char: her.value.name, n: cheers.value })]);
 }
 
 // —— 边吃边聊 ——
 const chatText = ref('');
 /** 还在准备（做饭、去买、热便当）时场景任务里多带的一行 */
-const prepLine = () => (phase.value === 'prep' ? `${userName.value}还在准备（${cue.value}）` : '');
+const prepLine = () => (phase.value === 'prep' ? mt()('mealScene.preparing', { user: userName.value, cue: cue.value }) : '');
 async function sendChat() {
   const t = chatText.value.trim();
   if (!t) return;
@@ -596,7 +600,7 @@ async function onVideoPick(v: VideoHit) {
   video.value = v;
   // 视频自己有声音：音乐先停（想一起开，再点一下音乐就行）
   if (mealMusic.state.playing) void mealMusic.toggle(false);
-  await reply('meal-watch', [...contextLines(), prepLine(), `${userName.value}刚点开了这个视频`]);
+  await reply('meal-watch', [...contextLines(), prepLine(), mt()('mealScene.videoOpened', { user: userName.value })]);
 }
 
 // —— 连麦：嘴上手上都忙着，说话她就听得到，用她的声音回你（最下面输入框左边） ——
@@ -621,10 +625,7 @@ const link = useMicLink({
   onInterrupt: () => undefined,
   autoWhisper: () => false,
   tasks: { reply: 'meal-call' },
-  input: (kind, info) =>
-    kind === 'open'
-      ? `${info.context}\n你们刚连上麦，${userName.value}一边${phase.value === 'prep' ? '准备' : '吃'}一边用语音跟你说话。先开口说第一句，1–2 个短句。`
-      : `${info.context}\n连麦中（已经连了 ${info.linked}）。回${userName.value}刚才说的话。`,
+  input: (kind, info) => mt()(kind === 'open' ? 'mealScene.link.open' : 'mealScene.link.reply', { context: info.context, user: userName.value, prep: phase.value === 'prep', linked: info.linked }),
   onReply: (text) => {
     notConnected.value = '';
     herLine.value = text;
@@ -654,7 +655,7 @@ async function ready() {
   const done = stepsDone.value.filter(Boolean).length;
   await reply('meal-ready', [
     ...contextLines(),
-    `${userName.value}${WAY_LABEL[way.value].done}，花了 ${prepMinutes} 分钟${way.value === 'cook' && stepsDone.value.length ? `（做法勾了 ${done} / ${stepsDone.value.length} 步）` : ''}`,
+    mt()('mealScene.ready', { user: userName.value, way: mt()(`mealScene.way.${way.value}.done`), minutes: prepMinutes, done: way.value === 'cook' && stepsDone.value.length ? done : null, steps: stepsDone.value.length }),
   ]);
 }
 
@@ -664,7 +665,7 @@ async function skipPlan() {
   offPlan.value = true;
   if (!foodTouched) food.value = '';
   phase.value = 'eat';
-  await reply('meal-start', [...contextLines(), `${userName.value}本来要按计划${WAY_SHORT[way.value]}，现在说不照计划了，随便吃点`]);
+  await reply('meal-start', [...contextLines(), mt()('mealScene.offPlan', { user: userName.value, way: mt()(`mealScene.way.${way.value}`) })]);
 }
 
 // —— 开饭、吃完 ——
@@ -736,9 +737,7 @@ async function finish() {
     'meal-end',
     [
       ...contextLines(),
-      prepMinutes ? `准备（${WAY_SHORT[way.value]}）花了 ${prepMinutes} 分钟` : '',
-      cheers.value ? `一共碰了 ${cheers.value} 次杯` : '',
-      photo.value ? `${userName.value}拍了饭照` : '',
+      mt()('mealScene.end', { way: mt()(`mealScene.way.${way.value}`), minutes: prepMinutes || null, cheers: cheers.value || null, photo: !!photo.value, user: userName.value }),
     ],
     undefined,
     true,

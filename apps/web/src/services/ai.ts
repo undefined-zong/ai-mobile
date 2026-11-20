@@ -13,7 +13,7 @@ import {
   type Sidestory,
   type VoiceSpec,
 } from '@app/ai';
-import { getLocation, hasOwnWorld, imageAppearance, moodOf, slotAt, TIME_OF_DAY_LABEL, timeOfDay, worldOf, type Character } from '@app/shared';
+import { getLocation, hasOwnWorld, imageAppearance, moodOf, slotAt, TIME_OF_DAY_LABEL, timeOfDay, worldOf, type Character, textFn } from '@app/shared';
 import { showToast } from 'vant';
 import { assetUrl, putAsset } from './assets';
 import { playBytes, stopAudio } from './audio';
@@ -414,7 +414,7 @@ export async function writeSidestory(characterId: string, opts: { recentChat?: s
               blurb: world.blurb,
               schedule: world.schedule.map((s) => `${s.from}–${s.to} ${getLocation(s.locationId)?.name ?? s.locationId} · ${s.status}`),
               studyTask: world.life.studyTask,
-              meals: `早饭${world.life.meals.breakfast}，午饭${world.life.meals.lunch}，晚饭${world.life.meals.dinner}`,
+              meals: textFn(preset.texts)('story.meals', world.life.meals),
             }
           : undefined,
         current: { place, status: slot?.status ?? c.status },

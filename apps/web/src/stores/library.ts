@@ -27,6 +27,7 @@ import {
   type PresetUse,
   type PresetUseId,
   type PromptBlock,
+  type Texts,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -43,8 +44,11 @@ const FILES = import.meta.glob<unknown>('../presets/*.json', { eager: true, impo
 
 interface Seed {
   file: string;
+  /** 不带程序文字：放进预设库的预设里 texts 只存改过的，没改的始终按文件（App 更新后跟着新文件走） */
   preset: Preset;
   defaultFor: PresetUseId[];
+  /** 这个文件里写的程序文字 */
+  texts: Texts;
 }
 
 function readSeeds(): Seed[] {
@@ -52,9 +56,9 @@ function readSeeds(): Seed[] {
   for (const [path, json] of Object.entries(FILES)) {
     const file = path.split('/').pop() ?? path;
     try {
-      const { warnings: _w, defaultFor, id, ...data } = parsePresetFile(json, file);
+      const { warnings: _w, defaultFor, id, texts, ...data } = parsePresetFile(json, file);
       const now = Date.now();
-      out.push({ file, defaultFor, preset: { ...data, id: id ?? `preset-${file.replace(/\.json$/i, '')}`, createdAt: now, updatedAt: now, seedFile: file } });
+      out.push({ file, defaultFor, texts: texts ?? {}, preset: { ...data, id: id ?? `preset-${file.replace(/\.json$/i, '')}`, createdAt: now, updatedAt: now, seedFile: file } });
     } catch (e) {
       console.error(`预设文件 ${file} 读不出来：`, e);
     }
@@ -64,6 +68,39 @@ function readSeeds(): Seed[] {
 }
 
 const SEEDS = readSeeds();
+
+/**
+ * 自带预设文件里的程序文字（见 @app/shared programText）：键 → 模板、写在哪个文件、哪一类。
+ * 同一个键只写在一个文件里（由用它的那个预设管）；别的预设没写这个键时用这里的。
+ */
+export const BUNDLED_TEXTS: ReadonlyMap<string, { text: string; file: string; name: string; category: PresetCategory }> = (() => {
+  const m = new Map<string, { text: string; file: string; name: string; category: PresetCategory }>();
+  for (const s of SEEDS) {
+    for (const [key, text] of Object.entries(s.texts)) {
+      if (m.has(key)) console.error(`程序文字"${key}"在 ${m.get(key)!.file} 和 ${s.file} 里都写了，用前一个`);
+      else m.set(key, { text, file: s.file, name: s.preset.name, category: s.preset.category });
+    }
+  }
+  return m;
+})();
+
+/** 这个预设这一次用的程序文字：预设自己改过的 → 它的自带预设文件里的 → 其他自带预设文件里的 */
+export function textsFor(p: Pick<Preset, 'texts' | 'seedFile'> | null | undefined): Texts {
+  const own = seedTexts(p?.seedFile);
+  return { ...Object.fromEntries([...BUNDLED_TEXTS].map(([k, v]) => [k, v.text])), ...own, ...p?.texts };
+}
+
+/** 自带预设文件里写的程序文字（不是自带的为空） */
+export function seedTexts(file: string | undefined): Texts {
+  return SEEDS.find((x) => x.file === file)?.texts ?? {};
+}
+
+/** 交给智能体、上传云端的预设：带上合好的程序文字（智能体按键取说明文字） */
+export function withTexts<P extends Preset>(p: P): P;
+export function withTexts<P extends Preset>(p: P | null | undefined): P | null;
+export function withTexts<P extends Preset>(p: P | null | undefined): P | null {
+  return p ? { ...p, texts: textsFor(p) } : null;
+}
 
 /**
  * 新建预设用的模板：src/presets/templates/ 里的预设文件（格式同自带预设，但不放进预设库）。往这个文件夹里加一个 .json 就多一个模板；
@@ -981,8 +1018,11 @@ export const useLibraryStore = defineStore('library', () => {
 
   /** 任务预设（生图、总结、社媒……）打开了"使用世界书"时，带上这个角色绑定的世界书，拼提示词时按这一次的输入扫描 */
   function withLorebooks<P extends Preset>(preset: P | undefined, character?: Pick<Character, 'lorebookIds'> | null): (P & { lorebooks?: Lorebook[] }) | undefined {
-    if (!preset || preset.worldInfoEnabled !== true || !character?.lorebookIds?.length) return preset;
-    return { ...preset, lorebooks: character.lorebookIds.map(lorebookById).filter((b): b is Lorebook => !!b) };
+    if (!preset) return preset;
+    // 程序文字合上自带预设文件里的（任务拼程序块时按键取）
+    const withTexts = { ...preset, texts: textsFor(preset) };
+    if (preset.worldInfoEnabled !== true || !character?.lorebookIds?.length) return withTexts;
+    return { ...withTexts, lorebooks: character.lorebookIds.map(lorebookById).filter((b): b is Lorebook => !!b) };
   }
 
   function addPreset(p: Preset) {
@@ -1120,7 +1160,8 @@ export const useLibraryStore = defineStore('library', () => {
   /** 导出成预设文件（App 自己的格式，带上它现在给哪些用途用） */
   function exportFile(id: string): PresetFile | undefined {
     const p = presetById(id);
-    return p ? toPresetFile(p, usesOf(id).map((u) => u.id)) : undefined;
+    // 自带的带上文件里的程序文字（导出的文件自己就是完整的）
+    return p ? toPresetFile({ ...p, texts: { ...seedTexts(p.seedFile), ...p.texts } }, usesOf(id).map((u) => u.id)) : undefined;
   }
 
   function addLorebook(b: Lorebook) {

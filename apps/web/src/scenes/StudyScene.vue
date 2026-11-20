@@ -25,7 +25,7 @@ import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseKind, type NoiseMix } fro
 import { putAsset } from '@/services/assets';
 import { studyMusic } from '@/services/musicPlayer';
 import { studySearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -476,7 +476,7 @@ function lookAtHer() {
   }
   const noticed = !dozing.value && Math.random() < 0.4;
   chars.setExpression(her.value.id, noticed ? 'shy' : herStuck.value ? 'pout' : 'neutral');
-  void drawMoment('peek', 'user', noticed ? `${her.value.name}发现你在看${her.value.pronoun}，抬头和你对上了眼` : `${her.value.name}没发现你在看${her.value.pronoun}`);
+  void drawMoment('peek', 'user', st()(noticed ? 'studyScene.peek.noticed' : 'studyScene.peek.unnoticed', { char: her.value.name, pronoun: her.value.pronoun }));
 }
 const herState = computed(() => {
   if (dozing.value) return `${her.value.pronoun}趴在桌上睡着了`;
@@ -520,23 +520,22 @@ async function preview(item: { assetKey: string | null; url?: string } | null) {
   else showToast('本机找不到这张图了');
 }
 
+/** 这个场景的程序文字（"陪伴学习"用途的预设里的 studyScene.*） */
+function st() {
+  return sceneText('scene:study', her.value);
+}
 /** 她此刻的状态（数据，给生图提示词看） */
 function stateLine(): string {
-  const p = `进度 ${Math.round(herProgress.value)}%`;
-  if (dozing.value) return `${her.value.name}趴在桌上睡着了（${p}）`;
-  if (herStuck.value) return `${her.value.name}卡住了，盯着书皱眉（${p}）`;
-  return `${her.value.name}在专心${herGoal.value ? `做"${herGoal.value}"` : '学习'}（${p}）`;
+  const v = { char: her.value.name, progress: Math.round(herProgress.value), goal: herGoal.value };
+  return st()(dozing.value ? 'studyScene.state.dozing' : herStuck.value ? 'studyScene.state.stuck' : 'studyScene.state.focus', v);
 }
 function where(): string {
-  const place = location.value?.name ?? '图书馆';
-  if (mode.value === 'visit') return `在${place}，${userName.value}坐在${her.value.pronoun}旁边`;
-  if (mode.value === 'bring') return `在${place}，${her.value.pronoun}坐在${userName.value}对面`;
-  const how = focusMode.value === 'solo' ? '各自专注' : '一起专注';
-  return `在${place}，和${userName.value}连线自习、${how}（${userName.value}在${yourPlace.value || '自己那边'}）`;
+  const v = { place: location.value?.name, user: userName.value, pronoun: her.value.pronoun, solo: focusMode.value === 'solo', yourPlace: yourPlace.value };
+  return st()(mode.value === 'visit' ? 'studyScene.where.visit' : mode.value === 'bring' ? 'studyScene.where.bring' : 'studyScene.where.remote', v);
 }
 function captionFor(m: Moment, extra?: string): string {
-  if (m === 'peek') return [`${cue.value}中`, stateLine(), where(), extra].filter(Boolean).join('；');
-  return [`今天一起学完了：${Math.round(focusedMs.value / 60_000)} 分钟`, keptLine(), where(), extra].filter(Boolean).join('；');
+  if (m === 'peek') return st()('studyScene.caption.peek', { cue: cue.value, state: stateLine(), where: where(), extra });
+  return st()('studyScene.caption.end', { minutes: Math.round(focusedMs.value / 60_000), kept: keptLine(), where: where(), extra });
 }
 
 let autoNoted = false;
@@ -663,9 +662,7 @@ async function pickPhoto(file: File) {
   }
 }
 function mineCaption(): string {
-  const place = yourPlace.value || '自己那边';
-  const desc = persona.value.description.trim();
-  return [`${userName.value}在${place}的书桌前学习`, desc ? `${userName.value}的人设：${desc}` : '', `${her.value.name}在${herWhere.value}，隔着屏幕陪着（不在画面里）`].filter(Boolean).join('；');
+  return st()('studyScene.caption.mine', { user: userName.value, place: yourPlace.value, persona: persona.value.description.trim(), char: her.value.name, herWhere: herWhere.value });
 }
 async function drawMine(priority: 'user' | 'auto') {
   if (mineDrawing.value) return;
@@ -747,22 +744,18 @@ async function reply(task: string, lines: string[], userText?: string): Promise<
 const doneText = () => tasks.value.filter((t) => t.done).map((t) => t.text).join('、');
 const todoText = () => tasks.value.filter((t) => !t.done).map((t) => t.text).join('、');
 function timerLine(): string {
-  if (timerKind.value === 'pomodoro') return `计时：番茄钟，${plan.value} 个，每个 ${focusMin.value} 分钟，休息 ${restMin.value} 分钟`;
-  if (timerKind.value === 'countdown') return `计时：倒计时 ${countdownMin.value} 分钟（到点再决定继续还是结束）`;
-  return '计时：正计时（不定时长，累了自己说休息，学完自己说结束）';
+  return st()(`studyScene.timer.${timerKind.value}`, { plan: plan.value, focus: focusMin.value, rest: restMin.value, countdown: countdownMin.value });
 }
 function modeLine(): string {
-  if (focusMode.value === 'together') return '专注方式：一起专注——共用一个计时器，到点一起休息';
+  if (focusMode.value === 'together') return st()('studyScene.mode.together');
   const into = Math.round((Date.now() - herSeg.startedAt) / 60_000);
-  return `专注方式：各自专注——各用各的计时器；${her.value.name}按自己的节奏（专注 ${HER_FOCUS_MIN} 分钟、休息 ${HER_REST_MIN} 分钟），${userName.value}来之前${her.value.pronoun}已经学了 ${into} 分钟`;
+  return st()('studyScene.mode.solo', { char: her.value.name, pronoun: her.value.pronoun, focus: HER_FOCUS_MIN, rest: HER_REST_MIN, user: userName.value, into });
 }
 /** 各自专注时她这会儿在干嘛（给她说话时参考） */
 function herSoloLine(): string {
   if (focusMode.value !== 'solo') return '';
   const left = Math.ceil(herSegLeftMs.value / 60_000);
-  return herSeg.kind === 'focus'
-    ? `各自专注：${her.value.name}自己还在专注（${her.value.pronoun}的第 ${herBlocks.value + 1} 个番茄，还剩 ${left} 分钟），小声说就好`
-    : `各自专注：${her.value.name}正好也在休息（还剩 ${left} 分钟）`;
+  return st()(herSeg.kind === 'focus' ? 'studyScene.solo.focus' : 'studyScene.solo.break', { char: her.value.name, pronoun: her.value.pronoun, n: herBlocks.value + 1, left });
 }
 function goalReached(): boolean {
   if (timerKind.value === 'pomodoro') return blocks.value >= plan.value;
@@ -770,7 +763,7 @@ function goalReached(): boolean {
   return focusedMs.value >= COUNTUP_PROMISE_MIN * 60_000;
 }
 function keptLine(): string {
-  return promise.value.trim() ? `约定"${promise.value.trim()}"${goalReached() ? '做到了' : '没做到'}` : '';
+  return promise.value.trim() ? st()('studyScene.kept', { promise: promise.value.trim(), kept: goalReached() }) : '';
 }
 
 async function begin() {
@@ -781,12 +774,7 @@ async function begin() {
   startSegment('focus');
   if (focusMode.value === 'solo' && mine.source === 'persona' && !mineArt.value) void drawMine('auto');
   await reply('study-start', [
-    `${userName.value}今天要学：${tasks.value.map((t) => t.text).join('、') || '没说'}`,
-    `${userName.value}的状态：${MOODS.find((m) => m.id === mood.value)?.label}`,
-    timerLine(),
-    modeLine(),
-    promise.value.trim() ? `约定：${promise.value.trim()}` : '',
-    `${her.value.name}今天手头的事：${herGoal.value}`,
+    st()('studyScene.start', { user: userName.value, tasks: tasks.value.map((x) => x.text), mood: MOODS.find((m) => m.id === mood.value)?.label, timer: timerLine(), mode: modeLine(), promise: promise.value.trim(), char: her.value.name, goal: herGoal.value }),
   ]);
 }
 
@@ -810,18 +798,16 @@ async function endFocus(why: 'timer' | 'rest') {
     startSegment('break');
     const notes = pendingNotes.splice(0);
     const minutes = Math.round(spent / 60_000);
-    const what =
-      timerKind.value === 'pomodoro'
-        ? `第 ${blocks.value} 个番茄结束（${focusMin.value} 分钟）`
-        : timerKind.value === 'countdown'
-          ? `倒计时 ${minutes} 分钟到了（今天第 ${blocks.value} 段）`
-          : `${userName.value}正计时学了 ${minutes} 分钟，说要休息一下`;
+    const t = st();
     await reply('study-break', [
-      what,
-      `${userName.value}已完成：${doneText() || '还没有'}；还没完成：${todoText() || '没有了'}`,
-      awayThisRound.value ? `${userName.value}这段中途离开了 ${awayThisRound.value} 次${playedThisRound.value ? `，其中 ${playedThisRound.value} 次说是去玩了` : ''}` : '',
-      notes.length ? `${userName.value}传来的纸条：${notes.map((n) => `「${n}」`).join(' ')}` : '',
-      `${her.value.name}的进度：${Math.round(herProgress.value)}%${herStuck.value ? '，现在卡住了' : herStuckTimes.value ? '，中途卡住过' : ''}`,
+      t('studyScene.break', {
+        what: t(`studyScene.break.${timerKind.value}`, { n: blocks.value, focus: focusMin.value, minutes, user: userName.value }),
+        user: userName.value, done: doneText(), todo: todoText(),
+        away: awayThisRound.value || null, played: playedThisRound.value || null,
+        notes: notes.map((n) => `「${n}」`),
+        char: her.value.name, progress: Math.round(herProgress.value),
+        stuck: herStuck.value, wasStuck: !herStuck.value && !!herStuckTimes.value,
+      }),
       herSoloLine(),
     ]);
     playedThisRound.value = 0;
@@ -854,7 +840,7 @@ async function askHelp() {
   stuckOpen.value = false;
   stuckText.value = '';
   sayMine(t);
-  await reply('study-stuck', [`专注中（${cue.value}），${userName.value}卡住了`, herSoloLine()], t);
+  await reply('study-stuck', [st()('studyScene.stuck', { cue: cue.value, user: userName.value }), herSoloLine()], t);
 }
 
 // —— 休息时聊天 ——
@@ -864,7 +850,7 @@ async function sendChat() {
   if (!t || stream.value) return;
   chatText.value = '';
   sayMine(t);
-  await reply('study-chat', [`休息中（${cue.value}）`, herSoloLine()], t);
+  await reply('study-chat', [st()('studyScene.resting', { cue: cue.value }), herSoloLine()], t);
 }
 
 // —— 你的任务：专注时点右下角的卡片勾掉、加新的 ——
@@ -966,12 +952,13 @@ async function finish() {
   const minutes = Math.round(focusedMs.value / 60_000);
   const kept = goalReached();
   const msg = await reply('study-end', [
-    `结束：一共专注 ${minutes} 分钟${timerKind.value === 'pomodoro' ? `，${blocks.value} 个番茄（计划 ${plan.value} 个）` : timerKind.value === 'countdown' ? `（倒计时 ${countdownMin.value} 分钟${countdownDone.value ? '，走完了' : '，没走完就结束了'}）` : '（正计时）'}`,
-    focusMode.value === 'solo' ? `各自专注：${her.value.name}自己学了 ${herBlocks.value} 个番茄` : '一起专注',
-    `${userName.value}完成了：${doneText() || '没有勾掉任务'}；没完成：${todoText() || '没有'}`,
-    awayTotal.value ? `中途离开 ${awayTotal.value} 次` : '',
-    promise.value.trim() ? `约定：${promise.value.trim()}（${kept ? '做到了' : '没做到'}）` : '',
-    `${her.value.name}的进度：${Math.round(herProgress.value)}%`,
+    st()('studyScene.end', {
+      minutes, pomodoro: timerKind.value === 'pomodoro', countdown: timerKind.value === 'countdown', countup: timerKind.value === 'countup',
+      blocks: blocks.value, plan: plan.value, countdownMin: countdownMin.value, countdownDone: countdownDone.value,
+      solo: focusMode.value === 'solo', char: her.value.name, herBlocks: herBlocks.value,
+      user: userName.value, done: doneText(), todo: todoText(), away: awayTotal.value || null,
+      promise: promise.value.trim(), kept, progress: Math.round(herProgress.value),
+    }),
   ]);
   diary.value = msg?.text.split(/日记[:：]/)[1]?.trim() ?? '';
   const card: MessagePart = {

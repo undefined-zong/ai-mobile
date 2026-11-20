@@ -163,5 +163,8 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "community.imageRecent": "这一帖：{{post}}"
+  }
 }

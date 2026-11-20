@@ -354,5 +354,15 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "sleepScene.place.blurb": "{{scene}}，画面是{{style}}（{{place}}）",
+    "sleepScene.immersion.place": "睡前的地方：{{name}}（{{blurb}}）",
+    "sleepScene.immersion.together": "{{user}}和{{char}}一起在这里，准备睡了",
+    "sleepScene.immersion.turn": "这是第 {{n}} 段",
+    "sleepScene.immersion.start": "你们刚在这里安顿下来",
+    "sleepScene.immersion.picked": "{{user}}选了：{{choice}}",
+    "sleepScene.immersion.said": "{{user}}没用你给的选项，自己说：{{text}}",
+    "sleepScene.immersion.end": "{{user}}说困了，想睡了\n你们在这里待了 {{turns}} 段"
+  }
 }

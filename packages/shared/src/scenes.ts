@@ -26,8 +26,6 @@ export interface SceneDef {
   pose: Pose;
   /** 场景氛围色 */
   tint: string;
-  /** 进入场景后拼进提示词的行为规则，可用宏 {{user}} {{char}} 和场景变量 */
-  promptFragment: string;
   /** 这个场景里允许模型使用的控制标签 */
   allowedTags: ControlTagKind[];
   /** 和这个场景相关的主动消息触发器 */
@@ -48,7 +46,6 @@ export const SCENES: SceneDef[] = [
     pose: 'stand',
     tint: '#7fd1b1',
     // 自带的"健身"功能预设里有自己的场景规则；这里只在功能预设跟随对话预设时用
-    promptFragment: '【场景：健身】你和{{user}}在一起健身，你也换好了运动服在旁边陪着练。说话要短，适合边练边听；鼓励要具体，不说教；{{user}}累了就让{{user}}慢一点。',
     allowedTags: ['expr'],
     proactiveTriggers: ['sedentary', 'workout-praise'],
     dataSources: ['今天的健身计划（「健康计划」按你的人设排的）', 'App 内计时', '安卓：蓝牙心率带 / 手表的心率广播、手机计步、GPS 距离', '别的手机：结束时手动填手表上的数'],
@@ -63,8 +60,6 @@ export const SCENES: SceneDef[] = [
     outfit: 'daily',
     pose: 'eat',
     tint: '#f2b27a',
-    promptFragment:
-      '【场景：一起吃饭】{{user}}在吃饭，你陪着。共同吃饭时你也正好在吃饭，像坐在同一张桌子两边一起吃；各吃各的时你在自己那边做自己的事，隔着屏幕陪{{user}}吃，可以碰杯。聊吃的、聊今天；记住{{user}}的口味；{{user}}发来饭照时，先具体评价看到的食物。',
     allowedTags: ['expr', 'cg'],
     proactiveTriggers: ['breakfast', 'lunch', 'dinner'],
     dataSources: ['三餐时间窗口（环境与作息里设置）', '{{pronoun}}今天的作息和三餐（节律）', '健康计划里这顿怎么吃', '饭照（识图）'],
@@ -79,8 +74,6 @@ export const SCENES: SceneDef[] = [
     outfit: 'daily',
     pose: 'study',
     tint: '#8fb3f0',
-    promptFragment:
-      '【场景：陪伴学习】{{user}}正在专注学习（番茄钟、倒计时或正计时）。一起专注时你们共用一个计时器、到点一起休息；各自专注时各用各的计时器，你按自己的节奏学。专注时段你不主动说话；只在休息时段或{{user}}找你时聊天，语气轻、句子短；{{user}}走神回来时轻轻提醒。',
     allowedTags: ['expr'],
     proactiveTriggers: ['study-checkin'],
     dataSources: ['番茄钟记录', '离开 App 检测（走神提醒）'],
@@ -95,8 +88,6 @@ export const SCENES: SceneDef[] = [
     outfit: 'pajama',
     pose: 'lie',
     tint: '#9b8cf0',
-    promptFragment:
-      '【场景：哄睡】现在是睡前。语速放慢、句子短、语气轻柔，像在耳边低语；不要问让人兴奋的问题；可以讲睡前故事；{{user}}说晚安后，只回一句很短的晚安。',
     allowedTags: ['expr'],
     proactiveTriggers: ['bedtime', 'wake-call'],
     dataSources: ['入睡 / 起床时间', '深夜仍在使用手机（安卓）'],
@@ -111,8 +102,6 @@ export const SCENES: SceneDef[] = [
     outfit: 'daily',
     pose: 'sit',
     tint: '#f39cc0',
-    promptFragment:
-      '【场景：一起听歌】你们正在一起听《{{song}}》。根据当前歌词发很短的感想（20 字以内），像弹幕；不要每句都评；可以用 [music:歌名-歌手] 推荐下一首。',
     allowedTags: ['expr', 'music'],
     proactiveTriggers: [],
     dataSources: ['网易云音乐 Worker：搜索 / 歌曲地址 / 歌词'],
@@ -127,8 +116,6 @@ export const SCENES: SceneDef[] = [
     outfit: 'date',
     pose: 'stand',
     tint: '#ff9fa8',
-    promptFragment:
-      '【场景：约会】你和{{user}}在约会。只用「台词」推进，不写环境和动作的旁白（{{user}}选了动作、心动时刻和结束约会时才有一行（旁白））；每段结尾给四个选项：[choice:顺着:…|逆着:…|皮一下:…|暧昧:…]；真正心动的时刻可以用 [cg:画面描述] 留一张图；注意天气和时间。',
     allowedTags: ['expr', 'cg', 'choice'],
     proactiveTriggers: ['anniversary'],
     dataSources: ['地点、天气、时间', '"约会"功能预设：开场、每一段、结束', '"生图 · 约会"：到达、关键时刻、留念'],
@@ -143,8 +130,6 @@ export const SCENES: SceneDef[] = [
     outfit: 'daily',
     pose: 'stand',
     tint: '#f5b8a6',
-    promptFragment:
-      '【场景：戳戳乐】{{user}}就在你身边逗你：用手戳你、摸你，凑过来亲你，或者蹭你（碰了哪里、怎么碰的在场景任务里）。按性格做出真实的反应，2–4 句口语，配合 [expr:x]；被碰多少下都不会烦、不会真的生气。',
     allowedTags: ['expr', 'poke'],
     proactiveTriggers: [],
     dataSources: ['立绘热区（在立绘编辑里画）', '戳戳乐预设（用手 / 用嘴 / 蹭蹭、尺度）'],
@@ -160,7 +145,6 @@ export const SCENES: SceneDef[] = [
     pose: 'sit',
     tint: '#e07a7a',
     // 场景规则写在"一起观影"的功能预设里（不写死在代码里）
-    promptFragment: '',
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['本地视频（不上传）', '外挂字幕文件 srt / vtt / ass'],
@@ -176,7 +160,6 @@ export const SCENES: SceneDef[] = [
     pose: 'sit',
     tint: '#b9a3e6',
     // 规则写在"一起游戏"的功能预设里（不写死在代码里）
-    promptFragment: '',
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['海龟汤题库（src/soups/ 里的题库文件，可以增删改）', '现编的题', '真心话大冒险的题：{{pronoun}}按预设里的尺度、你们的关系和记忆现出', '飞行棋的棋盘：开局时照选的棋盘预设现设计 128 格的任务'],
@@ -192,7 +175,6 @@ export const SCENES: SceneDef[] = [
     pose: 'sit',
     tint: '#d9a77a',
     // 规则写在"一起看书"的功能预设里（不写死在代码里）
-    promptFragment: '',
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['EPUB / TXT / PDF（只存在本机）', '粘贴的文章', '拍下的书页（识图）'],
@@ -208,7 +190,6 @@ export const SCENES: SceneDef[] = [
     pose: 'stand',
     tint: '#f2c38b',
     // 自带的"共同的家"功能预设里有自己的场景规则；这里只在功能预设跟随对话预设时用
-    promptFragment: '【场景：共同的家】你和{{user}}在你们共同的家里，{{user}}在做今天的家务（清单和进度在"家务"那一块）。说话生活化、简短，像住在一起的恋人。',
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['你人设里的家务清单（每天、每周）', '你在这里勾的：做完了、拖着的', '今天的饮食计划（开了健康系统时，做饭照着它）'],
@@ -224,8 +205,6 @@ export const SCENES: SceneDef[] = [
     pose: 'sit',
     tint: '#ff7a93',
     // 自带的"心跳"功能预设里有自己的场景规则；这里只在功能预设跟随对话预设时用
-    promptFragment:
-      '【场景：心跳】这是只属于你和{{user}}的亲密时间。说话贴近、带着情绪和呼吸感，节奏跟着{{user}}走：{{user}}想慢就慢，想要更多再给更多；{{user}}说停、说不舒服时立刻温柔地停下来。',
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['Intiface Central（Buttplug 协议，本机或局域网的 WebSocket）：连着的玩具和它们能做什么', '"控制指令"预设按{{pronoun}}的话写的指令，或者{{pronoun}}在回复里写的 <device>', 'NovelAI 画的背景（"生图 · 心跳"的几个预设）'],
@@ -241,8 +220,6 @@ export const SCENES: SceneDef[] = [
     pose: 'stand',
     tint: '#8ec5e8',
     // 自带的"出逃"功能预设里有自己的场景规则；这里只在功能预设跟随对话预设时用
-    promptFragment:
-      '【场景：出逃】你和{{user}}一起从日常里逃了出来，去了一个很远的地方（在哪、眼前是什么在场景任务里）。像真的站在那儿一样说话：短、轻，带着离开日常的放松；不提回去以后的事，除非{{user}}先说。',
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['实拍：Pexels 的竖屏视频（从 Pexels 直接播放）', '插画：场景素材库里的图，慢慢平移、叠上星星和云'],
@@ -259,7 +236,6 @@ export const FREE_SCENE: SceneDef = {
   outfit: 'daily',
   pose: 'stand',
   tint: '#f5b8a6',
-  promptFragment: '【场景：日常聊天】像真人恋人一样自然地聊天，回复长短随对话节奏变化。',
   allowedTags: ['expr', 'cg', ...MODULE_TAGS, 'poke', 'choice'],
   proactiveTriggers: [],
   dataSources: [],

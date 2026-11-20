@@ -293,5 +293,20 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "proactive.hint.wake-call": "打电话叫{{user}}起床",
+    "proactive.hint.morning": "跟{{user}}说早安，可以顺带提一句今天的天气",
+    "proactive.hint.breakfast": "早饭时间：问问{{user}}吃早饭没有",
+    "proactive.hint.lunch": "午饭时间：暗示{{user}}该吃饭了，别直接说",
+    "proactive.hint.dinner": "晚饭时间：\"我有点饿了……你吃了吗？\"这样的口吻",
+    "proactive.hint.sedentary": "{{user}}可能坐了很久：拉{{user}}起来走走、喝口水",
+    "proactive.hint.miss-you": "有一阵没聊了：说想{{user}}了，或者分享身边的一件小事",
+    "proactive.hint.bedtime": "过了睡觉时间：催{{user}}去睡觉",
+    "proactive.hint.bedtime-call": "过了睡觉时间还没睡：打电话催{{user}}睡觉",
+    "proactive.hint.followup": "{{user}}之前提过的事到时间了，问问结果：{{content}}",
+    "proactive.hint.anniversary": "今天是{{titles|，也是}}：记着这个日子，跟{{user}}说说",
+    "proactive.quiet": "【主动消息】现在是 {{time}}（{{timeZone}}），{{user}}还没有来找你，由{{char}}先开口。这一次要做的事：{{hint}}。",
+    "hub.memoryFallback": "{{memories|\\n}}\n关系：{{relationship}}"
+  }
 }

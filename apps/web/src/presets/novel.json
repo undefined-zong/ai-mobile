@@ -166,5 +166,22 @@
       }
     }
   ],
-  "regex": []
+  "regex": [],
+  "texts": {
+    "novel.untitled": "无题",
+    "novel.chapterLabel.extra": "番外 · {{title}}",
+    "novel.chapterLabel.chapter": "第 {{n}} 章 · {{title}}",
+    "novel.info": "书名：《{{title}}》\n类型：{{genre}}\n{{?setting}}设定和人物：\n{{setting}}\n{{!setting}}设定和人物：还没写，按讨论里说过的来\n{{?outline}}大纲：\n{{outline}}\n文风和尺度：{{style}}",
+    "novel.chapters.none": "已经写好的章节：还没有，这是第一章。",
+    "novel.chapters.full": "【{{head}}】\n{{text}}",
+    "novel.chapters.head": "【{{head}}】（只给开头）[[{{text}}]]…",
+    "novel.chapters": "已经写好的章节（按顺序）：\n\n{{parts|\\n\\n}}",
+    "novel.talk": "你们最近的讨论：\n{{lines|\\n}}",
+    "novel.talk.line": "{{who}}：{{text}}",
+    "novel.talk.you": "你",
+    "novel.ask.chat": "{{user}}刚说：{{said}}",
+    "novel.ask.chapter": "写第 {{n}} 章。[[{{user}}的要求：{{wish}}]][[{{!wish}}{{user}}没有额外要求，照大纲和讨论接着写。]]",
+    "novel.ask.extra": "写一篇番外。[[{{user}}想要的番外：{{wish}}]][[{{!wish}}{{user}}没说想要什么样的，你来挑一个有意思的。]]",
+    "novel.ask.rewrite": "重写【{{label}}】。\n{{user}}的意见：[[{{wish}}]][[{{!wish}}整体再打磨一下，写得更好看]]\n原文：\n# [[{{title}}]]\n\n{{text}}"
+  }
 }

@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import { monthDayKey } from './timeQuery.ts';
 import { daysBetweenDates, zonedDateKey } from './timezone.ts';
 import type { ISODate } from './types/common.ts';
@@ -122,15 +123,33 @@ export function anniversaryWhen(daysLeft: number): string {
   return daysLeft === 0 ? '今天' : daysLeft === 1 ? '明天' : daysLeft === 2 ? '后天' : `${daysLeft} 天后`;
 }
 
+/** 给模型看的这一次叫什么（程序文字 common.anniversary.*：名字、几岁生日、几个月、几周年） */
+export function anniversaryTitleText(o: Pick<AnniversaryOccurrence, 'anniversary' | 'count'>, t: TextFn): string {
+  const { label, birthday, repeat } = o.anniversary;
+  const n = o.count;
+  if (!n) return t('common.anniversary.plain', { label });
+  if (birthday) return t('common.anniversary.birthday', { label, n });
+  if (repeat === 'monthly' && n % 12) return t('common.anniversary.months', { label, n });
+  return t('common.anniversary.years', { label, n: repeat === 'monthly' ? n / 12 : n });
+}
+
+/** 给模型看的还有多久（程序文字 common.daysLater.*：今天、明天、后天、几天后） */
+export function daysLaterText(days: number, t: TextFn): string {
+  return days <= 2 ? t(`common.daysLater.${days}`) : t('common.daysLater.n', { days });
+}
+
 /**
- * 给模型看的一行：今天的、和进了"提前几天惦记"的。都不在时为空。
- * "纪念日：今天是在一起 2 个月；3 天后（11 月 18 日 周三）是她的生日（23 岁）"
+ * 给模型看的一行（程序文字 env.anniversaries / env.anniversary.today / env.anniversary.soon）：今天的、和进了"提前几天惦记"的。都不在时为空。
  */
-export function anniversaryLine(list: readonly Anniversary[] | undefined, now: number, timeZone: string): string {
+export function anniversaryLine(list: readonly Anniversary[] | undefined, now: number, timeZone: string, t: TextFn): string {
   const near = upcomingAnniversaries(list, now, timeZone).filter((o) => o.daysLeft <= Math.max(0, o.anniversary.remindDays));
   if (!near.length) return '';
-  const items = near.map((o) => (o.daysLeft === 0 ? `今天是${anniversaryTitle(o)}` : `${anniversaryWhen(o.daysLeft)}（${anniversaryDayLabel(o.date)}）是${anniversaryTitle(o)}`));
-  return `纪念日：${items.join('；')}`;
+  const items = near.map((o) =>
+    o.daysLeft === 0
+      ? t('env.anniversary.today', { title: anniversaryTitleText(o, t) })
+      : t('env.anniversary.soon', { when: daysLaterText(o.daysLeft, t), date: anniversaryDayLabel(o.date), title: anniversaryTitleText(o, t) }),
+  );
+  return t('env.anniversaries', { items });
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import families from './background-families.json';
 
 export type BackgroundPeriod = 'day' | 'dusk' | 'night' | 'indoor';
@@ -143,11 +144,9 @@ export function backdropKindFor(place: BackgroundPlace, fallback: BackdropKey = 
 }
 
 /** 传给建世界任务的是可用系列，不把 955 张图片或图片 URL 放进模型提示词。 */
-export function backgroundLibraryPrompt(): string {
-  return [
-    '本次可用的背景素材库（地点名字照角色世界观写，图片从最接近的真实素材里挑）：',
-    `backdrop 类型：${BACKDROPS.map((key) => `${key} ${BACKGROUND_KINDS[key].label}`).join(' / ')}`,
-    '可选 backgroundSet 固定下面某一系列的完整 id；留空时程序按地点名称、描述、室内外和世界观自动匹配。backgroundSet 只选系列，白天/黄昏/夜间由程序切换。blurb 写清房间用途与风格（例如古典书房、日式和室、森林石径）。没有完全相同的世界观画面时选地点用途与风格最接近的，不把所有地点都写成公园或卧室。背景类型和系列以本次素材库为准。',
-    ...families.map((f) => `- ${f.id}（${f.indoor ? '室内' : '室外'}；${f.periods.join('/')}）`),
-  ].join('\n');
+export function backgroundLibraryPrompt(t: TextFn): string {
+  return t('rhythm.backgrounds', {
+    backdrops: BACKDROPS.map((key) => `${key} ${BACKGROUND_KINDS[key].label}`),
+    families: families.map((f) => t('rhythm.backgrounds.family', { id: f.id, place: t(f.indoor ? 'common.indoor' : 'common.outdoor'), periods: f.periods.join('/') })),
+  });
 }

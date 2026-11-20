@@ -386,5 +386,21 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "workshop.mood.cheer": "{{user}}想听你夸",
+    "workshop.mood.roast": "{{user}}想听你吐槽",
+    "workshop.mood.any": "{{user}}没说想听夸还是吐槽，看你自己",
+    "workshop.clipped": "（后面还有 {{left}} 字，{{user}}只给你看到这里）",
+    "workshop.novel": "{{user}}给你看的：小说《{{title}}》[[（{{genre}}）]]的【{{label}}】\n这部小说的设定（{{user}}写的）：{{setting}}\n一共写了 {{count}} 篇，这是其中一篇\n{{mood}}\n全文：\n# [[{{chapterTitle}}]]\n\n{{text}}",
+    "workshop.subject.you": "画的是你",
+    "workshop.subject.other": "画的是{{name}}",
+    "workshop.subject.otherDefault": "别的角色",
+    "workshop.subject.novel": "画的是{{user}}的小说《{{title}}》里的东西",
+    "workshop.subject.free": "自由画",
+    "workshop.image": "{{user}}给你看一张画：「{{title}}」\n{{subject}}\n{{user}}写的画面描述：{{caption}}\n生图用的 tags（画出来大概就是这样）：{{prompt}}\n{{mood}}",
+    "workshop.frame": "你们在一起游戏的\"创意工坊\"里。\n{{input}}",
+    "workshop.works": "[[{{user}}在写的小说：{{novels}}]][[{{!novels}}{{user}}还没开始写小说]]\n画过 {{drawings}} 张画，最近一张是「{{latest}}」",
+    "workshop.works.novel": "《{{title}}》（{{n}} 篇）"
+  }
 }

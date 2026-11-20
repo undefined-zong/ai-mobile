@@ -9,7 +9,7 @@ import { usePersonaStore } from '@/stores/personas';
 import { useLibraryStore } from '@/stores/library';
 import { useBrawlStore } from '@/stores/brawl';
 import { useAiStore } from '@/stores/ai';
-import { generateBrawlFighter } from '@/services/brawl';
+import { generateBrawlFighter, brawlText } from '@/services/brawl';
 import { isHandheld, useTheater } from '@/composables/useTheater';
 import { uid } from '@/utils/id';
 import { BrawlEngine } from './engine';
@@ -209,7 +209,7 @@ function begin() {
   phase.value = 'playing'; tick.value++; previous = 0;
   emit('progress', `大乱斗（${you.value.name}对战${her.value.name}，${BRAWL_DIFFICULTIES[store.difficulty]}）`);
   void nextTick(resize);
-  void say('brawl-open', `玩家操控${you.value.name}，你操控${her.value.name}；难度${BRAWL_DIFFICULTIES[store.difficulty]}。双方的战斗档案：${JSON.stringify([you.value, her.value])}`, roundId);
+  void say('brawl-open', brawlText()('brawl.open', { you: you.value.name, her: her.value.name, difficulty: BRAWL_DIFFICULTIES[store.difficulty], fighters: JSON.stringify([you.value, her.value]) }), roundId);
 }
 function finish() {
   if (result.value || !engine.outcome) return;
@@ -220,7 +220,7 @@ function finish() {
   const summary = `大乱斗（${r.you}对战${r.opponent}，${winner}，${r.seconds} 秒，最高 ${r.combo} 连击）`;
   emit('progress', null); emit('done', summary);
   chat.push(roundChatId, 'narrator', [{ type: 'game', game: 'brawl', logId: r.id, result: r }], { meta: { scene: 'game', cue: '大乱斗战绩' } });
-  void say('brawl-end', `本局真实结果：${JSON.stringify(r)}。只围绕这局结果说一句话。`, roundId);
+  void say('brawl-end', brawlText()('brawl.end', { result: JSON.stringify(r) }), roundId);
 }
 function concede() { engine.forfeit(); finish(); }
 function backToGames() {

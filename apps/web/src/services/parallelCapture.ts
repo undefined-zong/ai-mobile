@@ -20,7 +20,7 @@ import { editEntry, myEntriesOn, parallelToday } from './parallel';
 import { MissingPresetError } from './prompt';
 import { useAiStore } from '@/stores/ai';
 import { useEnvironmentStore } from '@/stores/environment';
-import { useLibraryStore } from '@/stores/library';
+import { useLibraryStore, withTexts } from '@/stores/library';
 import { useParallelStore } from '@/stores/parallel';
 import { uid } from '@/utils/id';
 
@@ -34,7 +34,8 @@ import { uid } from '@/utils/id';
 
 /** 使用"AI 记一件事"用途选中的预设。 */
 export function capturePreset(): Preset | undefined {
-  return useLibraryStore().presetForUse('parallel-capture');
+  // 带上合好的程序文字（这一次的输入按它写）
+  return withTexts(useLibraryStore().presetForUse('parallel-capture')) ?? undefined;
 }
 
 /** 能不能用 AI 记（API 接通了、有"平行时空 · AI 记一件事"预设）；不能时说明原因、去哪改 */

@@ -1,9 +1,10 @@
+import { textFn } from '@app/shared';
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type ShallowRef } from 'vue';
 import { useAiStore } from '@/stores/ai';
 import { useChatStore } from '@/stores/chat';
-import { useLibraryStore } from '@/stores/library';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import type { DecorEngine } from './engine';
-import { LIFE_PROTOCOL, parseLifeDecision, type LifeDecision } from './activities';
+import { parseLifeDecision, type LifeDecision } from './activities';
 
 interface LifeOptions {
   engine: ShallowRef<DecorEngine | null>;
@@ -33,9 +34,11 @@ export function useRoomLife(options: LifeOptions) {
   const requesting = ref(false);
   const acting = ref(false);
   const error = ref('');
-  const lastResult = ref('刚进入小屋');
+  const lastResult = ref('');
   const connected = computed(() => ai.status('decor').live);
   const preset = computed(() => lib.presetForUse('decor-life'));
+  /** 小屋生活预设的程序文字：这一次的输入、上次的结果、动作说明（decorLife.*） */
+  const lt = () => textFn(textsFor(preset.value));
   const available = computed(() => mounted.value && visible.value && options.active() && !options.blocked() && connected.value && !!preset.value && !!options.engine.value);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | null = null;
@@ -75,7 +78,7 @@ export function useRoomLife(options: LifeOptions) {
     try {
       const response = await chat.sceneJson(options.chatId(), {
         name: 'decor-act',
-        input: `${options.context()}\n\n实时观察（you 是用户的小人，her 是你的小人）：\n${JSON.stringify(e.observe())}\n上次实际结果：${lastResult.value}\n这次：${userText ? `用户对你说：${userText}` : '观察此刻，自主决定一件事，也可以安静保持现状'}\n\n${LIFE_PROTOCOL}`,
+        input: lt()('decorLife.input', { context: options.context(), observe: JSON.stringify(e.observe()), last: lastResult.value || lt()('decorLife.last.entered'), said: userText, protocol: lt()('decorLife.protocol') }),
       }, parseLifeDecision, abort.signal, { agent: 'decor', use: 'decor-life' });
       clearTimeout(timeout);
       if (run !== sequence || abort.signal.aborted || roomId !== options.roomId()) return;
@@ -87,7 +90,7 @@ export function useRoomLife(options: LifeOptions) {
       options.reply(response.value);
       const result = await e.performAction('her', response.value.action, abort.signal);
       if (run !== sequence || result.cancelled) return;
-      lastResult.value = result.ok ? `已执行 ${response.value.action.type}，目标 ${response.value.action.target ?? '无'}；以实时观察里的姿态和设备状态为准` : `动作未执行：${result.reason}`;
+      lastResult.value = result.ok ? lt()('decorLife.last.done', { action: response.value.action.type, target: response.value.action.target }) : lt()('decorLife.last.failed', { reason: result.reason });
       options.result(lastResult.value);
       if (!result.ok) error.value = result.reason ?? '没有走到家具旁';
     } finally {
@@ -100,7 +103,7 @@ export function useRoomLife(options: LifeOptions) {
   }
 
   watch([available, enabled], ([, on], [, wasOn]) => { cancel(); if (on && !wasOn) error.value = ''; schedule(4500); });
-  watch([() => options.roomId(), () => options.characterId(), connected, preset], () => { cancel(); error.value = ''; lastResult.value = '以当前房间状态为准'; schedule(4500); });
+  watch([() => options.roomId(), () => options.characterId(), connected, preset], () => { cancel(); error.value = ''; lastResult.value = lt()('decorLife.last.changed'); schedule(4500); });
   watch(enabled, value => { try { localStorage.setItem('ai-mobile:decor-life', value ? 'on' : 'off'); } catch { /* 本次仍然生效 */ } });
   watch(interval, value => { try { localStorage.setItem('ai-mobile:decor-life-interval', String(value)); } catch { /* 本次仍然生效 */ } if (!requesting.value && !acting.value) schedule(); });
   const visibility = () => { visible.value = !document.hidden; };

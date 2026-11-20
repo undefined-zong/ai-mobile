@@ -18,6 +18,7 @@ import {
   type PlannerRunResult,
   type ProactiveCredentials,
   type SocialDay,
+  textFn,
 } from '@app/shared';
 import { unseal } from './crypto.ts';
 import type { Env } from './env.ts';
@@ -57,7 +58,7 @@ export async function generateParallelNote(
   context: ParallelContext, credentials: ProactiveCredentials, id: string, date: string, now: number, her: SocialDay | null, mine: ParallelEntry[] | null,
 ): Promise<{ note: ParallelNote; tokens: number }> {
   // The scheduler reserves the user-configured budget in D1 across concurrent characters.
-  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters });
+  const system = new AgentSystem({ config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation }, outputFilters: credentials.outputFilters, jsonRetry: () => context.preset?.texts?.['common.jsonRetry'] });
   const built = parallelRequest(context, now, her, mine);
   const { value, result } = await system.json('parallel', built.request, parseParallelPost, { signal: AbortSignal.timeout(150_000) });
   const about = resolveParallelRef(value.about, built.her, built.mine);
@@ -99,7 +100,7 @@ async function postOne(env: Env, row: ContextRow, slot: number, dueAt: number, d
         .bind(id, row.updated_at).all<{ data: string }>(),
     ]);
     const names = parallelNames(context.persona.name, () => context.character.name);
-    const mineNotes = later.results.map((r) => parallelNoteText(JSON.parse(r.data) as ParallelNote, names, context.timezone)).reverse();
+    const mineNotes = later.results.map((r) => parallelNoteText(JSON.parse(r.data) as ParallelNote, names, textFn(context.preset?.texts), context.timezone)).reverse();
     const current: ParallelContext = { ...context, notes: [context.notes, ...mineNotes].filter(Boolean).join('\n') };
     const route = credentials.routes.find((r) => r.role === 'parallel');
     const request = parallelRequest(current, now, her, mine).request;

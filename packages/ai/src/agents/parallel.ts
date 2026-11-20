@@ -14,7 +14,9 @@ import {
   type ParallelEnv,
   type ParallelTask,
   type SocialDay,
+  type TextFn,
   TASK_MARKERS,
+  textFn,
 } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import { socialCharacterFill, socialNowFill } from './social.ts';
@@ -55,13 +57,13 @@ export function herEntriesOf(day: SocialDay | null, now: number, timeZone: strin
 }
 
 /** "她今天的节律"那一块 */
-export function herFill(day: SocialDay | null, entries: ParallelEntry[], characterName: string, opts: { ids?: boolean } = {}): string {
-  return day ? parallelHerText(entries, { meals: day.meals, outfit: day.outfit, task: day.task, events: day.events }, opts) : `${characterName}今天还没有节律`;
+export function herFill(day: SocialDay | null, entries: ParallelEntry[], characterName: string, t: TextFn, opts: { ids?: boolean } = {}): string {
+  return day ? parallelHerText(entries, t, { meals: day.meals, outfit: day.outfit, task: day.task, events: day.events }, opts) : t('parallel.her.none', { char: characterName });
 }
 
 /** "你今天的安排"那一块；不知道（云端也没有今天的）时写明 */
-export function mineFill(entries: ParallelEntry[] | null, userName: string): string {
-  return entries ? parallelMineText(entries, userName) : `不知道${userName}今天的安排`;
+export function mineFill(entries: ParallelEntry[] | null, userName: string, t: TextFn): string {
+  return entries ? parallelMineText(entries, userName, t) : t('parallel.mine.unknown', { user: userName });
 }
 
 /**
@@ -72,6 +74,8 @@ export function mineFill(entries: ParallelEntry[] | null, userName: string): str
 export function parallelPostInput(context: ParallelContext, now: number, her: SocialDay | null, mine: ParallelEntry[] | null): { input: ParallelPromptInput; her: ParallelEntry[]; mine: ParallelEntry[] } {
   const { character: c } = context;
   const userName = context.persona.name;
+  // 说明文字都在平行时空预设的程序文字里（上传的预设已经合好了自带预设文件里的）
+  const t = textFn(context.preset?.texts);
   const herList = herEntriesOf(her, now, context.timezone);
   return {
     her: herList,
@@ -83,14 +87,14 @@ export function parallelPostInput(context: ParallelContext, now: number, her: So
       now: new Date(now),
       timeZone: context.timezone,
       fills: {
-        parallelCharacter: socialCharacterFill(c, userName),
-        parallelNow: socialNowFill(now, context.timezone).text,
-        parallelHer: herFill(her, herList, c.name),
-        parallelMine: mineFill(mine, userName),
+        parallelCharacter: socialCharacterFill(c, userName, t),
+        parallelNow: socialNowFill(now, context.timezone, t).text,
+        parallelHer: herFill(her, herList, c.name, t),
+        parallelMine: mineFill(mine, userName, t),
         parallelMemories: context.memories,
-        parallelRecent: context.recent ? `最近的聊天：\n${context.recent}` : '',
-        parallelNotes: context.notes ? `最近的留言（不要重复说过的话）：\n${context.notes}` : '',
-        parallelAsk: `这一次：${c.name}现在在平行时空里给${userName}留一句言。`,
+        parallelRecent: context.recent ? t('social.recent', { recent: context.recent }) : '',
+        parallelNotes: context.notes ? t('parallel.notes', { notes: context.notes }) : '',
+        parallelAsk: t('parallel.ask.post', { char: c.name, user: userName }),
       },
     },
   };
@@ -101,6 +105,7 @@ export function parallelPostInput(context: ParallelContext, now: number, her: So
  * 输出用 @app/shared 的 parseParallelPlan 读（编号换回来源的 key）。手机和云端 Worker 用的是同一份
  */
 export function parallelPlanMessages(input: { userName: string; date: string; now: number; timeZone: string; sources: ParallelEntry[] }, preset: TaskPreset): ChatMessage[] {
+  const t = textFn(preset.texts);
   return buildParallelMessages({
     task: 'parallel-plan',
     characterName: '',
@@ -108,9 +113,9 @@ export function parallelPlanMessages(input: { userName: string; date: string; no
     now: new Date(input.now),
     timeZone: input.timeZone,
     fills: {
-      parallelNow: socialNowFill(input.now, input.timeZone).text,
-      parallelSources: parallelSourcesText(input.sources, input.userName),
-      parallelAsk: `这一次：把${input.userName} ${input.date} 这一天的几份计划整理成平行时空里的一份计划。`,
+      parallelNow: socialNowFill(input.now, input.timeZone, t).text,
+      parallelSources: parallelSourcesText(input.sources, input.userName, t),
+      parallelAsk: t('parallel.ask.plan', { user: input.userName, date: input.date }),
     },
   }, preset);
 }
@@ -124,6 +129,7 @@ export function parallelCaptureMessages(
   preset: TaskPreset,
 ): ChatMessage[] {
   const last = input.days.at(-1)?.date ?? input.clock.today;
+  const t = textFn(preset.texts);
   return buildParallelMessages({
     task: 'parallel-capture',
     characterName: '',
@@ -131,10 +137,10 @@ export function parallelCaptureMessages(
     now: new Date(input.now),
     timeZone: input.timeZone,
     fills: {
-      parallelNow: socialNowFill(input.now, input.timeZone).text,
-      parallelSchedule: captureScheduleText(input.days, input.refs, input.clock, input.env, input.userName),
-      parallelInput: `${input.userName}随口说的：\n${input.text.trim()}`,
-      parallelAsk: `这一次：把${input.userName}随口说的整理成要做的事，排进 ${input.clock.today} 到 ${last} 这几天的安排里（只能排在这几天）。`,
+      parallelNow: socialNowFill(input.now, input.timeZone, t).text,
+      parallelSchedule: captureScheduleText(input.days, input.refs, input.clock, input.env, input.userName, t),
+      parallelInput: t('parallel.capture.input', { user: input.userName, text: input.text.trim() }),
+      parallelAsk: t('parallel.ask.capture', { user: input.userName, from: input.clock.today, to: last }),
     },
   }, preset);
 }

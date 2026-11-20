@@ -465,5 +465,34 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "mealScene.herSide": "{{char}}在[[{{place}}]][[{{!place}}自己那边]][[，{{status}}]][[，在吃{{meal}}]]",
+    "mealScene.caption.table": "{{user}}和{{char}}坐在同一张桌子两边一起吃{{meal}}[[；{{char}}吃的是{{herMeal}}]][[；{{user}}吃的是{{mine}}]][[；在{{place}}]][[；{{extra}}]]",
+    "mealScene.caption.together": "两个人坐在同一张桌子两边吃{{meal}}[[，{{char}}吃的是{{herMeal}}]]",
+    "mealScene.caption.mineVisit": "{{user}}坐在{{char}}旁边吃{{meal}}[[（{{mine}}）]]",
+    "mealScene.caption.mineApart": "{{user}}在[[{{yourPlace}}]][[{{!yourPlace}}自己那边]]吃{{meal}}，{{char}}隔着屏幕陪着（{{user}}不在画面里）",
+    "mealScene.caption.side": "{{where}}；{{mineSide}}[[；{{extra}}]]",
+    "mealScene.caption.cheers": "{{char}}举起手边的杯子和{{user}}碰杯（第 {{cheers}} 次）；{{where}}[[；{{extra}}]]",
+    "mealScene.plan.none": "没写",
+    "mealScene.plan.cook": "按健康计划自己做：{{name}}（约 {{minutes}} 分钟）；食材：{{ingredients}}；做法：{{steps}}",
+    "mealScene.plan.bento": "按健康计划吃带的便当：{{name}}[[；{{prep}}]]",
+    "mealScene.plan.buy": "按健康计划去买：{{name}}[[，去{{place}}[[（{{distance}}）]]]][[，点{{order}}]][[；{{note}}]]",
+    "mealScene.context": "这一顿：{{user}}的{{meal}}\n{{?bring}}共同吃饭：{{char}}来[[{{herPlace}}]][[{{!herPlace}}{{user}}这边]]陪{{user}}吃，坐在{{user}}对面\n{{?sameTable}}共同吃饭：{{char}}作息里正好在[[{{herStatus}}]][[{{!herStatus}}吃饭]]（在{{herPlace}}），你们像坐在同一张桌子两边一起吃\n{{?apart}}各吃各的：{{char}}在[[{{herPlace}}]][[{{!herPlace}}自己那边]][[，{{herStatus}}]]；{{user}}在[[{{yourPlace}}]][[{{!yourPlace}}自己那边]]吃饭，你隔着屏幕陪着\n{{char}}这顿吃：{{herMeal}}\n{{plan}}\n{{?free}}随便吃点（没照计划）\n{{user}}这顿吃的：{{mine}}\n{{user}}拍的饭照（识图看到的）：{{seen}}\n{{user}}边吃边听歌：《{{song}}》- {{artist}}[[{{?demo}}（示例歌曲）]]\n{{user}}边吃边看 B 站视频：《{{video}}》[[（UP 主：{{author}}）]]；{{char}}看不到画面、听不到声音，只知道这些",
+    "mealScene.photoUnseen": "{{user}}发来一张饭照，但识图没看成（[[{{issue}}]]），你看不清照片里是什么",
+    "mealScene.cheers": "{{user}}举杯和{{char}}碰了一下（这是第 {{n}} 次）",
+    "mealScene.preparing": "{{user}}还在准备（{{cue}}）",
+    "mealScene.videoOpened": "{{user}}刚点开了这个视频",
+    "mealScene.link.open": "{{context}}\n你们刚连上麦，{{user}}一边[[{{?prep}}准备]][[{{!prep}}吃]]一边用语音跟你说话。先开口说第一句，1–2 个短句。",
+    "mealScene.link.reply": "{{context}}\n连麦中（已经连了 {{linked}}）。回{{user}}刚才说的话。",
+    "mealScene.way.cook": "自己做",
+    "mealScene.way.buy": "去买",
+    "mealScene.way.bento": "带便当",
+    "mealScene.way.cook.done": "做好了",
+    "mealScene.way.buy.done": "买到了",
+    "mealScene.way.bento.done": "把便当热好了",
+    "mealScene.ready": "{{user}}{{way}}，花了 {{minutes}} 分钟[[（做法勾了 {{done}} / {{steps}} 步）]]",
+    "mealScene.offPlan": "{{user}}本来要按计划{{way}}，现在说不照计划了，随便吃点",
+    "mealScene.end": "准备（{{way}}）花了 {{minutes}} 分钟\n一共碰了 {{cheers}} 次杯\n{{?photo}}{{user}}拍了饭照"
+  }
 }

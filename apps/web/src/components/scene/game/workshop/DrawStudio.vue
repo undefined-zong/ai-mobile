@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
+import { sceneText } from '@/services/prompt';
 import { errorText, isAbortError } from '@app/ai';
 import type { Character } from '@app/shared';
 import { showToast } from 'vant';
@@ -66,12 +67,12 @@ function reference(): string[] {
   const n = ws.novelById(novelId.value);
   if (!n) return [];
   const last = n.chapters.at(-1);
-  return [
-    `参考：小说《${n.title}》${n.genre ? `（${n.genre}）` : ''}`,
-    n.setting.trim() ? `设定和人物：${n.setting.trim().replace(/\s+/g, ' ').slice(0, 600)}` : '',
-    n.style.trim() ? `文风：${n.style.trim()}` : '',
-    last ? `最近一篇「${chapterLabel(n, last)}」的开头：${last.text.replace(/\s+/g, ' ').slice(0, 300)}` : '',
-  ].filter(Boolean);
+  // 写法在"创意工坊"画画用的生图预设里（workshop.draw.reference）
+  const t = sceneText('game-workshop-image', props.character);
+  return [t('workshop.draw.reference', {
+    title: n.title, genre: n.genre, setting: n.setting.trim().replace(/\s+/g, ' ').slice(0, 600), style: n.style.trim(),
+    last: last ? chapterLabel(n, last) : null, opening: last ? last.text.replace(/\s+/g, ' ').slice(0, 300) : null,
+  })];
 }
 
 async function draw(text = caption.value) {

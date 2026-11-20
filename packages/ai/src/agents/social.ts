@@ -1,5 +1,5 @@
 import { characterPronoun } from '@app/shared';
-import { assembleTaskPrompt, socialDayText, substituteMacros, type SocialContext, type SocialDay, type SocialTask } from '@app/shared';
+import { assembleTaskPrompt, socialDayText, substituteMacros, textFn, type SocialContext, type SocialDay, type SocialTask, type TextFn } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
 
@@ -38,25 +38,26 @@ function cut(text: string | undefined, max: number): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-/** 角色那一块：名字、描述、性格、场景（宏先替换好） */
-export function socialCharacterFill(c: Pick<SocialContext['character'], 'id' | 'name' | 'pronoun'> & { card: Pick<SocialContext['character']['card'], 'description' | 'personality' | 'scenario'> }, userName: string): string {
+/** 角色那一块（程序文字 social.character）：名字、描述、性格、场景（宏先替换好） */
+export function socialCharacterFill(c: Pick<SocialContext['character'], 'id' | 'name' | 'pronoun'> & { card: Pick<SocialContext['character']['card'], 'description' | 'personality' | 'scenario'> }, userName: string, t: TextFn): string {
   const sub = (text: string) => substituteMacros(text, { char: c.name, user: userName, pronoun: c.pronoun }).trim();
-  return [
-    `名字：${c.name}（界面里称呼"${characterPronoun(c)}"）`,
-    c.card.description ? `描述：${cut(sub(c.card.description), 1500)}` : '',
-    c.card.personality ? `性格：${cut(sub(c.card.personality), 400)}` : '',
-    c.card.scenario ? `场景：${cut(sub(c.card.scenario), 400)}` : '',
-  ].filter(Boolean).join('\n');
+  return t('social.character', {
+    name: c.name,
+    pronoun: characterPronoun(c),
+    description: c.card.description ? cut(sub(c.card.description), 1500) : '',
+    personality: c.card.personality ? cut(sub(c.card.personality), 400) : '',
+    scenario: c.card.scenario ? cut(sub(c.card.scenario), 400) : '',
+  });
 }
 
-/** "现在"那一块：按她所在时区的日期、星期、时间 */
-export function socialNowFill(now: number, timeZone: string): { text: string; minute: number } {
+/** "现在"那一块（程序文字 social.now）：按她所在时区的日期、星期、时间 */
+export function socialNowFill(now: number, timeZone: string, t: TextFn): { text: string; minute: number } {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' })
     .formatToParts(new Date(now)).map((p) => [p.type, p.value]));
   const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday ?? '');
   const hour = Number(parts.hour) % 24;
   return {
-    text: `现在：${parts.year}-${parts.month}-${parts.day} ${WEEKDAY[weekday] ?? ''} ${String(hour).padStart(2, '0')}:${parts.minute}`,
+    text: t('social.now', { date: `${parts.year}-${parts.month}-${parts.day}`, weekday: WEEKDAY[weekday] ?? '', time: `${String(hour).padStart(2, '0')}:${parts.minute}` }),
     minute: hour * 60 + Number(parts.minute),
   };
 }
@@ -64,17 +65,19 @@ export function socialNowFill(now: number, timeZone: string): { text: string; mi
 /** 发一条朋友圈的输入：按上传的上下文（手机拼好的文字）和此刻的时间拼。day 传云端自己排的今天，没有就用上下文里的 */
 export function socialPostInput(context: SocialContext, now: number, day: SocialDay | null = context.day): SocialPromptInput {
   const { character: c, userName } = context;
-  const at = socialNowFill(now, context.timezone);
+  // 说明文字都在社媒预设的程序文字里（上传的预设已经合好了自带预设文件里的）
+  const t = textFn(context.preset?.texts);
+  const at = socialNowFill(now, context.timezone, t);
   return {
     task: 'post', characterName: c.name, pronoun: c.pronoun, userName, now: new Date(now), timeZone: context.timezone,
     fills: {
-      socialCharacter: socialCharacterFill(c, userName),
-      socialLife: day ? socialDayText(day, at.minute) : '',
+      socialCharacter: socialCharacterFill(c, userName, t),
+      socialLife: day ? socialDayText(day, at.minute, t) : '',
       socialNow: at.text,
       socialMemories: context.memories,
-      socialRecent: context.recent ? `最近的聊天：\n${context.recent}` : '',
-      socialFeed: context.feed ? `最近的朋友圈（不要重复发过的内容）：\n${context.feed}` : '',
-      socialAsk: `这一次：${c.name}现在发一条朋友圈。`,
+      socialRecent: context.recent ? t('social.recent', { recent: context.recent }) : '',
+      socialFeed: context.feed ? t('social.feed', { feed: context.feed }) : '',
+      socialAsk: t('social.ask.post', { char: c.name }),
     },
   };
 }

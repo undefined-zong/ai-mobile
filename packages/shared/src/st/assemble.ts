@@ -3,12 +3,13 @@ import { characterPronoun } from '../pronouns.ts';
 import type { LoreTimedState, Lorebook } from '../types/lorebook.ts';
 import type { Preset, PromptBlock } from '../types/preset.ts';
 import { substituteMacros, type MacroContext } from './macros.ts';
+import { markerContent, reportMarkerInjections, type MarkerContext } from './markers.ts';
 import { estimateTokens } from './tokens.ts';
 import { scanWorldInfo, type WorldInfoResult } from './worldinfo.ts';
 
 /**
  * 拼 Chat Completion 提示词，按 SillyTavern 的 populateChatCompletion（public/scripts/openai.js）：
- * - 预设里的块按顺序；关掉的不发；marker 由程序填充（角色卡、世界书、人设、示例对话、聊天记录）
+ * - 预设里的块按顺序；关掉的不发；marker 由程序填充（角色卡、世界书、人设、示例对话、聊天记录），块里写了内容时按写的发、{{original}} 换成程序填的（markers.ts）
  * - 角色卡的 system_prompt / post_history_instructions 覆盖主提示 / 后置指令（可用 {{original}}）
  * - 聊天记录开头插 new_chat_prompt；每段示例对话前插 new_example_chat_prompt
  * - 按深度插入的内容（预设里的 in-chat 块、世界书 @深度、角色卡 depth_prompt、作者注位置的世界书）
@@ -53,6 +54,8 @@ export interface AssembleInput {
    * 没写触发条件的块照常发送
    */
   task?: string;
+  /** 这一次在哪个场景（程序块按场景写的内容、记"上一次注入的内容"用）；不给时不分场景 */
+  context?: MarkerContext;
   /**
    * 你人设里开着的系统（housework 家务、health 健康，见 LIFE_FLAGS）：触发条件里写了它们的块只在开着时发送
    * （"家务：你怎么反应"那一块，没开家务系统时不发）
@@ -90,6 +93,8 @@ export interface BlockReport {
   placement: string;
   source: string;
   content: string;
+  /** 程序块：程序填的原内容（块里写了内容、和最终内容不一样时才有） */
+  filled?: string;
   tokens: number;
   /** 这一轮有没有发出去 */
   sent: boolean;
@@ -248,7 +253,7 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
   const placement = (b: PromptBlock) =>
     b.injection.position === 'absolute' ? (b.injection.depth === 0 ? '插在聊天记录最后' : `插在聊天记录倒数第 ${b.injection.depth} 条前`) : '按顺序';
 
-  const fill = (b: PromptBlock): { content: string; source: string } => {
+  const programFill = (b: PromptBlock): { content: string; source: string } => {
     switch (b.identifier) {
       case 'worldInfoBefore':
         return { content: stringFormat(f.wiFormat, lore.before), source: `世界书（角色前）命中 ${lore.activated.filter((a) => a.entry.position === 'before_char' && a.content).length} 条` };
@@ -275,6 +280,13 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
       return { content: m(card.postHistoryInstructions, { original }), source: '角色卡 post_history_instructions（覆盖了预设的后置指令）' };
     }
     return { content: original, source: '预设' };
+  };
+  /** 程序块里写了内容：按写的发，{{original}} 换成程序填的（见 markers.ts） */
+  const fill = (b: PromptBlock): { content: string; source: string; filled?: string } => {
+    const r = programFill(b);
+    if (!b.marker) return r;
+    const content = markerContent(b, input.context?.keys ?? [], r.content, ctx);
+    return content === r.content ? r : { content, source: `${r.source} · 套用了这一块写的内容`, filled: r.content };
   };
 
   // 没有提供世界书位置的旧预设仍能使用角色绑定的世界书；显式关闭的块保持关闭。
@@ -317,9 +329,10 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
       report.note = '预设里关闭了';
       // 程序填充的块照样算一下内容，方便看"关掉的这块本来会放什么"（不算普通块，免得执行里面的 {{setvar}}）
       if (b.marker && b.identifier !== 'chatHistory' && b.identifier !== 'dialogueExamples') {
-        const { content, source } = fill(b);
+        const { content, source, filled } = fill(b);
         report.content = content;
         report.source = source;
+        report.filled = filled;
         report.tokens = count(content);
         if (content.trim()) report.note = '预设里关闭了，这块内容没有发送';
       }
@@ -340,9 +353,10 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
       slots.push({ kind: 'examples', report });
       continue;
     }
-    const { content, source } = fill(b);
+    const { content, source, filled } = fill(b);
     report.content = content;
     report.source = source;
+    report.filled = filled;
     report.tokens = count(content);
     if (!content.trim()) {
       report.note = '这一轮内容为空，不发送';
@@ -526,6 +540,16 @@ export function assemblePrompt(input: AssembleInput): AssembleResult {
       } else squashed.push({ ...msg });
     }
     messages = squashed;
+  }
+
+  if (!input.dryRun) {
+    reportMarkerInjections(
+      preset.id,
+      input.context ?? { keys: [], who: character.name },
+      reports
+        .filter((r) => r.marker && r.identifier !== 'chatHistory' && r.identifier !== 'dialogueExamples')
+        .map((r) => ({ identifier: r.identifier, content: r.content, filled: r.filled, source: r.source, sent: r.sent, note: r.note })),
+    );
   }
 
   return {

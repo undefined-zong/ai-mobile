@@ -1,18 +1,21 @@
+import { textFn, type TextFn } from './programText.ts';
 import type { Message, MessagePart } from './types/chat.ts';
 import type { ProactiveContext } from './types/hub.ts';
 
-function partText(p: MessagePart): string {
+/** 卡片写成一句（程序文字 history.*，和手机上聊天记录里的一样） */
+function partText(p: MessagePart, t: TextFn): string {
+  const card = (body: string) => t('history.card', { body });
   if (p.type === 'voice') return p.transcript;
-  if (p.type === 'image' && !p.photo) return `[图片：${p.caption}]`;
-  if (p.type === 'chore') return p.status === 'done' ? `[家务：${p.name} 做完了]` : `[家务：${p.name} 说晚点再做（拖了 ${p.later ?? 1} 次）]`;
-  if (p.type === 'workout') return `[运动记录：${p.mode === 'plan' && p.plan ? `照计划练「${p.plan.title}」` : p.sport} ${Math.max(1, Math.round(p.durationSec / 60))} 分钟${p.kcal ? `，约 ${p.kcal} 千卡` : ''}]`;
+  if (p.type === 'image' && !p.photo) return card(t('history.image', { title: p.caption }));
+  if (p.type === 'chore') return card(p.status === 'done' ? t('history.chore.done', { name: p.name, minutes: null, later: null, note: null }) : t('history.chore.later', { name: p.name, later: p.later ?? 1 }));
+  if (p.type === 'workout') return card(t('history.workout.short', { title: p.mode === 'plan' && p.plan ? t('event.workout.plan', { title: p.plan.title }) : p.sport, minutes: Math.max(1, Math.round(p.durationSec / 60)), kcal: p.kcal || null }));
   return '';
 }
 
-/** 云端实际使用的消息内容：文字、语音转写和图片描述，不传本机媒体。 */
-export function proactiveMessageText(m: Pick<Message, 'text' | 'parts'>): string {
-  const base = m.text || m.parts.map(partText).join(' ');
-  const photos = m.parts.flatMap((p) => (p.type === 'image' && p.photo ? [p.seen ? `[照片：${p.seen}]` : '[照片]'] : []));
+/** 云端实际使用的消息内容：文字、语音转写和图片描述，不传本机媒体。t 是主动消息预设的程序文字 */
+export function proactiveMessageText(m: Pick<Message, 'text' | 'parts'>, t: TextFn): string {
+  const base = m.text || m.parts.map((p) => partText(p, t)).join(' ');
+  const photos = m.parts.flatMap((p) => (p.type === 'image' && p.photo ? [t('history.card', { body: p.seen ? t('history.photo', { seen: p.seen }) : t('history.photoPlain') })] : []));
   return [base.trim(), ...photos].filter(Boolean).join(' ');
 }
 
@@ -43,7 +46,7 @@ export function packProactiveContext(input: ProactiveContext): ProactiveContext 
       ...book, entries: entries.map(({ extra: _entryExtra, ...entry }) => entry),
     })),
     history: input.history.map((m) => ({
-      id: m.id, chatId: m.chatId, role: m.role, text: proactiveMessageText(m), parts: [],
+      id: m.id, chatId: m.chatId, role: m.role, text: proactiveMessageText(m, textFn(preset?.texts)), parts: [],
       createdAt: m.createdAt, deleted: m.deleted, proactive: m.proactive, read: m.read,
     })),
     environment: { timezone: environment.timezone, wakeTime: environment.wakeTime, sleepTime: environment.sleepTime, meals: environment.meals },

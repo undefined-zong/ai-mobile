@@ -1,4 +1,4 @@
-import { assembleTaskPrompt, rhythmDate, socialDayText, type DiaryContext, type SocialDay, type TASK_MARKERS } from '@app/shared';
+import { assembleTaskPrompt, rhythmDate, socialDayText, textFn, type DiaryContext, type SocialDay, type TASK_MARKERS } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import { socialCharacterFill, socialNowFill } from './social.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -34,7 +34,9 @@ export function buildDiaryMessages(input: DiaryPromptInput, preset: TaskPreset):
  */
 export function diaryInput(context: DiaryContext, now: number, date: string, day: SocialDay | null = context.day): DiaryPromptInput {
   const { character: c, userName } = context;
-  const at = socialNowFill(now, context.timezone);
+  // 说明文字都在日记预设的程序文字里（上传的预设已经合好了自带预设文件里的）
+  const t = textFn(context.preset?.texts);
+  const at = socialNowFill(now, context.timezone, t);
   // 写的是今天（今晚睡前写）还是补写前一天的
   const today = rhythmDate(new Date(now), context.timezone) === date;
   const ownDay = day && day.date === date ? day : context.day?.date === date ? context.day : null;
@@ -42,16 +44,13 @@ export function diaryInput(context: DiaryContext, now: number, date: string, day
   return {
     characterName: c.name, pronoun: c.pronoun, userName, now: new Date(now), timeZone: context.timezone,
     fills: {
-      diaryCharacter: socialCharacterFill(c, userName),
-      diaryDay: ownDay ? socialDayText(ownDay, today ? at.minute : null) : `${c.name}这一天没有排节律：按角色卡里平时的生活来写`,
-      diaryNow: [at.text, today && context.weather ? `天气：${context.weather}` : ''].filter(Boolean).join('\n'),
-      diaryUser: withUser ? `${date} 这一天和${userName}：\n${withUser}` : `${date} 这一天和${userName}没怎么聊`,
+      diaryCharacter: socialCharacterFill(c, userName, t),
+      diaryDay: ownDay ? socialDayText(ownDay, today ? at.minute : null, t) : t('diary.noDay', { char: c.name }),
+      diaryNow: t('diary.now', { now: at.text, weather: today ? context.weather : null }),
+      diaryUser: withUser ? t('diary.withUser', { date, user: userName, withUser }) : t('diary.noUser', { date, user: userName }),
       diaryMemories: context.memories,
-      diaryPrevious: context.previous ? `最近几篇日记（不要重复写过的事和句子）：\n${context.previous}` : '',
-      diaryAsk: [
-        `这一次：${c.name}在写 ${date} 这一天的日记${today ? '（今晚睡前写）' : '（那天晚上没来得及写，现在补写那一天）'}。`,
-        context.settings.image ? '这一天有值得画下来的画面就写 image，没有写 null。' : '这一篇不配图：image 写 null。',
-      ].join('\n'),
+      diaryPrevious: context.previous ? t('diary.previous', { previous: context.previous }) : '',
+      diaryAsk: t('diary.ask', { char: c.name, date, today, image: !!context.settings.image }),
     },
   };
 }

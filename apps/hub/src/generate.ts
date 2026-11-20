@@ -1,6 +1,6 @@
 import { AgentSystem, fromOpenAIBody } from '@app/ai';
 import {
-  anniversaryLine, applyRegexScripts, assemblePrompt, buildChatRequest, estimateTokens, formatEnvironmentBlock, FREE_SCENE,
+  anniversaryLine, applyRegexScripts, assemblePrompt, buildChatRequest, estimateTokens, formatEnvironmentBlock, FREE_SCENE, textFn,
   parseControlTags, proactiveMessageText, substituteMacros,
   type Message, type MessagePart, type ProactiveContext, type ProactiveCredentials, type Touchpoint,
 } from '@app/shared';
@@ -13,9 +13,11 @@ export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: n
   const macros = { char: c.name, pronoun: c.pronoun, user: persona.name, now: date, timeZone };
   const hint = substituteMacros(t.hint, macros);
   const time = substituteMacros('{{isodate}} {{time}}', macros);
-  const quiet = `【主动消息】现在是 ${time}（${timeZone}），${persona.name}还没有来找你，由${c.name}先开口。这一次要做的事：${hint}。`;
+  // 说明文字都在预设的程序文字里（手机上传时合好了自带预设文件里的）
+  const tx = textFn(preset.texts);
+  const quiet = tx('proactive.quiet', { time, timeZone, user: persona.name, char: c.name, hint });
   // 预设里"只改发给 AI 的"正则按深度改（0 = 最后一条），同 App 里发消息时
-  const live = history.filter((m) => !m.deleted).map((m) => ({ m, text: proactiveMessageText(m) })).filter((x) => x.text);
+  const live = history.filter((m) => !m.deleted).map((m) => ({ m, text: proactiveMessageText(m, tx) })).filter((x) => x.text);
   const result = assemblePrompt({
     character: c, preset, user: persona, lorebooks: context.lorebooks,
     history: live.map(({ m, text }, i) => {
@@ -33,8 +35,8 @@ export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: n
         : { content: (chat.summaries ?? []).slice(-6).map((s) => s.text).join('\n'), source: '聊天摘要' },
       memory: context.memoryBlocks
         ? { content: context.memoryBlocks.memory, source: '记忆和关系' }
-        : { content: context.memories.map((m) => `- ${m.content}`).join('\n') + `\n关系：${JSON.stringify(c.relationship)}`, source: '记忆和关系' },
-      environment: { content: formatEnvironmentBlock({ now: date, timeZone, anniversaries: anniversaryLine(c.relationship.anniversaries, now, timeZone) }), source: `云端当前时间（${timeZone}）/ 纪念日` },
+        : { content: tx('hub.memoryFallback', { memories: context.memories.map((m) => tx('memory.line', { content: m.content, due: null })), relationship: JSON.stringify(c.relationship) }), source: '记忆和关系' },
+      environment: { content: formatEnvironmentBlock({ now: date, timeZone, anniversaries: anniversaryLine(c.relationship.anniversaries, now, timeZone, tx) }, tx), source: `云端当前时间（${timeZone}）/ 纪念日` },
       proactive: { content: quiet, source: '本次主动消息' },
       // 你开了家务、健康系统时，手机上传那一刻今天的情况
       ...(context.memoryBlocks?.home ? { home: { content: context.memoryBlocks.home, source: '家务和健康（手机同步）' } } : {}),

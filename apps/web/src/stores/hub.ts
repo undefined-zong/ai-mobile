@@ -1,6 +1,6 @@
 import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
 import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, watchWorkoutLine, type HubWatchWorkouts, type WatchWorkout, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
-  type Character, type HubDiaries, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
+  textFn, type TextFn, type Character, type HubDiaries, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { getOne, msgKey, write } from '@/db/idb';
@@ -310,8 +310,8 @@ export const useHubStore = defineStore('hub', () => {
   }
 
   /** 家务和健康：上传实际情况，时间按半小时取整，免得每分钟都要重新上传。 */
-  function homeSnapshot(persona: ReturnType<typeof personaOf>): { home?: string } {
-    const b = homeBlock(persona, { stepMin: 30 });
+  function homeSnapshot(persona: ReturnType<typeof personaOf>, t: TextFn): { home?: string } {
+    const b = homeBlock(persona, t, { stepMin: 30 });
     return b ? { home: b.content } : {};
   }
 
@@ -324,9 +324,12 @@ export const useHubStore = defineStore('hub', () => {
     return chars.list.flatMap((character) => {
       const chat = chats.chatOfCharacter(character.id);
       if (!chat || chats.streams[chat.id]) return [];
-      const blocks = memoryBlocks(chat, character, Date.now(), timeZone, { proactive: true });
+      // 主动消息的预设带上合好的程序文字（云端按它写【当前环境】【主动消息】这些块）
+      const preset = lib.withLorebooks(lib.presetForUse('proactive', character)) ?? null;
+      const t = textFn(preset?.texts);
+      const blocks = memoryBlocks(chat, character, Date.now(), timeZone, { proactive: true, t });
       return [packProactiveContext({ character, chat, persona: personaOf(chat),
-        preset: lib.presetForUse('proactive', character) ?? null,
+        preset,
         lorebooks: character.lorebookIds.map((id) => lib.lorebookById(id)).filter((b) => !!b),
         chatLength: chats.list(chat.id).filter((m) => !m.deleted && !m.meta.error && !m.meta.interrupted).length,
         // 消息设置 → 发送条数、已总结的消息不发送：云端主动消息的上下文同样截取
@@ -340,7 +343,7 @@ export const useHubStore = defineStore('hub', () => {
           summary: blocks.summary.content,
           memory: blocks.memory.content,
           // 家务和健康：上传那一刻的（写着"截至几点"）；没开这两套系统时没有
-          ...homeSnapshot(personaOf(chat)),
+          ...homeSnapshot(personaOf(chat), t),
         },
         flags: lifeFlags(personaOf(chat)),
         environment: useEnvironmentStore().settings, rules: DEFAULT_PROACTIVE_RULES,

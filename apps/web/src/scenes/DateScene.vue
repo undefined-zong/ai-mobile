@@ -15,7 +15,7 @@ import { scenePlaces } from '@/composables/useTogether';
 import { assetUrl } from '@/services';
 import { dateMusic } from '@/services/musicPlayer';
 import { dateSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { leaveTo } from '@/router';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
@@ -118,12 +118,12 @@ function goTo(f: BackgroundFamily, how: 'roll' | 'pick') {
   const from = spot.value.name;
   bg.value = bgOf(f);
   chat.enterScene(her.value.id, place.value.id, 'date', undefined, spot.value.name);
-  moveNote = `${userName.value}${how === 'roll' ? '心血来潮' : ''}拉着${her.value.name}换了个地方：从${from}来到了${spot.value.name}`;
+  moveNote = dx()('dateScene.moved', { user: userName.value, roll: how === 'roll', char: her.value.name, from, to: spot.value.name });
   if (how === 'roll') showToast(`roll 到了：${spot.value.name}`);
   // 换了地方：先显示新背景和立绘，到达的图另画一张
   art.value = null;
   ensureArt();
-  if (showChoices.value) void ask('date-turn', [...contextLines(), '先用旁白写来到这里看到的景象，再接着约会']).then(afterTurn);
+  if (showChoices.value) void ask('date-turn', [...contextLines(), dx()('dateScene.arrived')]).then(afterTurn);
 }
 
 // —— 音乐：网易云的歌单（右边那一列；离开时停），放着的歌写进场景任务 ——
@@ -239,10 +239,15 @@ watch([beatIdx, () => beats.value.length, done], () => {
   chars.setExpression(her.value.id, e && 'value' in e.tag ? e.tag.value : baseExpr);
 });
 
+/** 这个场景的程序文字（"约会"用途的预设里的 dateScene.*） */
+function dx() {
+  return sceneText('scene:date', her.value);
+}
 /** 这一次的场景任务里都带的：在哪、怎么在一起、天气、第几段、这一段能不能留图 */
 const CG_GAP = 3;
 let lastCgTurn = -CG_GAP;
-function contextLines(): string[] {
+/** full：带上第几段、能不能留图、在放的歌（结束时只要地点、怎么在一起、天气） */
+function contextLines(full = true): string[] {
   const p = spot.value;
   const how = chat.chatOfCharacter(her.value.id)?.togetherMode;
   const w = sky.value;
@@ -250,13 +255,16 @@ function contextLines(): string[] {
   const song = dateMusic.current();
   const moved = moveNote;
   moveNote = '';
+  const t = dx();
+  const playing = !!song && dateMusic.state.playing;
   return [
-    `约会地点：${p.name}（${p.indoor ? '室内' : '室外'}${p.blurb ? `；${p.blurb}` : ''}）`,
-    how === 'bring' ? `${userName.value}带${her.value.name}来到${userName.value}这边的${p.name}` : `${userName.value}去${her.value.name}那边，两个人一起来到${p.name}`,
-    w ? `现在的天气：${w.text}，${Math.round(w.tempC)}°C${raining.value && !p.indoor ? '（在室外，要躲雨）' : ''}` : '',
-    `这是第 ${turns.value + 1} 段${startedAt.value ? `（约会开始了 ${minutes.value} 分钟）` : ''}`,
-    cgOk ? '这一段可以用 [cg:]（只在真正心动的时刻）' : '这一段不要用 [cg:]',
-    song && dateMusic.state.playing ? `${userName.value}放着歌：《${song.title}》- ${song.artist}${dateMusic.state.demo ? '（示例歌曲）' : ''}` : '',
+    t('dateScene.context', {
+      place: p.name, placeKind: t(p.indoor ? 'common.indoor' : 'common.outdoor'), blurb: p.blurb,
+      bring: how === 'bring', user: userName.value, char: her.value.name,
+      weather: w?.text, temp: w ? Math.round(w.tempC) : null, shelter: raining.value && !p.indoor,
+      turn: turns.value + 1, minutes: startedAt.value ? minutes.value : null,
+      full, cg: t(cgOk ? 'dateScene.cg.ok' : 'dateScene.cg.no'), song: playing ? song.title : null, artist: song?.artist, demo: playing && dateMusic.state.demo,
+    }),
     moved,
   ];
 }
@@ -315,7 +323,7 @@ function retry() {
 function afterTurn(r: { cg?: string } | null) {
   if (!r?.cg || turns.value - lastCgTurn < CG_GAP) return;
   lastCgTurn = turns.value;
-  void drawMoment('highlight', 'auto', `${r.cg}；在${spot.value.name}约会`);
+  void drawMoment('highlight', 'auto', dx()('dateScene.caption.cg', { cg: r.cg, place: spot.value.name }));
 }
 
 // —— 开始：选地点或者从地图来；从背景库 roll 的、选的地方还算在地点 p 上进出 ——
@@ -343,7 +351,7 @@ function start(p: MapLocation, withBg: DateBg | null = null) {
   titleOpen.value = true;
   chars.setExpression(her.value.id, 'smile');
   ensureArt();
-  void ask('date-start', [...contextLines(), '你们刚到这里，约会开始了']).then(afterTurn);
+  void ask('date-start', [...contextLines(), dx()('dateScene.start')]).then(afterTurn);
 }
 
 function closeTitle() {
@@ -355,7 +363,7 @@ async function pick(c: DateChoice) {
   if (!showChoices.value) return;
   const kind = c.kind ?? OWN;
   picks.value = { ...picks.value, [kind]: (picks.value[kind] ?? 0) + 1 };
-  const how = c.kind ? `${userName.value}选了「${c.kind}」：${c.text}` : `${userName.value}选了：${c.text}`;
+  const how = dx()('dateScene.picked', { user: userName.value, kind: c.kind, text: c.text });
   const r = await ask('date-turn', [...contextLines(), how], c.text);
   afterTurn(r);
 }
@@ -370,7 +378,7 @@ async function sendOwn() {
   if (!text || !showChoices.value) return;
   own.value = '';
   picks.value = { ...picks.value, [OWN]: (picks.value[OWN] ?? 0) + 1 };
-  const r = await ask('date-turn', [...contextLines(), `${userName.value}没用你给的选项，自己说：${text}`], text);
+  const r = await ask('date-turn', [...contextLines(), dx()('dateScene.said', { user: userName.value, text })], text);
   afterTurn(r);
 }
 
@@ -390,10 +398,8 @@ async function finish() {
   ending.value = true;
   void waitIdle().then(() => drawMoment('keepsake', 'auto', keepsakeCaption()));
   const r = await ask('date-end', [
-    ...contextLines().slice(0, 3),
-    `${userName.value}说今天的约会就到这里`,
-    `一共走了 ${turns.value} 段，约 ${minutes.value} 分钟`,
-    sessionArt.value.length ? `今天留下的画面：${sessionArt.value.map((i) => i.title).join('、')}` : '',
+    contextLines(false)[0] ?? '',
+    dx()('dateScene.end', { user: userName.value, turns: turns.value, minutes: minutes.value, art: sessionArt.value.map((i) => i.title) }),
   ]);
   afterFarewell(r);
 }
@@ -411,7 +417,7 @@ function keepsakeCaption(): string {
   const mood = Object.entries(picks.value)
     .sort((a, b) => b[1] - a[1])
     .map(([k]) => k)[0];
-  return `约会快结束了，${her.value.name}在${spot.value.name}和${userName.value}留一张纪念照${raining.value && !spot.value.indoor ? '，外面在下雨' : ''}${mood ? `；今天${userName.value}总是${mood === OWN ? '自己找话说' : mood}` : ''}`;
+  return dx()('dateScene.caption.keepsake', { char: her.value.name, place: spot.value.name, user: userName.value, rain: raining.value && !spot.value.indoor, mood: mood ? (mood === OWN ? dx()('dateScene.ownTalk') : mood) : null });
 }
 function showMemory() {
   postMemory(done.value ? farewellLine() : undefined);
@@ -525,7 +531,7 @@ function ensureArt() {
   const outfit = rhythm.outfitFor(her.value.id, 'date')?.name ?? null;
   const p = spot.value;
   if (useAiStore().outfitRef() && gallery.find(her.value.id, 'date', { moment: 'arrive', today: true, locationId: p.id, outfit, size: 'portrait' }).length) return;
-  void drawMoment('arrive', 'auto', `${her.value.name}和${userName.value}刚到${p.name}约会${raining.value ? (p.indoor ? '，外面在下雨' : '，在下雨') : ''}${p.blurb ? `；${p.blurb}` : ''}`);
+  void drawMoment('arrive', 'auto', dx()('dateScene.caption.arrive', { char: her.value.name, user: userName.value, place: p.name, rainOutside: raining.value && p.indoor, rain: raining.value && !p.indoor, blurb: p.blurb }));
 }
 function snap() {
   if (drawingNow.value) {
@@ -535,9 +541,9 @@ function snap() {
   const said = beats.value
     .slice(0, beatIdx.value + 1)
     .slice(-3)
-    .map((b) => (b.kind === 'narration' ? `（${b.text}）` : `${her.value.name}：${b.text}`))
+    .map((b) => dx()(b.kind === 'narration' ? 'dateScene.beat.narration' : 'dateScene.beat.line', { char: her.value.name, text: b.text }))
     .join(' ');
-  void drawMoment('highlight', 'user', `在${spot.value.name}约会，画此刻的画面${said ? `：${said}` : ''}`);
+  void drawMoment('highlight', 'user', dx()('dateScene.caption.now', { place: spot.value.name, said }));
 }
 function waitIdle(): Promise<void> {
   if (!drawingNow.value) return Promise.resolve();

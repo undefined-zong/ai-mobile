@@ -1,12 +1,13 @@
 import type { Lorebook } from '../types/lorebook.ts';
 import { markerName, type Preset, type PromptBlock } from '../types/preset.ts';
 import { substituteMacros, type MacroContext } from './macros.ts';
+import { markerContent, reportMarkerInjections, type MarkerContext } from './markers.ts';
 import { estimateTokens } from './tokens.ts';
 import { scanWorldInfo } from './worldinfo.ts';
 
 /**
  * 任务类预设（小剧场 / 总结 / 生图）拼成消息：按块的顺序，关掉的不发、空的不发；
- * 普通块替换宏（{{char}} {{user}} {{time}}……），程序填充块填这次任务的输入；
+ * 普通块替换宏（{{char}} {{user}} {{time}}……），程序填充块填这次任务的输入（块里写了内容时按写的发，{{original}} 换成程序填的，见 markers.ts）；
  * 相邻的同角色块合成一条（中间空一行），所以默认的预设拼出来是"一条系统说明 + 一条输入"。
  * 任务没有聊天记录，块的"插在聊天记录倒数第几条"不起作用。
  * 没放进预设的任务输入按 fills 的顺序补在最后；已有块（包括关闭或有触发条件的）仍按预设控制。
@@ -15,7 +16,7 @@ import { scanWorldInfo } from './worldinfo.ts';
  */
 
 /** 任务预设：块、采样参数（上下文上限 contextTokens）、"使用世界书"开关；lorebooks 是调用方按这次的角色带上的世界书 */
-export type TaskPresetLike = Pick<Preset, 'blocks'> & Partial<Pick<Preset, 'worldInfoEnabled'>> & { sampler?: Pick<Preset['sampler'], 'contextTokens'>; lorebooks?: Lorebook[] };
+export type TaskPresetLike = Pick<Preset, 'blocks'> & Partial<Pick<Preset, 'id' | 'worldInfoEnabled' | 'texts'>> & { sampler?: Pick<Preset['sampler'], 'contextTokens'>; lorebooks?: Lorebook[] };
 
 const WORLD_INFO_BLOCKS = new Set(['worldInfoBefore', 'worldInfoAfter']);
 
@@ -49,6 +50,8 @@ export interface TaskBlockReport {
   enabled: boolean;
   marker: boolean;
   content: string;
+  /** 程序块：程序填的原内容（块里写了内容、和最终内容不一样时才有） */
+  filled?: string;
   tokens: number;
   sent: boolean;
   note?: string;
@@ -65,6 +68,9 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
   const blocks: TaskBlockReport[] = [];
   const types = new Set(['normal', ...(Array.isArray(input.type) ? input.type : [input.type])].filter((t): t is string => !!t));
   const fills = { ...taskWorldInfo(input, ctx), ...input.fills };
+  // 程序块按场景写的内容、上一次注入的内容都按这一次的类型（任务没有类型时不分场景）
+  const own = [...types].filter((t) => t !== 'normal');
+  const context: MarkerContext = { keys: own.length > 1 ? [own.join('+'), ...own] : own, who: ctx.char || undefined };
   const supplied = new Set(input.preset.blocks.filter((b) => b.marker).map((b) => b.identifier));
   const missing = Object.keys(fills).filter((identifier) => !supplied.has(identifier));
   const inputBlock = (identifier: string, role: PromptBlock['role']): PromptBlock => ({
@@ -79,8 +85,10 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
   const sent: TaskBlockReport[] = [];
   for (const b of list) {
     const known = !b.marker || b.identifier in fills;
-    const content = (b.marker ? (fills[b.identifier] ?? '') : substituteMacros(b.content, ctx)).replace(/\r/g, '');
+    const filled = b.marker ? (fills[b.identifier] ?? '').replace(/\r/g, '') : '';
+    const content = (b.marker ? markerContent(b, context.keys, filled, ctx) : substituteMacros(b.content, ctx)).replace(/\r/g, '');
     const report: TaskBlockReport = { identifier: b.identifier, name: b.name, role: b.role, enabled: b.enabled, marker: b.marker, content, tokens: estimateTokens(content), sent: false };
+    if (b.marker && filled !== content) report.filled = filled;
     blocks.push(report);
     if (!b.enabled) {
       report.note = '预设里关闭了';
@@ -98,6 +106,11 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
     sent.push(report);
   }
   fitContext(sent, input.preset.sampler?.contextTokens);
+  reportMarkerInjections(
+    input.preset.id,
+    context,
+    blocks.filter((r) => r.marker).map((r) => ({ identifier: r.identifier, content: r.content, filled: r.filled, sent: r.sent, note: r.note })),
+  );
   for (const r of sent.filter((x) => x.sent)) {
     const last = messages.at(-1);
     if (last && last.role === r.role) last.content = `${last.content}\n\n${r.content}`;

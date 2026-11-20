@@ -9,7 +9,7 @@ import PdfPage from '@/components/scene/PdfPage.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
 import { services } from '@/services';
 import { pdfPageImage, readPageText, scanFallbackOf, scanPageOf, type Book, type BookChapter, type BookView } from '@/services/books';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
 import { useBookStore } from '@/stores/books';
@@ -368,12 +368,16 @@ function shifted(bookId: string, ci: number, para: number, since: number): numbe
 }
 
 /** 每次交给她的开头：书名、作者，微信读书的书写明来源（她怎么读这种书在预设的"微信读书"一块里） */
+/** 这个场景的程序文字（"一起看书"用途的预设里的 readScene.*） */
+function rt() {
+  return sceneText('scene:read', her.value);
+}
 function bookLines(b: Book): string[] {
-  return [`书名：《${b.title}》${b.author ? `（${b.author}）` : ''}`, ...(b.format === 'weread' ? [b.weread?.content === 'full' ? `来源：微信读书的全书正文，附有${userName.value}的划线和想法；这次提供的是当前读到的段落` : `来源：微信读书里${userName.value}的划线和想法（旧版笔记集）`] : [])];
+  return [rt()('readScene.book', { title: b.title, author: b.author, user: userName.value, wereadFull: b.format === 'weread' && b.weread?.content === 'full', wereadNotes: b.format === 'weread' && b.weread?.content !== 'full' })];
 }
 /** 这一段旁边你写的批注（微信读书带来的想法也在里面）：她提前读的时候一起看 */
 function yourNotes(b: Book, ci: number, p: number): string[] {
-  return (b.notes ?? []).filter((n) => n.who === 'you' && n.chapter === ci && n.para === p).map((n) => `  ${userName.value}的想法：${clipRich(n.text, 200)}`);
+  return (b.notes ?? []).filter((n) => n.who === 'you' && n.chapter === ci && n.para === p).map((n) => rt()('readScene.yourNote', { user: userName.value, text: clipRich(n.text, 200) }));
 }
 
 // —— 她的页边批注：提前写好接下来几页，翻到才显示 ——
@@ -427,7 +431,7 @@ async function requestNotes() {
     const n = scanPageOf(t);
     if (n === null) paras.push({ i, text: t });
     // 识图会读这一页，读完再给她；识图没接通时，有公式的页先给她文字层读出来的文字
-    else if (!live && scanFallbackOf(t)) paras.push({ i, text: `（第 ${n} 页从 PDF 文字层读出来的，公式可能是乱的）${scanFallbackOf(t)}` });
+    else if (!live && scanFallbackOf(t)) paras.push({ i, text: rt()('readScene.pdfText', { page: n, text: scanFallbackOf(t) }) });
   }
   if (!paras.length) return;
   for (const x of paras) requested.add(key(r.ci, x.i));
@@ -437,14 +441,10 @@ async function requestNotes() {
     chatId.value,
     {
       name: 'read-batch',
-      input: [
-        ...bookLines(b),
-        `这一章：${c.title}`,
-        `前情提要：${b.summary || '（刚开始读）'}`,
-        `话量：${TALK[talk.value].label}（${TALK[talk.value].hint}）`,
-        '接下来几页的段落（编号 正文）：',
-        ...paras.map((x) => [`#${x.i} ${clipRich(x.text, 800)}`, ...yourNotes(b, r.ci, x.i)].join('\n')),
-      ].join('\n'),
+      input: rt()('readScene.batch', {
+        book: bookLines(b).join('\n'), chapter: c.title, summary: b.summary, talk: TALK[talk.value].label, talkHint: TALK[talk.value].hint,
+        paras: paras.map((x) => [rt()('readScene.para', { n: x.i, text: clipRich(x.text, 800) }), ...yourNotes(b, r.ci, x.i)].join('\n')),
+      }),
     },
     (v) => {
       const o = v as { notes?: unknown; summary?: unknown } | null;
@@ -499,10 +499,10 @@ async function saveNote() {
   sessionNotes.value += 1;
   if (quote) lastQuote.value = quote;
   const para = c.paras[p] ?? '';
-  const body = scanPageOf(para) !== null ? `（第 ${scanPageOf(para)} 页，还没转成文字）${scanFallbackOf(para)}` : para;
+  const body = scanPageOf(para) !== null ? rt()('readScene.unscanned', { page: scanPageOf(para), text: scanFallbackOf(para) }) : para;
   const r = await chat.sceneReply(chatId.value, {
     task: 'read-note',
-    input: [...bookLines(b), `${c.title} 第 ${p + 1} 段：${clipRich(body, 800)}`, quote ? `${userName.value}划了：「${quote}」` : ''].filter(Boolean).join('\n'),
+    input: rt()('readScene.note', { book: bookLines(b).join('\n'), chapter: c.title, n: p + 1, text: clipRich(body, 800), user: userName.value, quote }),
     userText: text,
     cue: cueOf(ci, p, quote),
   });
@@ -515,7 +515,7 @@ async function chapterEnd(title: string) {
   const b = book.value;
   if (!b || endedChapters.has(title)) return;
   endedChapters.add(title);
-  const r = await chat.sceneReply(chatId.value, { task: 'read-chapter-end', input: [...bookLines(b), `刚读完：${title}`, `前情提要：${b.summary || '（没有）'}`].join('\n'), cue: `读完${title}` });
+  const r = await chat.sceneReply(chatId.value, { task: 'read-chapter-end', input: rt()('readScene.chapterEnd', { book: bookLines(b).join('\n'), title, summary: b.summary }), cue: `读完${title}` });
   if (r.ok) herLine.value = r.message.text;
   else fail(r);
 }
@@ -526,10 +526,9 @@ async function sendChat() {
   const text = chatText.value.trim();
   if (!b || !text) return;
   chatText.value = '';
-  const where = view.value === 'page' ? `第 ${viewPage.value} 页，` : '';
   const r = await chat.sceneReply(chatId.value, {
     task: 'read-chat',
-    input: [...bookLines(b), `读到：${chapter.value?.title ?? ''}（${where}全书 ${progress.value}%）`, `前情提要：${b.summary || '（刚开始读）'}`].join('\n'),
+    input: rt()('readScene.chat', { book: bookLines(b).join('\n'), chapter: chapter.value?.title, page: view.value === 'page' ? viewPage.value : null, progress: progress.value, summary: b.summary }),
     userText: text,
     cue: cueOf(b.pos.chapter, b.pos.para),
   });

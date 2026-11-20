@@ -495,5 +495,34 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "truthDare.together.visit": "{{user}}来你这边了，坐在你旁边",
+    "truthDare.together.bring": "你在{{user}}这边",
+    "truthDare.together.remote": "连线（{{user}}在自己那边，你在你那边）",
+    "truthDare.input": "你们怎么在一起：{{together}}\n{{?past}}这一局出过的题：\n{{past|\\n}}\n{{!past}}这一局出过的题：还没有\n{{extra|\\n}}",
+    "truthDare.past": "{{n}}. {{who}}选了{{choice}}：{{card}}[[{{?skipped}}（认罚了）]][[ → {{answer}}]]",
+    "truthDare.narrator.start": "真心话大冒险[[（{{level}}）]]开始了，瓶子转到了{{who}}。",
+    "truthDare.say.choose": "我选{{choice}}！",
+    "truthDare.say.swap": "换一个！",
+    "truthDare.say.skipTruth": "这个我不敢答……认罚",
+    "truthDare.say.skipDare": "这个我不敢做……认罚",
+    "truthDare.say.done": "[[做完了：{{text}}]][[{{!text}}做完了！]]",
+    "truthDare.say.card": "【{{choice}}】{{card}}",
+    "truthDare.result.skipTruth": "{{user}}不敢答，认罚了",
+    "truthDare.result.skipDare": "{{user}}不敢做，认罚了",
+    "truthDare.result.answer": "{{user}}的回答：{{text}}",
+    "truthDare.result.done": "{{user}}做完了[[：{{text}}]][[{{!text}}（没说具体怎么做的）]]",
+    "truthDare.doneShort": "做完了",
+    "truthDare.round.userChose": "这一轮：{{user}}选了{{choice}}",
+    "truthDare.round.swap": "{{user}}要换一题，换掉的是：{{card}}",
+    "truthDare.round.card": "题目：{{card}}",
+    "truthDare.round.yourTurn": "这一轮：轮到你",
+    "truthDare.round.tally": "你这一局选过：真心话 {{truth}} 次、大冒险 {{dare}} 次",
+    "truthDare.round.herChose": "这一轮：{{char}}选了{{choice}}",
+    "truthDare.round.youChose": "这一轮：你选了{{choice}}",
+    "truthDare.round.userCard": "{{user}}出的题：{{card}}",
+    "truthDare.between": "现在：第 {{n}} 轮刚结束，下一轮轮到{{next}}",
+    "truthDare.end": "这一局玩了 {{n}} 轮，结束了"
+  }
 }

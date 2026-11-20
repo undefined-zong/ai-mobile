@@ -1,3 +1,4 @@
+import type { TextFn, TextVars } from './programText.ts';
 import { INVITE_GAMES, inviteGame, parseStudyInvite, parseWatchInvite, type InviteGameId } from './chatModules.ts';
 
 /**
@@ -46,33 +47,13 @@ export type ControlTag =
 export type TagStreamEvent = { type: 'text'; text: string } | { type: 'tag'; tag: ControlTag };
 
 /**
- * 每种标签的写法和什么时候用。写给模型看：拼进提示词的"当前场景规则 + 可用标签"那一块（只列这个场景能用的），
- * 所以导入的 SillyTavern 预设也知道怎么用。
+ * 每种标签的写法和什么时候用：写在预设的程序文字里（tags.<种类>.syntax / tags.<种类>.desc），
+ * 拼进"当前场景规则 + 可用标签"那一块（只列这个场景能用的），所以导入的 SillyTavern 预设也知道怎么用。
+ * 约游戏（game）的说明里 {{games}} 是能约的游戏。
  */
-export const CONTROL_TAG_DOCS: Record<ControlTagKind, { syntax: string; desc: string }> = {
-  expr: { syntax: '[expr:表情]', desc: '情绪变化时切换立绘表情，只能用下面列出的表情' },
-  pose: { syntax: '[pose:动作]', desc: '想换个动作时切换立绘的动作，只能用下面列出的动作' },
-  outfit: { syntax: '[outfit:服装]', desc: '换一身衣服（pajama、casual……）' },
-  bg: { syntax: '[bg:地点]', desc: '换背景（cafe、library……）' },
-  cg: {
-    syntax: '[cg:画面描述]',
-    desc: '发一张图给对方：对方想看你（照片、自拍、你现在的样子），或者你想让对方看到眼前的画面时用。冒号后面用中文写清楚画面：谁、在哪、在做什么、什么光线。程序会照着画出来发过去；一次回复最多一个',
-  },
-  music: { syntax: '[music:歌名-歌手]', desc: '分享一首歌' },
-  call: { syntax: '[call]', desc: '想和对方打电话时用' },
-  choice: { syntax: '[choice:选项A|选项B]', desc: '给对方几个选项，显示成可以直接点的回复' },
-  poke: { syntax: '[poke:部位]', desc: '回戳对方' },
-  study: { syntax: '[study:要做的事|分钟]', desc: '约对方一起学习 / 专注，显示成陪伴学习的邀请卡片；两项都可以不写（不写分钟用番茄钟）' },
-  watch: { syntax: '[watch:片名|链接]', desc: '约对方一起看片，显示成一起观影的邀请卡片；知道 B 站 / YouTube 的真实链接才写链接，不知道只写片名，程序会去搜' },
-  game: { syntax: '[game:游戏名]', desc: `约对方玩某一个游戏，显示成邀请卡片；游戏名只能是：${INVITE_GAMES.map((g) => g.label).join('、')}` },
-  sleep: { syntax: '[sleep]', desc: '想陪对方入睡时用，显示成哄睡邀请卡片；对方接受后去选连麦、故事或睡前场景' },
-  exercise: { syntax: '[exercise]', desc: '约对方一起运动，显示成邀请卡片；对方接受后进入健身，照今天的计划练或随便动动' },
-  parallel: { syntax: '[parallel]', desc: '邀对方一起看你们今天的安排或留言，显示成平行时空邀请卡片；对方接受后打开你们的平行时空' },
-  device: {
-    syntax: '<device>"VIBRATE": 强度</device>',
-    desc: '对方连着成人玩具时，在发生的那句话后面写控制指令：VIBRATE / OSCILLATE / ROTATE（0–100 或 {"pattern": [..], "interval": [..]}）、LINEAR（{"start_position", "end_position", "duration"}）、"STOP": true',
-  },
-};
+export function tagDoc(kind: ControlTagKind, t: TextFn, vars: TextVars = {}): { syntax: string; desc: string } {
+  return { syntax: t(`tags.${kind}.syntax`), desc: t(`tags.${kind}.desc`, { games: INVITE_GAMES.map((g) => g.label), ...vars }) };
+}
 
 const KIND_ALT = CONTROL_TAG_KINDS.join('|');
 // [ 或 【 开头，名字，可选的 : 或 ： 加取值，] 或 】 结尾

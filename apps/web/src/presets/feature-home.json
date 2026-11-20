@@ -386,5 +386,23 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "homeScene.remaining": "[[今天还没做的：{{items}}]][[{{!items}}今天要做的家务都做完了]]",
+    "homeScene.progress": "今天的家务做完了 {{done}} / {{total}} 件",
+    "homeScene.effect.none": "不在意",
+    "homeScene.start": "{{user}}开始做：{{label}}（大概要 {{minutes}} 分钟）\n{{?extra}}这是健康计划里要提前做的[[，给{{meal}}备的]]\n这件之前说了晚点做，拖了 {{later}} 次\n{{?carried}}这件是之前该做没做、拖到今天的\n{{?overdue}}已经过了该做的时间\n之前已经 {{missedDays}} 天没做了\n今天计划做：{{recipe}}\n你最想吃{{user}}做的：{{wish}}",
+    "homeScene.done": "{{user}}做完了：{{label}}[[，做了 {{minutes}} 分钟]][[{{!minutes}}（直接打了勾）]]\n之前拖了 {{later}} 次\n没做时你会：{{effect}}（现在做完了）\n做的是今天计划里的：{{recipe}}\n{{meal}}的饭备好了",
+    "homeScene.later": "{{user}}说\"{{label}}\"晚点再做（这是第 {{times}} 次拖）\n这件没做时你会：{{effect}}\n这是健康计划里要提前做的[[（给{{meal}}）]]，没来得及做的备案：{{backup}}\n{{?overdue}}已经过了该做的时间\n之前已经 {{missedDays}} 天没做了",
+    "homeScene.cue.start": "开始{{label}}",
+    "homeScene.cue.done": "做完{{label}}",
+    "homeScene.cue.later": "拖延{{label}}",
+    "homeScene.cue.chat": "在家",
+    "homeScene.now": "现在 {{time}}[[，在放《{{song}}》- {{artist}}[[{{?demo}}（示例歌曲）]]]]。",
+    "homeScene.doing": "{{user}}正在做：{{label}}（做了 {{minutes}} 分钟）",
+    "homeScene.idle": "{{user}}没在做家务，在家里跟你聊天",
+    "homeScene.linkContext": "{{now}}[[{{doing}}。]]{{progress}}。",
+    "homeScene.link.open": "{{context}}你们刚连上麦，{{user}}一边做家务一边跟你说话。先开口说第一句，1–2 个短句。",
+    "homeScene.link.reply": "{{context}}连麦中（已经连了 {{linked}}）。回{{user}}刚才说的话。"
+  }
 }

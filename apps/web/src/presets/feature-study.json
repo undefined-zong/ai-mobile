@@ -386,5 +386,34 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "studyScene.peek.noticed": "{{char}}发现你在看{{pronoun}}，抬头和你对上了眼",
+    "studyScene.peek.unnoticed": "{{char}}没发现你在看{{pronoun}}",
+    "studyScene.state.dozing": "{{char}}趴在桌上睡着了（进度 {{progress}}%）",
+    "studyScene.state.stuck": "{{char}}卡住了，盯着书皱眉（进度 {{progress}}%）",
+    "studyScene.state.focus": "{{char}}在专心[[做\"{{goal}}\"]][[{{!goal}}学习]]（进度 {{progress}}%）",
+    "studyScene.where.visit": "在[[{{place}}]][[{{!place}}图书馆]]，{{user}}坐在{{pronoun}}旁边",
+    "studyScene.where.bring": "在[[{{place}}]][[{{!place}}图书馆]]，{{pronoun}}坐在{{user}}对面",
+    "studyScene.where.remote": "在[[{{place}}]][[{{!place}}图书馆]]，和{{user}}连线自习、[[{{?solo}}各自专注]][[{{!solo}}一起专注]]（{{user}}在[[{{yourPlace}}]][[{{!yourPlace}}自己那边]]）",
+    "studyScene.caption.peek": "{{cue}}中；{{state}}；{{where}}[[；{{extra}}]]",
+    "studyScene.caption.end": "今天一起学完了：{{minutes}} 分钟[[；{{kept}}]]；{{where}}[[；{{extra}}]]",
+    "studyScene.caption.mine": "{{user}}在[[{{place}}]][[{{!place}}自己那边]]的书桌前学习[[；{{user}}的人设：{{persona}}]]；{{char}}在{{herWhere}}，隔着屏幕陪着（不在画面里）",
+    "studyScene.timer.pomodoro": "计时：番茄钟，{{plan}} 个，每个 {{focus}} 分钟，休息 {{rest}} 分钟",
+    "studyScene.timer.countdown": "计时：倒计时 {{countdown}} 分钟（到点再决定继续还是结束）",
+    "studyScene.timer.countup": "计时：正计时（不定时长，累了自己说休息，学完自己说结束）",
+    "studyScene.mode.together": "专注方式：一起专注——共用一个计时器，到点一起休息",
+    "studyScene.mode.solo": "专注方式：各自专注——各用各的计时器；{{char}}按自己的节奏（专注 {{focus}} 分钟、休息 {{rest}} 分钟），{{user}}来之前{{pronoun}}已经学了 {{into}} 分钟",
+    "studyScene.solo.focus": "各自专注：{{char}}自己还在专注（{{pronoun}}的第 {{n}} 个番茄，还剩 {{left}} 分钟），小声说就好",
+    "studyScene.solo.break": "各自专注：{{char}}正好也在休息（还剩 {{left}} 分钟）",
+    "studyScene.kept": "约定\"{{promise}}\"[[{{?kept}}做到了]][[{{!kept}}没做到]]",
+    "studyScene.start": "{{user}}今天要学：[[{{tasks}}]][[{{!tasks}}没说]]\n{{user}}的状态：{{mood}}\n{{timer}}\n{{mode}}\n约定：{{promise}}\n{{char}}今天手头的事：{{goal}}",
+    "studyScene.break": "{{what}}\n{{user}}已完成：[[{{done}}]][[{{!done}}还没有]]；还没完成：[[{{todo}}]][[{{!todo}}没有了]]\n{{user}}这段中途离开了 {{away}} 次[[，其中 {{played}} 次说是去玩了]]\n{{user}}传来的纸条：{{notes| }}\n{{char}}的进度：{{progress}}%[[{{?stuck}}，现在卡住了]][[{{?wasStuck}}，中途卡住过]]",
+    "studyScene.break.pomodoro": "第 {{n}} 个番茄结束（{{focus}} 分钟）",
+    "studyScene.break.countdown": "倒计时 {{minutes}} 分钟到了（今天第 {{n}} 段）",
+    "studyScene.break.countup": "{{user}}正计时学了 {{minutes}} 分钟，说要休息一下",
+    "studyScene.stuck": "专注中（{{cue}}），{{user}}卡住了",
+    "studyScene.resting": "休息中（{{cue}}）",
+    "studyScene.end": "结束：一共专注 {{minutes}} 分钟[[{{?pomodoro}}，{{blocks}} 个番茄（计划 {{plan}} 个）]][[{{?countdown}}（倒计时 {{countdownMin}} 分钟[[{{?countdownDone}}，走完了]][[{{!countdownDone}}，没走完就结束了]]）]][[{{?countup}}（正计时）]]\n[[{{?solo}}各自专注：{{char}}自己学了 {{herBlocks}} 个番茄]][[{{!solo}}一起专注]]\n{{user}}完成了：[[{{done}}]][[{{!done}}没有勾掉任务]]；没完成：[[{{todo}}]][[{{!todo}}没有]]\n中途离开 {{away}} 次\n约定：{{promise}}（[[{{?kept}}做到了]][[{{!kept}}没做到]]）\n{{char}}的进度：{{progress}}%"
+  }
 }

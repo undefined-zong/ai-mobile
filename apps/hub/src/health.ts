@@ -20,6 +20,7 @@ import {
   type NearbyBlock,
   type NearbyFound,
   type ProactiveCredentials,
+  textFn,
 } from '@app/shared';
 import { unseal } from './crypto.ts';
 import type { Env } from './env.ts';
@@ -97,13 +98,16 @@ export async function healthFor(env: Env, row: ContextRow, credentials: Proactiv
     const system = new AgentSystem({
       config: { routes: () => credentials.routes.map((r) => ({ ...r, dailyTokenBudget: 0 })), keyOf: (k) => credentials.keys[k] || null, textObfuscation: () => credentials.textObfuscation },
       outputFilters: credentials.outputFilters,
+      jsonRetry: () => ctx.preset?.texts?.['common.jsonRetry'],
     });
     const signal = AbortSignal.timeout(LEASE_MS - 30_000);
     const day = ctx.days.find((d) => d.date === date);
     // 附近的店：云端自己查到的优先，没有用手机上次查到的（那一份没有店的列表，对不上外食）
     const found = await nearbyAtHome(ctx, mapsKey, signal);
-    const nearby = (task: 'plan-week' | 'plan-day'): NearbyBlock => (found ? healthNearbyText(found, task, date) : { text: day?.nearby ?? '', food: [], stores: [], near: day?.near ?? '' });
-    const shared: Partial<Record<HealthFill, string>> = { ...ctx.base, healthToday: day?.today ?? healthTodayText(date), healthRecent: day?.recent ?? '' };
+    // 说明文字都在健康预设的程序文字里（手机上传时合好了自带预设文件里的）
+    const tx = textFn(preset.texts);
+    const nearby = (task: 'plan-week' | 'plan-day'): NearbyBlock => (found ? healthNearbyText(found, task, date, tx) : { text: day?.nearby ?? '', food: [], stores: [], near: day?.near ?? '' });
+    const shared: Partial<Record<HealthFill, string>> = { ...ctx.base, healthToday: day?.today ?? healthTodayText(date, tx), healthRecent: day?.recent ?? '' };
     const ask = <T>(task: 'plan-week' | 'plan-day', fills: Partial<Record<HealthFill, string>>, parse: (v: unknown) => T | null) =>
       system.json('health', { messages: buildHealthMessages({ task, userName: ctx.persona.name, characterName: ctx.characterName, pronoun: ctx.pronoun, fills }, preset), ...samplerRequest(preset.sampler) }, parse, { signal });
     const weekStart = weekStartOf(date);
@@ -111,7 +115,7 @@ export async function healthFor(env: Env, row: ContextRow, credentials: Proactiv
     let fresh: HealthWeekPlan | undefined;
     if (!week) {
       const nb = nearby('plan-week');
-      const { value, result } = await ask('plan-week', { ...shared, healthNearby: nb.text, healthAsk: healthWeekAsk(date, weekStart) }, parseHealthWeek);
+      const { value, result } = await ask('plan-week', { ...shared, healthNearby: nb.text, healthAsk: healthWeekAsk(date, weekStart, tx) }, parseHealthWeek);
       fresh = {
         ...value, personaId: id, weekStart,
         ...(nb.stores.length ? { stores: nb.stores.map(healthSpot) } : {}),
@@ -122,7 +126,7 @@ export async function healthFor(env: Env, row: ContextRow, credentials: Proactiv
       week = fresh;
     }
     const nb = nearby('plan-day');
-    const { value, result } = await ask('plan-day', { ...shared, healthNearby: nb.text, healthWeek: healthWeekText(week, date), healthAsk: healthDayAsk(date, week, ctx.weekMinutes) }, parseHealthDay);
+    const { value, result } = await ask('plan-day', { ...shared, healthNearby: nb.text, healthWeek: healthWeekText(week, date, tx), healthAsk: healthDayAsk(date, week, ctx.weekMinutes, tx) }, parseHealthDay);
     matchHealthSpots(value, nb.food);
     const plan: HealthDayPlan = { ...value, personaId: id, date, ...(nb.near ? { near: nb.near } : {}), model: result.model, at: Date.now() };
     const out: HealthRunResult = { personaId: id, date, ...(fresh ? { week: fresh } : {}), day: plan, at: Date.now() };

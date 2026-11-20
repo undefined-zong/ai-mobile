@@ -3,6 +3,7 @@ import type { BackgroundPlace, Character, ParsedReply } from '@app/shared';
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { BACKGROUND_GROUPS, BACKGROUND_PERIOD_LABEL, BACKGROUND_SETS, backgroundUrl, familyCover, type BackgroundAsset, type BackgroundFamily } from '@/backgrounds/library';
+import { sceneText } from '@/services/prompt';
 import { SLEEP_PRESET_PLACES, sleepSceneLayoutKey } from './places';
 import type { SpeechQueue } from '@/services/speech';
 import { useCharacterStore } from '@/stores/characters';
@@ -62,7 +63,8 @@ const PRESETS: SleepPlace[] = SLEEP_PRESET_PLACES.flatMap((p) => {
 });
 /** 素材库里的一个系列当睡前的地方 */
 function placeOf(family: BackgroundFamily): SleepPlace {
-  return { id: family.id, name: family.style || family.scene, icon: 'i-lucide-image', family, asset: null, blurb: `${family.scene}，画面是${family.style}${family.indoor ? '（室内）' : '（室外）'}` };
+  const blurb = zt()('sleepScene.place.blurb', { scene: family.scene, style: family.style, place: zt()(family.indoor ? 'common.indoor' : 'common.outdoor') });
+  return { id: family.id, name: family.style || family.scene, icon: 'i-lucide-image', family, asset: null, blurb };
 }
 /** 一张图是什么时候、什么灯光（缩略图上的小字） */
 const shotLabel = (a: BackgroundAsset) => [BACKGROUND_PERIOD_LABEL[a.period], a.lighting].filter(Boolean).join(' · ');
@@ -228,13 +230,18 @@ async function present(b: Beat, key: string) {
   if (presented === key && auto.value) advance();
 }
 
+/** 这个场景的程序文字（"哄睡 · 场景"用途的预设里的 sleepScene.immersion.*） */
+function zt() {
+  return sceneText('sleep-scene', props.character);
+}
 function contextLines(): string[] {
   const p = place.value;
+  const t = zt();
   return [
-    `睡前的地方：${p.name}（${p.blurb}）`,
-    `${props.userName}和${props.character.name}一起在这里，准备睡了`,
+    t('sleepScene.immersion.place', { name: p.name, blurb: p.blurb }),
+    t('sleepScene.immersion.together', { user: props.userName, char: props.character.name }),
     props.context(),
-    `这是第 ${turns.value + 1} 段`,
+    t('sleepScene.immersion.turn', { n: turns.value + 1 }),
   ];
 }
 
@@ -293,11 +300,11 @@ function start() {
   turns.value = 0;
   ending.value = false;
   chars.setExpression(props.character.id, 'sleepy');
-  void ask('sleep-scene-start', [...contextLines(), '你们刚在这里安顿下来']);
+  void ask('sleep-scene-start', [...contextLines(), zt()('sleepScene.immersion.start')]);
 }
 function pick(c: string) {
   if (!showChoices.value) return;
-  void ask('sleep-scene-turn', [...contextLines(), `${props.userName}选了：${c}`], c);
+  void ask('sleep-scene-turn', [...contextLines(), zt()('sleepScene.immersion.picked', { user: props.userName, choice: c })], c);
 }
 async function toggleOwn() {
   ownOpen.value = !ownOpen.value;
@@ -309,7 +316,7 @@ function sendOwn() {
   const text = own.value.trim();
   if (!text || !showChoices.value) return;
   own.value = '';
-  void ask('sleep-scene-turn', [...contextLines(), `${props.userName}没用你给的选项，自己说：${text}`], text);
+  void ask('sleep-scene-turn', [...contextLines(), zt()('sleepScene.immersion.said', { user: props.userName, text })], text);
 }
 /** 睡了：她说最后一段（不给选项），说完你点晚安 */
 async function finish() {
@@ -320,7 +327,7 @@ async function finish() {
   }
   await halt();
   ending.value = true;
-  void ask('sleep-scene-end', [...contextLines().slice(0, 3), `${props.userName}说困了，想睡了`, `你们在这里待了 ${turns.value} 段`]);
+  void ask('sleep-scene-end', [...contextLines().slice(0, 3), zt()('sleepScene.immersion.end', { user: props.userName, turns: turns.value })]);
 }
 function changePlace() {
   void halt();

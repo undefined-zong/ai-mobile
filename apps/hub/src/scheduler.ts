@@ -1,4 +1,4 @@
-import { estimateTokens, inWindow, planTouchpoints, shiftDate, zonedDateKey, zonedParts,
+import { estimateTokens, inWindow, planTouchpoints, textFn, shiftDate, zonedDateKey, zonedParts,
   type Message, type ProactiveContext, type ProactiveCredentials, type Touchpoint } from '@app/shared';
 import { AiError } from '@app/ai';
 import { unseal } from './crypto.ts';
@@ -28,6 +28,8 @@ export async function planContext(env: Env, row: ContextRow, now: number) {
     character: context.character, rules: context.rules, env: context.environment,
     day: new Date(now), date: shiftDate(today, offset),
     followups: context.memories.filter((m) => m.type === 'followup' && m.dueAt).map((m) => ({ ...m, dueAt: m.dueAt! })),
+    // 手机上传的主动消息预设带着合好的程序文字
+    t: textFn(context.preset?.texts),
   }));
   // Dates are materialized by Cron itself, including after several days without any client.
   // A timezone change also moves overdue, unclaimed work. Completed IDs are never resurrected.

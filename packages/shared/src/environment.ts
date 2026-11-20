@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import type { TimeOfDay } from './scenes.ts';
 import { calendarParts } from './timezone.ts';
 
@@ -34,8 +35,8 @@ const SOLAR_TERMS: [number, number, string][] = [
   [10, 8, '寒露'], [10, 23, '霜降'], [11, 7, '立冬'], [11, 22, '小雪'], [12, 7, '大雪'], [12, 21, '冬至'],
 ];
 
-/** 返回"立冬"（当天）或"立冬后第 2 天"（7 天内），更远则返回 null */
-export function solarTermNote(date: Date, timeZone?: string): string | null {
+/** 节气：今天是哪个节气，或者 7 天内刚过了哪个（days 是过了几天）；更远时为 null */
+export function solarTerm(date: Date, timeZone?: string): { term: string; days: number } | null {
   const p = calendarParts(date.getTime(), timeZone);
   const day = Date.UTC(p.year, p.month - 1, p.day);
   let best: { name: string; diff: number } | null = null;
@@ -46,7 +47,14 @@ export function solarTermNote(date: Date, timeZone?: string): string | null {
     }
   }
   if (!best || best.diff > 7) return null;
-  return best.diff === 0 ? `今天${best.name}` : `${best.name}后第 ${best.diff} 天`;
+  return { term: best.name, days: best.diff };
+}
+
+/** 节气那一句（程序文字 common.solarTerm.today / common.solarTerm.after）；不在节气附近时为空 */
+export function solarTermNote(date: Date, timeZone: string | undefined, t: TextFn): string {
+  const s = solarTerm(date, timeZone);
+  if (!s) return '';
+  return s.days === 0 ? t('common.solarTerm.today', s) : t('common.solarTerm.after', s);
 }
 
 export interface WeatherSnapshot {
@@ -83,6 +91,14 @@ function pad(n: number) {
   return String(n).padStart(2, '0');
 }
 
+/** 多久（程序文字 common.duration.min / hour / day） */
+export function durationText(min: number, t: TextFn): string {
+  if (min < 60) return t('common.duration.min', { n: Math.max(1, Math.round(min)) });
+  const h = Math.floor(min / 60);
+  if (h < 24) return t('common.duration.hour', { n: h });
+  return t('common.duration.day', { n: Math.floor(h / 24) });
+}
+
 export function formatDuration(min: number): string {
   if (min < 60) return `${Math.max(1, Math.round(min))} 分钟`;
   const h = Math.floor(min / 60);
@@ -90,40 +106,39 @@ export function formatDuration(min: number): string {
   return `${Math.floor(h / 24)} 天`;
 }
 
-/** "上海 小雨 12°C，今天 9~13°C，明天降温（暴雨黄色预警）"；用华氏的人温度后面带一个华氏 */
-export function weatherLine(w: WeatherSnapshot): string {
-  const f = w.unit === 'f' ? `（${Math.round((w.tempC * 9) / 5 + 32)}°F）` : '';
-  let line = `${w.city} ${w.text} ${w.tempC}°C${f}`;
-  if (w.outlook) line += `，${w.outlook}`;
-  if (w.alert) line += `（${w.alert}）`;
-  return line;
+/** 一处的天气（程序文字 common.weather）：城市、天气、温度（用华氏的人带华氏）、接下来、预警 */
+export function weatherLine(w: WeatherSnapshot, t: TextFn): string {
+  return t('common.weather', {
+    city: w.city,
+    text: w.text,
+    tempC: w.tempC,
+    tempF: w.unit === 'f' ? Math.round((w.tempC * 9) / 5 + 32) : null,
+    outlook: w.outlook,
+    alert: w.alert,
+  });
 }
 
 /**
- * 拼出注入提示词的【当前环境】块。客户端每轮对话前调用，Worker 写主动消息时也用同一个函数。
+ * 拼出注入提示词的【当前环境】块（程序文字 env.block，写法在预设里）。客户端每轮对话前调用，Worker 写主动消息时也用同一个函数。
+ * 这里只给数据：日期时间、节气、纪念日、两边的天气、距上次聊天、在哪、穿什么、当前场景。
  */
-export function formatEnvironmentBlock(input: EnvironmentInput): string {
+export function formatEnvironmentBlock(input: EnvironmentInput, t: TextFn): string {
   const d = calendarParts(input.now.getTime(), input.timeZone);
-  const parts: string[] = [];
-  parts.push(
-    `${d.year}-${pad(d.month)}-${pad(d.day)} ${WEEKDAYS[d.weekday]} ${pad(d.hour)}:${pad(d.minute)}（${TIME_OF_DAY_LABEL[timeOfDay(d.hour)]}）`,
-  );
-  const term = solarTermNote(input.now, input.timeZone);
-  if (term) parts.push(term);
-  if (input.anniversaries) parts.push(input.anniversaries);
   const her = input.herWeather;
-  if (input.weather && her) {
-    parts.push(`你那边：${weatherLine(input.weather)}`);
-    parts.push(`${her.name}那边：${weatherLine(her)}`);
-  } else if (input.weather) {
-    parts.push(weatherLine(input.weather));
-  } else if (her) {
-    parts.push(`${her.name}那边：${weatherLine(her)}`);
-  }
-  if (input.todayLine) parts.push(input.todayLine);
-  if (input.sinceLastChatMin != null) parts.push(`距上次聊天 ${formatDuration(input.sinceLastChatMin)}`);
-  if (input.place) parts.push(input.place);
-  if (input.outfit) parts.push(input.outfit);
-  if (input.sceneName) parts.push(`当前场景：${input.sceneName}`);
-  return `【当前环境】${parts.join(' · ')}`;
+  return t('env.block', {
+    date: `${d.year}-${pad(d.month)}-${pad(d.day)}`,
+    weekday: WEEKDAYS[d.weekday],
+    time: `${pad(d.hour)}:${pad(d.minute)}`,
+    partOfDay: TIME_OF_DAY_LABEL[timeOfDay(d.hour)],
+    solarTerm: solarTermNote(input.now, input.timeZone, t),
+    anniversaries: input.anniversaries,
+    weather: input.weather ? weatherLine(input.weather, t) : null,
+    herName: her?.name,
+    herWeather: her ? weatherLine(her, t) : null,
+    todayLine: input.todayLine,
+    sinceLastChat: input.sinceLastChatMin != null ? durationText(input.sinceLastChatMin, t) : null,
+    place: input.place,
+    outfit: input.outfit,
+    sceneName: input.sceneName,
+  });
 }

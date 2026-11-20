@@ -130,5 +130,18 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "consolidate.noDate": "日期不详",
+    "consolidate.merge": "可能重复的记忆（每组判断一次）：\n{{groups|\\n\\n}}",
+    "consolidate.merge.group": "[{{group}}]\n{{items|\\n}}",
+    "consolidate.merge.item": "- ({{id}}) {{day}} · {{type}} · 重要度 {{importance}} · {{content}}",
+    "consolidate.rollup": "要合并的 {{n}} 段梗概（从旧到新）：\n{{items|\\n}}",
+    "consolidate.rollup.item": "{{n}}. {{from}} ~ {{to}}：{{text}}",
+    "consolidate.tense": "已经过了时间的待跟进：\n{{items|\\n}}",
+    "consolidate.tense.item": "- ({{id}}) 原定 {{due}}：{{content}}",
+    "consolidate.profile": "{{?lines}}现在的画像卡：\n{{lines|\\n}}\n{{!lines}}现在的画像卡：还是空的\n\n最近新记下的事：\n{{memories|\\n}}",
+    "consolidate.profile.line": "- ({{id}}) 【{{section}}】{{text}}",
+    "consolidate.profile.memory": "- {{day}} · {{type}} · {{content}}"
+  }
 }

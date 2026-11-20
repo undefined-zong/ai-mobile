@@ -1,5 +1,5 @@
 import { buildDeviceMessages, errorText, samplerRequest } from '@app/ai';
-import { describeCommand, MIN_TOY_INTERVAL, placeDeviceTags, SCALAR_KINDS, TOY_KIND_KEYS, TOY_KIND_LABEL, type Character, type PlacedCommand, type ToyCommand, type ToyKind } from '@app/shared';
+import { describeCommand, MIN_TOY_INTERVAL, textFn, type TextFn, placeDeviceTags, SCALAR_KINDS, TOY_KIND_KEYS, TOY_KIND_LABEL, type Character, type PlacedCommand, type ToyCommand, type ToyKind } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAiStore } from './ai';
@@ -379,46 +379,36 @@ export const useToyStore = defineStore('toys', () => {
   // —— 写给"控制指令"预设、她自己写指令时看的几行 ——
 
   /** 连着的玩具、能写的键，写数组时每个位置是哪个头 */
-  function toysLine(): string {
-    if (!ready.value) return settings.simulate ? `没连真的玩具（只在界面上显示）：${SIM_KINDS.flatMap((k) => TOY_KIND_KEYS[k]).join('、')} 都可以写。` : '';
+  /** 连着的玩具、每种能写的键（程序文字 device.toys*，在用这句话的预设里） */
+  function toysLine(t: TextFn): string {
+    if (!ready.value) return settings.simulate ? t('device.toys.simulate', { keys: SIM_KINDS.flatMap((k) => TOY_KIND_KEYS[k]) }) : '';
     const lines = devices.value.map((d) => {
       const by = new Map<ToyKind, number>();
       for (const f of d.features) by.set(f.kind, (by.get(f.kind) ?? 0) + 1);
-      const parts = [...by].map(([k, n]) => `${TOY_KIND_LABEL[k]}${n > 1 ? ` ${n} 个头` : ''}（${TOY_KIND_KEYS[k].join(' / ')}）`);
-      return `- ${d.name}：${parts.join('、') || '没有能控制的'}`;
+      const parts = [...by].map(([k, n]) => t('device.toys.part', { kind: TOY_KIND_LABEL[k], heads: n > 1 ? n : null, keys: TOY_KIND_KEYS[k] }));
+      return t('device.toys.device', { name: d.name, parts });
     });
     const many = SCALAR_KINDS.map((k) => {
       const hs = heads.value.filter((h) => h.kind === k);
       if (hs.length < 2) return '';
       const owner = (h: ToyHead) => (devices.value.length > 1 ? `${h.device?.name ?? ''}的` : '');
-      return `${TOY_KIND_KEYS[k][0]} 有 ${hs.length} 个头：写一个数是一起，写数组 [${hs.map((_, i) => String.fromCharCode(97 + i)).join(', ')}] 依次是 ${hs.map((h) => `${owner(h)}${h.name}`).join('、')}`;
+      return t('device.toys.many', { key: TOY_KIND_KEYS[k][0], n: hs.length, slots: hs.map((_, i) => String.fromCharCode(97 + i)), names: hs.map((h) => `${owner(h)}${h.name}`) });
     }).filter(Boolean);
-    const keys = kinds.value.flatMap((k) => TOY_KIND_KEYS[k]);
-    return [
-      ...lines,
-      ...many,
-      `能写的键：${keys.join('、')}、STOP；别的键这些玩具做不了，不要写。`,
-      '强度都照 0–100 写，不用自己压低：每个头的上限在心跳设置里单独设，超过上限的，程序发给玩具时压到上限。',
-    ].join('\n');
+    return t('device.toys', { devices: lines, many, keys: kinds.value.flatMap((k) => TOY_KIND_KEYS[k]) });
   }
 
   /** 最快的速度（太快玩具跟不上，程序会放慢） */
-  function speedLine(): string {
+  function speedLine(t: TextFn): string {
     const linear = heads.value.filter((h) => h.kind === 'linear');
     const strokeMs = linear.length ? Math.max(...linear.map((h) => headLimit(h).strokeMs)) : readLimit(settings.kindDefaults.linear, DEFAULT_HEAD_LIMIT).strokeMs;
-    return [
-      `变速的每一档不短于 ${MIN_TOY_INTERVAL} 毫秒`,
-      kinds.value.includes('linear') ? `伸缩：从底到顶一下最快 ${strokeMs} 毫秒（幅度小按比例更快）` : '',
-    ]
-      .filter(Boolean)
-      .join('；');
+    return t('device.speed', { interval: MIN_TOY_INTERVAL, stroke: kinds.value.includes('linear') ? strokeMs : null });
   }
 
   /** 现在在做什么 */
-  function nowLine(): string {
+  function nowLine(t: TextFn): string {
     const doing = Object.entries(levels.doing).map(([, v]) => v);
     const ago = lastCommand.value ? Math.round((Date.now() - lastCommand.value.at) / 1000) : null;
-    return `${doing.length ? doing.join('；') : '都停着'}${ago !== null ? `（上一条指令在 ${ago} 秒前）` : ''}`;
+    return t('device.now', { doing, ago });
   }
 
   /**
@@ -432,17 +422,19 @@ export const useToyStore = defineStore('toys', () => {
     const lib = useLibraryStore();
     const preset = lib.withLorebooks(lib.presetForUse('device', opts.character), opts.character);
     if (!preset) throw new MissingPresetError('控制指令');
+    // 说明文字都在控制指令预设的程序文字里
+    const t = textFn(preset.texts);
     const messages = buildDeviceMessages(
       {
         userName: opts.userName,
         characterName: opts.character.name,
         pronoun: opts.character.pronoun,
         fills: {
-          deviceToys: `连着的玩具：\n${toysLine()}`,
-          deviceLimits: `最快的速度：${speedLine()}`,
-          deviceNow: `玩具现在：${nowLine()}`,
-          deviceRecent: opts.recent.length ? `最近的对话：\n${opts.recent.join('\n')}` : '',
-          deviceLine: `${opts.character.name}这一句（要配指令的话）：\n${opts.line}`,
+          deviceToys: t('device.fill.toys', { toys: toysLine(t) }),
+          deviceLimits: t('device.fill.limits', { speed: speedLine(t) }),
+          deviceNow: t('device.fill.now', { now: nowLine(t) }),
+          deviceRecent: opts.recent.length ? t('device.fill.recent', { recent: opts.recent }) : '',
+          deviceLine: t('device.fill.line', { char: opts.character.name, line: opts.line }),
         },
       },
       preset,
@@ -452,7 +444,7 @@ export const useToyStore = defineStore('toys', () => {
         'device',
         { messages, ...samplerRequest(preset.sampler) },
         (text) => placeDeviceTags(text, opts.line),
-        `指令要写在 <device>…</device> 里：把${opts.character.name}这一句照抄一遍，在要变的地方插 <device>"键": 值</device>，不要别的写法、不要解释。`,
+        t('device.retry', { char: opts.character.name }),
         { signal: opts.signal },
       );
       const placed = value.map((st) => ({ pos: st.pos, command: fitCommand(st.command) })).filter((st): st is PlacedCommand => !!st.command);

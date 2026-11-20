@@ -1,4 +1,4 @@
-import { characterPronoun } from '@app/shared';
+import { characterPronoun, textFn, type TextFn } from '@app/shared';
 import { assembleTaskPrompt } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -65,24 +65,30 @@ function cut(text: string | undefined, max: number): string {
 }
 
 /** 这一次的输入：填进"小剧场"预设的程序填充块 */
-export function sidestoryFills(input: SidestoryInput): Record<string, string> {
+export function sidestoryFills(input: SidestoryInput, t: TextFn): Record<string, string> {
   const { character: c, user, world, current } = input;
   const now = input.now;
   return {
-    storyCharacter: `【角色】${c.name}\n${cut(c.description, 1200)}${c.personality ? `\n性格：${cut(c.personality, 300)}` : ''}${c.scenario ? `\n背景：${cut(c.scenario, 300)}` : ''}`,
+    storyCharacter: t('story.character', { name: c.name, description: cut(c.description, 1200), personality: cut(c.personality, 300), scenario: cut(c.scenario, 300) }),
     storyWorld: world
-      ? `【${characterPronoun(c)}的世界】${world.name}${world.blurb ? `：${world.blurb}` : ''}${world.schedule?.length ? `\n作息：\n${world.schedule.join('\n')}` : ''}${world.studyTask ? `\n手头在忙：${world.studyTask}` : ''}${world.meals ? `\n三餐：${world.meals}` : ''}${world.people?.length ? `\n身边的人：${world.people.map((p) => `${p.name}（${p.relation}）`).join('、')}` : ''}`
+      ? t('story.world', {
+        pronoun: characterPronoun(c), name: world.name, blurb: world.blurb, schedule: world.schedule ?? [], task: world.studyTask, meals: world.meals,
+        people: (world.people ?? []).map((p) => t('story.person', { name: p.name, relation: p.relation })),
+      })
       : '',
-    storyNow: `【现在】${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${WEEKDAY[now.getDay()]} ${clock(now)}${current?.place ? `；${c.name}在${current.place}${current.status ? `（${current.status}）` : ''}` : ''}`,
-    storyMemories: input.memories?.length ? `【${c.name}记得的关于${user.name}的事】\n${input.memories.slice(0, 8).map((m) => `- ${m}`).join('\n')}` : '',
-    storyRecent: input.recentChat?.length ? `【最近的聊天】\n${input.recentChat.slice(-8).join('\n')}` : '',
-    storyPrevious: input.previous?.length ? `【最近写过的番外】${input.previous.slice(-5).join('、')}` : '',
+    storyNow: t('story.now', {
+      date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, weekday: WEEKDAY[now.getDay()], time: clock(now),
+      char: c.name, place: current?.place, status: current?.status,
+    }),
+    storyMemories: input.memories?.length ? t('story.memories', { char: c.name, user: user.name, items: input.memories.slice(0, 8) }) : '',
+    storyRecent: input.recentChat?.length ? t('story.recent', { lines: input.recentChat.slice(-8) }) : '',
+    storyPrevious: input.previous?.length ? t('story.previous', { titles: input.previous.slice(-5) }) : '',
   };
 }
 
 /** 按"小剧场"预设拼番外的提示词 */
 export function buildSidestoryMessages(input: SidestoryInput, preset: TaskPreset): ChatMessage[] {
-  return assembleTaskPrompt({ preset, fills: sidestoryFills(input), macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.user.name, now: input.now } }).messages;
+  return assembleTaskPrompt({ preset, fills: sidestoryFills(input, textFn(preset.texts)), macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.user.name, now: input.now } }).messages;
 }
 
 function str(v: unknown): string {

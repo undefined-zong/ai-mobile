@@ -1,9 +1,10 @@
-import { getScene, MEAL_LABEL, rhythmDate, shiftDate, zonedInstant, type Message, type MessagePart } from '@app/shared';
+import { getScene, MEAL_LABEL, rhythmDate, shiftDate, textFn, zonedInstant, type Message, type MessagePart, type TextFn } from '@app/shared';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useHealthStore } from '@/stores/health';
 import { useHomeStore } from '@/stores/home';
+import { textsFor, useLibraryStore } from '@/stores/library';
 import { usePersonaStore } from '@/stores/personas';
 
 /**
@@ -66,29 +67,29 @@ const minutes = (sec: number) => Math.max(1, Math.round(sec / 60));
  * 一张卡片写成一件事；不是记录的卡片（邀请、拍一拍、玩具指令……）为空。
  * name 是角色的名字；withWho 是"和谁一起"里的那个人（默认是她；写进她的日记时空着，写成"一起"）
  */
-export function partEvent(p: MessagePart, name: string, withWho = name): Pick<DayEvent, 'kind' | 'icon' | 'title' | 'detail'> | null {
-  const together = withWho ? `和${withWho}一起` : '一起';
+export function partEvent(p: MessagePart, name: string, t: TextFn, withWho = name): Pick<DayEvent, 'kind' | 'icon' | 'title' | 'detail'> | null {
+  const together = withWho ? t('event.togetherWith', { who: withWho }) : t('event.together');
   switch (p.type) {
     case 'workout':
-      return { kind: 'workout', icon: 'i-lucide-dumbbell', title: p.mode === 'plan' && p.plan ? `照计划练「${p.plan.title}」` : p.sport, detail: [`${minutes(p.durationSec)} 分钟`, p.distanceKm ? `${p.distanceKm.toFixed(1)} 公里` : '', p.steps ? `${p.steps} 步` : ''].filter(Boolean).join(' · ') };
+      return { kind: 'workout', icon: 'i-lucide-dumbbell', title: workoutTitle(p, t), detail: t('event.workout.detail', { minutes: minutes(p.durationSec), km: p.distanceKm ? p.distanceKm.toFixed(1) : null, steps: p.steps || null }) };
     case 'meal':
-      return { kind: 'meal', icon: 'i-lucide-utensils', title: `${MEAL_LABEL[p.meal] ?? '吃饭'} · ${p.food}`, detail: p.how === 'together' ? `${together}吃` : p.how === 'solo' ? `${name}陪着` : '' };
+      return { kind: 'meal', icon: 'i-lucide-utensils', title: t('event.meal.title', { meal: MEAL_LABEL[p.meal] ?? t('event.meal.default'), food: p.food }), detail: p.how === 'together' ? t('event.meal.together', { together }) : p.how === 'solo' ? t('event.meal.solo', { name }) : '' };
     case 'study':
-      return { kind: 'study', icon: 'i-lucide-book-open', title: `学习 ${p.minutes} 分钟`, detail: [p.pomodoros ? `${p.pomodoros} 段` : '', p.tasks?.length ? `完成 ${p.tasks.filter((t) => t.done).length}/${p.tasks.length} 件` : '', p.together ? `${together}专注` : ''].filter(Boolean).join(' · ') };
+      return { kind: 'study', icon: 'i-lucide-book-open', title: t('event.study.title', { minutes: p.minutes }), detail: t('event.parts', { parts: [p.pomodoros ? t('event.study.pomodoros', { n: p.pomodoros }) : '', p.tasks?.length ? t('event.study.tasks', { done: p.tasks.filter((x) => x.done).length, total: p.tasks.length }) : '', p.together ? t('event.study.together', { together }) : ''].filter(Boolean) }) };
     case 'date':
-      return p.status === 'memory' ? { kind: 'date', icon: 'i-lucide-heart-handshake', title: `约会 · ${p.place}`, detail: p.minutes ? `${p.minutes} 分钟` : '' } : null;
+      return p.status === 'memory' ? { kind: 'date', icon: 'i-lucide-heart-handshake', title: t('event.date.title', { place: p.place }), detail: p.minutes ? t('event.minutes', { minutes: p.minutes }) : '' } : null;
     case 'watch':
-      return { kind: 'watch', icon: 'i-lucide-clapperboard', title: `看了《${p.title}》`, detail: `${p.minutes} 分钟${p.herScore ? ` · ${name}打了 ${p.herScore} 分` : ''}` };
+      return { kind: 'watch', icon: 'i-lucide-clapperboard', title: t('event.watch.title', { title: p.title }), detail: t('event.watch.detail', { minutes: p.minutes, name, score: p.herScore || null }) };
     case 'read':
-      return { kind: 'read', icon: 'i-lucide-book-marked', title: `一起读《${p.title}》`, detail: [p.chapter, `${p.progress}%`].filter(Boolean).join(' · ') };
+      return { kind: 'read', icon: 'i-lucide-book-marked', title: t('event.read.title', { title: p.title }), detail: [p.chapter, `${p.progress}%`].filter(Boolean).join(' · ') };
     case 'game':
-      return { kind: 'game', icon: 'i-lucide-gamepad-2', title: `玩了${GAME_NAME[p.game] ?? '一局'}`, detail: p.game === 'soup' ? p.title : p.game === 'workshop' ? p.title : '' };
+      return { kind: 'game', icon: 'i-lucide-gamepad-2', title: t('event.game.title', { game: GAME_NAME[p.game] ?? t('event.game.default') }), detail: p.game === 'soup' ? p.title : p.game === 'workshop' ? p.title : '' };
     case 'call-log':
-      return !p.missed && p.durationSec > 0 ? { kind: 'call', icon: p.video ? 'i-lucide-video' : 'i-lucide-phone', title: p.video ? '视频通话' : '通话', detail: `${minutes(p.durationSec)} 分钟` } : null;
+      return !p.missed && p.durationSec > 0 ? { kind: 'call', icon: p.video ? 'i-lucide-video' : 'i-lucide-phone', title: t(p.video ? 'event.call.video' : 'event.call.voice'), detail: t('event.minutes', { minutes: minutes(p.durationSec) }) } : null;
     case 'chore':
-      return p.status === 'done' ? { kind: 'chore', icon: 'i-lucide-house', title: `家务 · ${p.name}`, detail: p.minutes ? `${p.minutes} 分钟` : '' } : null;
+      return p.status === 'done' ? { kind: 'chore', icon: 'i-lucide-house', title: t('event.chore.title', { name: p.name }), detail: p.minutes ? t('event.minutes', { minutes: p.minutes }) : '' } : null;
     case 'music':
-      return { kind: 'music', icon: 'i-lucide-music-2', title: `《${p.title}》`, detail: p.artist };
+      return { kind: 'music', icon: 'i-lucide-music-2', title: t('event.music.title', { title: p.title }), detail: p.artist };
     case 'scene': {
       if (p.event !== 'enter' || !ENTER_ONLY.has(p.sceneId)) return null;
       const s = getScene(p.sceneId);
@@ -97,6 +98,16 @@ export function partEvent(p: MessagePart, name: string, withWho = name): Pick<Da
     default:
       return null;
   }
+}
+
+/** 运动那一件叫什么：照计划练的写计划名，别的写运动 */
+function workoutTitle(w: { mode?: string; plan?: { title: string } | null; sport: string }, t: TextFn): string {
+  return w.mode === 'plan' && w.plan ? t('event.workout.plan', { title: w.plan.title }) : w.sport;
+}
+
+/** "我的一天"的写法：和写进日记输入的一样，用日记预设里的程序文字 */
+function dayText(): TextFn {
+  return textFn(textsFor(useLibraryStore().presetForUse('diary')));
 }
 
 /** 这一条聊天在这段时间里的消息（内存里有的：每条聊天最近的几百条） */
@@ -112,12 +123,13 @@ export function dayEvents(date = todayDate()): DayEvent[] {
   const chat = useChatStore();
   const out: DayEvent[] = [];
   const workoutLogs = new Set<string>();
+  const t = dayText();
   for (const c of chat.chats) {
     const ch = chars.byId(c.characterId);
     if (!ch) continue;
     for (const m of messagesIn(c.id, from, to)) {
       m.parts.forEach((p, i) => {
-        const e = partEvent(p, ch.name);
+        const e = partEvent(p, ch.name, t);
         if (!e) return;
         if (p.type === 'workout') workoutLogs.add(p.logId);
         out.push({ ...e, key: `${m.id}:${i}`, at: m.createdAt, characterId: ch.id, chatId: c.id, messageId: m.id });
@@ -130,8 +142,8 @@ export function dayEvents(date = todayDate()): DayEvent[] {
     if (l.date !== date || workoutLogs.has(l.id)) continue;
     out.push({
       key: `log:${l.id}`, at: l.startedAt, characterId: l.characterId, kind: 'workout', icon: 'i-lucide-dumbbell',
-      title: l.mode === 'plan' && l.plan ? `照计划练「${l.plan.title}」` : l.sport,
-      detail: [`${minutes(l.durationSec)} 分钟`, l.distanceKm ? `${l.distanceKm.toFixed(1)} 公里` : '', l.steps ? `${l.steps} 步` : ''].filter(Boolean).join(' · '),
+      title: workoutTitle(l, t),
+      detail: t('event.workout.detail', { minutes: minutes(l.durationSec), km: l.distanceKm ? l.distanceKm.toFixed(1) : null, steps: l.steps || null }),
     });
   }
   return out.sort((a, b) => a.at - b.at);
@@ -206,21 +218,21 @@ function lastSleep(date: string): DayStats['sleep'] {
 }
 
 /** 今天的一句话（"环境与作息"里的今日活动预览） */
-export function dayLine(s: DayStats): string {
+export function dayLine(s: DayStats, t: TextFn): string {
   const parts: string[] = [];
-  if (s.workoutMin) parts.push(`你今天运动了 ${s.workoutMin} 分钟${s.steps ? `（${s.steps.toLocaleString('zh-CN')} 步）` : ''}`);
-  const ate = (['breakfast', 'lunch', 'dinner'] as const).filter((k) => s.meals[k]).map((k) => `${MEAL_LABEL[k]}吃了${s.meals[k]}`);
-  if (ate.length) parts.push(ate.join('，'));
-  if (s.studyMin) parts.push(`学习了 ${s.studyMin} 分钟`);
-  if (s.chores) parts.push(`家务做了 ${s.chores.done}/${s.chores.total}`);
-  return parts.length ? parts.join('，') : '你今天还没有记录（运动、吃饭、学习这些在一起做事时会自动记下）';
+  if (s.workoutMin) parts.push(t('env.today.workout', { minutes: s.workoutMin, steps: s.steps ? s.steps.toLocaleString('zh-CN') : null }));
+  const ate = (['breakfast', 'lunch', 'dinner'] as const).filter((k) => s.meals[k]).map((k) => t('env.today.meal', { meal: MEAL_LABEL[k], food: s.meals[k] }));
+  if (ate.length) parts.push(t('env.today.meals', { items: ate }));
+  if (s.studyMin) parts.push(t('env.today.study', { minutes: s.studyMin }));
+  if (s.chores) parts.push(t('env.today.chores', { done: s.chores.done, total: s.chores.total }));
+  return parts.length ? t('env.today', { parts }) : t('env.today.none');
 }
 
 /**
  * 这一天你和这个角色（日记里的"今天和你"）：一起做过的事，加上聊天里说过的话（每句截短，最多几十句）。
  * 没有就是空字符串
  */
-export function withUserText(characterId: string, date: string, userName: string, maxLines = 40): string {
+export function withUserText(characterId: string, date: string, userName: string, t: TextFn, maxLines = 40): string {
   const tz = useEnvironmentStore().settings.timezone;
   const [from, to] = dayBounds(date, tz);
   const chat = useChatStore();
@@ -231,11 +243,11 @@ export function withUserText(characterId: string, date: string, userName: string
   const time = (at: number) => new Intl.DateTimeFormat('zh-CN', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(at);
   for (const m of messagesIn(c.id, from, to)) {
     for (const p of m.parts) {
-      const e = partEvent(p, ch.name, '');
-      if (e) lines.push(`${time(m.createdAt)} [${m.role === 'user' ? `${userName}：` : ''}${e.title}${e.detail ? ` · ${e.detail}` : ''}]`);
+      const e = partEvent(p, ch.name, t, '');
+      if (e) lines.push(t('diary.withUser.event', { time: time(m.createdAt), body: t('diary.withUser.eventBody', { who: m.role === 'user' ? userName : null, title: e.title, detail: e.detail }) }));
     }
     const text = m.text?.replace(/\s+/g, ' ').trim();
-    if (text && (m.role === 'user' || m.role === 'assistant')) lines.push(`${time(m.createdAt)} ${m.role === 'user' ? userName : ch.name}：${text.length > 80 ? `${text.slice(0, 80)}…` : text}`);
+    if (text && (m.role === 'user' || m.role === 'assistant')) lines.push(t('diary.withUser.said', { time: time(m.createdAt), who: m.role === 'user' ? userName : ch.name, text: text.length > 80 ? `${text.slice(0, 80)}…` : text }));
   }
   // 太多时留下开头几句和后面的大部分（一天的样子都在）
   const kept = lines.length > maxLines ? [...lines.slice(0, 6), '……', ...lines.slice(-(maxLines - 7))] : lines;

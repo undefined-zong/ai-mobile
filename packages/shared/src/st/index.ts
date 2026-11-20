@@ -16,6 +16,7 @@ export * from './tokens.ts';
 export * from './worldinfo.ts';
 export * from './assemble.ts';
 export * from './task.ts';
+export * from './markers.ts';
 export * from './regex.ts';
 
 export type StFileKind = 'card' | 'lorebook' | 'preset' | 'chat' | 'unknown';
