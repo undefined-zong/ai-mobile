@@ -25,7 +25,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 | `[game:游戏名]` | 约你玩某一个游戏（邀请卡片 → 直接开那个游戏：王国模拟、大乱斗、海龟汤、真心话大冒险、飞行棋、装修小屋、创意工坊） |
 | `<device>"VIBRATE": 40</device>` | 玩具的控制指令（尖括号、成对、可以跨行；键沿用 SillyTavern 的 Intiface 插件：VIBRATE / OSCILLATE / ROTATE / LINEAR / STOP）。心跳里由心跳执行；聊天里是一张卡片，连着玩具时读到那里自动执行 |
 
-**聊天里的主动卡片由世界书开关**（`chatModules.ts`）：自带的世界书"聊天 · 主动卡片"每个功能一条、每个游戏一条，绑到角色卡上后，开着哪条她就能用哪个，关掉的那个功能提示词里不再教、回复里写了也不出卡片（玩具指令默认关着）。规则是"有开着的条目教了这个写法就开、只有关着的就关、都没提就按默认（歌曲、打电话照旧能用）"，所以自己写的世界书只要内容里写了这些写法也一样能开关。
+**日常聊天默认支持全部主动卡片和游戏**（`chatModules.ts`、`scenes.ts`）：标签和游戏来自共享注册表；角色是否绑定世界书、条目是否启用、是否写过某种标签，都不影响卡片执行。世界书的开关只控制其提示词内容。副对话预设内的卡片提示块按本轮处理的标签发送。
 
 其余和回复有关的写法：
 
@@ -88,7 +88,7 @@ App 认的各种写法集中在这一页：模型回复里夹带的隐藏标签�
 | novel.json | novel | `novel-chat` `novel-chapter` `novel-extra` `novel-rewrite` |
 | sprite.json | sprite | `sprite-tags` `sprite-label` `sprite-draw` `sprite-negative` |
 | assistant.json | assistant | `check`（一键检测）`card`（做角色卡 / 补全设定） |
-| feature-secondary.json | secondary（副对话） | `secondary`；主动卡片那几块的触发条件 `card:music` `card:call` `card:study` `card:watch` `card:sleep` `card:exercise` `card:parallel` `card:device`，游戏一个个开 `card:game:kingdom` `card:game:soup`……：按角色绑定世界书的模块开关，这一轮能用的才打开 |
+| feature-secondary.json | secondary（副对话） | `secondary`；主动卡片那几块的触发条件 `card:music` `card:call` `card:study` `card:watch` `card:sleep` `card:exercise` `card:parallel` `card:device`，游戏按类型分块 `card:game:kingdom` `card:game:soup`……：按本轮处理的标签发送提示块，日常聊天包括全部模块和游戏 |
 
 游戏的预设靠任务名的前缀认（`td-` `soup-` `fly-` `brawl-` `decor-` `ws-` `poke-` `community-`，`presetUses.ts`）：换成别的功能预设时出题、布置这些格式会不对。
 

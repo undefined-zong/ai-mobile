@@ -1,4 +1,5 @@
 import { pronounText } from './pronouns.ts';
+import { MODULE_TAGS } from './chatModules.ts';
 import type { Outfit, Pose } from './expressions.ts';
 import type { ControlTagKind } from './tags.ts';
 import type { ProactiveTriggerId } from './types/proactive.ts';
@@ -259,7 +260,7 @@ export const FREE_SCENE: SceneDef = {
   pose: 'stand',
   tint: '#f5b8a6',
   promptFragment: '【场景：日常聊天】像真人恋人一样自然地聊天，回复长短随对话节奏变化。',
-  allowedTags: ['expr', 'cg', 'music', 'call', 'poke', 'choice'],
+  allowedTags: ['expr', 'cg', ...MODULE_TAGS, 'poke', 'choice'],
   proactiveTriggers: [],
   dataSources: [],
 };
