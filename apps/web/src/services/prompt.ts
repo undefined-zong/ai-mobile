@@ -65,123 +65,126 @@ export function personaOf(chat: Chat | undefined): Persona {
   return usePersonaStore().forChat(chat);
 }
 
-function partToText(p: MessagePart, character: Character, user: string, mapText?: (text: string) => string): string {
+/** 聊天记录里一张卡片写成给模型看的一句（程序文字 history.*，这一轮预设里的） */
+function partToText(p: MessagePart, character: Character, user: string, t: TextFn, mapText?: (text: string) => string): string {
+  const char = character.name;
+  const card = (body: string) => t('history.card', { body });
   switch (p.type) {
     case 'text':
       return mapText ? mapText(p.text) : p.text;
     case 'voice':
-      return `[语音] ${p.transcript}`;
+      return t('history.voice', { text: p.transcript });
     case 'image':
       // 你发的照片：识图看到的内容代替图片；没看成就照实说看不到
-      if (p.photo) return p.seen ? `[照片：${p.seen}]` : `[照片（${character.name}看不到照片的内容）]`;
-      return `[图片：${p.title || p.caption}]`;
+      if (p.photo) return card(p.seen ? t('history.photo', { seen: p.seen }) : t('history.photoUnseen', { char }));
+      return card(t('history.image', { title: p.title || p.caption }));
     case 'music':
-      return `[分享歌曲：${p.title} - ${p.artist}]`;
+      return card(t('history.music', { title: p.title, artist: p.artist }));
     case 'poke':
-      return `（${pokeLine(p, user, character.name)}）`;
-    case 'call-log':
-      if (p.missed) return `[${p.answered ? '打来的' : '没接通的'}${p.video ? '视频通话' : '语音通话'}]`;
-      return `[${p.video ? '视频通话' : '语音通话'} ${Math.round(p.durationSec / 60)} 分钟${p.scene ? ` · ${p.scene}` : ''}]`;
+      return t('history.poke', { line: pokeLine(p, user, char, t) });
+    case 'call-log': {
+      const kind = t(p.video ? 'call.kind.video' : 'call.kind.voice');
+      if (p.missed) return card(t('history.call.missed', { kind, answered: !!p.answered }));
+      return card(t('history.call', { kind, minutes: Math.round(p.durationSec / 60), scene: p.scene }));
+    }
     case 'workout':
-      return `[${workoutText(p)}]`;
+      return card(workoutText(p, t));
     case 'chore':
-      return p.status === 'done'
-        ? `[家务：${p.name} 做完了${p.minutes ? `，做了 ${p.minutes} 分钟` : ''}${p.later ? `（之前拖了 ${p.later} 次）` : ''}${p.note ? `；${p.note}` : ''}]`
-        : `[家务：${p.name} 说晚点再做（拖了 ${p.later ?? 1} 次）]`;
+      return card(p.status === 'done'
+        ? t('history.chore.done', { name: p.name, minutes: p.minutes || null, later: p.later || null, note: p.note })
+        : t('history.chore.later', { name: p.name, later: p.later ?? 1 }));
     case 'meal': {
-      const how = p.how === 'together' ? '共同吃饭' : p.how === 'solo' ? '各吃各的' : '';
-      const way = p.plan ? `按计划${{ cook: '自己做', buy: '去买', bento: '带便当' }[p.plan.way]}（计划：${p.plan.name}）` : p.mode === 'free' ? '随便吃点' : '';
-      const extra = [p.photo ? '拍了照片' : '', p.herMeal ? `${character.name}吃的：${p.herMeal}` : '', p.cheers ? `碰杯 ${p.cheers} 次` : ''].filter(Boolean);
-      const meta = [how, way].filter(Boolean).join('，');
-      return `[一起吃饭 · ${MEAL_LABEL[p.meal] ?? '一顿饭'}：${p.food}${meta ? `（${meta}）` : ''}${extra.length ? `；${extra.join('；')}` : ''}]`;
+      const how = p.how === 'together' ? t('history.meal.together') : p.how === 'solo' ? t('history.meal.solo') : '';
+      const way = p.plan ? t('history.meal.plan', { way: t(`history.meal.way.${p.plan.way}`), name: p.plan.name }) : p.mode === 'free' ? t('history.meal.free') : '';
+      const extra = [p.photo ? t('history.meal.photo') : '', p.herMeal ? t('history.meal.her', { char, meal: p.herMeal }) : '', p.cheers ? t('history.meal.cheers', { n: p.cheers }) : ''].filter(Boolean);
+      return card(t('history.meal', { meal: MEAL_LABEL[p.meal] ?? t('history.meal.default'), food: p.food, meta: [how, way].filter(Boolean), extra }));
     }
     case 'study': {
-      const done = p.tasks?.filter((t) => t.done).map((t) => t.text) ?? [];
+      const done = p.tasks?.filter((x) => x.done).map((x) => x.text) ?? [];
       const extra = [
-        done.length ? `完成：${done.join('、')}` : '',
-        p.promise ? `约定"${p.promise.text}"${p.promise.kept ? '做到了' : '没做到'}` : '',
+        done.length ? t('history.study.done', { items: done }) : '',
+        p.promise ? t('history.study.promise', { text: p.promise.text, kept: !!p.promise.kept }) : '',
       ].filter(Boolean);
-      const how = !p.timer || p.timer === 'pomodoro' ? `${p.pomodoros} 个番茄，` : p.timer === 'countdown' ? '倒计时，' : '正计时，';
-      return `[陪伴学习：${how}${p.minutes} 分钟${p.together === false ? '，各自专注' : ''}${extra.length ? `；${extra.join('；')}` : ''}]`;
+      const how = !p.timer || p.timer === 'pomodoro' ? t('history.study.pomodoro', { n: p.pomodoros }) : t(p.timer === 'countdown' ? 'history.study.countdown' : 'history.study.stopwatch');
+      return card(t('history.study', { how, minutes: p.minutes, apart: p.together === false, extra }));
     }
     case 'date': {
-      if (p.status !== 'memory') return `[约会邀请：${p.when} ${p.place}]`;
+      if (p.status !== 'memory') return card(t('history.date.invite', { when: p.when, place: p.place }));
       const picks = Object.entries(p.picks ?? {})
         .filter(([, n]) => n > 0)
-        .map(([k, n]) => `${k} ${n} 次`);
+        .map(([k, n]) => t('history.date.pick', { name: k, n }));
       const extra = [
-        p.turns ? `走了 ${p.turns} 段${p.minutes ? `、${p.minutes} 分钟` : ''}` : '',
-        picks.length ? `${user}的回法：${picks.join('、')}` : '',
-        p.images?.length ? `留了 ${p.images.length} 张图` : '',
-        p.farewell ? `${character.name}最后说：${p.farewell}` : '',
+        p.turns ? t('history.date.turns', { turns: p.turns, minutes: p.minutes || null }) : '',
+        picks.length ? t('history.date.picks', { user, picks }) : '',
+        p.images?.length ? t('history.date.images', { n: p.images.length }) : '',
+        p.farewell ? t('history.date.farewell', { char, text: p.farewell }) : '',
       ].filter(Boolean);
-      return `[约会回忆 · ${p.place}${extra.length ? `：${extra.join('；')}` : ''}]`;
+      return card(t('history.date.memory', { place: p.place, extra }));
     }
     case 'gift':
-      return `[礼物：${p.name}]`;
+      return card(t('history.gift', { name: p.name }));
     case 'read':
-      return `[一起读《${p.title}》：读到${p.chapter}，全书 ${p.progress}%，写了 ${p.notes} 条批注${p.quote ? `；划了"${p.quote}"` : ''}]`;
+      return card(t('history.read', { title: p.title, chapter: p.chapter, progress: p.progress, notes: p.notes, quote: p.quote }));
     case 'game':
       if (p.game === 'brawl') {
         const r = p.result;
-        return `[大乱斗：${r.you}对战${r.opponent}，${r.winner === 'draw' ? '平局' : `${r.winner === 'you' ? r.you : r.opponent}获胜`}；${r.seconds} 秒，玩家造成 ${r.damage} 伤害，最高 ${r.combo} 连击${r.reason === 'forfeit' ? '，玩家认输' : ''}]`;
+        const result = r.winner === 'draw' ? t('history.brawl.draw') : t('history.brawl.win', { winner: r.winner === 'you' ? r.you : r.opponent });
+        return card(t('history.brawl', { you: r.you, opponent: r.opponent, result, seconds: r.seconds, damage: r.damage, combo: r.combo, forfeit: r.reason === 'forfeit' }));
       }
       if (p.game === 'truthdare') {
-        const tally = (t: TruthDareTally) => `真心话 ${t.truth} 次、大冒险 ${t.dare} 次${t.skipped ? `、认罚 ${t.skipped} 次` : ''}`;
-        return `[真心话大冒险${p.level ? `（${p.level}）` : ''}：玩了 ${p.rounds} 轮；${user}${tally(p.you)}；${character.name}${tally(p.her)}]`;
+        const tally = (x: TruthDareTally) => t('history.truthdare.tally', { truth: x.truth, dare: x.dare, skipped: x.skipped || null });
+        return card(t('history.truthdare', { level: p.level, rounds: p.rounds, user, you: tally(p.you), char, her: tally(p.her) }));
       }
-      if (p.game === 'decor') {
-        const her = p.herAdded ? `，其中${character.name}放了 ${p.herAdded} 件` : '';
-        return `[一起装修小屋「${p.room}」：现在摆了 ${p.items} 件，这一次添了 ${p.added} 件${her}]`;
-      }
+      if (p.game === 'decor') return card(t('history.decor', { room: p.room, items: p.items, added: p.added, char, herAdded: p.herAdded || null }));
       if (p.game === 'workshop') {
-        const mood = p.verdict === 'cheer' ? `，想听${characterPronoun(character)}捧场` : p.verdict === 'roast' ? `，想听${characterPronoun(character)}吐槽` : '';
-        if (p.kind === 'image') return `[${user}在创意工坊画了一张画「${p.title}」拿给${character.name}看${mood}]`;
-        const head = p.excerpt ? `，开头是：${p.excerpt}` : '';
-        return `[${user}在创意工坊写的小说《${p.title}》${p.chapter ? `的「${p.chapter}」` : ''}拿给${character.name}看${mood}${head}]`;
+        const mood = p.verdict === 'cheer' || p.verdict === 'roast' ? t(`history.workshop.${p.verdict}`, { pronoun: characterPronoun(character) }) : '';
+        if (p.kind === 'image') return card(t('history.workshop.image', { user, title: p.title, char, mood }));
+        return card(t('history.workshop.novel', { user, title: p.title, chapter: p.chapter, char, mood, excerpt: p.excerpt }));
       }
       if (p.game === 'flight') {
-        const won = p.winner ? `；${p.winner === 'you' ? user : character.name}先到了终点` : '';
-        return `[飞行棋「${p.board}」：掷了 ${p.turns} 次骰子；${user}走到第 ${p.you} 格，${character.name}走到第 ${p.her} 格（一共 ${p.size} 格）${won}]`;
+        return card(t('history.flight', { board: p.board, turns: p.turns, user, you: p.you, char, her: p.her, size: p.size, winner: p.winner ? (p.winner === 'you' ? user : char) : null }));
       }
-      return `[海龟汤《${p.title}》：${{ solved: '猜出来了', partial: '猜对了一半', 'gave-up': '认输了' }[p.result]}，问了 ${p.questions} 个问题${p.truth ? `；汤底：${p.truth}` : ''}]`;
+      return card(t('history.soup', { title: p.title, result: t(`history.soup.${p.result}`), questions: p.questions, truth: p.truth }));
     case 'watch':
-      return `[一起看了《${p.title}》${p.minutes} 分钟${p.yourScore ? `；${user}打 ${p.yourScore}/5` : ''}${p.herScore ? `；${character.name}打 ${p.herScore}/5` : ''}]`;
+      return card(t('history.watch', { title: p.title, minutes: p.minutes, user, yourScore: p.yourScore || null, char, herScore: p.herScore || null }));
     case 'scene':
-      return `（${p.title}${p.summary ? `：${p.summary}` : ''}）`;
+      return t('history.scene', { title: p.title, summary: p.summary });
     case 'invite': {
-      const activity = p.kind === 'sleep' ? '哄睡' : p.kind === 'exercise' ? '一起运动' : p.kind === 'parallel' ? '一起看平行时空' : '';
       const what =
         p.kind === 'study'
-          ? `一起学习${p.task ? `：${p.task}` : ''}${p.minutes ? `（${p.minutes} 分钟）` : ''}`
+          ? t('history.invite.study', { task: p.task, minutes: p.minutes || null })
           : p.kind === 'watch'
-            ? `一起看${p.title ? `《${p.title}》` : '片'}`
+            ? t('history.invite.watch', { title: p.title })
             : p.kind === 'game'
-              ? `一起玩${inviteGameLabel(p.game)}`
-              : activity;
-      return `[邀请${what}${p.answer === 'yes' ? `；${user}答应了` : p.answer === 'no' ? `；${user}这次没答应` : ''}]`;
+              ? t('history.invite.game', { game: inviteGameLabel(p.game) })
+              : p.kind === 'sleep' || p.kind === 'exercise' || p.kind === 'parallel'
+                ? t(`history.invite.${p.kind}`)
+                : '';
+      return card(t('history.invite', { what, user, yes: p.answer === 'yes', no: p.answer === 'no' }));
     }
     case 'toy':
-      return `[玩具：${p.text}]`;
+      return card(t('history.toy', { text: p.text }));
   }
 }
 
-/** 运动卡片的一句话："健身：照计划练「上肢 + 核心」做完 5/6 个动作，32 分钟；平均心率 138；约 210 千卡" */
-export function workoutText(p: Extract<MessagePart, { type: 'workout' }>): string {
-  const head = p.mode === 'plan' && p.plan ? `健身：照计划练「${p.plan.title}」，做完 ${p.plan.done}/${p.plan.total} 个动作` : `运动记录：${p.sport}`;
-  const parts = [
-    `用时 ${Math.max(1, Math.round(p.durationSec / 60))} 分钟`,
-    p.distanceKm ? `${p.distanceKm} 公里${p.pace ? `（配速 ${p.pace}）` : ''}` : '',
-    p.steps ? `${p.steps} 步` : '',
-    p.heartRate?.avg ? `平均心率 ${p.heartRate.avg}${p.heartRate.max ? `、最高 ${p.heartRate.max}` : ''}` : '',
-    p.kcal ? `约 ${p.kcal} 千卡` : '',
-  ].filter(Boolean);
-  return `${head}；${parts.join('；')}${p.source === 'watch' ? '（手表记的）' : ''}`;
+/** 运动卡片的一句话（程序文字 history.workout*）："健身：照计划练「上肢 + 核心」做完 5/6 个动作，32 分钟；平均心率 138；约 210 千卡" */
+export function workoutText(p: Extract<MessagePart, { type: 'workout' }>, t: TextFn): string {
+  return t('history.workout', {
+    head: p.mode === 'plan' && p.plan ? t('history.workout.plan', { title: p.plan.title, done: p.plan.done, total: p.plan.total }) : t('history.workout.free', { sport: p.sport }),
+    minutes: Math.max(1, Math.round(p.durationSec / 60)),
+    km: p.distanceKm || null,
+    pace: p.pace,
+    steps: p.steps || null,
+    hrAvg: p.heartRate?.avg || null,
+    hrMax: p.heartRate?.max || null,
+    kcal: p.kcal || null,
+    watch: p.source === 'watch',
+  });
 }
 
 /** mapText：只改文字部分（正则只改你写的、她说的，不动卡片的描述） */
-export function messageToText(m: Message, character: Character, user = usePersonaStore().defaultPersona.name, mapText?: (text: string) => string): string {
-  return m.parts.map((p) => partToText(p, character, user, mapText)).filter(Boolean).join('\n').trim();
+export function messageToText(m: Message, character: Character, t: TextFn, user = usePersonaStore().defaultPersona.name, mapText?: (text: string) => string): string {
+  return m.parts.map((p) => partToText(p, character, user, t, mapText)).filter(Boolean).join('\n').trim();
 }
 
 export interface TurnOptions {
@@ -191,20 +194,23 @@ export interface TurnOptions {
   regex?: readonly RegexScript[];
   /** 统计：有内容的消息一共几条、按条数截掉几条、正则改了几条 */
   stats?: { total: number; dropped: number; regexed: number };
+  /** 这一轮预设的程序文字（卡片怎么写成一句） */
+  t: TextFn;
 }
 
 /** 聊天记录 → 拼装器要的格式：旁白 / 场景分隔当系统消息（同 ST 的 narrator） */
-export function toTurns(history: Message[], character: Character, user: string, opts: TurnOptions = {}): ChatTurn[] {
-  const all = history.filter((m) => messageToText(m, character, user));
+export function toTurns(history: Message[], character: Character, user: string, opts: TurnOptions): ChatTurn[] {
+  const t = opts.t;
+  const all = history.filter((m) => messageToText(m, character, t, user));
   const items = lastN(all, opts.last);
   if (opts.stats) Object.assign(opts.stats, { total: all.length, dropped: all.length - items.length, regexed: 0 });
   const out: ChatTurn[] = [];
   items.forEach((m, i) => {
     const placement = m.role === 'user' ? 'user_input' : m.role === 'assistant' ? 'ai_output' : null;
-    const plain = messageToText(m, character, user);
+    const plain = messageToText(m, character, t, user);
     const text =
       placement && opts.regex?.length
-        ? messageToText(m, character, user, (t) => applyRegexScripts(opts.regex, t, { target: 'prompt', placement, depth: items.length - 1 - i, char: character.name, user }))
+        ? messageToText(m, character, t, user, (x) => applyRegexScripts(opts.regex, x, { target: 'prompt', placement, depth: items.length - 1 - i, char: character.name, user }))
         : plain;
     if (opts.stats && text !== plain) opts.stats.regexed++;
     // 正则把整条都删掉了：这一条不发（同空消息）
@@ -437,9 +443,10 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const now = opts.now ?? new Date();
   const timeZone = useEnvironmentStore().settings.timezone;
   const proactive = opts.agent === 'proactive' || opts.type === 'quiet';
-  const userText = lastUser ? messageToText(lastUser, character, persona.name) : '';
-  const recall: RecallForTurn = proactive ? { lines: [], snapshot: undefined, added: 0, reused: false } : recallForTurn(chat, character, userText, opts.targetId);
+  // 这一轮预设的程序文字：程序块、聊天记录里的卡片怎么写
   const t = textFn(textsFor(preset));
+  const userText = lastUser ? messageToText(lastUser, character, t, persona.name) : '';
+  const recall: RecallForTurn = proactive ? { lines: [], snapshot: undefined, added: 0, reused: false } : recallForTurn(chat, character, userText, opts.targetId);
   const app = appFills(chat, character, history, now, timeZone, recall, proactive, userText, t);
   if (opts.allowedTags) app.sceneRules = {
     content: tagsLine(getScene(chat.currentScene ?? 'free'), character, t, opts.allowedTags),
@@ -458,8 +465,8 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const last = msgSettings.sendCount();
   const sendable = msgSettings.settings.dropSummarized ? afterSummarized(history, chat.summaryUntilMessageId) : history;
   const turnStats = { total: 0, dropped: 0, regexed: 0 };
-  const turns = toTurns(sendable, character, persona.name, { last, regex: preset.regex, stats: turnStats });
-  const loreHistory = toTurns(history, character, persona.name, { regex: preset.regex });
+  const turns = toTurns(sendable, character, persona.name, { last, regex: preset.regex, stats: turnStats, t });
+  const loreHistory = toTurns(history, character, persona.name, { regex: preset.regex, t });
   const result = assemblePrompt({
     preset,
     character,

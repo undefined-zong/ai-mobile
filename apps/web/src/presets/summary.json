@@ -118,5 +118,8 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "summary.narrator": "旁白"
+  }
 }

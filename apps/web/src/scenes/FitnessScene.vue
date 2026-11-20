@@ -20,7 +20,7 @@ import { useMicLink } from '@/composables/useMicLink';
 import { services } from '@/services';
 import { fitMusic } from '@/services/musicPlayer';
 import { fitSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { clearFitnessSession, loadFitnessSession, saveFitnessSession, type FitnessSession } from '@/services/fitnessSession';
 import { bluetoothSupported, createGpsTracker, createHeartRate, createStepCounter, isIOS, trackingSupport } from '@/services/workoutSensors';
@@ -263,20 +263,23 @@ const cue = computed(() => {
   return clock(activeSec.value);
 });
 
+/** 这个场景的程序文字（"一起运动"用途的预设里的 fitScene.*） */
+function ft() {
+  return sceneText('scene:exercise', her.value);
+}
 function statsLines(): string[] {
-  const parts = [
-    `已经练了 ${Math.max(1, Math.round(activeSec.value / 60))} 分钟`,
-    hr.state.bpm ? `现在心率 ${hr.state.bpm}` : '',
-    hr.state.avg ? `平均心率 ${hr.state.avg}、最高 ${hr.state.max}` : '',
-    stepCounter.state.steps ? `${stepCounter.state.steps} 步` : '',
-    gps.state.km >= 0.05 ? `${gps.state.km.toFixed(2)} 公里，配速 ${paceLive.value}` : '',
-    kcalLive.value.kcal ? `大约消耗 ${kcalLive.value.kcal} 千卡（${kcalLive.value.basis}）` : '',
-  ].filter(Boolean);
-  return [parts.join('，')];
+  return [ft()('fitScene.stats', {
+    minutes: Math.max(1, Math.round(activeSec.value / 60)),
+    bpm: hr.state.bpm || null, avg: hr.state.avg || null, max: hr.state.max,
+    steps: stepCounter.state.steps || null,
+    km: gps.state.km >= 0.05 ? gps.state.km.toFixed(2) : null, pace: paceLive.value,
+    kcal: kcalLive.value.kcal || null, basis: kcalLive.value.basis,
+  })];
 }
 function whatLine(): string {
-  if (mode.value === 'plan' && planWorkout.value) return `照今天的健身计划练：${planWorkout.value.title}（${planWorkout.value.minutes} 分钟，${planWorkout.value.intensity || '中等'}；${planWorkout.value.items.map((m) => m.name).join('、')}）`;
-  return `随便动动：${method.value}${outdoor.value ? '（室外）' : ''}${targetMin.value ? `，打算练 ${targetMin.value} 分钟` : '，不定时'}`;
+  const w = planWorkout.value;
+  if (mode.value === 'plan' && w) return ft()('fitScene.what.plan', { title: w.title, minutes: w.minutes, intensity: w.intensity || ft()('fitScene.what.defaultIntensity'), items: w.items.map((m) => m.name) });
+  return ft()('fitScene.what.free', { method: method.value, outdoor: outdoor.value, target: targetMin.value || null });
 }
 
 async function speak(text: string) {
@@ -343,7 +346,7 @@ async function begin() {
   startTicker();
   persistSession();
   chars.setExpression(her.value.id, 'laugh');
-  await reply('fit-start', [whatLine(), herSlot.value ? `你自己这会儿：${herSlot.value.status}（在${herWhere.value || '你那边'}）` : '', hs.value?.goal ? `${userName.value}的目标：${hs.value.goal}` : '']);
+  await reply('fit-start', [whatLine(), ft()('fitScene.start', { status: herSlot.value?.status, where: herWhere.value, user: userName.value, goal: hs.value?.goal })]);
 }
 
 /** 照计划：这一组按时间做的开倒计时，按次数做的等你点"这组做完了" */
@@ -392,7 +395,7 @@ function tick() {
     if (targetMin.value && min >= targetMin.value && lastCheerMin < targetMin.value) {
       lastCheerMin = targetMin.value;
       services.native.vibrate([40, 80, 40]);
-      void reply('fit-cheer', [whatLine(), `定的 ${targetMin.value} 分钟到了（还可以接着练，也可以结束）`, ...statsLines(), watchLine()]);
+      void reply('fit-cheer', [whatLine(), ft()('fitScene.targetReached', { minutes: targetMin.value }), ...statsLines(), watchLine()]);
     } else if (min > 0 && min % CHEER_EVERY_MIN === 0 && min !== lastCheerMin) {
       lastCheerMin = min;
       void reply('fit-cheer', [whatLine(), ...statsLines(), watchLine()]);
@@ -591,7 +594,7 @@ async function nextMove(completed: boolean) {
   startSegment();
   // 正式的动作做完了才让她说一句（热身、拉伸不说）
   if (completed && s.kind === 'items') {
-    await reply('fit-move', [`${userName.value}做完了：${s.move.name}（${moveAmount(s.move)}）`, `下一个：${next.move.name}（${moveAmount(next.move)}）${next.move.tips ? `；要注意：${next.move.tips}` : ''}`, ...statsLines(), watchLine()]);
+    await reply('fit-move', [ft()('fitScene.moveDone', { user: userName.value, move: s.move.name, amount: moveAmount(s.move), next: next.move.name, nextAmount: moveAmount(next.move), tips: next.move.tips }), ...statsLines(), watchLine()]);
   }
 }
 function skipRest() {
@@ -601,7 +604,7 @@ function skipRest() {
 
 // —— 边练边聊 ——
 function doingLine(): string {
-  return mode.value === 'plan' && current.value ? `现在在做：${current.value.move.name}（第 ${setNo.value}/${current.value.move.sets} 组${resting.value ? '，组间休息' : ''}）` : '';
+  return mode.value === 'plan' && current.value ? ft()('fitScene.doing', { move: current.value.move.name, set: setNo.value, sets: current.value.move.sets, resting: resting.value }) : '';
 }
 const chatText = ref('');
 async function sendChat() {
@@ -615,7 +618,7 @@ async function sendChat() {
   }
   if (stream.value) return;
   chatText.value = '';
-  await reply('fit-chat', [whatLine(), doingLine(), paused.value ? '暂停着' : '', ...statsLines(), watchLine()], t);
+  await reply('fit-chat', [whatLine(), doingLine(), paused.value ? ft()('fitScene.paused') : '', ...statsLines(), watchLine()], t);
 }
 
 // —— 音乐：网易云的歌单，边练边听（右上角喇叭下面） ——
@@ -642,7 +645,7 @@ function closeVideo() {
 /** 在看的视频：她看不到画面、听不到声音，只知道标题和 UP 主 */
 function watchLine(): string {
   const v = video.value;
-  return v ? `${userName.value}边练边看 B 站视频：《${v.title}》${v.author ? `（UP 主：${v.author}）` : ''}；${her.value.name}看不到画面、听不到声音，只知道这些` : '';
+  return v ? ft()('fitScene.video', { user: userName.value, title: v.title, author: v.author, char: her.value.name }) : '';
 }
 async function onVideoPick(v: VideoHit) {
   watchOpen.value = false;
@@ -654,7 +657,7 @@ async function onVideoPick(v: VideoHit) {
   video.value = v;
   // 视频自己有声音：音乐先停（想一起开，再点一下音乐就行）
   if (fitMusic.state.playing) void fitMusic.toggle(false);
-  await reply('fit-watch', [whatLine(), doingLine(), paused.value ? '暂停着' : '', ...statsLines(), watchLine(), `${userName.value}刚点开了这个视频`]);
+  await reply('fit-watch', [whatLine(), doingLine(), paused.value ? ft()('fitScene.paused') : '', ...statsLines(), watchLine(), ft()('fitScene.videoOpened', { user: userName.value })]);
 }
 
 // —— 连麦：手上忙着，说话她就听得到，用她的声音回你（最下面左边） ——
@@ -670,9 +673,9 @@ function newSpeech(o: { onSentence?(text: string, i: number): void } = {}): Spee
   return q;
 }
 function linkContext(): string {
-  if (phase.value === 'setup') return `${userName.value}还没开练，在准备。打算：${whatLine()}`;
-  if (phase.value === 'done') return `${userName.value}刚练完（${whatLine()}），一共练了 ${Math.max(1, Math.round(endedSec.value / 60))} 分钟`;
-  return [whatLine(), doingLine(), paused.value ? '暂停着' : '', ...statsLines(), watchLine()].filter(Boolean).join('\n');
+  if (phase.value === 'setup') return ft()('fitScene.link.setup', { user: userName.value, what: whatLine() });
+  if (phase.value === 'done') return ft()('fitScene.link.done', { user: userName.value, what: whatLine(), minutes: Math.max(1, Math.round(endedSec.value / 60)) });
+  return [whatLine(), doingLine(), paused.value ? ft()('fitScene.paused') : '', ...statsLines(), watchLine()].filter(Boolean).join('\n');
 }
 const link = useMicLink({
   chatId,
@@ -684,10 +687,7 @@ const link = useMicLink({
   onInterrupt: () => undefined,
   autoWhisper: () => false,
   tasks: { reply: 'fit-call' },
-  input: (kind, info) =>
-    kind === 'open'
-      ? `${info.context}\n你们刚连上麦，${userName.value}${phase.value === 'active' ? '一边练一边' : ''}用语音跟你说话。先开口说第一句，1–2 个短句。`
-      : `${info.context}\n连麦中（已经连了 ${info.linked}）。回${userName.value}刚才说的话。`,
+  input: (kind, info) => ft()(kind === 'open' ? 'fitScene.link.open' : 'fitScene.link.reply', { context: info.context, user: userName.value, active: phase.value === 'active', linked: info.linked }),
 });
 // 练着的时候挂断了麦：屏幕接着保持亮着（连麦挂断时会把它关掉）
 watch(
@@ -890,12 +890,11 @@ async function send() {
     visitMinutes.value += Math.max(1, Math.round(s.sec / 60));
     await reply('fit-end', [
       whatLine(),
-      `一共练了 ${Math.max(1, Math.round(s.sec / 60))} 分钟`,
-      mode.value === 'plan' ? `做完了 ${doneItems.value} / ${totalMoves.value} 个动作${doneMoves.value.length ? `：${doneMoves.value.join('、')}` : ''}` : '',
-      s.hrAvg ? `平均心率 ${s.hrAvg}${s.hrMax ? `，最高 ${s.hrMax}` : ''}` : '',
-      s.km ? `${s.km} 公里，配速 ${s.pace}` : '',
-      s.steps ? `${s.steps} 步` : '',
-      s.kcal ? `大约消耗 ${s.kcal} 千卡（${s.kcalBasis}）` : '',
+      ft()('fitScene.end', {
+        minutes: Math.max(1, Math.round(s.sec / 60)),
+        plan: mode.value === 'plan', done: doneItems.value, total: totalMoves.value, moves: doneMoves.value,
+        hrAvg: s.hrAvg || null, hrMax: s.hrMax || null, km: s.km || null, pace: s.pace, steps: s.steps || null, kcal: s.kcal || null, basis: s.kcalBasis,
+      }),
     ]);
   } finally {
     sending.value = false;

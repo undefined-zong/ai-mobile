@@ -418,5 +418,23 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "fitScene.stats": "已经练了 {{minutes}} 分钟[[，现在心率 {{bpm}}]][[，平均心率 {{avg}}、最高 {{max}}]][[，{{steps}} 步]][[，{{km}} 公里，配速 {{pace}}]][[，大约消耗 {{kcal}} 千卡（{{basis}}）]]",
+    "fitScene.what.plan": "照今天的健身计划练：{{title}}（{{minutes}} 分钟，{{intensity}}；{{items}}）",
+    "fitScene.what.defaultIntensity": "中等",
+    "fitScene.what.free": "随便动动：{{method}}[[{{?outdoor}}（室外）]][[，打算练 {{target}} 分钟]][[{{!target}}，不定时]]",
+    "fitScene.start": "你自己这会儿：{{status}}（在[[{{where}}]][[{{!where}}你那边]]）\n{{user}}的目标：{{goal}}",
+    "fitScene.targetReached": "定的 {{minutes}} 分钟到了（还可以接着练，也可以结束）",
+    "fitScene.moveDone": "{{user}}做完了：{{move}}（{{amount}}）\n下一个：{{next}}（{{nextAmount}}）[[；要注意：{{tips}}]]",
+    "fitScene.doing": "现在在做：{{move}}（第 {{set}}/{{sets}} 组[[{{?resting}}，组间休息]]）",
+    "fitScene.paused": "暂停着",
+    "fitScene.video": "{{user}}边练边看 B 站视频：《{{title}}》[[（UP 主：{{author}}）]]；{{char}}看不到画面、听不到声音，只知道这些",
+    "fitScene.videoOpened": "{{user}}刚点开了这个视频",
+    "fitScene.link.setup": "{{user}}还没开练，在准备。打算：{{what}}",
+    "fitScene.link.done": "{{user}}刚练完（{{what}}），一共练了 {{minutes}} 分钟",
+    "fitScene.link.open": "{{context}}\n你们刚连上麦，{{user}}[[{{?active}}一边练一边]]用语音跟你说话。先开口说第一句，1–2 个短句。",
+    "fitScene.link.reply": "{{context}}\n连麦中（已经连了 {{linked}}）。回{{user}}刚才说的话。",
+    "fitScene.end": "一共练了 {{minutes}} 分钟\n{{?plan}}做完了 {{done}} / {{total}} 个动作[[：{{moves}}]]\n平均心率 {{hrAvg}}[[，最高 {{hrMax}}]]\n{{km}} 公里，配速 {{pace}}\n{{steps}} 步\n大约消耗 {{kcal}} 千卡（{{basis}}）"
+  }
 }

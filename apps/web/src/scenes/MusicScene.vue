@@ -30,7 +30,7 @@ import {
   setVolume,
   toggle,
 } from '@/services/musicPlayer';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -158,16 +158,12 @@ async function planReactions() {
     chatId.value,
     {
       name: 'music-batch',
-      input: [
-        `歌：《${s.title}》- ${s.artist}${s.album ? `（专辑《${s.album}》）` : ''}${player.demo ? '（示例歌曲，虚构的）' : ''}`,
-        durationMs.value ? `时长：${clock(durationMs.value / 1000)}` : '',
-        '话量：适中（这首歌说 2–4 句，不想说也可以一句都不说）',
-        herSaid.length ? `你刚才说过：${herSaid.slice(-4).join(' / ')}` : '',
-        '歌词（编号 时间 歌词 / 译文）：',
-        ...lines.map((l) => `#${l.i} ${clock(l.t / 1000)} ${l.text}${l.tr ? ` / ${l.tr}` : ''}`),
-      ]
-        .filter(Boolean)
-        .join('\n'),
+      input: sceneText('scene:music', her.value)('musicScene.batch', {
+        title: s.title, artist: s.artist, album: s.album, demo: player.demo,
+        duration: durationMs.value ? clock(durationMs.value / 1000) : null,
+        said: herSaid.slice(-4),
+        lines: lines.map((l) => sceneText('scene:music', her.value)('musicScene.lyric', { n: l.i, time: clock(l.t / 1000), text: l.text, tr: l.tr })),
+      }),
     },
     parseBatch(new Set(lines.map((l) => l.i))),
   );
@@ -241,13 +237,10 @@ async function sendTalk() {
   const lyric = player.lines[lineIdx.value]?.text ?? '';
   const r = await chat.sceneReply(chatId.value, {
     task: 'music-chat',
-    input: [
-      s ? `正在放：《${s.title}》- ${s.artist}${player.demo ? '（示例歌曲）' : ''}` : '还没在放歌',
-      s ? `放到 ${clock(player.posMs / 1000)}${lyric ? `，唱到"${lyric}"` : ''}` : '',
-      herSaid.length ? `你刚才说过：${herSaid.slice(-4).join(' / ')}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    input: sceneText('scene:music', her.value)('musicScene.chat', {
+      playing: !!s, title: s?.title, artist: s?.artist, demo: player.demo,
+      pos: s ? clock(player.posMs / 1000) : null, lyric, said: herSaid.slice(-4),
+    }),
     userText: text,
     cue: s ? `《${s.title}》${clock(player.posMs / 1000)}` : undefined,
     allowedTags: ['expr', 'music'],

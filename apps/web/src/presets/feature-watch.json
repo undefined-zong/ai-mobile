@@ -386,5 +386,18 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "watchScene.link": "[[{{?direct}}平台：视频文件链接]][[平台：{{platform}}（{{url}}）]]\n作者 / 频道：{{author}}\n{{?notes}}{{user}}贴的内容（简介 / 字幕 / 重点）：\n{{notes}}",
+    "watchScene.batch": "片名：{{title}}\n{{link}}\n前情提要：[[{{summary}}]][[{{!summary}}（刚开始）]]\n话量：{{talk}}（{{talkHint}}）\n这一段的字幕（编号 片内时间 台词）：\n{{cues|\\n}}",
+    "watchScene.cue": "#{{n}} {{time}} {{text}}",
+    "watchScene.where.manual": "大概播到 {{time}}（{{user}}点\"开始计时\"算的）",
+    "watchScene.where.watched": "你们已经一起看了约 {{time}}",
+    "watchScene.where.player": "现在播到 {{time}}[[{{?paused}}（暂停中）]]",
+    "watchScene.chatter": "片名：{{title}}\n{{link}}\n{{where}}\n你刚才说过：{{said| / }}",
+    "watchScene.chat": "片名：{{title}}\n{{link}}\n前情提要：[[{{summary}}]][[{{!summary}}（刚开始）]]\n{{?hasCues}}现在：{{now}}[[{{?paused}}（暂停中）]]\n{{!hasCues}}{{where}}\n{{?recent}}最近 60 秒的字幕：\n{{recent|\\n}}\n你刚才说过：{{said| / }}",
+    "watchScene.end": "片名：{{title}}\n{{link}}\n前情提要：[[{{summary}}]][[{{!summary}}（没有）]]\n一起看了 {{minutes}} 分钟",
+    "watchScene.myScore": "我打 {{score}}/5[[：{{words}}]]",
+    "watchScene.finished": "看完了"
+  }
 }

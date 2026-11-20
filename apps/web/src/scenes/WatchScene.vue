@@ -9,7 +9,7 @@ import FlyingDanmaku from '@/components/scene/FlyingDanmaku.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
 import { useBiliEmbed } from '@/composables/useBiliEmbed';
 import { isHandheld, useTheater } from '@/composables/useTheater';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
@@ -310,15 +310,18 @@ function parseBatch(valid: Set<number>) {
   };
 }
 
+/** 这个场景的程序文字（"一起观影"用途的预设里的 watchScene.*） */
+function wt() {
+  return sceneText('scene:watch', her.value);
+}
 /** 贴链接时片子的信息（给她看的那几行） */
 function linkLines(): string[] {
   const l = link.value;
   if (source.value !== 'link' || !l) return [];
-  return [
-    l.platform === 'direct' ? '平台：视频文件链接' : `平台：${PLATFORM_LABEL[l.platform]}（${l.watchUrl}）`,
-    author.value ? `作者 / 频道：${author.value}` : '',
-    notes.value.trim() ? `${userName.value}贴的内容（简介 / 字幕 / 重点）：\n${notes.value.trim().slice(0, 2000)}` : '',
-  ].filter(Boolean);
+  return [wt()('watchScene.link', {
+    direct: l.platform === 'direct', platform: l.platform === 'direct' ? null : PLATFORM_LABEL[l.platform], url: l.watchUrl,
+    author: author.value, user: userName.value, notes: notes.value.trim().slice(0, 2000),
+  })];
 }
 
 async function requestWindow(k: number) {
@@ -333,14 +336,10 @@ async function requestWindow(k: number) {
     chatId.value,
     {
       name: 'watch-batch',
-      input: [
-        `片名：${title.value}`,
-        ...linkLines(),
-        `前情提要：${summary || '（刚开始）'}`,
-        `话量：${TALK[talk.value].label}（${TALK[talk.value].hint}）`,
-        '这一段的字幕（编号 片内时间 台词）：',
-        ...idx.map(({ c, i }) => `#${i} ${mediaClock(c.start)} ${c.text}`),
-      ].join('\n'),
+      input: wt()('watchScene.batch', {
+        title: title.value, link: linkLines().join('\n'), summary, talk: TALK[talk.value].label, talkHint: TALK[talk.value].hint,
+        cues: idx.map(({ c, i }) => wt()('watchScene.cue', { n: i, time: mediaClock(c.start), text: c.text })),
+      }),
     },
     parseBatch(new Set(idx.map((x) => x.i))),
   );
@@ -398,9 +397,9 @@ function chatterGap(): number {
 function whereLine(): string {
   const now = clockNow();
   if (clockKind.value === 'manual') {
-    return playing.value || baseSec > 0 ? `大概播到 ${mediaClock(now)}（${userName.value}点"开始计时"算的）` : `你们已经一起看了约 ${mediaClock(watchedSec)}`;
+    return playing.value || baseSec > 0 ? wt()('watchScene.where.manual', { time: mediaClock(now), user: userName.value }) : wt()('watchScene.where.watched', { time: mediaClock(watchedSec) });
   }
-  return `现在播到 ${mediaClock(now)}${playing.value ? '' : '（暂停中）'}`;
+  return wt()('watchScene.where.player', { time: mediaClock(now), paused: !playing.value });
 }
 function maybeChatter() {
   if (phase.value !== 'watching' || source.value !== 'link' || cues.value.length || notConnected.value || chattering.value || !playing.value || replying.value) return;
@@ -414,7 +413,7 @@ async function chatter() {
   lastChatterAt = watchedSec;
   const r = await chat.sceneReply(chatId.value, {
     task: 'watch-link',
-    input: [`片名：${title.value}`, ...linkLines(), whereLine(), herSaid.length ? `你刚才说过：${herSaid.slice(-5).join(' / ')}` : ''].filter(Boolean).join('\n'),
+    input: wt()('watchScene.chatter', { title: title.value, link: linkLines().join('\n'), where: whereLine(), said: herSaid.slice(-5) }),
     cue: mediaClock(clockNow()),
     allowedTags: ['expr'],
   });
@@ -518,17 +517,11 @@ async function send() {
   const recent = cues.value.filter((c) => c.start <= now && c.start >= now - 60).map((c) => `${mediaClock(c.start)} ${c.text}`);
   const r = await chat.sceneReply(chatId.value, {
     task: playing.value ? 'watch-chat' : 'watch-pause',
-    input: [
-      `片名：${title.value}`,
-      ...linkLines(),
-      `前情提要：${summary || '（刚开始）'}`,
-      cues.value.length ? `现在：${mediaClock(now)}${playing.value ? '' : '（暂停中）'}` : whereLine(),
-      recent.length ? '最近 60 秒的字幕：' : '',
-      ...recent,
-      !cues.value.length && herSaid.length ? `你刚才说过：${herSaid.slice(-5).join(' / ')}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    input: wt()('watchScene.chat', {
+      title: title.value, link: linkLines().join('\n'), summary,
+      hasCues: !!cues.value.length, now: mediaClock(now), paused: !playing.value, where: whereLine(),
+      recent, said: cues.value.length ? [] : herSaid.slice(-5),
+    }),
     userText: text,
     cue: mediaClock(now),
   });
@@ -581,8 +574,8 @@ async function leaveTheater() {
   const minutes = Math.max(1, Math.round(watchedSec / 60));
   const r = await chat.sceneReply(chatId.value, {
     task: 'watch-end',
-    input: [`片名：${title.value}`, ...linkLines(), `前情提要：${summary || '（没有）'}`, `一起看了 ${minutes} 分钟`].join('\n'),
-    userText: yourScore.value ? `我打 ${yourScore.value}/5${yourWords.value.trim() ? `：${yourWords.value.trim()}` : ''}` : yourWords.value.trim() || '看完了',
+    input: wt()('watchScene.end', { title: title.value, link: linkLines().join('\n'), summary, minutes }),
+    userText: yourScore.value ? wt()('watchScene.myScore', { score: yourScore.value, words: yourWords.value.trim() }) : yourWords.value.trim() || wt()('watchScene.finished'),
     cue: '散场',
   });
   if (r.ok) {

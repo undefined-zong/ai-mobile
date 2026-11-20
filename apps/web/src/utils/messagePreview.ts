@@ -1,4 +1,5 @@
-import { pokeLine, type Character, type Message } from '@app/shared';
+import { pokeLine, textFn, type Character, type Message } from '@app/shared';
+import { textsFor } from '@/stores/library';
 
 /** 没有文字的消息在列表、聚焦首页里怎么写 */
 const PART_LABEL: Record<string, string> = {
@@ -22,7 +23,8 @@ export function messagePreview(m: Message | undefined, character: Character): st
   if (m.text) return m.text;
   const p = m.parts[0];
   if (p?.type === 'call-log' && p.video) return '[视频通话]';
-  if (p?.type === 'poke') return pokeLine(p, '你', character.name);
+  // 和写进提示词的是同一个写法（自带预设里的）
+  if (p?.type === 'poke') return pokeLine(p, '你', character.name, textFn(textsFor(null)));
   if (p?.type === 'scene') return `[${p.event === 'enter' ? '来到' : '离开'}] ${p.title.replace(/^和.+?来到|^离开/, '')}`;
   return p ? (PART_LABEL[p.type] ?? '') : '';
 }

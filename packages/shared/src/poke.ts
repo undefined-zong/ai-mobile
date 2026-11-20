@@ -1,3 +1,4 @@
+import type { TextFn } from './programText.ts';
 import type { MessagePart } from './types/chat.ts';
 import type { PokeHow } from './types/sprite.ts';
 
@@ -37,11 +38,10 @@ export type PokePart = Extract<MessagePart, { type: 'poke' }>;
  * 这一下怎么写（聊天卡片、聊天列表、提示词共用）："你亲了亲她的脸，连着 3 下"；
  * 没写怎么碰的是聊天里的拍一拍（"你拍了拍她的头"）
  */
-export function pokeLine(p: PokePart, user: string, char: string): string {
-  if (p.actor === 'char') return `${char}拍了拍${user}`;
+export function pokeLine(p: PokePart, user: string, char: string, t: TextFn): string {
+  if (p.actor === 'char') return t('poke.char', { char, user });
   const how = pokeHow(p.how);
-  const act = !how ? `拍了拍${char}的${p.target}` : p.hold ? `${how.hold[0]}${char}的${p.target}${how.hold[1]}` : `${how.tap}${char}的${p.target}`;
-  const times = p.times && p.times > 1 ? `，连着 ${p.times} 下` : '';
-  const touched = p.sensitive ? '，碰到了不该碰的地方' : '';
-  return `${user}${act}${times}${touched}`;
+  const where = { char, target: p.target };
+  const act = !how ? t('poke.act.plain', where) : p.hold ? t('poke.act.hold', { ...where, pre: how.hold[0], post: how.hold[1] }) : t('poke.act.tap', { ...where, tap: how.tap });
+  return t('poke.user', { user, act, times: p.times && p.times > 1 ? p.times : null, sensitive: !!p.sensitive });
 }

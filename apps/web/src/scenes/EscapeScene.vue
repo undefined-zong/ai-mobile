@@ -14,7 +14,7 @@ import { useMicLink } from '@/composables/useMicLink';
 import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseKind, type NoiseMix } from '@/services/ambience';
 import { escapeMusic } from '@/services/musicPlayer';
 import { escapeSearches } from '@/services/playlistSearches';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
@@ -119,18 +119,20 @@ const failed = ref('');
 const notConnected = ref('');
 const said: string[] = [];
 
+/** 这个场景的程序文字（"出逃"用途的预设里的 escapeScene.*） */
+function et() {
+  return sceneText('scene:escape', her.value);
+}
 function sceneInput(): string {
   const d = dest.value;
-  const v = view.value;
-  return [`你们在：${d.name}（${d.tagline}）`, `眼前：${v.desc}`, ...soundLines(), said.length ? `你刚才说过：${said.slice(-4).join(' / ')}` : ''].filter(Boolean).join('\n');
+  return et()('escapeScene.input', { name: d.name, tagline: d.tagline, view: view.value.desc, sounds: soundLines().join('\n'), said: said.slice(-4) });
 }
 /** 在听的歌、开着的白噪音：写进场景任务 */
 function soundLines(): string[] {
-  const lines: string[] = [];
   const song = escapeMusic.current();
-  if (song && musicPlaying.value) lines.push(`在听歌：《${song.title}》- ${song.artist}${escapeMusic.state.demo ? '（示例歌曲）' : ''}`);
-  if (noisePlaying.value) lines.push(`开着白噪音：${NOISE_LABEL[noise.value].label}`);
-  return lines;
+  const playing = !!song && musicPlaying.value;
+  const text = et()('escapeScene.sounds', { song: playing ? song.title : null, artist: song?.artist, demo: playing && escapeMusic.state.demo, noise: noisePlaying.value ? NOISE_LABEL[noise.value].label : null });
+  return text ? [text] : [];
 }
 function sayIt(text: string, expr?: string | null) {
   line.value = text;
@@ -241,8 +243,8 @@ const link = useMicLink({
   tasks: { reply: 'escape-call' },
   input: (kind, info) =>
     kind === 'open'
-      ? `${info.context}\n你们刚连上麦，${userName.value}在这里用语音跟你说话。先开口说第一句，1–2 个短句。`
-      : `${info.context}\n连麦中（已经连了 ${info.linked}）。回${userName.value}刚才说的话。`,
+      ? et()('escapeScene.link.open', { context: info.context, user: userName.value })
+      : et()('escapeScene.link.reply', { context: info.context, user: userName.value, linked: info.linked }),
   onReply: (text) => {
     notConnected.value = '';
     failed.value = '';

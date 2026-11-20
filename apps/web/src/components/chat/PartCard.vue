@@ -2,7 +2,8 @@
 import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImages } from '@/services/redraw';
-import { inviteGameLabel, pokeHow, pokeLine, type Character, type MessagePart, type VideoHit } from '@app/shared';
+import { inviteGameLabel, pokeHow, pokeLine, textFn, type Character, type MessagePart, type VideoHit } from '@app/shared';
+import { textsFor } from '@/stores/library';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
@@ -228,6 +229,8 @@ function watchWithoutLink() {
 async function connectToys() {
   if (!(await toys.connect())) showToast({ message: toys.error || '连不上 Intiface Central', duration: 4000 });
 }
+/** 拍一拍那一句的写法：和写进提示词的是同一个（自带预设里的） */
+const pokeText = textFn(textsFor(null));
 </script>
 
 <template>
@@ -280,7 +283,7 @@ async function connectToys() {
   <!-- 拍一拍 -->
   <div v-else-if="part.type === 'poke'" class="poke">
     <span :class="pokeHow(part.how)?.icon ?? 'i-lucide-hand'" class="text-[13px]" />
-    {{ pokeLine(part, '你', character.name) }}
+    {{ pokeLine(part, '你', character.name, pokeText) }}
   </div>
 
   <!-- 通话记录；她在聊天里打来的先响一会儿（能接），没接就是能回拨的未接来电 -->

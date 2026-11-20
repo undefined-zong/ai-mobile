@@ -17,7 +17,7 @@ export function proactivePrompt(context: ProactiveContext, t: Touchpoint, now: n
   const tx = textFn(preset.texts);
   const quiet = tx('proactive.quiet', { time, timeZone, user: persona.name, char: c.name, hint });
   // 预设里"只改发给 AI 的"正则按深度改（0 = 最后一条），同 App 里发消息时
-  const live = history.filter((m) => !m.deleted).map((m) => ({ m, text: proactiveMessageText(m) })).filter((x) => x.text);
+  const live = history.filter((m) => !m.deleted).map((m) => ({ m, text: proactiveMessageText(m, tx) })).filter((x) => x.text);
   const result = assemblePrompt({
     character: c, preset, user: persona, lorebooks: context.lorebooks,
     history: live.map(({ m, text }, i) => {

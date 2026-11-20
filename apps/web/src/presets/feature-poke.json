@@ -399,5 +399,12 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "pokeScene.together.remote": "连线（{{user}}在自己那边，隔着屏幕逗你）",
+    "pokeScene.together.bring": "你在{{user}}那边，就在{{user}}身边",
+    "pokeScene.together.visit": "{{user}}来你这边了，就在你身边",
+    "pokeScene.input": "你们怎么在一起：{{together}}\n在放的歌：《{{song}}》- {{artist}}[[{{?demo}}（示例歌曲）]]\n{{user}}这一次：\n{{touches|\\n}}\n碰在\"{{loose}}\"上的是没碰在具体的地方，在你身上乱碰\n今天在戳戳乐里一共被碰了 {{total}} 下",
+    "pokeScene.touch": "- {{line}}"
+  }
 }

@@ -130,5 +130,20 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "device.toys.simulate": "没连真的玩具（只在界面上显示）：{{keys}} 都可以写。",
+    "device.toys.part": "{{kind}}[[ {{heads}} 个头]]（{{keys| / }}）",
+    "device.toys.device": "- {{name}}：[[{{parts}}]][[{{!parts}}没有能控制的]]",
+    "device.toys.many": "{{key}} 有 {{n}} 个头：写一个数是一起，写数组 [{{slots|, }}] 依次是 {{names}}",
+    "device.toys": "{{devices|\\n}}\n{{many|\\n}}\n能写的键：{{keys}}、STOP；别的键这些玩具做不了，不要写。\n强度都照 0–100 写，不用自己压低：每个头的上限在心跳设置里单独设，超过上限的，程序发给玩具时压到上限。",
+    "device.speed": "变速的每一档不短于 {{interval}} 毫秒[[；伸缩：从底到顶一下最快 {{stroke}} 毫秒（幅度小按比例更快）]]",
+    "device.now": "[[{{doing|；}}]][[{{!doing}}都停着]][[（上一条指令在 {{ago}} 秒前）]]",
+    "device.fill.toys": "连着的玩具：\n{{toys}}",
+    "device.fill.limits": "最快的速度：{{speed}}",
+    "device.fill.now": "玩具现在：{{now}}",
+    "device.fill.recent": "最近的对话：\n{{recent|\\n}}",
+    "device.fill.line": "{{char}}这一句（要配指令的话）：\n{{line}}",
+    "device.retry": "指令要写在 <device>…</device> 里：把{{char}}这一句照抄一遍，在要变的地方插 <device>\"键\": 值</device>，不要别的写法、不要解释。"
+  }
 }

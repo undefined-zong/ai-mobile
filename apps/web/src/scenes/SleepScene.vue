@@ -16,7 +16,7 @@ import { useMicLink } from '@/composables/useMicLink';
 import { ttsLiveFor } from '@/services/ai';
 import { ambience } from '@/services/ambience';
 import { sleepMusic } from '@/services/musicPlayer';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { sleepAudio } from '@/services/sleepAudio';
 import { SentenceStream, SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
@@ -200,13 +200,15 @@ async function herSays(task: string, input: string, opts: { cue?: string; speedF
   await q.drained();
 }
 
+/** 这个场景的程序文字（"哄睡"用途的预设里的 sleepScene.*） */
+function zt() {
+  return sceneText('scene:sleep', her.value);
+}
 /** 现在的情况：写进她这一次的场景任务 */
 function nowLine() {
-  const parts = [`现在 ${hhmm(Date.now())}`, lightsOff.value ? '已经熄灯了' : '灯还开着'];
-  if (sleepAudio.noiseActive.value) parts.push('开着白噪音');
   const s = sleepMusic.current();
-  if (s && sleepMusic.state.playing) parts.push(`在放《${s.title}》- ${s.artist}${sleepMusic.state.demo ? '（示例歌曲）' : ''}`);
-  return `${parts.join('，')}。`;
+  const playing = !!s && sleepMusic.state.playing;
+  return zt()('sleepScene.now', { time: hhmm(Date.now()), lightsOff: lightsOff.value, noise: sleepAudio.noiseActive.value, song: playing ? s.title : null, artist: s?.artist, demo: playing && sleepMusic.state.demo });
 }
 
 // —— 故事：她现编，边写边读；可以暂停（继续时从停下的那句读）、换题材 ——
@@ -264,15 +266,15 @@ async function newStory(want: { genre?: string; request?: string } = {}) {
   Object.assign(story, { title: '', genre: want.genre ?? '', sentences: [], index: -1, playing: true, done: false });
   const stream = new SentenceStream();
   const genres = [...new Set(told.map((t) => t.genre).filter(Boolean))];
-  const input = [
-    nowLine(),
-    '讲一个新的睡前故事。',
-    want.request ? `${userName.value}刚才说："${want.request}"。照这句话的意思来。` : '',
-    want.genre ? `题材：${want.genre}。` : want.request ? '' : `题材你来挑${genres.length ? `，和今晚讲过的（${genres.join('、')}）不一样` : ''}。`,
-    told.length ? `今晚已经讲过：${told.map((t) => `《${t.title}》`).join('、')}，不要重复。` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const input = zt()('sleepScene.story', {
+    now: nowLine(),
+    user: userName.value,
+    request: want.request,
+    genre: want.genre,
+    pick: !want.genre && !want.request,
+    genres,
+    told: told.map((x) => `《${x.title}》`),
+  });
   readFrom(0);
   const r = await askHer('sleep-story', input, {
     cue: '睡前故事',
@@ -471,7 +473,7 @@ async function drawMoment(moment: 'mic' | 'now', priority: 'user' | 'auto', capt
   artIssue.value = null;
   art.value = r.item;
 }
-const lightLine = () => (lightsOff.value ? '已经熄灯了，只有一点月光' : '床头灯还亮着');
+const lightLine = () => zt()(lightsOff.value ? 'sleepScene.light.off' : 'sleepScene.light.on');
 /** 连上麦：今天同一身睡衣画过的直接用，没有就画一张 */
 function ensureArt() {
   if (art.value || drawingNow.value) return;
@@ -481,7 +483,7 @@ function ensureArt() {
     art.value = found;
     return;
   }
-  void drawMoment('mic', 'auto', `睡前，${her.value.name}躺在床上和${userName.value}连麦，刚连上，小声说着话；${lightLine()}`);
+  void drawMoment('mic', 'auto', zt()('sleepScene.caption.mic', { char: her.value.name, user: userName.value, light: lightLine() }));
 }
 function snap() {
   if (drawingNow.value) {
@@ -489,7 +491,7 @@ function snap() {
     return;
   }
   const said = lastHerCaption.value;
-  void drawMoment('now', 'user', `睡前，${her.value.name}躺在床上和${userName.value}连麦，画${her.value.pronoun}此刻的样子${said ? `：${her.value.pronoun}刚小声说"${said.slice(0, 60)}"` : ''}；${lightLine()}`);
+  void drawMoment('now', 'user', zt()('sleepScene.caption.now', { char: her.value.name, user: userName.value, pronoun: her.value.pronoun, said: said ? said.slice(0, 60) : null, light: lightLine() }));
 }
 function toggleAutoDraw() {
   gallery.autoDraw = !gallery.autoDraw;
@@ -608,7 +610,7 @@ async function goNight(say: boolean) {
   lightsOff.value = true;
   if (say) {
     line.value = '';
-    if (companionStatus.value.live) await herSays('sleep-end', `${nowLine()}定时到了。`, { cue: '晚安', speedFactor: 0.8 });
+    if (companionStatus.value.live) await herSays('sleep-end', zt()('sleepScene.timerEnd', { now: nowLine() }), { cue: '晚安', speedFactor: 0.8 });
   }
   // 说完晚安以后不再重新开始计时
   sleepAt.value = null;

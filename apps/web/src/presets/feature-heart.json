@@ -354,5 +354,25 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "heartScene.how.visit": "{{user}}来到了你身边（在{{herWhere}}）",
+    "heartScene.how.bring": "你在{{user}}那边，在{{user}}身边",
+    "heartScene.how.remote": "连线：你在{{herWhere}}，{{user}}在{{yourPlace}}",
+    "heartScene.situation": "现在 {{time}}\n{{how}}\n{{toy}}",
+    "heartScene.toy.none": "{{user}}没连玩具",
+    "heartScene.toy.simulated": "（没连真的玩具，只在界面上显示）",
+    "heartScene.toy": "{{user}}连着玩具：{{names}}；玩具现在：{{now}}\n{{?inline}}能写的键：\n{{toys}}\n{{speed}}",
+    "heartScene.open": "{{situation}}\n{{user}}刚来到\"心跳\"。你先开口。",
+    "heartScene.reply": "{{situation}}\n回{{user}}刚才说的话。",
+    "heartScene.link.open": "{{context}}\n你们刚连上麦，{{user}}戴着耳机。你先开口，1–2 个短句。",
+    "heartScene.link.whisper": "{{context}}\n连麦中（已经连了 {{linked}}），{{user}}安静了 {{quiet}} 分钟。",
+    "heartScene.link.reply": "{{context}}\n连麦中（已经连了 {{linked}}）。回{{user}}刚才说的话。",
+    "heartScene.caption.visit": "{{user}}坐在{{pronoun}}旁边",
+    "heartScene.caption.remote": "{{char}}在{{herWhere}}，和{{user}}连线",
+    "heartScene.caption.open": "{{user}}刚来，{{char}}在等{{user}}；{{how}}",
+    "heartScene.caption.hot": "气氛正浓，心跳很快",
+    "heartScene.caption.warm": "气氛渐渐升温",
+    "heartScene.caption.now": "{{char}}此刻的样子（按最近的对话）；{{how}}[[；{{heat}}]]"
+  }
 }

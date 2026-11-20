@@ -1,5 +1,5 @@
 import { AiError, buildSummaryMessages, isAbortError, parseSummary, samplerRequest, type SummaryLine } from '@app/ai';
-import type { Chat, Memory, Message } from '@app/shared';
+import { textFn, type Chat, type Memory, type Message } from '@app/shared';
 import { useAiStore } from '@/stores/ai';
 import { useCharacterStore } from '@/stores/characters';
 import { useEnvironmentStore } from '@/stores/environment';
@@ -166,8 +166,9 @@ async function summarizeBatch(chat: Chat, list: Message[], opts: { signal?: Abor
 
   const persona = personaOf(chat);
   const timeZone = useEnvironmentStore().settings.timezone;
-  const who = (m: Message) => (m.role === 'user' ? persona.name : m.role === 'assistant' ? c.name : '旁白');
-  const rows = batch.map((m) => ({ m, text: messageToText(m, c, persona.name) })).filter((x) => x.text);
+  const t = textFn(preset.texts);
+  const who = (m: Message) => (m.role === 'user' ? persona.name : m.role === 'assistant' ? c.name : t('summary.narrator'));
+  const rows = batch.map((m) => ({ m, text: messageToText(m, c, t, persona.name) })).filter((x) => x.text);
   if (!rows.length) {
     chat.summaryUntilMessageId = (batch.at(-1) as Message).id;
     return null;
