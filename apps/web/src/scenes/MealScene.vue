@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
-import { errorText, parseJsonLoose } from '@app/ai';
+import { errorText, parseJsonLoose, splitSentences } from '@app/ai';
 import { canDineAt, getLocation, IMAGE_MOMENTS, MEAL_LABEL, mealOfStatus, toMinutes, wallDate, worldOf, type MealSlot, type MessagePart, type PlanMeal, type VideoHit } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
@@ -29,6 +29,7 @@ import { mealMusic } from '@/services/musicPlayer';
 import { lookWith } from '@/services/photos';
 import { mealSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
+import { ttsLiveFor } from '@/services/ai';
 import { SpeechQueue } from '@/services/speech';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
@@ -385,7 +386,6 @@ const streamingText = computed(() => (stream.value ? (chat.list(chatId.value).fi
 /** 连麦时是她说出口的那句（跟着声音走），平时是正在写的、最近一次回复 */
 const lastSpoken = computed(() => [...link.state.captions].reverse().find((c) => c.who === 'her')?.text ?? '');
 const shownLine = computed(() => (link.state.on && lastSpoken.value) || streamingText.value || herLine.value);
-const chatLink = computed(() => `/chat/${chatId.value}?mode=stage`);
 const cue = computed(() => {
   if (phase.value === 'setup') return '开饭前';
   if (phase.value === 'done') return '吃完';
@@ -449,6 +449,7 @@ async function reply(task: string, lines: string[], userText?: string, last = fa
   }
   notConnected.value = '';
   herLine.value = r.message.text;
+  readOut(r.message.text);
 }
 
 // —— 你这顿吃的：写一句，或者拍一张 / 从相册选，识图认出是什么 ——
@@ -616,6 +617,42 @@ function newSpeech(o: { onSentence?(text: string, i: number): void } = {}): Spee
   });
   return q;
 }
+
+// —— 朗读（右上角视频下面的音量按钮）：开着时她回的每一句都用她的声音读出来；连着麦时麦里本来就在说，不重复读 ——
+const READ_KEY = 'ai-mobile:meal:read-aloud:v1';
+const readAloud = ref(false);
+try {
+  readAloud.value = localStorage.getItem(READ_KEY) === '1';
+} catch {
+  // 本机存不了：默认关
+}
+let readQ: SpeechQueue | null = null;
+function stopReading() {
+  if (readQ && speech === readQ) {
+    readQ.stop();
+    speech = null;
+    mealMusic.duck(false);
+  }
+  readQ = null;
+}
+function readOut(text: string) {
+  if (!readAloud.value || link.state.on || !text.trim()) return;
+  const q = newSpeech();
+  readQ = q;
+  q.pushAll(splitSentences(text));
+  q.end();
+}
+function toggleReadAloud() {
+  readAloud.value = !readAloud.value;
+  try {
+    localStorage.setItem(READ_KEY, readAloud.value ? '1' : '0');
+  } catch {
+    // 本机存不了：这次有效
+  }
+  if (!readAloud.value) return stopReading();
+  if (!ttsLiveFor(her.value)) showToast(`${her.value.name}的声音还没配好（设置里接通语音合成），先只显示字`);
+}
+
 const link = useMicLink({
   chatId,
   character: her,
@@ -844,7 +881,7 @@ const figureHidden = computed(() => {
             </div>
           </div>
           <div v-else-if="shownLine || stream" class="done-say">
-            <StudyBubble side="her" :text="shownLine" :typing="!!stream && !streamingText" :to="chatLink" :label="`去和${her.name}聊天`" />
+            <StudyBubble side="her" :text="shownLine" :typing="!!stream && !streamingText" />
           </div>
 
           <section class="split-panel" :aria-label="phase === 'setup' ? '这顿怎么吃' : '吃完了'">
@@ -996,7 +1033,7 @@ const figureHidden = computed(() => {
             <div class="her-card" data-testid="her-card">
               <div class="flex items-center gap-2">
                 <Avatar :character="her" :size="24" live />
-                <span class="flex-1 min-w-0 text-[12px] text-ink-2 truncate">{{ her.name }}{{ herPlace ? ` · ${herPlace}` : '' }}</span>
+                <span class="card-name flex-1 min-w-0 text-[12px] truncate">{{ her.name }}{{ herPlace ? ` · ${herPlace}` : '' }}</span>
               </div>
               <div class="card-task">
                 <template v-if="herMeal">在吃：{{ herMeal }}</template>
@@ -1005,7 +1042,7 @@ const figureHidden = computed(() => {
               </div>
             </div>
             <MicLinkBar v-if="link.state.on" :link="link" :pronoun="her.pronoun" data-testid="meal-link" />
-            <StudyBubble v-if="shownLine || stream" side="her" :text="shownLine" :typing="!!stream && !streamingText" :to="chatLink" :label="`去和${her.name}聊天`" />
+            <StudyBubble v-if="shownLine || stream" side="her" :text="shownLine" :typing="!!stream && !streamingText" />
             <div v-if="notConnected" class="mini-notice">
               <span class="i-lucide-plug-zap shrink-0" /><span class="flex-1 min-w-0">{{ notConnected }}</span>
               <button class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=companion')">去设置</button>
@@ -1145,7 +1182,7 @@ const figureHidden = computed(() => {
         </template>
 
         <!-- 右上角：音乐、观影，竖着排在顶栏下面。开始前、吃完后只在音乐还响着时留着音乐（好关掉） -->
-        <div v-if="view !== 'split' || musicPlaying || musicOpen" class="side-tools">
+        <div v-if="view !== 'split' || musicPlaying || musicOpen || readAloud" class="side-tools">
           <button
             type="button"
             class="pill-btn plain"
@@ -1169,6 +1206,19 @@ const figureHidden = computed(() => {
             @click="watchOpen = true"
           >
             <span class="i-lucide-tv" />
+          </button>
+          <!-- 朗读：开着时她回的话自动读出来 -->
+          <button
+            v-if="view !== 'split' || readAloud"
+            type="button"
+            class="pill-btn plain"
+            :class="{ on: readAloud }"
+            :aria-pressed="readAloud"
+            :aria-label="readAloud ? `朗读：开着，${her.pronoun}的话会读出来（点一下关掉）` : `朗读：点一下打开，${her.pronoun}的话自动读出来`"
+            data-testid="meal-read-btn"
+            @click="toggleReadAloud"
+          >
+            <span :class="readAloud ? 'i-lucide-volume-2' : 'i-lucide-volume-x'" />
           </button>
         </div>
 
@@ -1357,6 +1407,18 @@ const figureHidden = computed(() => {
 .done-say :deep(.bubble) {
   max-height: min(9.6em, calc(50vh - 120px));
 }
+/* 一起吃饭的对话气泡：全透明，不挡背景图；字加一圈阴影，压在亮图上也看得清 */
+.meal :deep(.bubble) {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.45);
+}
 .split-panel {
   position: absolute;
   left: 0;
@@ -1531,12 +1593,14 @@ const figureHidden = computed(() => {
   display: block;
   width: 100%;
   padding: 9px 12px 10px;
-  border-radius: 16px;
-  background: var(--veil);
-  border: 1px solid var(--glass-line);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: var(--shadow-sm);
+  /* 同对话气泡：全透明，不挡背景图；白字加阴影 */
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.45);
+}
+.card-name {
+  color: rgba(255, 255, 255, 0.85);
 }
 .card-task {
   display: -webkit-box;
