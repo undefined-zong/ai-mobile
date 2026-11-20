@@ -3,6 +3,7 @@ import {
   AGENT_META, getLocation, hubMomentId, MOMENT_USER, momentDueTimes, momentMemory, momentText, parseMomentDraft, parseMomentReaction, shiftDate, socialDayOf, socialDayText, socialPerDay, zonedDateKey,
   type Character, type Moment, type MomentImage, type Preset, type SocialContext, type SocialDay,
 } from '@app/shared';
+import { onRemote } from '@/db/idb';
 import { putAsset } from './assets';
 import { memoryBlocks } from './memoryBlocks';
 import { describePhoto } from './photos';
@@ -168,6 +169,9 @@ export function rememberMoment(momentId: string, characterId: string) {
 
 // —— 配图 ——
 
+/** 这台设备这次打开以来自动画过的图（`image:朋友圈:第几张`） */
+const autoTried = new Set<string>();
+
 /**
  * 画这条朋友圈的第 index 张图（她发的：模型写了画面，这里交给生图）。
  * auto：收到云端发的、她刚发完时自动画，守着"自动画"的规矩（NovelAI 只在不花点的设置下画）；user：你点的。
@@ -186,6 +190,9 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
   if (!c) return { ok: false, reason: '找不到发这条的角色' };
   if (priority === 'auto') {
     if (!social.settings.autoImage) return { ok: false, reason: '自动画关着' };
+    // 每张图这台设备只自动画一次：两台设备都画不出来时，失败结果互相同步过去也不会来回重画
+    if (autoTried.has(key)) return { ok: false, reason: '这台设备已经自动画过这张' };
+    autoTried.add(key);
     const check = useGalleryStore().autoCheck({ ignoreSwitch: true });
     if (!check.ok) {
       img.error = check.reason;
@@ -326,6 +333,13 @@ export function startSocialSchedule() {
     social.seeded = true;
     for (const m of demoMoments()) if (useCharacterStore().byId(m.authorId) && !social.byId(m.id)) social.add(m);
   }
+  // Key 只存在各自的设备上，朋友圈连同配图的失败原因却会多设备同步：别的设备自动画失败的图，这台设备用自己的生图 API 再自动画一次
+  onRemote('moments', (changes) => {
+    for (const c of changes) {
+      const m = c.deleted ? undefined : social.byId(c.key);
+      if (m?.images[0]?.error) void drawMomentImage(m.id, 0, 'auto');
+    }
+  });
   // 等云端状态同步回来再看要不要自己发
   setTimeout(() => void localTick(), 30_000);
   setInterval(() => void localTick(), 5 * 60_000);
