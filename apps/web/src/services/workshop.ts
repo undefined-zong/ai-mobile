@@ -1,5 +1,5 @@
 import { samplerRequest } from '@app/ai';
-import { assembleTaskPrompt, type Character } from '@app/shared';
+import { assembleTaskPrompt, textFn, type Character, type TextFn } from '@app/shared';
 import { useAiStore } from '@/stores/ai';
 import { useLibraryStore } from '@/stores/library';
 import type { Novel, NovelChapter } from '@/stores/workshop';
@@ -43,42 +43,42 @@ export function chapterLabel(novel: Novel, chapter: NovelChapter): string {
   return `第 ${chapterNo(novel, chapter)} 章 · ${chapter.title || '无题'}`;
 }
 
-function infoText(n: Novel): string {
-  return [
-    `书名：《${n.title}》`,
-    n.genre.trim() ? `类型：${n.genre.trim()}` : '',
-    n.setting.trim() ? `设定和人物：\n${n.setting.trim()}` : '设定和人物：还没写，按讨论里说过的来',
-    n.outline.trim() ? `大纲：\n${n.outline.trim()}` : '',
-    n.style.trim() ? `文风和尺度：${n.style.trim()}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+/** 写给模型看的章节名（程序文字 novel.chapterLabel.*） */
+function chapterLabelText(novel: Novel, chapter: NovelChapter, t: TextFn): string {
+  return chapter.kind === 'extra'
+    ? t('novel.chapterLabel.extra', { title: chapter.title || t('novel.untitled') })
+    : t('novel.chapterLabel.chapter', { n: chapterNo(novel, chapter), title: chapter.title || t('novel.untitled') });
+}
+
+function infoText(n: Novel, t: TextFn): string {
+  return t('novel.info', { title: n.title, genre: n.genre.trim(), setting: n.setting.trim(), outline: n.outline.trim(), style: n.style.trim() });
 }
 
 /** 已经写好的章节：从最新的往前带全文，带不下的只带标题和开头；番外只在重写它时带全文 */
-function chaptersText(n: Novel, skip?: string): string {
+function chaptersText(n: Novel, t: TextFn, skip?: string): string {
   const list = n.chapters.filter((c) => c.id !== skip);
-  if (!list.length) return '已经写好的章节：还没有，这是第一章。';
+  if (!list.length) return t('novel.chapters.none');
   let budget = CONTEXT_CHARS;
   const parts: string[] = [];
   for (let i = list.length - 1; i >= 0; i -= 1) {
     const c = list[i]!;
-    const head = chapterLabel(n, c);
+    const head = chapterLabelText(n, c, t);
     if (c.kind === 'chapter' && c.text.length <= budget) {
-      parts.unshift(`【${head}】\n${c.text.trim()}`);
+      parts.unshift(t('novel.chapters.full', { head, text: c.text.trim() }));
       budget -= c.text.length;
     } else {
-      parts.unshift(`【${head}】（只给开头）${c.text.trim().replace(/\s+/g, ' ').slice(0, 120)}…`);
+      parts.unshift(t('novel.chapters.head', { head, text: c.text.trim().replace(/\s+/g, ' ').slice(0, 120) }));
     }
   }
-  return `已经写好的章节（按顺序）：\n\n${parts.join('\n\n')}`;
+  return t('novel.chapters', { parts });
 }
 
-function talkText(n: Novel, userName: string): string {
+function talkText(n: Novel, userName: string, t: TextFn): string {
   const recent = n.talk.slice(-TALK_KEEP);
   if (!recent.length) return '';
-  const who = (r: string) => (r === 'user' ? userName : '你');
-  return `你们最近的讨论：\n${recent.map((t) => `${who(t.role)}：${t.text.length > 800 ? `${t.text.slice(0, 800)}…` : t.text}`).join('\n')}`;
+  return t('novel.talk', {
+    lines: recent.map((x) => t('novel.talk.line', { who: x.role === 'user' ? userName : t('novel.talk.you'), text: x.text.length > 800 ? `${x.text.slice(0, 800)}…` : x.text })),
+  });
 }
 
 /** 写作助手的回复里拿出【记进设定】的几行 */
@@ -110,19 +110,21 @@ export function parseChapter(raw: string): { title: string; text: string } {
   return { title, text: s.slice(m[0].length).trim() };
 }
 
-async function run(novel: Novel, task: NovelTask, ask: string, opts: NovelCallOptions, skip?: string): Promise<string> {
+/** ask：这一次要它做的事（按这一次预设的程序文字写） */
+async function run(novel: Novel, task: NovelTask, ask: (t: TextFn) => string, opts: NovelCallOptions, skip?: string): Promise<string> {
   const status = novelStatus();
   if (!status.live) throw new Error(status.reason);
   const lib = useLibraryStore();
   const preset = lib.withLorebooks(lib.presetForUse('novel', opts.character), opts.character);
   if (!preset) throw new MissingPresetError('小说');
+  const t = textFn(preset.texts);
   const { messages } = assembleTaskPrompt({
     preset,
     fills: {
-      novelInfo: infoText(novel),
-      novelChapters: chaptersText(novel, skip),
-      novelChat: talkText(novel, opts.userName),
-      novelAsk: ask,
+      novelInfo: infoText(novel, t),
+      novelChapters: chaptersText(novel, t, skip),
+      novelChat: talkText(novel, opts.userName, t),
+      novelAsk: ask(t),
     },
     macros: { pronoun: opts.character?.pronoun, char: opts.character?.name ?? '', user: opts.userName },
     type: task,
@@ -138,28 +140,21 @@ async function run(novel: Novel, task: NovelTask, ask: string, opts: NovelCallOp
 
 /** 和写作助手商量：你说一句，它回一段（最后可能带几条【记进设定】） */
 export async function novelChat(novel: Novel, said: string, opts: NovelCallOptions): Promise<{ text: string; notes: string[] }> {
-  const raw = await run(novel, 'novel-chat', `${opts.userName}刚说：${said}`, { ...opts, onText: opts.onText ? (t) => opts.onText?.(splitNotes(t).text) : undefined });
+  const raw = await run(novel, 'novel-chat', (t) => t('novel.ask.chat', { user: opts.userName, said }), { ...opts, onText: opts.onText ? (t) => opts.onText?.(splitNotes(t).text) : undefined });
   return splitNotes(raw);
 }
 
 /** 写下一章 / 写番外 */
 export async function novelWrite(novel: Novel, kind: 'chapter' | 'extra', wish: string, opts: NovelCallOptions): Promise<{ title: string; text: string }> {
   const w = wish.trim();
-  const ask =
-    kind === 'chapter'
-      ? `写第 ${chapterNo(novel)} 章。${w ? `${opts.userName}的要求：${w}` : `${opts.userName}没有额外要求，照大纲和讨论接着写。`}`
-      : `写一篇番外。${w ? `${opts.userName}想要的番外：${w}` : `${opts.userName}没说想要什么样的，你来挑一个有意思的。`}`;
+  const ask = (t: TextFn) => t(kind === 'chapter' ? 'novel.ask.chapter' : 'novel.ask.extra', { n: chapterNo(novel), user: opts.userName, wish: w });
   const raw = await run(novel, kind === 'chapter' ? 'novel-chapter' : 'novel-extra', ask, opts);
   return parseChapter(raw);
 }
 
 /** 照你的意见重写一章 */
 export async function novelRewrite(novel: Novel, chapter: NovelChapter, wish: string, opts: NovelCallOptions): Promise<{ title: string; text: string }> {
-  const ask = [
-    `重写【${chapterLabel(novel, chapter)}】。`,
-    `${opts.userName}的意见：${wish.trim() || '整体再打磨一下，写得更好看'}`,
-    `原文：\n# ${chapter.title}\n\n${chapter.text}`,
-  ].join('\n');
+  const ask = (t: TextFn) => t('novel.ask.rewrite', { label: chapterLabelText(novel, chapter, t), user: opts.userName, wish: wish.trim(), title: chapter.title, text: chapter.text });
   const raw = await run(novel, 'novel-rewrite', ask, opts, chapter.id);
   return parseChapter(raw);
 }

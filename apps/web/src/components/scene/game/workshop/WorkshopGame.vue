@@ -7,7 +7,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AssetImg from '@/components/common/AssetImg.vue';
 import { assetUrl } from '@/services/assets';
-import { personaOf } from '@/services/prompt';
+import { personaOf, sceneText } from '@/services/prompt';
 import { chapterLabel } from '@/services/workshop';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
@@ -136,27 +136,28 @@ function openShow(s: Showing) {
 }
 
 /** 场景任务：这一次给她看的作品 */
+/** 这个游戏的程序文字（"一起游戏 · 创意工坊"用途的预设里的 workshop.*） */
+function wx() {
+  return sceneText(USE, her.value);
+}
 function showInput(): { task: string; input: string; card: MessagePart } | null {
   const s = showing.value;
   if (!s) return null;
-  const moodLine = mood.value === 'cheer' ? `${userName.value}想听你夸` : mood.value === 'roast' ? `${userName.value}想听你吐槽` : `${userName.value}没说想听夸还是吐槽，看你自己`;
+  const t = wx();
+  const moodLine = t(mood.value === 'cheer' ? 'workshop.mood.cheer' : mood.value === 'roast' ? 'workshop.mood.roast' : 'workshop.mood.any', { user: userName.value });
   if (s.kind === 'novel') {
     const n = showNovel.value;
     const c = showChapter.value;
     if (!n || !c) return null;
-    const text = c.text.length > SHOW_CHARS ? `${c.text.slice(0, SHOW_CHARS)}\n（后面还有 ${c.text.length - SHOW_CHARS} 字，${userName.value}只给你看到这里）` : c.text;
+    const text = c.text.length > SHOW_CHARS ? `${c.text.slice(0, SHOW_CHARS)}\n${t('workshop.clipped', { left: c.text.length - SHOW_CHARS, user: userName.value })}` : c.text;
     const label = chapterLabel(n, c);
     return {
       task: 'ws-novel',
-      input: [
-        `${userName.value}给你看的：小说《${n.title}》${n.genre ? `（${n.genre}）` : ''}的【${label}】`,
-        n.setting.trim() ? `这部小说的设定（${userName.value}写的）：${n.setting.trim().replace(/\s+/g, ' ').slice(0, 500)}` : '',
-        `一共写了 ${n.chapters.length} 篇，这是其中一篇`,
-        moodLine,
-        `全文：\n# ${c.title}\n\n${text}`,
-      ]
-        .filter(Boolean)
-        .join('\n'),
+      input: t('workshop.novel', {
+        user: userName.value, title: n.title, genre: n.genre, label,
+        setting: n.setting.trim().replace(/\s+/g, ' ').slice(0, 500), count: n.chapters.length,
+        mood: moodLine, chapterTitle: c.title, text,
+      }),
       card: {
         type: 'game',
         logId: uid('game'),
@@ -172,10 +173,14 @@ function showInput(): { task: string; input: string; card: MessagePart } | null 
   const d = showDrawing.value;
   if (!d) return null;
   const from = d.novelId ? ws.novelById(d.novelId) : undefined;
-  const subject = d.who === 'her' && d.characterId === her.value.id ? '画的是你' : d.who === 'her' ? `画的是${chars.byId(d.characterId)?.name ?? '别的角色'}` : from ? `画的是${userName.value}的小说《${from.title}》里的东西` : '自由画';
+  const subject = d.who === 'her' && d.characterId === her.value.id
+    ? t('workshop.subject.you')
+    : d.who === 'her'
+      ? t('workshop.subject.other', { name: chars.byId(d.characterId)?.name ?? t('workshop.subject.otherDefault') })
+      : from ? t('workshop.subject.novel', { user: userName.value, title: from.title }) : t('workshop.subject.free');
   return {
     task: 'ws-image',
-    input: [`${userName.value}给你看一张画：「${d.title}」`, subject, `${userName.value}写的画面描述：${d.caption}`, `生图用的 tags（画出来大概就是这样）：${d.prompt}`, moodLine].join('\n'),
+    input: t('workshop.image', { user: userName.value, title: d.title, subject, caption: d.caption, prompt: d.prompt, mood: moodLine }),
     card: { type: 'game', logId: uid('game'), game: 'workshop', kind: 'image', title: d.title, ...(d.assetKey ? { photo: d.assetKey } : {}), ...(mood.value ? { verdict: mood.value } : {}) },
   };
 }
@@ -186,7 +191,7 @@ async function herReply(task: string, input: string, userText: string | undefine
   try {
     const r = await chat.sceneReply(chatId.value, {
       task,
-      input: `你们在一起游戏的"创意工坊"里。\n${input}`,
+      input: wx()('workshop.frame', { input }),
       userText,
       cue,
       use: USE,
@@ -226,11 +231,12 @@ async function talk() {
   const t = talkText.value.trim();
   if (!t || busy.value || !chatId.value) return;
   talkText.value = '';
-  const works = [
-    ws.novels.length ? `${userName.value}在写的小说：${ws.novels.slice(0, 5).map((n) => `《${n.title}》（${n.chapters.length} 篇）`).join('、')}` : `${userName.value}还没开始写小说`,
-    ws.drawings.length ? `画过 ${ws.drawings.length} 张画，最近一张是「${ws.drawings[0]!.title}」` : '',
-  ].filter(Boolean);
-  await herReply('ws-chat', works.join('\n'), t, [], '聊聊创作');
+  const works = wx()('workshop.works', {
+    user: userName.value,
+    novels: ws.novels.slice(0, 5).map((n) => wx()('workshop.works.novel', { title: n.title, n: n.chapters.length })),
+    drawings: ws.drawings.length || null, latest: ws.drawings[0]?.title,
+  });
+  await herReply('ws-chat', works, t, [], '聊聊创作');
 }
 </script>
 

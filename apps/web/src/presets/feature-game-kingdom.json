@@ -132,5 +132,27 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "kingdom.narrator": "史官",
+    "kingdom.key.name": "国号",
+    "kingdom.key.ruler": "君主",
+    "kingdom.key.rulerTitle": "称谓",
+    "kingdom.key.dynasty": "朝代",
+    "kingdom.key.setting": "背景",
+    "kingdom.key.time": "时间",
+    "kingdom.key.stats": "国家",
+    "kingdom.key.rulerSkills": "君主素养",
+    "kingdom.key.factions": "外交",
+    "kingdom.key.provinces": "领土",
+    "kingdom.key.policies": "政策",
+    "kingdom.key.report": "本季",
+    "kingdom.key.result": "评价",
+    "kingdom.key.people": "人物",
+    "kingdom.key.heirs": "子嗣",
+    "kingdom.key.recent": "近期纪事",
+    "kingdom.key.person": "人物",
+    "kingdom.key.talk": "对话",
+    "kingdom.key.user": "用户"
+  }
 }

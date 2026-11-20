@@ -140,5 +140,12 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "kingdom.portrait.outfit": "{{dynasty}} · {{title}}",
+    "kingdom.portrait.caption": "solo, full body, standing, character portrait, simple background, detailed clothing",
+    "kingdom.portrait.place": "{{kingdom}}，{{dynasty}}风格王庭",
+    "kingdom.portrait.world": "世界：{{setting}}",
+    "kingdom.portrait.person": "人物：{{name}}，{{age}}岁，{{title}}[[，{{personality}}]]。[[{{biography}}]]"
+  }
 }

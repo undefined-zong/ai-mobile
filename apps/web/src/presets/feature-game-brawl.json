@@ -253,5 +253,22 @@
     "preferCharacterPrompt": true,
     "preferCharacterJailbreak": true
   },
-  "regex": []
+  "regex": [],
+  "texts": {
+    "brawl.key.identity": "身份",
+    "brawl.key.name": "名字",
+    "brawl.key.setting": "设定",
+    "brawl.key.description": "描述",
+    "brawl.key.personality": "性格",
+    "brawl.key.scenario": "场景",
+    "brawl.key.tags": "标签",
+    "brawl.key.looks": "外观",
+    "brawl.key.lore": "世界书",
+    "brawl.identity.persona": "用户操控的人设",
+    "brawl.identity.character": "角色",
+    "brawl.loreEntry": "[[{{title}}：]]{{content}}",
+    "brawl.make": "这次只为下面这个参战者生成战斗档案，不要把当前聊天角色的能力套给其他人。\n参战者：{{material}}\n现有战斗档案：{{current}}\n用户想要：[[{{wish}}]][[{{!wish}}贴合角色设定，招式各有用途]]",
+    "brawl.open": "玩家操控{{you}}，你操控{{her}}；难度{{difficulty}}。双方的战斗档案：{{fighters}}",
+    "brawl.end": "本局真实结果：{{result}}。只围绕这局结果说一句话。"
+  }
 }

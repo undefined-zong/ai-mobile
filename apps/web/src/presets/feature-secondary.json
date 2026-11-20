@@ -486,5 +486,12 @@
   },
   "defaultFor": [
     "secondary"
-  ]
+  ],
+  "texts": {
+    "secondary.scene": "场景：{{scene}}\n{{?task}}主对话这一轮在做的事：{{task}}\n{{?task}}{{input}}\n本轮可用标签：[[{{tags}}]][[{{!tags}}没有]]",
+    "secondary.option": "{{id}}（{{label}}）",
+    "secondary.image.off": "生图：没接通，这一轮不写 [cg:]",
+    "secondary.image.use": "- {{id}}（{{label}}[[，预设「{{preset}}」]]）[[；moment 可选：{{moments}}]]",
+    "secondary.image.on": "生图：已接通\nmode 可选：{{modes}}\nuse 可选：\n{{uses|\\n}}\nmodel 可选：{{models}}[[；不写用 {{defaultModel}}]]"
+  }
 }

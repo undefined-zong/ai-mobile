@@ -33,7 +33,7 @@ import { uid } from '@/utils/id';
 import { defaultPresetId } from './importer';
 import { MissingPresetError } from './prompt';
 import { useBrawlStore } from '@/stores/brawl';
-import { brawlMaterial } from './brawl';
+import { brawlMaterial, brawlText } from './brawl';
 
 /**
  * "我的 → 助手"：检测预设、世界书、角色卡和 App 的格式合不合（packages/shared/src/formats.ts），
@@ -220,7 +220,7 @@ function texts(s: Subject): string[] {
 }
 
 function subjectJson(s: Subject, cap: number): Record<string, unknown> {
-  if (s.kind === 'fighter') return { type: 'fighter', ...s.obj, material: brawlMaterial(s.obj) };
+  if (s.kind === 'fighter') return { type: 'fighter', ...s.obj, material: brawlMaterial(s.obj, brawlText()) };
   if (s.kind === 'preset') {
     const p = s.obj;
     return {
