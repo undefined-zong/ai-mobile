@@ -205,6 +205,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
   function avatarKey(owner: AvatarOwner, id: string): string | null {
     return s.avatars[`${owner}:${id}`] ?? null;
   }
+  /** 上传的头像（本机上传的优先，其次同步过来的）；本机显示不了时为空 */
+  function avatarUrl(owner: AvatarOwner, who: { id: string; avatar: string | null }): string | null {
+    return imageUrl(avatarKey(owner, who.id) ?? who.avatar);
+  }
   async function pickAvatar(owner: AvatarOwner, id: string, file: Blob): Promise<boolean> {
     const dataUrl = await compressImage(file, { max: 320, square: true, quality: 0.86 });
     const { key, saved } = putImage(dataUrl);
@@ -235,6 +239,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
     clearBackground,
     resetBackground,
     avatarKey,
+    avatarUrl,
     pickAvatar,
     resetAvatar,
   };

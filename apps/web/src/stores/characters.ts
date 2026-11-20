@@ -1,4 +1,4 @@
-import { characterPronoun, normalizeAnniversaries, normalizeExpression, slotAt, worldOf, type Anniversary, type Character } from '@app/shared';
+import { characterPronoun, normalizeAnniversaries, normalizeExpression, slotAt, worldOf, type Anniversary, type AvatarMode, type Character } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
 import { autoSave, getAll, write } from '@/db/idb';
@@ -96,6 +96,20 @@ export const useCharacterStore = defineStore('characters', () => {
     if (p) pose[id] = p.id;
   }
 
+  /** 头像：固定 / 跟随立绘；portrait 是固定头像没上传图时用的那张立绘 */
+  function setAvatar(id: string, patch: { mode?: AvatarMode; portrait?: string }) {
+    const c = byId(id);
+    if (!c) return;
+    if (patch.mode) c.avatarMode = patch.mode;
+    if (patch.portrait) c.avatarPortrait = patch.portrait;
+    c.updatedAt = Date.now();
+  }
+
+  /** 刚上传了头像：选过"跟随立绘"的换回固定，让上传的图显示出来（没选过的本来就用上传的图） */
+  function showUploadedAvatar(id: string) {
+    if (byId(id)?.avatarMode === 'portrait') setAvatar(id, { mode: 'fixed' });
+  }
+
   /** 加一个纪念日或改已有的（按 id） */
   function saveAnniversary(id: string, a: Anniversary) {
     const c = byId(id);
@@ -119,5 +133,5 @@ export const useCharacterStore = defineStore('characters', () => {
     if (c) c.relationship.affection = Math.max(0, Math.min(100, c.relationship.affection + delta));
   }
 
-  return { list, expression, expressionSeq, pose, hydrate, byId, isDemo, add, remove, setPreset, setExpression, setPose, saveAnniversary, removeAnniversary, bumpAffection };
+  return { list, expression, expressionSeq, pose, hydrate, byId, isDemo, add, remove, setPreset, setExpression, setPose, setAvatar, showUploadedAvatar, saveAnniversary, removeAnniversary, bumpAffection };
 });

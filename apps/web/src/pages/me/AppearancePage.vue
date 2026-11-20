@@ -7,6 +7,7 @@ import ImagePick from '@/components/common/ImagePick.vue';
 import PersonaAvatar from '@/components/common/PersonaAvatar.vue';
 import Segmented from '@/components/common/Segmented.vue';
 import Wallpaper from '@/components/common/Wallpaper.vue';
+import AvatarModeField from '@/components/settings/AvatarModeField.vue';
 import BackgroundEditor from '@/components/settings/BackgroundEditor.vue';
 import PageHeader from '@/layouts/PageHeader.vue';
 import { usePersonaStore } from '@/stores/personas';
@@ -55,6 +56,7 @@ function hasAvatar(owner: AvatarOwner, id: string) {
 async function pickAvatar(owner: AvatarOwner, id: string, file: File) {
   try {
     const saved = await looks.pickAvatar(owner, id, file);
+    if (owner === 'character') chars.showUploadedAvatar(id);
     showToast(saved ? '头像换好了' : '换好了，但本机存储不够，下次打开会恢复原样');
   } catch {
     showToast('这张图读不出来，换一张试试');
@@ -173,17 +175,17 @@ const reduceMotion = ref(false);
           <button v-if="hasAvatar('persona', me.id)" class="mini-btn" @click="looks.resetAvatar('persona', me.id)">恢复</button>
           <ImagePick class="mini-btn primary" :data-upload="`persona-${me.id}`" @pick="(f) => pickAvatar('persona', me.id, f)">上传</ImagePick>
         </div>
-        <div v-for="c in chars.list" :key="c.id" class="opt-row">
-          <Avatar :character="c" :size="40" />
-          <div class="flex-1 min-w-0">
-            <div class="text-[15px] font-600 truncate">{{ c.name }}</div>
-            <div class="text-[12px] text-ink-3 truncate">{{ hasAvatar('character', c.id) ? '用的是你上传的图' : c.portraits?.portraits.length ? '用的是立绘（按头像框裁，跟着表情换）' : '用的是占位立绘的头像' }}</div>
+        <div v-for="c in chars.list" :key="c.id" class="opt-row avatar-row">
+          <div class="flex items-center gap-2.5">
+            <Avatar :character="c" :size="40" live />
+            <div class="flex-1 min-w-0 text-[15px] font-600 truncate">{{ c.name }}</div>
+            <button v-if="hasAvatar('character', c.id)" class="mini-btn" @click="looks.resetAvatar('character', c.id)">删掉上传的图</button>
+            <ImagePick class="mini-btn primary" :data-upload="`character-${c.id}`" @pick="(f) => pickAvatar('character', c.id, f)">上传</ImagePick>
           </div>
-          <button v-if="hasAvatar('character', c.id)" class="mini-btn" @click="looks.resetAvatar('character', c.id)">恢复</button>
-          <ImagePick class="mini-btn primary" :data-upload="`character-${c.id}`" @pick="(f) => pickAvatar('character', c.id, f)">上传</ImagePick>
+          <AvatarModeField :character="c" />
         </div>
       </div>
-      <p class="note">上传的头像会居中裁成正方形。没上传时用立绘按头像框裁（在角色卡 → 立绘里导入、拖头像框）。</p>
+      <p class="note">上传的头像会居中裁成正方形。立绘按头像框裁（在角色卡 → 立绘里导入、拖头像框）。</p>
 
       <div class="group-title">阅读</div>
       <van-cell-group inset>
@@ -315,6 +317,10 @@ const reduceMotion = ref(false);
   border: 1px solid var(--border);
   color: inherit;
   text-decoration: none;
+}
+.avatar-row {
+  flex-direction: column;
+  align-items: stretch;
 }
 .swatch {
   width: 22px;
