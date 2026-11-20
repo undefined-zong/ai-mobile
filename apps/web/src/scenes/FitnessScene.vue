@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { estimateKcal, FIT_METHODS, fitMethod, metFor, moveAmount, paceText, shiftDate, weekStartOf, type FitMove, type MessagePart, type VideoHit } from '@app/shared';
+import { estimateKcal, FIT_METHODS, fitMethod, mergeWatch, metFor, moveAmount, paceText, shiftDate, weekStartOf, type FitMove, type MessagePart, type VideoHit, type WatchWorkout } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -22,12 +22,14 @@ import { fitMusic } from '@/services/musicPlayer';
 import { fitSearches } from '@/services/playlistSearches';
 import { personaOf } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
-import { bluetoothSupported, createGpsTracker, createHeartRate, createStepCounter, isAndroid } from '@/services/workoutSensors';
+import { clearFitnessSession, loadFitnessSession, saveFitnessSession, type FitnessSession } from '@/services/fitnessSession';
+import { bluetoothSupported, createGpsTracker, createHeartRate, createStepCounter, isIOS, trackingSupport } from '@/services/workoutSensors';
 import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
-import { useHealthStore, type WorkoutLog } from '@/stores/health';
+import { useHealthStore, watchSig, type WorkoutLog, type WorkoutWatchInfo } from '@/stores/health';
+import { useHubStore } from '@/stores/hub';
 import { useRhythmStore } from '@/stores/rhythm';
 import { uid } from '@/utils/id';
 import { clock } from '@/utils/time';
@@ -37,7 +39,8 @@ import { parseVideoLink } from '@/utils/videoLink';
  * 健身（以前的"一起运动"，设计文档 §9.1）：照"一起学习"的样子，画面用她的立绘（穿节律里那套运动服），不生图。
  * - 开始前（和练完）：上下各一半。上半屏是她的立绘和她那边在干什么；下半屏是你的安排：
  *   按照计划（今天的健身计划，一个动作一个动作地练）或者随便动动（从你人设里能接受的健身方式挑一个，可以定个时长）；
- *   记录：时长一直记；心率、消耗可选；室外的再加步数和距离。进阶的自动记录先只做安卓（蓝牙心率、计步、GPS），别的手机结束时手动填。
+ *   记录：时长一直记；心率、消耗可选；室外的再加步数和距离。手机上自动记 GPS 距离和步数（安卓、iPhone 都行，屏幕亮着时）；
+ *   蓝牙心率只有安卓。iPhone 的心率、准确的消耗靠手表的数据（"我的 → 手表数据"：快捷指令或 Health Auto Export），练完补上；也能手动填。
  * - 练的时候：整屏立绘，一个半透明的圆形计时器（照计划练：每组的计时、组间休息倒计时；随便动动：时长），按住能拖到哪儿都行、记住位置；
  *   下面是现在这个动作，怎么做直接展开着（开练了就不用再点）、心率、消耗、步数、距离；最下面连麦、跟她说一句。
  * - 她说的话（开练、做完一个动作、练了一段时间、边练边聊、点开了视频、结束）都来自「陪伴 · 快速」按"健身"功能预设，存进聊天；可以让她读出来。
@@ -48,6 +51,10 @@ import { parseVideoLink } from '@/utils/videoLink';
  *   她看不到画面，只知道标题和 UP 主（点开时说一句 fit-watch，之后练的时候每一句的场景任务里都带着）。
  *   开始前、练完只在音乐还响着时留着音乐（好关掉）。
  * - 练完：统计、补上手表上的数，"发给她"：运动卡片进聊天，她具体地评价；记录也记进健康计划（她平时聊天也知道你今天练没练）。
+ *   接了手表数据时：快捷指令可以在练完页上直接跑（带着这次的开始、结束时刻），推上来的数先填进来；
+ *   发给她以后才到的（Health Auto Export 在后台推的）由健康计划对上，改记录和这张卡片。
+ * - 忘了按结束：进行中的这一次存在本机（services/fitnessSession.ts），被关掉、离开再回来能接着练或按最后在动的时刻补结束；
+ *   练的时候 GPS / 数步 20 分钟没动、切到后台半小时以上、或者练得太久（3 小时，或者定的时长的两倍），问一句是不是早就练完了。
  */
 type Phase = 'setup' | 'active' | 'done';
 type Mode = 'plan' | 'free';
@@ -82,7 +89,12 @@ const userName = computed(() => persona.value.name);
 const hs = computed(() => (persona.value.health?.enabled ? persona.value.health : null));
 const herWhere = computed(() => location.value?.name ?? '');
 const herSlot = computed(() => rhythm.slotNow(her.value.id));
-const android = isAndroid();
+const hub = useHubStore();
+/** 这台设备能自动记什么：GPS、数步（手机）；蓝牙心率（安卓） */
+const support = trackingSupport();
+const ios = isIOS();
+/** 这次有没有自动记到的数（练完页上说"自动记到的在下面"还是"手表上的数"） */
+const autoTracked = computed(() => hr.state.avg > 0 || stepCounter.state.steps > 0 || gps.state.km >= 0.05);
 
 // —— 设置：记在本机 ——
 interface Saved {
@@ -180,6 +192,18 @@ const pausedAt = ref<number | null>(null);
 const activeSec = computed(() => (startedAt.value ? Math.max(0, Math.floor(((pausedAt.value ?? now.value) - startedAt.value) / 1000)) : 0));
 const paused = computed(() => pausedAt.value !== null);
 let ticker: ReturnType<typeof setInterval> | undefined;
+/** 真正开始、结束的时刻（不随暂停挪；对手表的运动用） */
+const realStart = ref(0);
+const endedAt = ref(0);
+/** 练了多少秒（练完时定下） */
+const endedSec = ref(0);
+/** 这次运动记录的 id：开练时就定下（快捷指令带着它回来） */
+const logId = ref('');
+/** 最后一次在动：GPS 走了一段、数到了步、点了屏幕、做完一组（问"是不是早就练完了"时用） */
+const lastMoveAt = ref(0);
+function markMove() {
+  if (phase.value === 'active') lastMoveAt.value = Date.now();
+}
 
 // 照计划：现在第几个动作、第几组、是不是在组间休息（休息、按时间做的组都有自己的倒计时）
 const stepIndex = ref(0);
@@ -198,11 +222,13 @@ const segLeftSec = computed(() => {
   return segEndsAt.value === null ? null : Math.max(0, Math.ceil((segEndsAt.value - now.value) / 1000));
 });
 
-// —— 记录：心率（蓝牙）、步数（加速度）、距离（GPS），只在安卓上开 ——
+// —— 记录：心率（蓝牙，安卓）、步数（加速度）、距离（GPS），手机上开 ——
 const hr = createHeartRate();
 const stepCounter = createStepCounter();
 const gps = createGpsTracker();
 const manual = reactive({ hrAvg: '', hrMax: '', kcal: '', steps: '', km: '' });
+watch(() => gps.state.km, (v, old) => v > old && markMove());
+watch(() => stepCounter.state.steps, (v, old) => v > old && markMove());
 function setCounting(on: boolean) {
   hr.setCounting(on);
   stepCounter.setCounting(on);
@@ -290,6 +316,11 @@ async function begin() {
   }
   now.value = Date.now();
   startedAt.value = now.value;
+  realStart.value = now.value;
+  endedAt.value = 0;
+  endedSec.value = 0;
+  lastMoveAt.value = now.value;
+  logId.value = uid('workout');
   pausedAt.value = null;
   stepIndex.value = 0;
   setNo.value = 1;
@@ -300,17 +331,17 @@ async function begin() {
   gps.state.km = 0;
   Object.assign(manual, { hrAvg: '', hrMax: '', kcal: '', steps: '', km: '' });
   sent.value = false;
+  usedWatch.value = null;
+  idleAsk.value = null;
+  recovery.value = null;
   lastCheerMin = 0;
   phase.value = 'active';
-  if (android && track.value && outdoor.value) {
-    gps.start();
-    if (methodInfo.value.steps) stepCounter.start();
-  }
+  // 在点击里开：iPhone 数步要在这里问"运动与方向"的权限
+  startSensors();
   setCounting(true);
   startSegment();
-  clearInterval(ticker);
-  ticker = setInterval(tick, 1000);
-  void services.native.keepAwake(true);
+  startTicker();
+  persistSession();
   chars.setExpression(her.value.id, 'laugh');
   await reply('fit-start', [whatLine(), herSlot.value ? `你自己这会儿：${herSlot.value.status}（在${herWhere.value || '你那边'}）` : '', hs.value?.goal ? `${userName.value}的目标：${hs.value.goal}` : '']);
 }
@@ -327,10 +358,27 @@ function startRest(sec: number) {
   segEndsAt.value = Date.now() + sec * 1000;
 }
 
+/** 室外的随便动动开 GPS、数步（手机上；要在点击里调用） */
+function startSensors() {
+  if (!track.value || !outdoor.value) return;
+  if (support.gps) gps.start();
+  if (support.steps && methodInfo.value.steps) stepCounter.start();
+}
+function startTicker() {
+  clearInterval(ticker);
+  ticker = setInterval(tick, 1000);
+  void services.native.keepAwake(true);
+}
+
 let lastCheerMin = 0;
+let lastPersist = 0;
 function tick() {
   now.value = Date.now();
-  if (phase.value !== 'active' || paused.value) return;
+  if (phase.value !== 'active') return;
+  // 每 5 秒存一次进行中的这一次（被关掉以后能接着练或者补结束）
+  if (now.value - lastPersist >= 5000) persistSession();
+  if (paused.value) return;
+  checkIdle();
   if (mode.value === 'plan' && segEndsAt.value !== null && now.value >= segEndsAt.value) {
     if (resting.value) {
       resting.value = false;
@@ -366,12 +414,158 @@ function togglePause() {
     setCounting(true);
   }
   now.value = t;
+  persistSession();
+}
+
+// —— 忘了按结束：存进行中的这一次；很久没动时问一句 ——
+
+/** 多久没动算"可能练完了"（开着 GPS / 数步时） */
+const IDLE_MIN = 20;
+/** 切到后台多久算"可能练完了" */
+const HIDDEN_MIN = 30;
+/** 问了"还在练"以后多久再问 */
+const SNOOZE_MIN = 20;
+/** "是不是早就练完了"：为什么问、建议按哪个时刻结束 */
+const idleAsk = ref<{ reason: string; endAt: number } | null>(null);
+let idleSnoozeUntil = 0;
+let hiddenAt: number | null = null;
+
+function snapshot(): FitnessSession {
+  return {
+    v: 1,
+    characterId: her.value.id,
+    phase: phase.value === 'done' ? 'done' : 'active',
+    mode: mode.value,
+    method: method.value,
+    outdoor: outdoor.value,
+    logId: logId.value,
+    realStart: realStart.value,
+    startedAt: startedAt.value,
+    pausedAt: pausedAt.value,
+    ...(phase.value === 'done' ? { endedAt: endedAt.value, endedSec: endedSec.value, manual: { ...manual } } : {}),
+    stepIndex: stepIndex.value,
+    setNo: setNo.value,
+    doneMoves: [...doneMoves.value],
+    km: gps.state.km,
+    steps: stepCounter.state.steps,
+    hrAvg: hr.state.avg,
+    hrMax: hr.state.max,
+    lastMoveAt: lastMoveAt.value,
+    savedAt: Date.now(),
+    hiddenAt,
+  };
+}
+function persistSession() {
+  if ((phase.value !== 'active' && phase.value !== 'done') || sent.value || !logId.value) return;
+  lastPersist = Date.now();
+  saveFitnessSession(snapshot());
+}
+
+const hm = (t: number) => new Date(t).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+function askIdle(reason: string, endAt: number) {
+  if (idleAsk.value) return;
+  idleAsk.value = { reason, endAt: Math.max(realStart.value, Math.min(endAt, Date.now())) };
+  services.native.vibrate([40, 80, 40]);
+}
+function checkIdle() {
+  const t = now.value;
+  if (idleAsk.value || t < idleSnoozeUntil) return;
+  const sensing = gps.state.on || stepCounter.state.on;
+  if (sensing && t - lastMoveAt.value >= IDLE_MIN * 60_000) {
+    askIdle(`${IDLE_MIN} 多分钟没动了（GPS 没走、没数到步）`, lastMoveAt.value);
+    return;
+  }
+  const tooLong = Math.max(180, targetMin.value * 2) * 60;
+  if (activeSec.value >= tooLong) askIdle(`已经记了 ${Math.round(activeSec.value / 60)} 分钟`, lastMoveAt.value);
+}
+/** 还在练：过一阵子再问 */
+function keepGoing() {
+  idleAsk.value = null;
+  idleSnoozeUntil = Date.now() + SNOOZE_MIN * 60_000;
+  markMove();
+}
+function onVisibility() {
+  if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now();
+    persistSession();
+    return;
+  }
+  const away = hiddenAt;
+  hiddenAt = null;
+  if (phase.value !== 'active' || away === null) return;
+  now.value = Date.now();
+  if (now.value - away >= HIDDEN_MIN * 60_000 && !paused.value) askIdle(`切到后台 ${Math.round((now.value - away) / 60_000)} 分钟了`, Math.max(lastMoveAt.value, away));
+  persistSession();
+}
+
+// —— 上次没结束的那一次：接着练 / 按某个时刻结束 / 不要了 ——
+const recovery = ref<FitnessSession | null>(null);
+/** 上次那次建议按哪个时刻结束：最后在动（或者切到后台、最后存）的时刻 */
+const recoveryEnd = computed(() => {
+  const s = recovery.value;
+  if (!s) return 0;
+  if (s.phase === 'done') return s.endedAt ?? s.savedAt;
+  return Math.max(s.realStart, Math.min(Math.max(s.lastMoveAt, s.hiddenAt ?? s.savedAt), s.savedAt));
+});
+/** 两小时以内的才让接着练 */
+const recoveryResumable = computed(() => !!recovery.value && recovery.value.phase === 'active' && Date.now() - recovery.value.savedAt < 2 * 3600_000);
+function restoreBase(s: FitnessSession) {
+  mode.value = s.mode;
+  method.value = s.method;
+  logId.value = s.logId;
+  realStart.value = s.realStart;
+  startedAt.value = s.startedAt;
+  pausedAt.value = s.pausedAt;
+  stepIndex.value = s.stepIndex;
+  setNo.value = s.setNo;
+  doneMoves.value = [...s.doneMoves];
+  gps.state.km = s.km;
+  stepCounter.state.steps = s.steps;
+  lastMoveAt.value = s.lastMoveAt;
+  sent.value = false;
+  usedWatch.value = null;
+  recovery.value = null;
+  now.value = Date.now();
+}
+/** 接着练（在点击里：iPhone 数步要重新问权限） */
+function resumeRecovered() {
+  const s = recovery.value;
+  if (!s) return;
+  restoreBase(s);
+  resting.value = false;
+  phase.value = 'active';
+  startSensors();
+  setCounting(!s.pausedAt);
+  startSegment();
+  startTicker();
+  persistSession();
+}
+/** 按某个时刻结束（上次练完了、还没发给她的，直接回到练完页） */
+function endRecovered(at: number) {
+  const s = recovery.value;
+  if (!s) return;
+  restoreBase(s);
+  phase.value = 'active';
+  if (s.phase === 'done') {
+    endedSec.value = s.endedSec ?? 0;
+    endedAt.value = s.endedAt ?? at;
+    phase.value = 'done';
+    Object.assign(manual, s.manual ?? {});
+    persistSession();
+    return;
+  }
+  void finish(true, at, { hrAvg: s.hrAvg, hrMax: s.hrMax });
+}
+function discardRecovered() {
+  recovery.value = null;
+  clearFitnessSession();
 }
 
 /** 这一组做完了（按次数的点的，按时间的到点自动） */
 async function finishSet() {
   const s = current.value;
   if (!s || resting.value) return;
+  markMove();
   services.native.vibrate(20);
   if (setNo.value < s.move.sets) {
     setNo.value += 1;
@@ -477,7 +671,7 @@ function newSpeech(o: { onSentence?(text: string, i: number): void } = {}): Spee
 }
 function linkContext(): string {
   if (phase.value === 'setup') return `${userName.value}还没开练，在准备。打算：${whatLine()}`;
-  if (phase.value === 'done') return `${userName.value}刚练完（${whatLine()}），一共练了 ${Math.max(1, Math.round((endedSec || activeSec.value) / 60))} 分钟`;
+  if (phase.value === 'done') return `${userName.value}刚练完（${whatLine()}），一共练了 ${Math.max(1, Math.round(endedSec.value / 60))} 分钟`;
   return [whatLine(), doingLine(), paused.value ? '暂停着' : '', ...statsLines(), watchLine()].filter(Boolean).join('\n');
 }
 const link = useMicLink({
@@ -513,8 +707,11 @@ const sent = ref(false);
 /** 这次进来发给她的几次一共练了多久（离开时那一段的总结） */
 const visitMinutes = ref(0);
 const sending = ref(false);
-let endedSec = 0;
-async function finish(auto = false) {
+/**
+ * 结束。at：按哪个时刻结束（忘了按结束时选的"最后在动"的时刻；默认现在）；
+ * hrSaved：上次存下来的心率（App 被关掉以后补结束时，蓝牙心率已经断了）
+ */
+async function finish(auto = false, at?: number, hrSaved?: { hrAvg: number; hrMax: number }) {
   if (phase.value !== 'active') return;
   if (!auto) {
     try {
@@ -523,8 +720,13 @@ async function finish(auto = false) {
       return;
     }
   }
-  if (pausedAt.value !== null) togglePause();
-  endedSec = activeSec.value;
+  const t = Date.now();
+  const end = Math.min(at ?? t, t);
+  // 暂停着的话算到暂停的那一刻
+  endedSec.value = Math.max(0, Math.floor((Math.min(end, pausedAt.value ?? end) - startedAt.value) / 1000));
+  endedAt.value = end;
+  pausedAt.value = null;
+  idleAsk.value = null;
   clearInterval(ticker);
   setCounting(false);
   gps.stop();
@@ -537,9 +739,11 @@ async function finish(auto = false) {
   watchOpen.value = false;
   closeVideo();
   // 自动记到的数先填进去，可以改
+  const hrAvg = hr.state.avg || hrSaved?.hrAvg || 0;
+  const hrMax = hr.state.max || hrSaved?.hrMax || 0;
   Object.assign(manual, {
-    hrAvg: hr.state.avg ? String(hr.state.avg) : '',
-    hrMax: hr.state.max ? String(hr.state.max) : '',
+    hrAvg: hrAvg ? String(hrAvg) : '',
+    hrMax: hrMax ? String(hrMax) : '',
     steps: stepCounter.state.steps ? String(stepCounter.state.steps) : '',
     km: gps.state.km >= 0.05 ? gps.state.km.toFixed(2) : '',
     kcal: '',
@@ -548,14 +752,73 @@ async function finish(auto = false) {
   // 上面的气泡等"发给她"以后放她的评价，不留练的时候的那句
   herLine.value = '';
   chars.setExpression(her.value.id, 'smile');
+  persistSession();
 }
+
+// —— 手表的数据（"我的 → 手表数据"）：练完页上补上，发给她以后才到的由健康计划改卡片 ——
+const watchMode = computed(() => health.watch.mode);
+/** 推上来的、和这一次对得上的手表运动（练完、还没发给她时） */
+const watchHit = computed<WatchWorkout | null>(() => (phase.value === 'done' && !sent.value && logId.value ? health.watchFor(logId.value, realStart.value, endedAt.value) : null));
+/** 用上的那次手表运动和说明（手表忘了停时只取了 App 那段） */
+const usedWatch = ref<{ workout: WatchWorkout; note?: string; used: boolean } | null>(null);
+/** 刚打开了快捷指令，等它推上来 */
+const watchWaiting = ref(false);
+watch(watchHit, (w) => {
+  if (!w || usedWatch.value?.workout.id === w.id && watchSig(usedWatch.value.workout) === watchSig(w)) return;
+  watchWaiting.value = false;
+  const m = mergeWatch({ id: logId.value, startedAt: realStart.value, endedAt: endedAt.value, durationSec: endedSec.value }, w);
+  usedWatch.value = { workout: w, used: m.used, ...(m.note ? { note: m.note } : {}) };
+  if (!m.used) return;
+  if (m.durationSec) endedSec.value = m.durationSec;
+  if (m.endedAt) endedAt.value = m.endedAt;
+  if (m.hrAvg) manual.hrAvg = String(m.hrAvg);
+  if (m.hrMax) manual.hrMax = String(m.hrMax);
+  if (m.kcal) manual.kcal = String(m.kcal);
+  if (m.steps) manual.steps = String(m.steps);
+  if (m.distanceKm) manual.km = m.distanceKm.toFixed(2);
+  persistSession();
+});
+// 练完页上改的数也存着（被关掉以后回来还在）
+watch(manual, () => phase.value === 'done' && persistSession(), { deep: true });
+
+/** "2026-11-19T18:02:00+08:00"：快捷指令的"从输入中获取日期"认得 */
+function isoLocal(t: number): string {
+  const d = new Date(t);
+  const off = -d.getTimezoneOffset();
+  const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${off >= 0 ? '+' : '-'}${pad(off / 60)}:${pad(off % 60)}`;
+}
+/** 打开快捷指令，带着这次的开始、结束时刻和记录 id；它查这段时间的心率、消耗、距离、步数推到云端，回来时同步就填上 */
+function runShortcut() {
+  const input = JSON.stringify({ start: isoLocal(realStart.value), end: isoLocal(endedAt.value), logId: logId.value, sport: mode.value === 'plan' ? (planWorkout.value?.title ?? '健身') : method.value });
+  watchWaiting.value = true;
+  persistSession();
+  window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(health.watch.shortcutName)}&input=text&text=${encodeURIComponent(input)}`;
+}
+const watchSyncing = ref(false);
+async function syncWatch() {
+  if (!hub.connected) {
+    showToast('还没连云端：我的 → 云端与同步');
+    return;
+  }
+  watchSyncing.value = true;
+  try {
+    await hub.pullWatchWorkouts();
+    if (!watchHit.value) showToast(watchMode.value === 'hae' ? '还没收到：Health Auto Export 在后台推完以后再试' : '还没收到：看看快捷指令跑完时的提示');
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : String(e));
+  } finally {
+    watchSyncing.value = false;
+  }
+}
+
 const num = (s: string) => {
   const n = Number(s.trim());
   return s.trim() && Number.isFinite(n) && n > 0 ? n : undefined;
 };
 const summary = computed(() => {
   const h = hs.value;
-  const sec = endedSec || activeSec.value;
+  const sec = phase.value === 'done' ? endedSec.value : activeSec.value;
   const hrAvg = num(manual.hrAvg);
   const km = num(manual.km);
   const met = mode.value === 'plan' ? intensityMet.value : metFor(methodInfo.value, km && sec ? km / (sec / 3600) : null);
@@ -567,7 +830,7 @@ const summary = computed(() => {
     steps: num(manual.steps) ? Math.round(num(manual.steps)!) : undefined,
     km: km ? Math.round(km * 100) / 100 : undefined,
     kcal: num(manual.kcal) ? Math.round(num(manual.kcal)!) : est.kcal || undefined,
-    kcalBasis: num(manual.kcal) ? '你填的' : est.basis,
+    kcalBasis: num(manual.kcal) ? (usedWatch.value?.used && usedWatch.value.workout.kcal !== undefined ? '手表记的' : '你填的') : est.basis,
     pace: km ? paceText(sec / km) : undefined,
   };
 });
@@ -579,13 +842,17 @@ async function send() {
   sending.value = true;
   try {
     const s = summary.value;
-    const auto = hr.state.avg > 0 || stepCounter.state.steps > 0 || gps.state.km > 0;
-    const source: WorkoutLog['source'] = num(manual.kcal) || (!auto && (s.hrAvg || s.steps || s.km)) ? 'manual' : auto ? 'auto' : 'estimate';
-    const logId = uid('workout');
+    const auto = autoTracked.value;
+    const w = usedWatch.value?.used ? usedWatch.value : null;
+    const source: WorkoutLog['source'] = w ? 'watch' : num(manual.kcal) || (!auto && (s.hrAvg || s.steps || s.km)) ? 'manual' : auto ? 'auto' : 'estimate';
+    const watchInfo: WorkoutWatchInfo | undefined = usedWatch.value
+      ? { id: usedWatch.value.workout.id, source: usedWatch.value.workout.source, used: usedWatch.value.used, sig: watchSig(usedWatch.value.workout), ...(usedWatch.value.workout.device ? { device: usedWatch.value.workout.device } : {}), ...(usedWatch.value.note ? { note: usedWatch.value.note } : {}) }
+      : undefined;
+    const id = logId.value || uid('workout');
     const title = planWorkout.value?.title ?? '今天的训练';
     const part: MessagePart = {
       type: 'workout',
-      logId,
+      logId: id,
       sport: mode.value === 'plan' ? title : method.value,
       durationSec: s.sec,
       mode: mode.value,
@@ -595,14 +862,18 @@ async function send() {
       ...(s.kcal ? { kcal: s.kcal } : {}),
       ...(s.steps ? { steps: s.steps } : {}),
       source,
+      ...(w ? { watch: { ...(w.workout.device ? { device: w.workout.device } : {}), ...(w.note ? { note: w.note } : {}) } } : {}),
     };
     chat.push(chatId.value, 'user', [part], { meta: { scene: 'exercise', cue: '练完' } });
+    sent.value = true;
+    clearFitnessSession();
     health.addLog({
-      id: logId,
+      id,
       personaId: persona.value.id,
       characterId: her.value.id,
       date: health.today(),
-      startedAt: Date.now() - s.sec * 1000,
+      startedAt: realStart.value || Date.now() - s.sec * 1000,
+      endedAt: endedAt.value || Date.now(),
       durationSec: s.sec,
       mode: mode.value,
       sport: mode.value === 'plan' ? title : method.value,
@@ -614,8 +885,8 @@ async function send() {
       ...(s.hrMax ? { hrMax: s.hrMax } : {}),
       ...(s.kcal ? { kcal: s.kcal } : {}),
       source,
+      ...(watchInfo ? { watch: watchInfo } : {}),
     });
-    sent.value = true;
     visitMinutes.value += Math.max(1, Math.round(s.sec / 60));
     await reply('fit-end', [
       whatLine(),
@@ -634,8 +905,15 @@ function again() {
   if (location.value) chat.enterScene(her.value.id, location.value.id, 'exercise');
   phase.value = 'setup';
   herLine.value = '';
-  endedSec = 0;
+  endedSec.value = 0;
+  endedAt.value = 0;
   startedAt.value = 0;
+  realStart.value = 0;
+  logId.value = '';
+  usedWatch.value = null;
+  watchWaiting.value = false;
+  // "不发了，再练一次"：上一次不要了
+  clearFitnessSession();
 }
 
 // —— 这周练了几天（健康计划里的运动记录，按人设） ——
@@ -669,8 +947,16 @@ onMounted(() => {
   // 离开时那一段写"练了多久"
   chat.setLeaveSummary(her.value.id, () => (visitMinutes.value ? `练了 ${visitMinutes.value} 分钟` : undefined));
   if (mode.value === 'plan' && hs.value && !plan.value && healthStatus.value.live && !planBusy.value) void makePlan();
+  // 上次没结束（或者练完了还没发给她）的那一次
+  recovery.value = loadFitnessSession();
+  document.addEventListener('visibilitychange', onVisibility);
+  document.addEventListener('pointerdown', markMove, { capture: true, passive: true });
 });
 onBeforeUnmount(() => {
+  // 练着、练完还没发就离开：这一次留着，回来时接着练或者补结束
+  persistSession();
+  document.removeEventListener('visibilitychange', onVisibility);
+  document.removeEventListener('pointerdown', markMove, { capture: true });
   chat.setLeaveSummary(her.value.id, null);
   clearInterval(ticker);
   link.dispose();
@@ -727,6 +1013,26 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
 
               <!-- 开始前 -->
               <template v-if="phase === 'setup'">
+                <!-- 上次没结束（或者练完了还没发给她）的那一次 -->
+                <div v-if="recovery" class="recover" data-testid="fit-recover">
+                  <div class="flex items-start gap-2">
+                    <span class="i-lucide-history shrink-0 mt-0.5 text-accent-ink" />
+                    <div class="flex-1 min-w-0 text-[13.5px] leading-snug">
+                      <template v-if="recovery.phase === 'done'">上次练完的{{ recovery.mode === 'plan' ? '训练' : recovery.method }}还没发给{{ her.pronoun }}（{{ Math.max(1, Math.round((recovery.endedSec ?? 0) / 60)) }} 分钟）</template>
+                      <template v-else>上次的{{ recovery.mode === 'plan' ? '训练' : recovery.method }}没按结束：{{ hm(recovery.realStart) }} 开始，最后在动是 {{ hm(recoveryEnd) }}</template>
+                    </div>
+                  </div>
+                  <div class="flex gap-2 flex-wrap mt-2">
+                    <template v-if="recovery.phase === 'done'">
+                      <button type="button" class="act primary" @click="endRecovered(recoveryEnd)">接着发</button>
+                    </template>
+                    <template v-else>
+                      <button type="button" class="act primary" data-testid="fit-recover-end" @click="endRecovered(recoveryEnd)">按 {{ hm(recoveryEnd) }} 结束</button>
+                      <button v-if="recoveryResumable" type="button" class="act" @click="resumeRecovered">接着练</button>
+                    </template>
+                    <button type="button" class="act" @click="discardRecovered">不要了</button>
+                  </div>
+                </div>
                 <div class="label first">怎么练</div>
                 <Segmented v-model="mode" :options="MODE_OPTIONS" />
 
@@ -777,8 +1083,8 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
                 <div class="label">记录</div>
                 <div class="rec">
                   <div class="rec-row"><span class="i-lucide-timer text-accent-ink" /><span class="flex-1">时长</span><span class="text-[12px] text-ink-3">一直记</span></div>
-                  <template v-if="android">
-                    <div class="rec-row">
+                  <template v-if="support.gps">
+                    <div v-if="support.heartRate" class="rec-row">
                       <span class="i-lucide-heart-pulse text-accent-ink" />
                       <span class="flex-1 min-w-0">心率<span class="block text-[11.5px] text-ink-3">蓝牙心率带，或者打开手表的"心率广播"</span></span>
                       <span v-if="hr.state.status === 'on'" class="text-[12px] text-good num shrink-0">{{ hr.state.device }}{{ hr.state.bpm ? ` · ${hr.state.bpm}` : '' }}</span>
@@ -787,12 +1093,18 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
                     <p v-if="hr.state.error" class="hint text-bad">{{ hr.state.error }}</p>
                     <div v-if="mode === 'free' && outdoor" class="rec-row">
                       <span class="i-lucide-route text-accent-ink" />
-                      <span class="flex-1 min-w-0">{{ methodInfo.steps ? '步数和距离' : '距离' }}<span class="block text-[11.5px] text-ink-3">GPS 记距离{{ methodInfo.steps ? '、手机数步（带在身上）' : '' }}；屏幕会保持亮着</span></span>
+                      <span class="flex-1 min-w-0">{{ methodInfo.steps ? '步数和距离' : '距离' }}<span class="block text-[11.5px] text-ink-3">GPS 记距离{{ methodInfo.steps ? '、手机数步（带在身上）' : '' }}；屏幕会保持亮着{{ ios ? '，锁屏、切走就停了' : '' }}</span></span>
                       <van-switch v-model="track" size="20px" />
                     </div>
                     <div class="rec-row"><span class="i-lucide-flame text-accent-ink" /><span class="flex-1">消耗</span><span class="text-[12px] text-ink-3">按{{ hs?.weightKg ? '体重' : '强度' }}{{ hs?.age && hs?.sex ? '和心率' : '' }}估</span></div>
                   </template>
-                  <p v-else class="hint !mt-1">自动记心率、步数、距离先只支持安卓（Chrome）；在这台设备上练完以后，可以把手表上的心率、消耗{{ outdoor ? '、步数、距离' : '' }}填进来。</p>
+                  <p v-else class="hint !mt-1">自动记步数、距离要用手机；在这台设备上练完以后，可以把手表上的心率、消耗{{ outdoor ? '、步数、距离' : '' }}填进来。</p>
+                  <!-- 心率、准确的消耗：iPhone 上靠手表的数据 -->
+                  <div v-if="!support.heartRate" class="rec-row">
+                    <span class="i-lucide-watch text-accent-ink" />
+                    <span class="flex-1 min-w-0">手表的心率、消耗<span class="block text-[11.5px] text-ink-3">{{ watchMode === 'shortcut' ? '练完用快捷指令补上' : watchMode === 'hae' ? 'Health Auto Export 推上来以后补上' : '练完手动填，或者接上手表的数据' }}</span></span>
+                    <RouterLink to="/me/workout-data" class="text-[12px] text-accent-ink shrink-0">{{ watchMode === 'off' ? '去接' : '设置' }}</RouterLink>
+                  </div>
                 </div>
               </template>
 
@@ -807,8 +1119,34 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
                   <div v-if="outdoor || summary.km" class="stat"><div class="v num">{{ summary.km ?? '—' }}</div><div class="k">公里{{ summary.pace ? ` · ${summary.pace}` : '' }}</div></div>
                   <div v-if="outdoor || summary.steps" class="stat"><div class="v num">{{ summary.steps ?? '—' }}</div><div class="k">步</div></div>
                 </div>
+                <!-- 手表的数据：快捷指令带着这次的时间去查，推上来就填进下面 -->
+                <div v-if="!sent && watchMode !== 'off'" class="watch-box" data-testid="fit-watch">
+                  <template v-if="usedWatch">
+                    <div class="flex items-center gap-2 text-[13px]">
+                      <span class="i-lucide-watch shrink-0" :class="usedWatch.used ? 'text-good' : 'text-ink-3'" />
+                      <span class="flex-1 min-w-0">{{ usedWatch.used ? `用上了${usedWatch.workout.device ? ` ${usedWatch.workout.device} ` : '手表'}的数，下面可以改` : '收到了手表的数，没用上' }}</span>
+                    </div>
+                    <p v-if="usedWatch.note" class="hint !mt-1">{{ usedWatch.note }}</p>
+                  </template>
+                  <template v-else-if="!hub.connected || !hub.supportsIngest">
+                    <p class="hint !mt-0">{{ !hub.connected ? '手表的数据经过你的云端：先连上云端' : '云端的 Worker 是旧版，收不了手表的数据：重新部署一次' }}<RouterLink :to="!hub.connected ? '/me/sync' : '/me/workout-data'" class="text-accent-ink ml-1">去看看</RouterLink></p>
+                  </template>
+                  <template v-else-if="watchMode === 'shortcut'">
+                    <div class="flex items-center gap-2">
+                      <span class="flex-1 min-w-0 text-[12.5px] text-ink-2">{{ watchWaiting ? '跑完快捷指令回到这里，就会填上' : `用快捷指令"${health.watch.shortcutName}"查这段时间手表上的心率、消耗、距离、步数` }}</span>
+                      <button v-if="watchWaiting" type="button" class="act shrink-0" :disabled="watchSyncing" @click="syncWatch">{{ watchSyncing ? '同步中…' : '同步一下' }}</button>
+                      <button type="button" class="act primary shrink-0" data-testid="fit-run-shortcut" @click="runShortcut"><span class="i-lucide-watch" />{{ watchWaiting ? '再跑一次' : '用手表的数据更新' }}</button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="flex items-center gap-2">
+                      <span class="flex-1 min-w-0 text-[12.5px] text-ink-2">Health Auto Export 推上来以后自动填上；先发给{{ her.pronoun }}也行，到了会改卡片</span>
+                      <button type="button" class="act shrink-0" :disabled="watchSyncing" @click="syncWatch">{{ watchSyncing ? '同步中…' : '同步一下' }}</button>
+                    </div>
+                  </template>
+                </div>
                 <div v-if="!sent" class="manual">
-                  <div class="text-[12.5px] text-ink-3 mb-1.5">{{ android ? '自动记到的在下面，可以改' : '手表上的数（可以不填）' }}</div>
+                  <div class="text-[12.5px] text-ink-3 mb-1.5">{{ usedWatch?.used ? '手表上的数，可以改' : autoTracked ? '自动记到的在下面，可以改' : '手表上的数（可以不填）' }}</div>
                   <div class="grid grid-cols-2 gap-2">
                     <label class="mfield"><span>平均心率</span><input v-model="manual.hrAvg" inputmode="numeric" placeholder="—" /></label>
                     <label class="mfield"><span>最高心率</span><input v-model="manual.hrMax" inputmode="numeric" placeholder="—" /></label>
@@ -895,6 +1233,17 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
             <span v-if="gps.state.on"><b class="num">{{ gps.state.km.toFixed(2) }}</b>公里 · {{ paceLive }}</span>
           </div>
           <p v-if="gps.state.error || stepCounter.state.error" class="sensor-err">{{ gps.state.error || stepCounter.state.error }}</p>
+
+          <!-- 是不是早就练完了（忘了按结束） -->
+          <div v-if="idleAsk" class="idle-ask" role="alertdialog" aria-label="是不是练完了" data-testid="fit-idle">
+            <div class="text-[14px] font-600">是不是早就练完了？</div>
+            <div class="text-[12.5px] text-ink-2 mt-0.5">{{ idleAsk.reason }}；最后在动是 {{ hm(idleAsk.endAt) }}</div>
+            <div class="flex gap-2 flex-wrap mt-2.5">
+              <button type="button" class="act primary" data-testid="fit-idle-end" @click="finish(true, idleAsk.endAt)">按 {{ hm(idleAsk.endAt) }} 结束</button>
+              <button type="button" class="act" @click="finish(true)">现在结束</button>
+              <button type="button" class="act" @click="keepGoing">还在练</button>
+            </div>
+          </div>
 
           <!-- 最下面：连麦（左）+ 边练边聊 -->
           <nav class="bottom-bar" aria-label="健身时">
@@ -1505,6 +1854,42 @@ const figureLayout = computed(() => (view.value === 'split' ? { left: 50, bottom
   margin: 0;
   font-size: 11.5px;
   color: var(--bad);
+}
+/* 上次没结束的那一次、练完页上的手表数据 */
+.recover,
+.watch-box {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--panel);
+}
+.watch-box {
+  margin: 12px 0 0;
+}
+.recover .act,
+.watch-box .act {
+  height: 32px;
+  font-size: 12.5px;
+  background: var(--bg);
+}
+.recover .act.primary,
+.watch-box .act.primary {
+  flex: 0 1 auto;
+  background: var(--accent);
+}
+/* 是不是早就练完了 */
+.idle-ask {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--safe-bottom) + 110px);
+  z-index: 6;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 .bottom-bar {
   position: absolute;

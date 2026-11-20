@@ -1,5 +1,5 @@
 import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
-import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
+import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, watchWorkoutLine, type HubWatchWorkouts, type WatchWorkout, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
   type Character, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
@@ -55,6 +55,10 @@ interface SavedHub {
   healthRevisions?: Record<string, number>; healthHashes?: Record<string, string>; healthApiHash?: string; healthCursor?: number;
   /** 给云端的 Google 地图 Key 上传过的指纹（空 = 没传） */
   mapsCloudHash?: string;
+  /** 手表的运动数据拉到哪了（workout_ingest 的 seq） */
+  watchCursor?: number;
+  /** 上报令牌（快捷指令、Health Auto Export 用；云端只存哈希，这里留一份方便再复制。hub 这一项不进多设备同步） */
+  ingestToken?: string;
   /** 平行时空里整理你的一天：每个人设上传过的版本和内容指纹（API 用平行时空的那一份） */
   parallelPlanRevisions?: Record<string, number>; parallelPlanHashes?: Record<string, string>;
   lastSyncAt?: number;
@@ -98,6 +102,8 @@ export const useHubStore = defineStore('hub', () => {
   const supportsMcpCall = computed(() => status.value?.mcpCall === true);
   /** 云端有多设备同步（聊天、朋友圈、社群、记忆、角色、设置……连着同一个 Worker 的设备都一样） */
   const supportsSync = computed(() => status.value?.sync === true);
+  /** 云端能收手表的运动数据（快捷指令、Health Auto Export 推到 /v1/ingest/*） */
+  const supportsIngest = computed(() => status.value?.ingest === true);
   const upgradeRequired = computed(() => !!status.value && (!supportsRhythm.value || !supportsMemory.value));
   const syncing = ref(false);
   let started = false;
@@ -662,6 +668,52 @@ export const useHubStore = defineStore('hub', () => {
     await save();
   }
 
+  /**
+   * 拉手表的运动数据（快捷指令、Health Auto Export 推上来的），交给健康计划对上"健身"里记的那一次；
+   * 用上了、单独记了的说一句。没有新的也对一遍（只在手表上练的要等结束 2 小时以后才单独记）
+   */
+  async function pullWatchWorkouts() {
+    const health = useHealthStore();
+    if (health.watch.mode === 'off') return;
+    config.watchCursor ??= 0;
+    const got: WatchWorkout[] = [];
+    let more = true;
+    while (more) {
+      const data: HubWatchWorkouts = await request<HubWatchWorkouts>(`/v1/ingest/workouts?since=${config.watchCursor}`);
+      got.push(...data.workouts.map((r) => r.workout));
+      config.watchCursor = data.next;
+      more = data.more && data.workouts.length > 0;
+    }
+    const outcomes = health.ingestWatch(got);
+    if (got.length) await save();
+    const app = useAppStore();
+    const first = outcomes[0];
+    if (first) {
+      const w = first.workout;
+      app.showBanner({
+        characterId: first.log.characterId ?? app.activeCharacterId,
+        title: first.kind === 'created' ? '手表记了一次运动' : '用上了手表的数',
+        text: `${watchWorkoutLine(w)}${outcomes.length > 1 ? `（还有 ${outcomes.length - 1} 次）` : ''}${first.log.watch?.note ? `；${first.log.watch.note}` : ''}`,
+        to: '/me/health',
+        icon: 'i-lucide-watch',
+      });
+    }
+  }
+  /** 建（或者换）上报令牌：旧的马上失效 */
+  async function createIngestToken(): Promise<string> {
+    const r = await request<{ token: string; createdAt: number }>('/v1/ingest/token', 'POST');
+    config.ingestToken = r.token;
+    await save();
+    await refreshStatus();
+    return r.token;
+  }
+  async function revokeIngestToken() {
+    await request('/v1/ingest/token', 'DELETE');
+    config.ingestToken = '';
+    await save();
+    await refreshStatus();
+  }
+
   /** 拉云端排好的健康计划 */
   async function pullHealth() {
     const health = useHealthStore();
@@ -885,6 +937,7 @@ export const useHubStore = defineStore('hub', () => {
         ...(supportsPlanner.value ? [{ label: '日程计划', run: () => pullPlanner().then(uploadPlanner) }] : []),
         ...(supportsParallel.value ? [{ label: '平行时空', run: () => pullParallel().then(uploadParallel) }] : []),
         ...(supportsHealth.value ? [{ label: '健康计划', run: () => pullHealth().then(uploadHealth) }] : []),
+        ...(supportsIngest.value && useHealthStore().watch.mode !== 'off' ? [{ label: '手表数据', run: pullWatchWorkouts }] : []),
         ...(supportsParallelPlan.value ? [{ label: '整理你的一天', run: () => pullParallelPlans().then(uploadParallelPlans) }] : []),
         ...(config.active ? [
           { label: '角色上下文（含时区和作息）', run: uploadContexts },
@@ -985,6 +1038,6 @@ export const useHubStore = defineStore('hub', () => {
       clearTimeout(debounce); debounce = setTimeout(() => void syncNow(), 500);
     }, { deep: true });
   }
-  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, endpoint,
-    ensureStatus, pushMcpSecret, syncPlannerNow, runPlanner, mcpCall, plannerTools, oauthDiscover, oauthRegister, oauthToken, start };
+  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, endpoint,
+    ensureStatus, pushMcpSecret, syncPlannerNow, runPlanner, mcpCall, plannerTools, oauthDiscover, oauthRegister, oauthToken, pullWatchWorkouts, createIngestToken, revokeIngestToken, start };
 });

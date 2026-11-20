@@ -24,6 +24,7 @@ import { usePersonaStore } from '@/stores/personas';
 import { useProactiveStore } from '@/stores/proactive';
 import { useRhythmStore } from '@/stores/rhythm';
 import { useHubStore } from '@/stores/hub';
+import { useHealthStore } from '@/stores/health';
 import { useServicesStore } from '@/stores/services';
 import { useSocialStore } from '@/stores/social';
 import { useWeatherStore } from '@/stores/weather';
@@ -46,6 +47,9 @@ const proactive = useProactiveStore();
 /** 今天所有打开了主动消息的角色加起来还会来找你几次 */
 const upcoming = computed(() => proactive.upcoming());
 const hub = useHubStore();
+const health = useHealthStore();
+/** 手表数据：从哪来 */
+const watchValue = computed(() => ({ off: '没接', shortcut: '快捷指令', hae: 'Health Auto Export' })[health.watch.mode]);
 const rhythm = useRhythmStore();
 /** 节律那一行：几个每天变化、几个还没有小世界 */
 const rhythmValue = computed(() => {
@@ -170,6 +174,7 @@ const groups = computed((): { title: string; rows: Row[] }[] => [
       { icon: 'i-lucide-aperture', label: '社媒', value: socialValue.value, click: () => (socialOpen.value = true) },
       { icon: 'i-lucide-calendar-clock', label: '节律', value: rhythmValue.value, to: '/me/rhythm' },
       { icon: 'i-lucide-heart-pulse', label: '健康计划', value: me.value.health?.enabled ? '' : '健康系统没开', to: '/me/health' },
+      { icon: 'i-lucide-watch', label: '手表数据', value: watchValue.value, to: '/me/workout-data' },
       { icon: 'i-lucide-calendar-check', label: '日程计划', value: me.value.planner?.enabled ? '' : '日程系统没开', to: '/me/planner' },
       { icon: weather.mine?.icon ?? 'i-lucide-cloud-sun', label: '环境与作息', value: envValue.value, to: '/me/environment' },
     ],

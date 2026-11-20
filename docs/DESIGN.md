@@ -703,8 +703,14 @@ M4–M6 在 M3 之后互不依赖，可以按你的优先级调换（例如先�
 > - **她说的话**：「陪伴 · 快速」按"健身"功能预设：开练（`fit-start`）、做完一个正式的动作（`fit-move`，提醒下一个动作最要注意的地方）、随便动动每 10 分钟和定的时长到了（`fit-cheer`）、边练边聊（`fit-chat`）、点开了视频（`fit-watch`）、结束（`fit-end`）；右上角能让她读出来（语音合成）。
 > - **连麦**（练的时候在最下面输入框左边，开始前、练完在最下面那排按钮左边，同一起吃饭；`composables/useMicLink.ts`，和共同的家一样）：手上忙着，说话她就听得到、用她的声音回你（`fit-call`，"健身"预设里的"连麦"一块）；开始前、练的时候、练完都能连，挂断也在那个按钮上（状态条在上面）。连着的时候开练、做完一个动作、练了一段时间、练完她都在麦里说（不另外念），下面打的字也走麦里那一路。语音识别没接通、麦克风用不了时改成打字，写明原因。这里右上角不放"连线 / 坐在她旁边"。
 > - **音乐、视频**（右上角，喇叭下面竖着排，同一起吃饭）：音乐是 `PlaylistMusic`（播放器 `fitMusic`，她说话时压低），面板在按钮左边展开；开始前、练完只在音乐还响着时留着音乐（好关掉）。视频是"逛 B 站"（`BiliBrowser`），挑一个放在 `FloatVideo` 浮窗里（能拖、能调大小、能全屏，位置和大小记在本机；没动过时放在右边、贴在动作卡 / 那一排数上面，压在计时器下面）；她只知道标题和 UP 主：点开时说一句（`fit-watch`，"健身"预设里的"边练边看"一块），之后练的时候每一句的场景任务里都带着。练完关掉。
-> - **进阶记录先只做安卓**（`services/workoutSensors.ts`）：心率用 Web Bluetooth 连标准蓝牙心率服务（心率带、开了"心率广播"的手表）；步数用加速度传感器（Accelerometer，没有时用 devicemotion）按波峰数；距离和配速用 GPS（watchPosition，35 米以内的点才用，原地漂移和跳点不算，暂停时不算）。消耗：知道年龄、性别、体重和平均心率时按心率算（Keytel 公式），否则按 MET × 体重 × 时长（跑步、走路按配速换 MET）；没填体重按 60 kg。iPhone、电脑不开这些。以后的安卓壳可以换成 Health Connect、前台服务（锁屏不断）。
-> - **以前的设想（未实现）**：iPhone 快捷指令把健康数据 POST 到 `/v1/ingest/workout`；Keep、华为、小米的运动截图交给视觉模型识别。
+> - **手机上的自动记录**（`services/workoutSensors.ts`）：步数用加速度传感器（Accelerometer，没有时用 devicemotion；iPhone 要在开练的点击里问"运动与方向"权限 `DeviceMotionEvent.requestPermission`）按波峰数；距离和配速用 GPS（watchPosition，35 米以内的点才用，原地漂移和跳点不算，暂停时不算）。安卓、iPhone 都开，屏幕亮着时记（iPhone 锁屏、切到后台就停了，网页做不了后台定位）。心率用 Web Bluetooth 连标准蓝牙心率服务（心率带、开了"心率广播"的手表），只有安卓（iPhone 上的浏览器都没有 Web Bluetooth）。消耗：知道年龄、性别、体重和平均心率时按心率算（Keytel 公式），否则按 MET × 体重 × 时长（跑步、走路按配速换 MET）；没填体重按 60 kg。电脑不开这些。以后的安卓壳可以换成 Health Connect、前台服务（锁屏不断）。
+> - **手表的数据**（"我的 → 手表数据"，`packages/shared/src/watchWorkout.ts`、`apps/hub/src/ingest.ts`、`stores/health.ts`）：iPhone 的网页读不到 HealthKit，Apple Watch 记的运动由 iPhone 推到自己的 Worker，二选一——
+>   - **快捷指令**（免费）：POST `/v1/ingest/workout`，格式由 App 定（`start`/`end` 带时区的 ISO 8601，`logId`，`hr`/`kcal`/`km`/`steps` 一个数或一行一个，带单位的会换算）。"健身"练完页上"用手表的数据更新"用 `shortcuts://run-shortcut` 打开它、带着这次的开始、结束时刻和记录 id：一定是解锁的，查的就是 App 这一段，手表忘了停也不影响。也能加"Apple Watch 体能训练结束时"的自动化（锁屏时读不到健康数据，可能是空的）。
+>   - **Health Auto Export**（它的 REST API 自动化是付费功能）：POST `/v1/ingest/hae`，它的 JSON（Workouts，第 2 版，开 Include Workout Metrics、按分钟）；后台按间隔推（iOS 不保证准时，解锁时才读得到），没推成的下次补上。
+>   - 两种都用单独的上报令牌（`Authorization: Bearer`，云端只存哈希，只能往里推运动数据）；云端读成同一个样子存在 `workout_ingest`（只存数和按分钟的明细，不存路线，留 120 天），App 同步时拉回来。
+>   - 怎么对：带 `logId` 的按记录 id，否则按时间重叠超过短的那段的一半。两边差不多长：心率、消耗、距离、步数换成手表的；手表那次长得多（忘了停）：有逐分钟的数时只取 App 那段，没有就不用；App 那次长得多、手表早结束了（App 里忘了按结束）：时长按手表结束的时刻算。练完还没发时到的先填进练完页；发给她以后才到的改记录和运动卡片（卡片标"手表"，她看到的文字带"手表记的"），横幅说一句——她不会因为数变了再评价一次。没开 App、只在手表上练的，结束 2 小时以后还没对上就单独记一条（记在默认人设上，选了手表数据以后的才记）。
+> - **忘了按结束**（`services/fitnessSession.ts`）：进行中（和练完还没发给她）的那一次每 5 秒存在本机；被关掉、离开健身页再回来，开始前那页问"按最后在动的时刻结束 / 接着练（两小时以内） / 不要了"。练的时候开着 GPS / 数步 20 分钟没动、切到后台半小时以上、或者记了 3 小时（定了时长的是两倍）以上，问一句"是不是早就练完了"：按最后在动的时刻结束 / 现在结束 / 还在练（20 分钟后再问）。
+> - **以前的设想（未实现）**：Keep、华为、小米的运动截图交给视觉模型识别。
 
 - **AI 行为**：发现新的运动记录就夸或吐槽；久坐提醒；邀约"今晚一起去跑步？"；平时聊天也知道你今天练没练（"家务和健康"那一块，§5.1）。
 
@@ -1521,7 +1527,8 @@ CREATE TABLE usage (date TEXT, agent TEXT, tokens INTEGER, PRIMARY KEY (date, ag
 | `POST /v1/image/novelai` | 生图（解 zip → R2） | 设备令牌 |
 | `GET /v1/music/search｜song｜lyric` | 网易云（还没做：现在浏览器直接请求你部署的 Netease_url Worker，同 SleepTogether） | 设备令牌 |
 | `GET /v1/weather` | 天气（缓存；还没做：现在浏览器直接请求 Open-Meteo / 和风天气，都支持跨域） | 设备令牌 |
-| `POST /v1/ingest/:kind` | 快捷指令 / 安卓上报健康数据 | 单独的上报令牌 |
+| `POST /v1/ingest/workout`、`POST /v1/ingest/hae` | 快捷指令 / Health Auto Export 上报手表的运动 | 单独的上报令牌 |
+| `GET /v1/ingest/workouts?since=`、`POST/DELETE /v1/ingest/token` | App 拉手表的运动、建 / 换 / 停用上报令牌 | 设备令牌 |
 | `POST /v1/push/subscribe` | Web Push 订阅、webhook 通道 | 设备令牌 |
 | `GET /v1/inbox?since=` | 安卓壳轮询：新的主动消息 + 今天的计划 | 设备令牌 |
 | `POST /v1/agents/run/:role` | 手动让 Worker 跑一次后台智能体 | 设备令牌 |
@@ -1652,7 +1659,7 @@ CREATE TABLE usage (date TEXT, agent TEXT, tokens INTEGER, PRIMARY KEY (date, ag
 | 风险 | 对策 |
 |---|---|
 | 国内网络：`*.workers.dev`、Google 服务不可用 | 自定义域名；不依赖 FCM / Google Fonts / 外部 CDN |
-| iPhone PWA：锁屏暂停、无全屏来电、无计步、主屏 App 与 Safari 存储分开 | Web Push + Bark；快捷指令上报健康数据；设置在主屏 App 里做 |
+| iPhone PWA：锁屏暂停、无全屏来电、读不到健康数据、无蓝牙心率、主屏 App 与 Safari 存储分开 | Web Push + Bark；亮屏时 GPS + devicemotion 记距离和步数；快捷指令 / Health Auto Export 上报手表的运动；设置在主屏 App 里做 |
 | Cloudflare 免费版限制 | 检索放本机；批量查询；必要时 5 美元/月 |
 | 模型费用 | 每个后台智能体有每日 token 上限；总结批量做；Worker 有总开关 |
 | 中转不稳定 | 每个智能体可设备用连接；流式失败自动退回非流式 |

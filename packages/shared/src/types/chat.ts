@@ -88,8 +88,10 @@ export type MessagePart =
       heartRate?: { avg?: number; max?: number };
       kcal?: number;
       steps?: number;
-      /** 这些数从哪来：auto 安卓自动记的 / manual 手动填的 / estimate 估的 */
-      source?: 'auto' | 'manual' | 'estimate';
+      /** 这些数从哪来：auto 手机自动记的 / manual 手动填的 / estimate 估的 / watch 手表的（快捷指令、Health Auto Export 推来的） */
+      source?: 'auto' | 'manual' | 'estimate' | 'watch';
+      /** 用了手表的数：哪个设备、怎么用的（手表忘了停时只取了 App 那段） */
+      watch?: { device?: string; note?: string };
     }
   /** 家务：在"共同的家"里做完了一件 / 说了晚点再做 */
   | {

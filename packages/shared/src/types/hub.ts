@@ -111,6 +111,12 @@ export interface HubStatus {
   mcpCall?: boolean;
   /** 有多设备同步（/v1/sync/*）；旧版 Worker 没有这个字段 */
   sync?: boolean;
+  /** 能收手表的运动数据（快捷指令、Health Auto Export 推到 /v1/ingest/*）；旧版 Worker 没有这个字段 */
+  ingest?: boolean;
+  /** 建了上报令牌 */
+  ingestConfigured?: boolean;
+  /** 上一次收到手表的运动数据的时刻 */
+  lastIngestAt?: number | null;
   /** 同步的大文件存在哪：r2（绑了 SYNC_BUCKET）/ d1（base64 分块，免费版整个数据库 500 MB） */
   syncBlobs?: import('./sync.ts').SyncBlobStore;
   /** 存在 D1 里的同步大文件最多占多少字节（绑了 R2 时没有） */
