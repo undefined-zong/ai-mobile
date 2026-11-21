@@ -124,6 +124,8 @@ export interface DiaryImage {
   url?: string;
   /** 生图提示词智能体起的标题 */
   title?: string;
+  /** 出图请求（本机素材库里的 JSON）："重新生成"照它换个种子再画，不再让模型重写 tags；以前的图没有，重画时从头画 */
+  requestKey?: string;
   /** 没画成的原因 */
   error?: string;
 }

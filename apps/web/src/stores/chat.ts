@@ -798,6 +798,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * 给一条消息里的配图出图：生图预设写 tags（生图提示词）→ 生图 API 出图 → 存进本机素材库。
+   * 已经画好过的（存了出图请求）再画时是"重新生成"：同样的 tags 换个种子再画，不再让模型重写 tags。
    * 生图 API 没接通时卡片上直接写原因，不拿占位画冒充"画好了"。
    * await 之后按 id 重新取消息和卡片（设计文档 §3.1 的教训：生成期间对象可能被替换）
    */
@@ -835,12 +836,16 @@ export const useChatStore = defineStore('chat', () => {
       });
       return;
     }
+    // 画好过的：照存下的出图请求再画（updatePart 会改到 before，先记下）
+    const requestKey = before.requestKey;
     // 重画时旧图先留着（画失败了也还在），画好了再换
     updatePart({ generated: false, error: undefined, errorDetail: undefined });
     try {
       // 没写描述（"生成配图"空着）：不发描述，类型多一个 auto-caption，句子在配图预设里；以前存下的默认句子也当没写
       const auto = !caption.trim() || isLegacyAutoCaption(caption, character.name);
-      const out = await services.image.illustrate({
+      // 重新生成：同样的 tags 换个种子（同 NovelAI 的重新生成）；以前的图没存请求、或者找不到了才从头画
+      const again = requestKey ? await services.image.redraw(requestKey) : null;
+      const out = again ?? await services.image.illustrate({
         characterId: character.id,
         ...(auto ? { types: ['auto-caption'] } : { caption }),
         mode: before.mode,
@@ -861,6 +866,7 @@ export const useChatStore = defineStore('chat', () => {
         negative: out.negative,
         seed: out.seed ?? undefined,
         model: out.model,
+        requestKey: out.requestKey,
         generated: true,
         error: undefined,
         errorDetail: undefined,
@@ -1086,12 +1092,30 @@ export const useChatStore = defineStore('chat', () => {
     if (covered.length) useMemoryStore().markSourceChanged(chatId, covered, msgs);
   }
 
-  async function regenerate(chatId: string, messageId: string) {
+  /**
+   * 她的这条回复再出一个备选（追加成新的 swipe）。opts：一起做事时照这件事原来的样子再写（心跳带上场景任务、标签、触发条件）
+   */
+  async function regenerate(chatId: string, messageId: string, opts: GenerateOptions = {}): Promise<string | undefined> {
     const msg = find(chatId, messageId);
-    if (!msg) return;
+    if (!msg) return undefined;
     // 失败时这条可能是空的：空的不当成一个备选回复
     if (!msg.swipes.length && msg.text) msg.swipes = [{ text: msg.text, parts: msg.parts, expression: msg.expression, createdAt: msg.createdAt }];
-    await generate(chatId, messageId);
+    return generate(chatId, messageId, opts);
+  }
+
+  /**
+   * 重新生成没成（失败、被停下）：这条回到原来那个备选回复，写了一半的不留；
+   * 失败的提示不记在消息上，由发起的界面自己说（心跳在左上角写一行）
+   */
+  function revertSwipe(chatId: string, messageId: string) {
+    const msg = find(chatId, messageId);
+    const s = msg?.swipes[msg.swipeIndex];
+    if (!msg || !s) return;
+    Object.assign(msg, { text: s.text, parts: s.parts ?? [{ type: 'text', text: s.text }], updatedAt: Date.now() });
+    msg.meta.choices = s.choices;
+    msg.meta.secondary = s.secondary;
+    if (s.expression) msg.expression = s.expression;
+    Object.assign(msg.meta, { interrupted: undefined, error: undefined, errorDetail: undefined });
   }
 
   /** 戳一戳：先在聊天里留一条"你拍了拍她的头"，需要时再让她回应 */
@@ -1323,6 +1347,7 @@ export const useChatStore = defineStore('chat', () => {
     sceneJson,
     swipe,
     regenerate,
+    revertSwipe,
     editMessage,
     patchWorkoutCard,
     keepSpoken,

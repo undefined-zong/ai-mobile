@@ -14,7 +14,7 @@ const redrawing = ref<Set<ViewerImage>>(new Set());
 const current = computed(() => imageViewer.images[imageViewer.index]);
 const busy = computed(() => !!current.value && redrawing.value.has(current.value));
 
-/** 重新生成这一张：画好在这里直接换成新的（关掉看图也照样画完，原来的地方会换） */
+/** 重新生成这一张（同样的 tags 换个种子）：画好在这里直接换成新的（关掉看图也照样画完，原来的地方会换） */
 async function redraw(compare = false) {
   const img = current.value;
   const generate = compare ? img?.compareVibe : img?.redraw;

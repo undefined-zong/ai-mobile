@@ -175,7 +175,8 @@ const autoTried = new Set<string>();
 /**
  * 画这条朋友圈的第 index 张图（她发的：模型写了画面，这里交给生图）。
  * auto：收到云端发的、她刚发完时自动画，守着"自动画"的规矩（NovelAI 只在不花点的设置下画）；user：你点的。
- * redo：已经画好的再画一张换掉（新的画好之前旧的留着；拍的照片不重画）
+ * redo：已经画好的再画一张换掉（新的画好之前旧的留着；拍的照片不重画）：同样的 tags 换个种子（同 NovelAI 的重新生成），
+ * 不再让模型重写 tags；以前的图没存出图请求时从头画
  */
 export async function drawMomentImage(momentId: string, index = 0, priority: 'user' | 'auto' = 'user', opts: { redo?: boolean } = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
   const social = useSocialStore();
@@ -202,7 +203,8 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
   social.busy[key] = true;
   delete img.error;
   try {
-    const out = await services.image.illustrate(
+    const again = opts.redo && img.requestKey ? await services.image.redraw(img.requestKey, { priority }) : null;
+    const out = again ?? await services.image.illustrate(
       // 朋友圈的配图始终参考节律里的衣着（不看服装参考开关）
       // 朋友圈正文给宏 {{moments_text}}，怎么写在配图预设里（触发条件 moments）
       { characterId: c.id, caption: img.caption, use: 'image', place: m.location, outfitRef: true, vars: { moments_text: m.text ?? '' }, types: ['moments'] },
@@ -214,6 +216,8 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
       Object.assign(now, { assetKey: out.assetKey }, { error: undefined });
       if (out.url) now.url = out.url;
       else delete now.url;
+      if (out.requestKey) now.requestKey = out.requestKey;
+      else delete now.requestKey;
     }
     return { ok: true };
   } catch (e) {

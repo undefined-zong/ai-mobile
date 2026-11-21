@@ -4,7 +4,8 @@ import type { AlbumDraft } from '@/stores/album';
 /**
  * 全屏看图（替代 vant 的 showImagePreview）：一样左右翻、点一下关掉，底下多一个"下载"——
  * 手机上弹系统分享（能存进相册），电脑上下载成文件（components/common/ImageViewer.vue，App.vue 里放一个）。
- * AI 画的图带上 redraw 时还有"重新生成"：同一个画面再画一张，画好换掉（拍的照片不给）。
+ * AI 画的图带上 redraw 时还有"重新生成"：同样的 tags 换个种子再画一张（同 NovelAI 的重新生成，不再让模型重写 tags），
+ * 画好换掉（拍的照片不给）。
  * 生成的图带上 album 时还有"存到相册"（回忆 → 相册里能删、拖动排序、按日期场景搜）。
  */
 export interface ViewerImage {

@@ -11,6 +11,7 @@ import Waveform from '@/components/call/Waveform.vue';
 import AssetImg from '@/components/common/AssetImg.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import Segmented from '@/components/common/Segmented.vue';
+import MessageEditor from '@/components/chat/MessageEditor.vue';
 import HeartPulse from '@/components/scene/heart/HeartPulse.vue';
 import ToyPanel from '@/components/scene/heart/ToyPanel.vue';
 import { SCENE_LOCATION } from '@/components/scene/location';
@@ -37,7 +38,8 @@ import { hhmm } from '@/utils/time';
 
 /**
  * 心跳（设计文档 §9.14）：只属于你们两个人的时间。画面照"陪伴学习 · 一起专注"的样子：背景图铺满整屏、是视觉中心，
- * 左上是她的名字（和没接通之类的提示），她说的话挂在名字下面；你说的话在右下角、心跳那条上面；
+ * 左上是她的名字（和没接通之类的提示），她说的话挂在名字下面（打字时点一下能改、重新生成、切换备选回复，也能展开这一次说过的）；
+ * 你说的话在右下角、心跳那条上面；
  * 最下面是心跳（心电图、每个头现在的数值、停）和打字 / 连麦；右上角是音乐（网易云的歌单，播放器 heartMusic，她念的时候压低）、魔杖、设置。
  *
  * - 背景：NovelAI 按"心跳"的生图预设画（氛围 / 第一视角 / 亲密，设置 → 画面里换），竖图铺满屏幕；
@@ -174,6 +176,10 @@ function stopToys() {
 
 // —— 她说的话（打字）：主对话按"心跳 · 文字"回 ——
 const herLine = ref('');
+/** 气泡里那句是哪条消息（点气泡改、重新生成、切换备选回复都对它） */
+const herMsgId = ref<string | null>(null);
+/** 打字时她的每一条是按哪个任务写的（重新生成时照原样再写）；连麦时的回复不在这里，不能在这儿重新生成 */
+const herTasks = new Map<string, 'heart-open' | 'heart-chat'>();
 const herIssue = ref('');
 const notConnected = ref('');
 const myLine = ref('');
@@ -199,7 +205,11 @@ function toyLine(): string {
   return `${line}\n能写的键：\n${toys.toysLine()}\n${toys.speedLine()}`;
 }
 
-async function herTurn(task: 'heart-open' | 'heart-chat') {
+/**
+ * 她回一句。target：重新生成气泡里那条（照它原来的任务再写一个备选回复，追加在这条消息上；
+ * 没成时这条回到原来那句，写了一半的不留）
+ */
+async function herTurn(task: 'heart-open' | 'heart-chat', target?: string) {
   const id = chatId.value;
   if (!id) return;
   const s = ai.status('main');
@@ -208,22 +218,31 @@ async function herTurn(task: 'heart-open' | 'heart-chat') {
     return;
   }
   notConnected.value = '';
+  closeHerTools();
   if (chat.streams[id]) {
     chat.stop(id);
     for (let i = 0; i < 40 && chat.streams[id]; i += 1) await sleep(50);
   }
   const tl = newTimeline('read');
   const input = task === 'heart-open' ? `${situation()}\n${userName.value}刚来到"心跳"。你先开口。` : `${situation()}\n回${userName.value}刚才说的话。`;
-  const msgId = await chat.generate(id, undefined, { agent: 'main', task: { name: task, input }, allowedTags: replyTags(), flags: replyFlags(), onParsed });
+  const opts = { agent: 'main' as const, task: { name: task, input }, allowedTags: replyTags(), flags: replyFlags(), onParsed };
+  const msgId = target ? await chat.regenerate(id, target, opts) : await chat.generate(id, undefined, opts);
   const msg = msgId ? chat.list(id).find((m) => m.id === msgId) : undefined;
-  if (!msg || msg.meta.interrupted) return;
-  if (msg.meta.error) {
-    herIssue.value = `${her.value.name}没回上：${msg.meta.error}`;
+  if (!msg) return;
+  herTasks.set(msg.id, task);
+  if (!target) herMsgId.value = msg.id;
+  if (msg.meta.interrupted || msg.meta.error) {
+    if (msg.meta.error) herIssue.value = `${her.value.name}没${target ? '重新写成' : '回上'}：${msg.meta.error}`;
+    if (target) {
+      chat.revertSwipe(id, msg.id);
+      herLine.value = msg.text;
+    }
     return;
   }
   herIssue.value = '';
   herLine.value = msg.text;
-  noteReply();
+  // 重新生成的不算多说了一句（不催着换图）
+  if (!target) noteReply();
   void direct(msg.text, tl);
 }
 
@@ -279,8 +298,10 @@ const link = useMicLink({
   allowedTags: replyTags,
   onTurnStart: () => void newTimeline('speech'),
   onParsed,
-  onReply: (t) => {
+  onReply: (t, messageId) => {
     herLine.value = t;
+    herMsgId.value = messageId;
+    closeHerTools();
     noteReply();
     void direct(t, timeline);
   },
@@ -328,6 +349,54 @@ const shownLine = computed(() => {
 });
 const herTyping = computed(() => (!!stream.value && !streamingText.value) || link.state.her === 'thinking');
 const shownMine = computed(() => (voiceOn.value ? lastYou.value : myLine.value && now.value < myLineUntil.value ? myLine.value : ''));
+
+// —— 点她的气泡：改这句、重新生成、切换备选回复、看这一次说过的话 ——
+/** 气泡里那句对应的消息（打字时她回的、连麦时她说完的那条） */
+const herMsg = computed(() => (herMsgId.value ? chat.list(chatId.value).find((m) => m.id === herMsgId.value) : undefined));
+/** 能改、能重新生成：气泡里显示的就是这条消息（不在连麦、没在写） */
+const herEditable = computed(() => !voiceOn.value && !stream.value && !!herMsg.value?.text && herLine.value === herMsg.value.text);
+const herTask = computed(() => (herMsg.value ? herTasks.get(herMsg.value.id) : undefined));
+const herTools = ref(false);
+const editingHer = ref(false);
+function closeHerTools() {
+  herTools.value = false;
+  editingHer.value = false;
+}
+function onHerBubble() {
+  if (herEditable.value) herTools.value = !herTools.value;
+  else logOpen.value = true;
+}
+function startHerEdit() {
+  herTools.value = false;
+  editingHer.value = true;
+}
+function saveHerEdit(t: string) {
+  const m = herMsg.value;
+  editingHer.value = false;
+  if (!m) return;
+  chat.editMessage(chatId.value, m.id, t);
+  herLine.value = m.text;
+}
+function regenerateHer() {
+  const m = herMsg.value;
+  const task = herTask.value;
+  if (!m || !task || stream.value) return;
+  void herTurn(task, m.id);
+}
+function swipeHer(dir: 1 | -1) {
+  const m = herMsg.value;
+  if (!m) return;
+  chat.swipe(chatId.value, m.id, dir);
+  herLine.value = m.text;
+}
+function openLog() {
+  closeHerTools();
+  logOpen.value = true;
+}
+// 换成连麦、开始写下一句时收起
+watch(herEditable, (ok) => {
+  if (!ok) closeHerTools();
+});
 
 /** 这一次说过的话（点她的气泡展开） */
 const logOpen = ref(false);
@@ -604,7 +673,7 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
           </svg>
         </div>
 
-        <!-- 左上：她是谁、在哪，没接通之类的提示，她说的话挂在下面（点开看这一次说过的） -->
+        <!-- 左上：她是谁、在哪，没接通之类的提示，她说的话挂在下面（点一下能改、重新生成、看这一次说过的） -->
         <div v-if="!logOpen" class="her-col">
           <div class="her-card">
             <Avatar :character="her" :size="26" live />
@@ -618,15 +687,29 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
             <span class="flex-1 min-w-0">{{ n.text }}</span>
             <button v-if="n.action" type="button" class="text-accent-ink shrink-0" @click="n.action.run()">{{ n.action.label }}</button>
           </div>
+          <div v-if="editingHer && herMsg" class="her-edit" data-testid="heart-her-edit">
+            <MessageEditor :text="herMsg.text" :mine="false" @save="saveHerEdit" @cancel="editingHer = false" />
+          </div>
           <StudyBubble
-            v-if="shownLine || herTyping"
+            v-else-if="shownLine || herTyping"
             side="her"
             :text="shownLine"
             :typing="herTyping"
-            label="看这一次说过的话"
+            :label="herEditable ? `${her.name}说的这句：点一下改、重新生成` : '看这一次说过的话'"
+            :aria-expanded="herEditable ? herTools : undefined"
             data-testid="heart-her-line"
-            @click="logOpen = true"
+            @click="onHerBubble"
           />
+          <div v-if="herTools && herEditable && !editingHer" class="her-tools" role="toolbar" :aria-label="`${her.name}说的这句`" data-testid="heart-her-tools">
+            <button type="button" class="tool" data-testid="heart-her-edit-btn" @click="startHerEdit"><span class="i-lucide-pencil" />改</button>
+            <button v-if="herTask" type="button" class="tool" data-testid="heart-her-regen" @click="regenerateHer"><span class="i-lucide-refresh-cw" />重新生成</button>
+            <span v-if="herMsg && herMsg.swipes.length > 1" class="swipes">
+              <button type="button" class="tool icon" aria-label="上一个回复" @click="swipeHer(-1)"><span class="i-lucide-chevron-left" /></button>
+              <span class="num">{{ herMsg.swipeIndex + 1 }}/{{ herMsg.swipes.length }}</span>
+              <button type="button" class="tool icon" aria-label="下一个回复" @click="swipeHer(1)"><span class="i-lucide-chevron-right" /></button>
+            </span>
+            <button type="button" class="tool" @click="openLog"><span class="i-lucide-scroll-text" />说过的话</button>
+          </div>
         </div>
 
         <!-- 这一次说过的话 -->
@@ -903,6 +986,56 @@ const figureLayout = { left: 50, bottom: 16, height: 70 };
 .her-col :deep(.bubble.her) {
   max-height: min(9.6em, 30vh);
   cursor: pointer;
+}
+/* 点她的气泡：改、重新生成、切换备选回复 */
+.her-edit {
+  width: 100%;
+}
+.her-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  animation: rise 0.2s var(--ease) both;
+}
+.her-tools .tool,
+.her-tools .swipes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 99px;
+  background: var(--veil);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--ink);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-sm);
+}
+.her-tools .swipes {
+  padding: 0 2px;
+  gap: 0;
+}
+/* 切换备选回复：‹ n/m › 放在一个胶囊里 */
+.her-tools .swipes .tool.icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.her-tools .num {
+  min-width: 2.2em;
+  text-align: center;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .talk {
   position: absolute;
