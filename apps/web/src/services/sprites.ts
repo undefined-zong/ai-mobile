@@ -45,7 +45,7 @@ import { useChatStore } from '@/stores/chat';
 import { useLibraryStore } from '@/stores/library';
 import { usePersonaStore } from '@/stores/personas';
 import { useRhythmStore } from '@/stores/rhythm';
-import { alignFit, alphaInfo, faceInImage, novelaiImage, rectMask, referenceImage, type FaceGuess } from '@/utils/spriteImage';
+import { alignFit, alphaInfo, faceInImage, mergeInpaint, novelaiImage, rectMask, referenceImage, resizeImage, type FaceGuess, type PixelRect } from '@/utils/spriteImage';
 
 /**
  * AI 画立绘（设计文档 §10.4，"角色 → 立绘 → AI 画立绘"）。怎么画全在立绘预设里（@app/shared 的 spritePreset.ts）：
@@ -53,7 +53,7 @@ import { alignFit, alphaInfo, faceInImage, novelaiImage, rectMask, referenceImag
  * 2. 底图：按画法拼提示词（长相 + 这身衣服 + 构图 + 底图的动作和表情，默认半身、平静、站立），NovelAI V5 直接画透明背景；
  *    画出来不是透明底（V4.5、公益站……）时按预设用 Director Tools 去背景；给了参考图时用 V4.5 的精准参考照着画；
  *    构图（半身、全身……）是立绘预设里的块：App 里平时用半身立绘（立绘框、头像框的默认值都是按半身定的），全身也能画；
- * 3. 照着底图换表情：只重画脸（局部重绘，遮罩是头像框放大几倍，身子一像素不动）/ Director Tools 换表情 / 整张图生图；
+ * 3. 照着底图换表情：只重画脸（局部重绘，遮罩是头像框放大几倍；画回来在本机贴回底图，身子一像素不动、透明照底图的）/ Director Tools 换表情 / 整张图生图；
  * 4. 照着底图换动作：精准参考（V4.5）/ 同一个种子换动作 tags 重画；画完对齐到立绘框（按透明轮廓猜的脸对上头像框）。
  * 换表情、换动作都沿用底图的构图。和这个角色平时用的构图不一样的（例如半身的角色画了全身）留着备用、不参与自动挑选，免得换表情时人忽大忽小。
  * 所有出图都排进同一个队列，一次一张。画出来的图存进本机素材库，标好表情、动作、服装，各处按 pickPortrait 挑。
@@ -359,9 +359,11 @@ async function finish(
   const src = await novelaiImage(blob, info.width * info.height);
   const r = await useAiStore().system.augment({ kind: 'bg-removal', image: src.base64, width: src.width, height: src.height, signal: opts.signal });
   if (!r.image.bytes) throw new AiError('empty', '去背景返回了，但里面没有图片');
-  blob = new Blob([r.image.bytes], { type: r.image.mime });
+  // 发出去时宽高改成了 64 的倍数：拉回原来的宽高（照着底图画的沿用底图的对齐参数）
+  const back = await resizeImage(new Blob([r.image.bytes], { type: r.image.mime }), info.width, info.height);
+  blob = new Blob([back.bytes], { type: back.mime });
   info = await alphaInfo(blob, { headRatio });
-  return { bytes: r.image.bytes, mime: r.image.mime, width: info.width, height: info.height, transparent: info.transparent, face: info.face, removedBg: true };
+  return { bytes: back.bytes, mime: back.mime, width: info.width, height: info.height, transparent: info.transparent, face: info.face, removedBg: true };
 }
 
 /**
@@ -512,17 +514,25 @@ export function hasLabel(c: Character, kind: 'expression' | 'pose', name: string
   );
 }
 
+/** 只重画脸时重画哪一块（底图像素）：头像框放大 maskScale 倍，以脸为中心，超出画布的切掉 */
+function faceRect(set: NonNullable<Character['portraits']>, base: Portrait, maskScale: number): PixelRect {
+  const f = faceInImage(set, base);
+  const half = (f.side * maskScale) / 2;
+  const x0 = Math.max(0, f.cx - half);
+  const y0 = Math.max(0, f.cy - half);
+  const x1 = Math.min(base.width, f.cx + half);
+  const y1 = Math.min(base.height, f.cy + half);
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+}
+
 /** 只重画脸时重画哪一块（占底图的比例），界面上画个框给你看 */
 export function maskBox(c: Character): { x: number; y: number; w: number; h: number } | null {
   const set = c.portraits;
   const base = baseOf(c);
   if (!set || !base) return null;
   const { params } = spriteStatus(c);
-  const f = faceInImage(set, base);
-  const side = f.side * params.maskScale;
-  const x = Math.max(0, f.cx - side / 2);
-  const y = Math.max(0, f.cy - side / 2);
-  return { x: x / base.width, y: y / base.height, w: Math.min(side, base.width - x) / base.width, h: Math.min(side, base.height - y) / base.height };
+  const r = faceRect(set, base, params.maskScale);
+  return { x: r.x / base.width, y: r.y / base.height, w: r.w / base.width, h: r.h / base.height };
 }
 
 /**
@@ -541,8 +551,13 @@ export function drawExpression(c: Character, label: SpriteLabel, opts: { replace
     async () => {
       const ai = useAiStore();
       const baseBlob = await assetBlob(base.assetKey);
-      const src = await novelaiImage(baseBlob, params.width * params.height);
+      const area = params.width * params.height;
+      const src = await novelaiImage(baseBlob, area);
       const srcBlob = new Blob([src.bytes], { type: 'image/png' });
+      // 发出去的图按 NovelAI 的尺寸（64 的倍数）改过，宽高的比例不一定和底图一样：横竖分开换算
+      const kx = src.width / base.width;
+      const ky = src.height / base.height;
+      const face = faceRect(set, base, params.maskScale);
       let out: { bytes: Uint8Array<ArrayBuffer> | null; mime: string; prompt: string; negative: string; seed: number | null; model: string };
       if (method === 'emotion') {
         const r = await ai.system.augment({ kind: 'emotion', image: src.base64, width: src.width, height: src.height, emotion: label.emotion, prompt: label.tags, defry: params.emotionLevel, signal: opts.signal });
@@ -551,13 +566,10 @@ export function drawExpression(c: Character, label: SpriteLabel, opts: { replace
         const { prompt, negative } = promptFrom(c, preset, base, framing, { expression: label.tags });
         let source: ImageRequest['source'];
         if (method === 'inpaint') {
-          const f = faceInImage(set, base);
-          const k = src.width / base.width;
-          const side = f.side * k * params.maskScale;
-          const x = Math.max(0, f.cx * k - side / 2);
-          const y = Math.max(0, f.cy * k - side / 2);
-          const mask = await rectMask(src.width, src.height, { x, y, w: Math.min(side, src.width - x), h: Math.min(side, src.height - y) });
-          source = { image: src.base64, mask, strength: params.inpaintStrength, ...(params.inpaintModel ? { inpaintModel: params.inpaintModel } : {}) };
+          // 重绘模型不认透明：铺上白底再发（画回来在本机贴回底图，透明照底图的，见 mergeInpaint）
+          const flat = await novelaiImage(baseBlob, area, { background: '#ffffff' });
+          const mask = await rectMask(src.width, src.height, { x: face.x * kx, y: face.y * ky, w: face.w * kx, h: face.h * ky });
+          source = { image: flat.base64, mask, strength: params.inpaintStrength, ...(params.inpaintModel ? { inpaintModel: params.inpaintModel } : {}) };
         } else {
           source = { image: src.base64, strength: params.img2imgStrength };
         }
@@ -566,6 +578,12 @@ export function drawExpression(c: Character, label: SpriteLabel, opts: { replace
           { signal: opts.signal, model: modelOf(base, params) },
         );
         out = { bytes: r.images[0]?.bytes ?? null, mime: r.images[0]?.mime ?? 'image/png', prompt: r.prompt, negative: r.negative, seed: r.seed, model: r.model };
+      }
+      if (out.bytes) {
+        // 拉回底图的宽高（立绘框里沿用底图的对齐参数）；只重画脸的在本机贴回底图：框外一像素不动、透明照底图
+        const drawn = new Blob([out.bytes], { type: out.mime });
+        const back = method === 'inpaint' ? await mergeInpaint(baseBlob, drawn, face) : await resizeImage(drawn, base.width, base.height);
+        out = { ...out, bytes: back.bytes, mime: back.mime };
       }
       const done = await finish(out.bytes, out.mime, params, { framing, compare: srcBlob, signal: opts.signal, canEdit: true });
       const exprId = set.expressions.find((e) => e.label === label.name || e.id === label.name)?.id;
