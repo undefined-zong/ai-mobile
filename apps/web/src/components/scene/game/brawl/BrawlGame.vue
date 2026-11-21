@@ -257,7 +257,35 @@ function saveEditor() {
 function askAssistant(f: BrawlFighter) { void router.push({ path: '/me/assistant', query: { target: `fighter:${f.id}` } }); }
 function selectPreset(event: Event) { lib.setUse('game-brawl', (event.target as HTMLSelectElement).value); }
 
+// iOS（主屏幕 App、旋转后的战斗画面）不一定认 touch-action：连点照样双击放大，双指照样捏合放大。
+// 战斗全屏里兜底：两次抬手间隔不到 350ms 就取消第二次的默认动作，系统不再当成双击放大；被取消的那次点击替普通按钮补上
+// （招式键靠 pointerdown 出招，不补，补了会多出一招）。多指移动和缩放手势一律拦下；打斗期间把页面缩放锁在 1 倍，已放大的会弹回。
+const fighting = () => active.value && inArena.value;
+let lastTouchEnd = -Infinity;
+function touchEnd(event: TouchEvent) {
+  if (!fighting()) return;
+  const quick = event.timeStamp - lastTouchEnd < 350;
+  lastTouchEnd = event.timeStamp;
+  if (!quick || !event.cancelable) return;
+  event.preventDefault();
+  const button = event.target instanceof Element ? event.target.closest('button') : null;
+  if (button && !button.disabled && !button.classList.contains('combat')) button.click();
+}
+function touchMove(event: TouchEvent) { if (fighting() && event.touches.length > 1 && event.cancelable) event.preventDefault(); }
+function gesture(event: Event) { if (fighting()) event.preventDefault(); }
+const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+let viewportBefore: string | null = null;
+function lockZoom(on: boolean) {
+  if (!viewport) return;
+  if (on && viewportBefore === null) { viewportBefore = viewport.content; viewport.content = `${viewportBefore}, maximum-scale=1, user-scalable=no`; }
+  else if (!on && viewportBefore !== null) { viewport.content = viewportBefore; viewportBefore = null; }
+}
+watch(fighting, lockZoom, { immediate: true });
+
 onMounted(() => {
+  const el = screen.value!;
+  el.addEventListener('touchend', touchEnd, { passive: false }); el.addEventListener('touchmove', touchMove, { passive: false });
+  document.addEventListener('gesturestart', gesture, { passive: false }); document.addEventListener('gesturechange', gesture, { passive: false });
   try { renderer = new BrawlRenderer(canvas.value!); observer = new ResizeObserver(resize); observer.observe(stage.value!); resize(); runFrames(); }
   catch { renderError.value = '战场未能打开。请开启浏览器的硬件加速，或换一个支持 WebGL 的浏览器。'; }
   window.addEventListener('keydown', keyDown); window.addEventListener('keyup', keyUp); window.addEventListener('blur', blur);
@@ -269,6 +297,8 @@ onActivated(() => { active.value = true; if (handheld && inArena.value) enterThe
 onDeactivated(() => { active.value = false; pause(); exitTheater(); cancelGeneration(); lineRequest?.abort(); cancelAnimationFrame(frame); frame = 0; });
 onBeforeUnmount(() => {
   alive = false; cancelGeneration(); lineRequest?.abort(); clearInput(); cancelAnimationFrame(frame); observer?.disconnect(); renderer?.dispose();
+  lockZoom(false); screen.value?.removeEventListener('touchend', touchEnd); screen.value?.removeEventListener('touchmove', touchMove);
+  document.removeEventListener('gesturestart', gesture); document.removeEventListener('gesturechange', gesture);
   void audio?.close(); window.removeEventListener('keydown', keyDown); window.removeEventListener('keyup', keyUp); window.removeEventListener('blur', blur); document.removeEventListener('visibilitychange', visibility);
 });
 </script>
