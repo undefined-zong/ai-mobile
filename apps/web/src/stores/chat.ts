@@ -1092,12 +1092,30 @@ export const useChatStore = defineStore('chat', () => {
     if (covered.length) useMemoryStore().markSourceChanged(chatId, covered, msgs);
   }
 
-  async function regenerate(chatId: string, messageId: string) {
+  /**
+   * 她的这条回复再出一个备选（追加成新的 swipe）。opts：一起做事时照这件事原来的样子再写（心跳带上场景任务、标签、触发条件）
+   */
+  async function regenerate(chatId: string, messageId: string, opts: GenerateOptions = {}): Promise<string | undefined> {
     const msg = find(chatId, messageId);
-    if (!msg) return;
+    if (!msg) return undefined;
     // 失败时这条可能是空的：空的不当成一个备选回复
     if (!msg.swipes.length && msg.text) msg.swipes = [{ text: msg.text, parts: msg.parts, expression: msg.expression, createdAt: msg.createdAt }];
-    await generate(chatId, messageId);
+    return generate(chatId, messageId, opts);
+  }
+
+  /**
+   * 重新生成没成（失败、被停下）：这条回到原来那个备选回复，写了一半的不留；
+   * 失败的提示不记在消息上，由发起的界面自己说（心跳在左上角写一行）
+   */
+  function revertSwipe(chatId: string, messageId: string) {
+    const msg = find(chatId, messageId);
+    const s = msg?.swipes[msg.swipeIndex];
+    if (!msg || !s) return;
+    Object.assign(msg, { text: s.text, parts: s.parts ?? [{ type: 'text', text: s.text }], updatedAt: Date.now() });
+    msg.meta.choices = s.choices;
+    msg.meta.secondary = s.secondary;
+    if (s.expression) msg.expression = s.expression;
+    Object.assign(msg.meta, { interrupted: undefined, error: undefined, errorDetail: undefined });
   }
 
   /** 戳一戳：先在聊天里留一条"你拍了拍她的头"，需要时再让她回应 */
@@ -1329,6 +1347,7 @@ export const useChatStore = defineStore('chat', () => {
     sceneJson,
     swipe,
     regenerate,
+    revertSwipe,
     editMessage,
     patchWorkoutCard,
     keepSpoken,
