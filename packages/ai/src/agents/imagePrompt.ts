@@ -125,13 +125,15 @@ export function imagePromptMacros(input: ImagePromptInput): Record<string, strin
 }
 
 /**
- * 这一次的类型（块的触发条件按它挑）：画什么、时刻、duo（坐在她旁边）、outfit-free / outfit-locked / outfit-unlocked、
+ * 这一次的类型（块的触发条件按它挑）：image-task（生图都有）、画什么、时刻、duo（坐在她旁边）、outfit-free / outfit-locked / outfit-unlocked、
  * size:<画幅>（场景定了画幅时）、场景给的类型；每个数据宏有值时多一个 has:<名字>，没值时多一个 no:<名字>
  */
 export function imagePromptTypes(input: ImagePromptInput): string[] {
   const mode = input.mode ?? 'scene';
   const outfit = input.outfitFree ? 'outfit-free' : lockedOutfit(input) ? 'outfit-locked' : input.character.outfit ? 'outfit-unlocked' : '';
   return [
+    // 生图任务都有：生图的块加进别的分类的预设时（那个预设也负责生图），只在生图时发的块用它
+    'image-task',
     mode,
     ...(input.moment ? [input.moment] : []),
     ...(input.duo && mode === 'scene' ? ['duo'] : []),
@@ -200,9 +202,12 @@ export function wantsUserVibe(preset: Pick<TaskPreset, 'blocks'> | null | undefi
 
 const SIZES = new Set(['portrait', 'landscape', 'square']);
 
-/** tags 整理：按逗号、换行切开，去掉空的和重复的（不删任何词） */
+/**
+ * tags 整理：按逗号、换行切开，去掉空的、重复的和带中文的（生图接口读不了中文，发过去等于没写、只剩画风词，会画出一堆随机的人；
+ * 整段都是中文时 image### 算没写，让模型按 retry 那块重写）
+ */
 function cleanTags(tags: string): string {
-  return joinTags(tags.replace(/[\r\n]+/g, ', ').split(/[,，]/).map((t) => t.trim()).join(', '));
+  return joinTags(tags.replace(/[\r\n]+/g, ', ').split(/[,，]/).map((t) => t.trim()).filter((t) => !/[\u4e00-\u9fff]/.test(t)).join(', '));
 }
 
 /** 一段"名字###"的开头：名字见 IMAGE_PROMPT_SECTIONS；前面紧挨着别的词的（例如 char negative###）不算 */

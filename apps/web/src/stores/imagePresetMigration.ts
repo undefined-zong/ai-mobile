@@ -94,6 +94,29 @@ export function moveImageIntoPreset(p: Preset, primary: Preset, others: Preset[]
   return changed;
 }
 
+const OLD_MARKERS = new Set([...Object.keys(MARKER_GROUPS), 'imageCharacters']);
+
+/**
+ * 负责生图的预设缺不缺生图的块：还是以前的程序填充块，或者"角色和外观""出图 · 最终提示词"一块都没有
+ * （不是生图分类的预设拿来生图、升级以后才新建或导入的、被同步盖回旧版的）
+ */
+export function needsImageBlocks(p: Preset): boolean {
+  return p.blocks.some((b) => b.marker && OLD_MARKERS.has(b.identifier)) || !p.blocks.some((b) => !b.marker && (b.identifier === 'imageSubject' || b.identifier === 'imageFinal'));
+}
+
+/**
+ * 给负责生图的预设补上生图的块（同 moveImageIntoPreset）。不是生图分类的预设（例如对话预设拿来生图）：
+ * 没有触发条件的块加上 image-task，只在生图时发，对话时不发
+ */
+export function addImageBlocks(p: Preset, primary: Preset, others: Preset[]): boolean {
+  const before = new Set(p.blocks.map((b) => b.identifier));
+  const changed = moveImageIntoPreset(p, primary, others);
+  if (p.category !== 'image') {
+    for (const b of p.blocks) if (!before.has(b.identifier) && !b.marker && !b.triggers?.length) b.triggers = ['image-task'];
+  }
+  return changed;
+}
+
 /** 立绘预设：以前由程序接在负面词后面的角色负面 tags，变成负面块里的 {{char_negative}} */
 export function moveCharNegativeIntoSprite(p: Preset): boolean {
   let changed = false;
