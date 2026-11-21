@@ -5,7 +5,7 @@ import { readBytes, readText, request, sleep } from '../core/http.ts';
 import { randomSeed } from '../core/util.ts';
 import { flattenCharacters } from './characters.ts';
 import { extractImage, sniffImageMime } from './extract.ts';
-import { isNovelaiV5, joinTags, NOVELAI_DEFAULT_MODEL, novelaiGeneration, novelaiInpaintModel, resolveSize, supportsCharacterReference, supportsVibeTransfer } from './presets.ts';
+import { isNovelaiV5, joinTags, NOVELAI_DEFAULT_MODEL, NOVELAI_QUALITY_TAGS, NOVELAI_UC_PRESETS, novelaiGeneration, novelaiInpaintModel, resolveSize, supportsCharacterReference, supportsVibeTransfer } from './presets.ts';
 import type { AugmentRequest, GeneratedImage, ImageRequest, ImageResult, VibeComparisonSource, VibeEncodeRequest } from './types.ts';
 import { isZip, unzipFirst } from './zip.ts';
 
@@ -18,7 +18,7 @@ import { isZip, unzipFirst } from './zip.ts';
  * - 照着图改（设计文档 §10.7）：图生图 action img2img；局部重绘 action infill（遮罩白色重画，用重绘模型，框外原样贴回）；
  *   精准参考 director_reference_*（只有 V4.5）；字段对照社区客户端（novelai-python、ComfyUI 的几个 NovelAI 节点）；
  * - Vibe Transfer（V4 起）：reference_image_multiple 放 /ai/encode-vibe 编码好的结果，强度、信息提取量一一对应（见 novelaiEncodeVibe）；
- * - 质量标签和 UC 预设不加（qualityToggle false），质量词、负面词都写在预设里；
+ * - 质量标签和 UC 预设默认不加（同 SleepTogether / SillyTavern：qualityToggle false，质量词写在生图风格的前缀里），可以打开；
  * - Variety Boost 按画面大小算 skip_cfg_above_sigma（同 SillyTavern）；
  * - 返回可能是 zip、直接的图片，公益站也可能回 JSON（图片 base64 或链接），都认；
  * - 种子不给就随机一个，返回后再从 PNG 元数据核对；429（同一时间只能生成一张）等两三秒重试。
@@ -47,13 +47,14 @@ export function buildNovelaiPayload(baseModel: string, req: ImageRequest): { bod
   const gen = novelaiGeneration(baseModel);
   const { width, height } = resolveSize(req.size);
   const seed = req.seed ?? randomSeed();
-  // 质量词、负面预设不替你加（写在预设里）：qualityToggle、ucPreset 只是记在图里的参数
-  const quality = false;
+  const quality = req.quality === true;
   // V3 不能分人物写：每个人的那一份并进整体提示词；V4 起整体和每个人分开发
   const flat = gen === 'v4' ? { prompt: req.prompt, negative: req.negative ?? '' } : flattenCharacters(req);
-  const prompt = joinTags(flat.prompt);
-  const negative = joinTags(flat.negative);
-  const ucPreset = 0;
+  const prompt = quality ? joinTags(flat.prompt, NOVELAI_QUALITY_TAGS[baseModel]) : joinTags(flat.prompt);
+  const preset = req.ucPreset ?? (quality ? 'heavy' : 'none');
+  const ucBase = preset === 'none' ? '' : (NOVELAI_UC_PRESETS[baseModel]?.[preset] ?? '');
+  const negative = joinTags(ucBase, flat.negative);
+  const ucPreset = preset === 'light' ? 1 : 0;
   const common = {
     width,
     height,

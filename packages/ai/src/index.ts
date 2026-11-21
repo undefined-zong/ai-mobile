@@ -56,7 +56,7 @@ export {
   supportsCharacterReference,
   supportsVibeTransfer,
 } from './image/presets.ts';
-export { applyImageStyle, DEFAULT_IMAGE_STYLE } from './image/style.ts';
+export { applyImageStyle, composePrompt, DEFAULT_IMAGE_STYLE } from './image/style.ts';
 export { extractImage, sniffImageMime } from './image/extract.ts';
 export { listZip, readZipEntry, unzipFirst, type ZipEntry } from './image/zip.ts';
 
