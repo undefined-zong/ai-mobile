@@ -239,7 +239,9 @@ export const useGalleryStore = defineStore('gallery', () => {
         {
           characterId: c.id,
           caption: req.caption,
-          use: sceneImageUse(req.sceneId),
+          use: sceneImageUse(req.sceneId, req.withUser),
+          // 坐在Ta旁边的双人图：只给两个人的 tags 和最近的对话
+          ...(sceneImageUse(req.sceneId, req.withUser) === 'image-duo' ? { duo: true } : {}),
           moment: req.moment,
           sceneId: req.sceneId,
           lockOutfit: req.lockOutfit ?? true,

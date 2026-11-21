@@ -37,6 +37,7 @@ export type PresetUseId =
   | 'summary'
   | 'consolidate'
   | 'image'
+  | 'image-duo'
   | 'rhythm'
   | 'health'
   | 'planner'
@@ -259,6 +260,14 @@ export const PRESET_USES: PresetUse[] = [
     };
   }),
   {
+    id: 'image-duo',
+    category: 'image',
+    label: '双人图',
+    desc: '心跳、陪伴学习、一起吃饭时坐在Ta旁边画的两个人同框的图：只给两个人的外观、服装 tags 和最近的对话',
+    icon: 'i-lucide-users-round',
+    follow: null,
+  },
+  {
     id: 'game-workshop-image',
     category: 'image',
     label: '创意工坊 · 画画',
@@ -337,7 +346,11 @@ export function sceneUse(sceneId: string | null | undefined): PresetUseId | null
   return sceneId && SCENES.some((s) => s.id === sceneId) ? (`scene:${sceneId}` as PresetUseId) : null;
 }
 
-/** 在这个场景里画图用哪个用途（自由聊天没有，用配图） */
-export function sceneImageUse(sceneId: string | null | undefined): PresetUseId {
+/** 坐在Ta旁边时画两个人同框的场景：这几个场景的双人图用"双人图"（image-duo）的预设 */
+export const VISIT_DUO_SCENES: ReadonlySet<string> = new Set(['heart', 'study', 'meal']);
+
+/** 在这个场景里画图用哪个用途（自由聊天没有，用配图）；withUser：坐在Ta旁边画双人图 */
+export function sceneImageUse(sceneId: string | null | undefined, withUser?: boolean): PresetUseId {
+  if (withUser && sceneId && VISIT_DUO_SCENES.has(sceneId)) return 'image-duo';
   return sceneId && SCENES.some((s) => s.id === sceneId) ? (`image:${sceneId}` as PresetUseId) : 'image';
 }

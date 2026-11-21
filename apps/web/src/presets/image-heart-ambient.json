@@ -92,21 +92,6 @@
       ]
     },
     {
-      "identifier": "duoScene",
-      "name": "双人（你入画时才发）",
-      "role": "system",
-      "content": "这一次画双人图：{{char}}和{{user}}两个人同框，照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###（image### 写人数，不写 solo）。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算。两个人在哪、什么姿势、离多近、在做什么，只照\"要画的画面\"和最近的对话来画，对话里没写的不要自己加；两个人都是成年人。",
-      "marker": false,
-      "enabled": true,
-      "injection": {
-        "position": "relative",
-        "depth": 4
-      },
-      "triggers": [
-        "duo"
-      ]
-    },
-    {
       "identifier": "format",
       "name": "输出格式（### 和它前面的英文词别改）",
       "role": "system",

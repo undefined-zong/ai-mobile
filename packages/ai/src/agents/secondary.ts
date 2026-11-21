@@ -47,7 +47,7 @@ export function parseSecondaryReply(text: string, models: readonly string[] = []
   const image: SecondaryImageChoice = {};
   const mode = (Object.keys(IMAGE_MODES) as ImageMode[]).find((m) => m === raw.mode);
   if (mode) image.mode = mode;
-  const use = PRESET_USES.find((u) => u.category === 'image' && u.id === raw.use)?.id;
+  const use = PRESET_USES.find((u) => u.category === 'image' && u.id !== 'image-duo' && u.id === raw.use)?.id;
   if (use) image.use = use;
   const moment = use && Object.entries(imageUseMoments(use) ?? {}).find(([id, label]) => raw.moment === id || raw.moment === label)?.[0];
   if (moment) image.moment = moment;

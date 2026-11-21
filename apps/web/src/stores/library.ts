@@ -209,6 +209,8 @@ interface SeedUpgrade {
   reset?: boolean;
   patched?: Record<string, [string, string][]>;
   categories?: PresetCategory[];
+  /** 删块：本机那块还是这几段旧的默认内容之一就删掉（自己改过的留着） */
+  removed?: Record<string, string[]>;
 }
 
 /** 强制改句子（SeedUpgrade.patched）：块里出现原句就换，返回改了没有 */
@@ -677,11 +679,19 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     added: ['outfitFree'],
   },
   {
-    // 心跳的双人图：去掉写死的"坐在旁边、并肩坐着、靠在肩上、依偎、对视"和构图，姿势、距离只照对话；本机那块还是旧的默认内容就跟上
-    id: 'image-heart:duo-follow-chat',
-    files: ['image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json'],
-    renamed: { blocks: { duoScene: ['双人 · 坐在旁边（你入画时才发）', '双人（你入画时才发）'] } },
-    replaced: { duoScene: ["这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算，其余照旧：两个人挨得很近（并肩坐着、靠在肩上、依偎、对视），距离和表情按\"要画的画面\"和最近的对话；两个人都是成年人。竖图里两个人都放在中间偏上。", "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"只有{{char}}一个人入镜\"和\"镜头是{{user}}的眼睛（pov）\"这次不算：换成第三人称的近景（upper body 或 cowboy shot），把两个人都拍进去，离得很近（并肩坐着、靠在肩上、依偎、额头相抵），{{char}}看着{{user}}（looking at another）；两个人都是成年人。竖图里两个人都放在中间偏上。", "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算，其余照旧：两个人挨得很近（并肩坐着、靠在肩上、依偎、对视），姿势和距离照对话里发生到哪一步来画；两个人都是成年人。竖图里两个人都放在中间偏上。"] },
+    // 坐在Ta旁边的双人图改用单独的"双人图"预设（只给两个人的 tags 和最近的对话）：场景生图预设里的"双人 · 坐在旁边"块不再用，
+    // 里面写死的"坐在旁边、并肩坐着、依偎……"也一起删掉
+    id: 'image-scenes:duo-own-preset',
+    files: ['image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json', 'image-study.json', 'image-meal.json'],
+    removed: { duoScene: [
+      "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算，其余照旧：两个人挨得很近（并肩坐着、靠在肩上、依偎、对视），距离和表情按\"要画的画面\"和最近的对话；两个人都是成年人。竖图里两个人都放在中间偏上。",
+      "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算，其余照旧：两个人挨得很近（并肩坐着、靠在肩上、依偎、对视），姿势和距离照对话里发生到哪一步来画；两个人都是成年人。竖图里两个人都放在中间偏上。",
+      "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"只有{{char}}一个人入镜\"和\"镜头是{{user}}的眼睛（pov）\"这次不算：换成第三人称的近景（upper body 或 cowboy shot），把两个人都拍进去，离得很近（并肩坐着、靠在肩上、依偎、额头相抵），{{char}}看着{{user}}（looking at another）；两个人都是成年人。竖图里两个人都放在中间偏上。",
+      "这一次画双人图：{{char}}和{{user}}两个人同框，照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###（image### 写人数，不写 solo）。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算。两个人在哪、什么姿势、离多近、在做什么，只照\"要画的画面\"和最近的对话来画，对话里没写的不要自己加；两个人都是成年人。",
+      "这一次画双人图：{{char}}和{{user}}两个人同框，照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###（image### 写人数，不写 solo）。规则里\"只有{{char}}一个人入镜\"和\"镜头是{{user}}的眼睛（pov）\"这次不算，两个人都要入镜。两个人在哪、什么姿势、离多近、在做什么，只照\"要画的画面\"和最近的对话来画，对话里没写的不要自己加；两个人都是成年人。",
+      "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"和时刻里\"像坐在{{char}}对面看过去\"这次不算：两个人并肩坐在同一张桌前（sitting next to each other），镜头从桌子对面拍过去（from front, upper body），两个人的脸都看得到；按这一刻写各自在做什么——偷拍时两个人都低头看书、写字，或者{{char}}偷偷看{{user}}一眼；学完时两个人一起伸懒腰、相视而笑或者一起比耶。",
+      "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"、时刻里的第一视角（pov）和\"你不在画面里\"这次不算：两个人并肩坐在同一张桌前（sitting next to each other），各自面前有自己那份饭（按\"要画的画面\"写具体的食物）；碰杯时两个人举杯碰在一起（toast, holding cup），笑着看向对方（looking at another）。",
+    ] },
   },
 ];
 
@@ -804,6 +814,12 @@ function upgradeFile(list: Preset[], u: SeedUpgrade, file: string, changed: Set<
       changed.add(p);
     }
     if (u.patched && patchBlocks(p, u.patched)) changed.add(p);
+    for (const [id, olds] of Object.entries(u.removed ?? {})) {
+      const i = p.blocks.findIndex((b) => b.identifier === id);
+      if (i < 0 || !olds.includes(p.blocks[i]!.content.trim())) continue;
+      p.blocks.splice(i, 1);
+      changed.add(p);
+    }
   }
 }
 

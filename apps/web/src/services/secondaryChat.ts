@@ -22,7 +22,8 @@ export async function secondaryChat(chat: Chat, character: Character, history: M
   if (tags.includes('cg')) {
     if (!imageLive) lines.push('生图：没接通，这一轮不写 [cg:]');
     else {
-      const uses = PRESET_USES.filter((u) => u.category === 'image').map((u) => {
+      // 双人图只给坐在Ta旁边的场景用，聊天配图不选它
+      const uses = PRESET_USES.filter((u) => u.category === 'image' && u.id !== 'image-duo').map((u) => {
         const preset = lib.presetForUse(u.id, character)?.name;
         const moments = imageUseMoments(u.id);
         return `- ${u.id}（${u.label}${preset ? `，预设「${preset}」` : ''}）${moments ? `；moment 可选：${Object.entries(moments).map(([id, label]) => `${id}（${label}）`).join('、')}` : ''}`;
