@@ -138,9 +138,10 @@ export async function alphaInfo(blob: Blob, opts: { headRatio: number | null; co
 }
 
 /**
- * 改成 NovelAI 收的样子：PNG，宽高是 64 的倍数；面积超过 maxArea 时按比例缩小（图生图、局部重绘、换表情都要用原图的宽高出图）
+ * 改成 NovelAI 收的样子：PNG，宽高是 64 的倍数；面积超过 maxArea 时按比例缩小（图生图、局部重绘、换表情都要用原图的宽高出图）。
+ * background 给了时铺在这个颜色上（不留透明）：局部重绘的模型不认透明，透明的地方给它看什么就不一定了，铺好白底它看到的是干净的白底
  */
-export async function novelaiImage(blob: Blob, maxArea: number): Promise<{ bytes: Uint8Array<ArrayBuffer>; base64: string; width: number; height: number }> {
+export async function novelaiImage(blob: Blob, maxArea: number, opts: { background?: string } = {}): Promise<{ bytes: Uint8Array<ArrayBuffer>; base64: string; width: number; height: number }> {
   const img = await decodeImage(blob);
   const w0 = img.naturalWidth;
   const h0 = img.naturalHeight;
@@ -149,17 +150,133 @@ export async function novelaiImage(blob: Blob, maxArea: number): Promise<{ bytes
   const width = snap(w0 * s);
   const height = snap(h0 * s);
   const { canvas, ctx } = canvasOf(width, height);
+  if (opts.background) {
+    ctx.fillStyle = opts.background;
+    ctx.fillRect(0, 0, width, height);
+  }
   ctx.drawImage(img, 0, 0, width, height);
   return { ...(await pngOf(canvas)), width, height };
 }
 
-/** 局部重绘的遮罩：和图一样大，黑底，要重画的方框涂白（坐标是像素） */
-export async function rectMask(width: number, height: number, rect: { x: number; y: number; w: number; h: number }): Promise<string> {
+/** 把一张图拉成指定的宽高（照着底图画的图按 NovelAI 的尺寸回来，拉回底图的宽高，立绘框里的对齐参数才对得上） */
+export async function resizeImage(blob: Blob, width: number, height: number): Promise<{ bytes: Uint8Array<ArrayBuffer>; mime: string; width: number; height: number }> {
+  const img = await decodeImage(blob);
+  if (img.naturalWidth === width && img.naturalHeight === height) return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type || 'image/png', width, height };
+  const { canvas, ctx } = canvasOf(width, height);
+  ctx.drawImage(img, 0, 0, width, height);
+  return { bytes: (await pngOf(canvas)).bytes, mime: 'image/png', width: canvas.width, height: canvas.height };
+}
+
+/** 像素方框 */
+export interface PixelRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 不透明：底图里 alpha 到这个数才算人身上（往下是轮廓边上半透明的、背景） */
+const SOLID = 250;
+
+/**
+ * 只重画脸画回来以后在本机贴回底图（局部重绘的模型画不出透明底：重画的那块会铺上背景；NovelAI 自己贴回框外时也只按 8 像素的格子对，
+ * 框边上会留一圈半透明的条）。所以不用它贴好的整张，只从里面取框里新画的脸：
+ * - 框外原样是底图，一像素不动；宽高也是底图的（result 是按 NovelAI 的尺寸画的，整张拉回底图的大小再取）；
+ * - 透明按底图的：人的轮廓不变，框里铺上的背景去掉，换表情时不会多出一块方的；
+ * - 只换轮廓里面的颜色：轮廓边上几个像素、框的四边都渐变过渡到底图，看不出方框的接缝。
+ * rect 是底图像素
+ */
+export async function mergeInpaint(base: Blob, result: Blob, rect: PixelRect): Promise<{ bytes: Uint8Array<ArrayBuffer>; mime: string; width: number; height: number }> {
+  const img = await decodeImage(base);
+  const out = await decodeImage(result);
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const { canvas, ctx } = canvasOf(W, H);
+  ctx.drawImage(img, 0, 0);
+  const x0 = Math.max(0, Math.floor(rect.x));
+  const y0 = Math.max(0, Math.floor(rect.y));
+  const x1 = Math.min(W, Math.ceil(rect.x + rect.w));
+  const y1 = Math.min(H, Math.ceil(rect.y + rect.h));
+  const rw = x1 - x0;
+  const rh = y1 - y0;
+  if (rw > 0 && rh > 0) {
+    const orig = ctx.getImageData(x0, y0, rw, rh);
+    // 新画的那块：整张按比例拉回底图大小再取框里的；铺在白底上，万一回来的图带透明，颜色也是实的
+    const fresh = canvasOf(rw, rh);
+    fresh.ctx.fillStyle = '#ffffff';
+    fresh.ctx.fillRect(0, 0, rw, rh);
+    const sx = out.naturalWidth / W;
+    const sy = out.naturalHeight / H;
+    fresh.ctx.drawImage(out, x0 * sx, y0 * sy, rw * sx, rh * sy, 0, 0, rw, rh);
+    const next = fresh.ctx.getImageData(0, 0, rw, rh).data;
+    const o = orig.data;
+    const n = rw * rh;
+    // 每个像素离轮廓（底图里不是实心的像素）多远（城市距离，两遍扫）
+    const far = rw + rh;
+    const dist = new Int32Array(n);
+    for (let i = 0; i < n; i++) dist[i] = (o[i * 4 + 3] ?? 0) >= SOLID ? far : 0;
+    for (let y = 0; y < rh; y++) {
+      for (let x = 0; x < rw; x++) {
+        const i = y * rw + x;
+        let d = dist[i] ?? 0;
+        if (x > 0) d = Math.min(d, (dist[i - 1] ?? 0) + 1);
+        if (y > 0) d = Math.min(d, (dist[i - rw] ?? 0) + 1);
+        dist[i] = d;
+      }
+    }
+    for (let y = rh - 1; y >= 0; y--) {
+      for (let x = rw - 1; x >= 0; x--) {
+        const i = y * rw + x;
+        let d = dist[i] ?? 0;
+        if (x < rw - 1) d = Math.min(d, (dist[i + 1] ?? 0) + 1);
+        if (y < rh - 1) d = Math.min(d, (dist[i + rw] ?? 0) + 1);
+        dist[i] = d;
+      }
+    }
+    const side = Math.min(rw, rh);
+    const edge = Math.max(2, Math.round(side * 0.02));
+    const feather = Math.max(4, Math.round(side * 0.08));
+    const ease = (t: number) => {
+      const v = Math.min(1, Math.max(0, t));
+      return v * v * (3 - 2 * v);
+    };
+    // 框的四边往里渐变；贴着画布边的那一边外面没有东西，不用过渡
+    const left = x0 > 0;
+    const top = y0 > 0;
+    const right = x1 < W;
+    const bottom = y1 < H;
+    for (let y = 0; y < rh; y++) {
+      for (let x = 0; x < rw; x++) {
+        const i = y * rw + x;
+        const d = dist[i] ?? 0;
+        if (!d) continue;
+        const border = Math.min(left ? x + 0.5 : far, top ? y + 0.5 : far, right ? rw - x - 0.5 : far, bottom ? rh - y - 0.5 : far);
+        const w = ease(border / feather) * ease(d / edge);
+        if (w <= 0) continue;
+        const p = i * 4;
+        for (let c = 0; c < 3; c++) o[p + c] = Math.round((o[p + c] ?? 0) * (1 - w) + (next[p + c] ?? 0) * w);
+      }
+    }
+    ctx.putImageData(orig, x0, y0);
+  }
+  return { bytes: (await pngOf(canvas)).bytes, mime: 'image/png', width: W, height: H };
+}
+
+/**
+ * 局部重绘的遮罩：和图一样大，黑底，要重画的方框涂白（坐标是像素）。
+ * NovelAI 按 8 像素一格（潜空间）重画，方框往外扩到格子上，重画的那块和遮罩对得上、盖得住要换的地方
+ */
+export async function rectMask(width: number, height: number, rect: PixelRect): Promise<string> {
   const { canvas, ctx } = canvasOf(width, height);
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, width, height);
+  const g = 8;
+  const x0 = Math.max(0, Math.floor(rect.x / g) * g);
+  const y0 = Math.max(0, Math.floor(rect.y / g) * g);
+  const x1 = Math.min(canvas.width, Math.ceil((rect.x + rect.w) / g) * g);
+  const y1 = Math.min(canvas.height, Math.ceil((rect.y + rect.h) / g) * g);
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.w), Math.round(rect.h));
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   return (await pngOf(canvas)).base64;
 }
 
