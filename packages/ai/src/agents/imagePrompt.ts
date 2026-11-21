@@ -1,4 +1,4 @@
-import { ACTION_TAG_PREFIXES, assembleTaskPrompt, IMAGE_PROMPT_MODIFIERS, IMAGE_PROMPT_PERSON_SEPARATOR, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags, plainActionTags } from '@app/shared';
+import { assembleTaskPrompt, IMAGE_PROMPT_PERSON_SEPARATOR, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags, plainActionTags } from '@app/shared';
 import type { ImageCharacter, ImageRequest, ImageSize } from '../image/types.ts';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -10,14 +10,10 @@ import type { TaskPreset } from './taskPreset.ts';
  * 提示词（任务、规则、"画什么"、输出格式）全在"生图"预设里；这里只填这一次的输入。
  *
  * 模型的输出不是 JSON，是几段"名字###内容###"（parseImagePrompt 读，toImageRequest 拼成生图请求）：
- *   image###1girl, upper body, smile, ...###        画面的 tags（必须有）
+ *   image###1girl, upper body, smile, ...###        画面的 tags（必须有）；画几个人、画谁只看这里
  *   negative###...###                              额外的负面 tags（可以不写）
  *   size###landscape###                            画幅 portrait / landscape / square（可以不写：程序给了画幅时照程序的，否则竖图）
- *   char left###girl, smile, ...###                两个人同框时她的那一份（left / right / center 是位置，可以不写）
- *   user right###boy, ...###                       两个人同框时"你"的那一份
- *   char negative###...###                         只针对她（或 user negative###：只针对你）的负面 tags
- * 画面里还有别的人时用 NovelAI 的 | 写法：image###整体画面 | 一个人 | 又一个人###，negative### 按同样的顺序用 | 隔开（第一段是整体的）。
- * 人物那几份里两个人之间的动作用 source# / target# / mutual#（NovelAI V4 起认）；单人图、整体那一份、不分人物的接口去掉前缀。
+ * image### 里用 NovelAI 的 | 写法分人物时：image###整体画面 | 一个人 | 又一个人###，negative### 按同样的顺序用 | 隔开（第一段是整体的）。
  */
 
 /**
@@ -72,15 +68,15 @@ export interface ImagePromptInput {
   /** 最近几句对话（帮助理解画面），纯文本 */
   recent?: string[];
   /**
-   * "你"可以入画（{{user}} 的长相按人设的外观 tags）：画不画、画成单人还是双人由生图预设定，
-   * 预设里"{{user}}可以入画"那一块（程序填充 imageCharacters）发了才告诉模型；两个人同框时用 V4 的多人提示词
+   * "你"可以入画：只给预设里的宏 {{user}} {{user_appearance}} {{user_outfit}} 和类型 duo，程序不往提示词里加别的；
+   * 画不画你、画几个人全看模型写的 image###
    */
   withUser?: {
     name: string;
     appearanceTags?: string;
     negativeTags?: string;
-    /** 你人设里常穿的那套（服装参考开着时才有）；locked：和她的衣服一起锁，程序加进你那一份，否则只告诉模型 */
-    outfit?: { tags: string; locked: boolean };
+    /** 你人设里常穿的那套（服装参考开着时才有）：{{user_outfit}} */
+    outfit?: { tags: string };
   } | null;
   /**
    * 画幅由程序定（例如陪伴学习分上下两屏时，半屏接近方形就画方图）：告诉模型按这个画幅构图，出图时也按它，不看模型写的 size
@@ -102,9 +98,7 @@ export interface ImagePromptOutput {
   negative: string;
   /** 模型写的画幅（size###）；没写时由程序定 */
   size?: PromptSize;
-  /** 她和你各自的一份（char### / user###，模型给出的表情、动作、服装），长相由程序补上 */
-  characters?: { who: 'char' | 'user'; tags: string; negative?: string; position?: 'left' | 'right' | 'center' }[];
-  /** 画面里别的人（image### 里 | 隔开的后面几段）：程序不加长相，负面 tags 是 negative### 里同一个位置的那段 */
+  /** image### 里 | 隔开的后面几段（一段一个人）：负面 tags 是 negative### 里同一个位置的那段 */
   others?: { tags: string; negative: string }[];
 }
 
@@ -113,39 +107,12 @@ function lockedOutfit(input: ImagePromptInput): string {
   return input.lockOutfit && input.mode !== 'background' ? (input.character.outfit?.tags.trim() ?? '') : '';
 }
 
-/** 你锁定的衣服：两个人同框时程序加进你那一份 */
-function lockedUserOutfit(input: ImagePromptInput): string {
-  const o = input.withUser?.outfit;
-  return o?.locked && input.mode !== 'background' ? o.tags.trim() : '';
-}
-
 /** 这一次的输入：填进"生图"预设的程序填充块 */
 export function imagePromptFills(input: ImagePromptInput): Record<string, string> {
-  const { character: c, scene = {}, withUser } = input;
-  const mode = input.mode ?? 'scene';
+  const { character: c, scene = {} } = input;
   const outfit = c.outfit;
   const locked = lockedOutfit(input);
-  const youOutfit = withUser?.outfit?.tags.trim();
   return {
-    // "你"可以入画时：你的长相和两个人同框时的输出字段（解析时按 characters 读每个人的动作）；单人图不写 characters
-    imageCharacters:
-      withUser && mode === 'scene'
-        ? [
-            `${withUser.name}可以入画；外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
-            ...(youOutfit
-              ? [lockedUserOutfit(input)
-                  ? `${withUser.name}的服装 tags（两个人同框时程序会加在 user### 那一份里，不要重复，也不要另写别的衣服）：${youOutfit}`
-                  : `${withUser.name}常穿：${youOutfit}（两个人同框时照它写进 user###，画面要换装时可以换）`]
-              : []),
-            `画${c.name}和${withUser.name}两个人同框时：image### 里只写整体画面（人数、构图、场景、光线），再各起一行分别写每个人：`,
-            `char###${c.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
-            `user###${withUser.name}的人物类别（boy/girl/other）、表情、动作、服装###`,
-            `人物类别按各自的外观与角色信息填写，不按 char / user 固定性别。位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），不指定位置时不写。`,
-            `两个人之间的动作写在各自那一行，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出谁做、谁承受、相互（例如 char###girl, source#hug### 和 user###boy, target#hug###；相互拥抱两边都写 mutual#hug）。`,
-            `只针对一个人的负面 tags 另起一行写 char negative###…### 或 user negative###…###。只画${c.name}一个人时不写 char### 和 user###。`,
-            `画面里还有别的人时，在 image### 里用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开：第一段写整体画面，后面每段写一个人（人物类别、长相、表情、动作、服装）；只针对这些人的负面 tags 在 negative### 里按同样的顺序用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开。`,
-          ].join('\n')
-        : '',
     imageSubject: [
       `角色：${c.name}${c.pronoun ? `（${c.pronoun}）` : ''}；外观 tags（程序会加，不要重复）：${c.appearanceTags || '（无）'}`,
       locked && outfit ? `服装：${outfit.name}；服装 tags（程序会加在外观后面，不要重复，也不要另写别的衣服）：${locked}` : outfit ? `${c.name}今天穿：${outfit.name}（${outfit.tags}）` : '',
@@ -198,7 +165,6 @@ export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPr
 }
 
 const SIZES = new Set(['portrait', 'landscape', 'square']);
-const POSITIONS: ReadonlySet<string> = new Set(IMAGE_PROMPT_MODIFIERS.filter((m) => m !== 'negative'));
 
 /** 英文 tags 清理：去掉中文和模型多写的外观、质量词 */
 function cleanTags(tags: string): string {
@@ -212,29 +178,22 @@ function cleanTags(tags: string): string {
   );
 }
 
-/** 一段"名字###"的开头：名字见 IMAGE_PROMPT_SECTIONS，char、user 后面可以跟位置和 negative（IMAGE_PROMPT_MODIFIERS） */
-const SECTION_RE = new RegExp(`\\b(${IMAGE_PROMPT_SECTIONS.join('|')})((?:[ \\t_-]+(?:${IMAGE_PROMPT_MODIFIERS.join('|')}))*)[ \\t]*###`, 'gi');
+/** 一段"名字###"的开头：名字见 IMAGE_PROMPT_SECTIONS；前面紧挨着别的词的（例如 char negative###）不算 */
+const SECTION_RE = new RegExp(`(?<![A-Za-z0-9_][ \\t_-]*)(${IMAGE_PROMPT_SECTIONS.join('|')})[ \\t]*###`, 'gi');
 
 /** 输出里的每一段：内容到下一个 ### 或者下一段的开头为止（最后一段忘了收尾的 ### 也认） */
-function sections(text: string): { name: string; mods: string[]; body: string }[] {
+function sections(text: string): { name: string; body: string }[] {
   const heads = [...text.matchAll(SECTION_RE)];
   return heads.map((m, i) => {
     const from = (m.index ?? 0) + m[0].length;
     const close = text.indexOf('###', from);
     const next = heads[i + 1]?.index ?? text.length;
     const end = close >= 0 ? Math.min(close, next) : next;
-    return {
-      name: (m[1] ?? '').toLowerCase(),
-      mods: (m[2] ?? '').toLowerCase().split(/[ \t_-]+/).filter(Boolean),
-      body: text.slice(from, end).trim(),
-    };
+    return { name: (m[1] ?? '').toLowerCase(), body: text.slice(from, end).trim() };
   });
 }
 
-/** 一段 tags 里的 | 换成逗号（人物那几份里不该有 | ） */
-const noSeparator = (t: string) => t.split(IMAGE_PROMPT_PERSON_SEPARATOR).join(', ');
-
-/** 读模型的输出（image###tags### 那几段）；没有 image### 或者整体那段里没有能用的 tags 时为 null（让模型重写） */
+/** 读模型的输出（image###tags###，另外认 negative###、size###）；没有 image### 或者整体那段里没有能用的 tags 时为 null（让模型重写） */
 export function parseImagePrompt(text: string): ImagePromptOutput | null {
   const list = sections(text);
   const body = (name: string) => list.filter((x) => x.name === name).map((x) => x.body).join(', ');
@@ -252,28 +211,16 @@ export function parseImagePrompt(text: string): ImagePromptOutput | null {
   };
   const others = people.map((p, i) => ({ tags: cleanTags(p), negative: cleanTags(negParts[i + 1] ?? '') })).filter((o) => o.tags);
   if (others.length) out.others = others;
-  const chars = (['char', 'user'] as const).flatMap((who) => {
-    const mine = list.filter((x) => x.name === who);
-    const own = cleanTags(noSeparator(mine.filter((x) => !x.mods.includes('negative')).map((x) => x.body).join(', ')));
-    if (!own) return [];
-    const position = mine.flatMap((x) => x.mods).find((m): m is 'left' | 'right' | 'center' => POSITIONS.has(m));
-    const negative = cleanTags(noSeparator(mine.filter((x) => x.mods.includes('negative')).map((x) => x.body).join(', ')));
-    return [{ who, tags: own, negative, ...(position ? { position } : {}), at: list.indexOf(mine[0]!) }];
-  });
-  // 按写的先后排（位置明确时从左到右写）
-  if (chars.length) out.characters = chars.sort((a, b) => a.at - b.at).map(({ at: _at, ...c }) => c);
   return out;
 }
 
 /** 让模型重写时的提醒 */
 export const IMAGE_PROMPT_RETRY = '上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。';
 
-const CENTERS = { left: { x: 0.3, y: 0.5 }, right: { x: 0.7, y: 0.5 }, center: { x: 0.5, y: 0.5 } } as const;
-
-/** 人物那一份里的人物类别（NovelAI 多人时每个人写 girl / boy / other，不带数字） */
+/** | 后面每段里的人物类别（NovelAI 多人时每个人写 girl / boy / other，不带数字） */
 const PERSON_KINDS: ReadonlySet<string> = new Set(['girl', 'boy', 'other']);
 
-/** 人物块去掉人数和 solo，保留人数标签里的人物类别。 */
+/** 人物那一段去掉人数和 solo，保留人数标签里的人物类别。 */
 function characterTags(tags: string | undefined): string {
   const { lead, rest } = leadCountTags(tags ?? '');
   const subjects = lead.split(',').flatMap((tag) => {
@@ -283,9 +230,11 @@ function characterTags(tags: string | undefined): string {
   return joinTags(...subjects, rest);
 }
 
-/** 模型画了两个人同框（"你"可以入画、输出里有"你"的那一份） */
+/** image### 里画了两个人以上（人数 tags 加起来，或者 | 分了人），而且"你"可以入画：带上你立绘的 Vibe */
 export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput): boolean {
-  return !!input.withUser && input.mode !== 'background' && !!out.characters?.some((c) => c.who === 'user');
+  if (!input.withUser || input.mode === 'background') return false;
+  const n = headCount(leadCountTags(out.tags).lead) ?? (out.others?.length ? out.others.length + 1 : 0);
+  return n >= 2;
 }
 
 /** 人数 tags 加起来几个人（1boy, 1girl → 2；2girls → 2）；没写人数、写了 multiple 时为 null */
@@ -300,41 +249,26 @@ function headCount(lead: string): number | null {
 }
 
 /**
- * 多人图每个人的那一份（NovelAI V4 起的人物提示词）；只有她一个人时为 null（按单人图拼）。
- * 她：长相（去掉人数 tags）+ 锁定的衣服 + 她那一份，负面是角色卡的 + char negative###；
- * 你："你"可以入画时是人设的长相 + 你那一份，负面是人设的 + user negative###（人设没有长相时 user### 当成别的人）；
- * 别的人（| 写法）：只用模型写的，负面是 negative### 里同一个位置的那段。
- * 模型没写她那一份、又看得出画面里还有空位（人数 tags 比写了的人多，或者没写人数）时，她照样入画（单人图本来也总带她的长相）
+ * image### 用 | 分了人时每个人的那一份（NovelAI V4 起的人物提示词）；没用 | 时为 null（整段就是提示词）。
+ * 每段只用模型写的，负面是 negative### 里同一个位置的那段；人数 tags 比写了的段多（或者没写人数）时，她的长相单独占一份
  */
 function personPrompts(out: ImagePromptOutput, input: ImagePromptInput): ImageCharacter[] | null {
-  const blocks = out.characters ?? [];
   const others = out.others ?? [];
-  const mineOnly = blocks.every((c) => c.who === 'char') && !others.length;
-  if (mineOnly) return null;
-  const outfit = lockedOutfit(input);
-  const her = (c?: { tags: string; negative?: string }) => ({
-    prompt: joinTags(characterTags(input.character.appearanceTags), outfit, characterTags(c?.tags)),
-    negative: joinTags(input.character.negativeTags, c?.negative),
-  });
-  const list: ImageCharacter[] = blocks.map((c) => {
-    const center = c.position ? { center: CENTERS[c.position] } : {};
-    if (c.who === 'char') return { ...her(c), ...center };
-    const you = input.withUser;
-    return you
-      ? { prompt: joinTags(characterTags(you.appearanceTags), lockedUserOutfit(input), characterTags(c.tags)), negative: joinTags(you.negativeTags, c.negative), ...center }
-      : { prompt: characterTags(c.tags), negative: c.negative ?? '', ...center };
-  });
-  list.push(...others.map((o) => ({ prompt: characterTags(o.tags), negative: o.negative })));
+  if (!others.length) return null;
+  const list: ImageCharacter[] = others.map((o) => ({ prompt: characterTags(o.tags), negative: o.negative }));
   const { lead } = leadCountTags(out.tags);
   const count = headCount(lead);
-  if (!blocks.some((c) => c.who === 'char') && input.character.appearanceTags.trim() && !noHumans(lead) && (count === null || count > list.length)) list.unshift(her());
+  if (input.character.appearanceTags.trim() && !noHumans(lead) && (count === null || count > list.length)) {
+    list.unshift({ prompt: joinTags(characterTags(input.character.appearanceTags), lockedOutfit(input)), negative: input.character.negativeTags ?? '' });
+  }
   return list;
 }
 
 /**
- * 智能体的输出 → 生图请求：单人时人数 tags 在最前面，接着是她的长相（同人是角色 tag + 作品 tag）、锁定的衣服，再是画面（她那一份 char### 并进来）；
- * 多人时（你入画、或者 | 写了别的人）整体 tags 做基础提示词（人数在这里），每个人的那一份做 V4 的人物提示词，各自带各自的负面 tags，按位置放。
- * 动作标签的 source# / target# / mutual# 只留在人物那几份里
+ * 智能体的输出 → 生图请求：画几个人、画谁只看 image###。
+ * 没用 | 时：image### 的人数 tags 在最前面，接着是她的长相（同人是角色 tag + 作品 tag）、锁定的衣服，再是 image### 其余的 tags；
+ * 人数以 image### 为准，image### 写了人数就不再加她外观里的人数 tags（外观里的 solo 会把双人图压成单人）。
+ * 用了 | 时：第一段做基础提示词，后面每段做 V4 的人物提示词。source# / target# / mutual# 只留在人物那几份里
  */
 export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, seed?: number): ImageRequest {
   // 背景图不画人：不加外观 tags，确保有 no humans；画幅没定时用横图
@@ -345,15 +279,12 @@ export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, 
   // 画幅：程序给的 → 模型写的 size### → 多人横图、其余竖图
   const size: ImageSize = input.size ?? out.size ?? (people ? 'landscape' : 'portrait');
   if (people) return { prompt: plainActionTags(out.tags), negative: out.negative, size, seed, characters: people };
-  const mine = out.characters?.find((c) => c.who === 'char');
-  const negative = joinTags(input.character.negativeTags, out.negative, mine?.negative);
-  // 她那一份并进来：人物类别（girl / boy / other）单人时已经在人数 tags 里了
-  const own = mine ? characterTags(mine.tags).split(',').filter((t) => !PERSON_KINDS.has(t.trim().toLowerCase())).join(',') : '';
-  const scene = leadCountTags(plainActionTags(joinTags(out.tags, own)));
+  const negative = joinTags(input.character.negativeTags, out.negative);
+  const scene = leadCountTags(plainActionTags(out.tags));
   // 模型判断画面里没有人（她只拍了吃的、东西、风景）：不加她的长相和衣服，否则和 no humans 打架，会把她硬塞进画面边上
   if (noHumans(scene.lead)) return { prompt: joinTags(scene.lead, scene.rest), negative, size, seed };
   const appearance = leadCountTags(input.character.appearanceTags);
-  return { prompt: joinTags(scene.lead, appearance.lead, appearance.rest, lockedOutfit(input), scene.rest), negative, size, seed };
+  return { prompt: joinTags(scene.lead || appearance.lead, appearance.rest, lockedOutfit(input), scene.rest), negative, size, seed };
 }
 
 /** 人数 tags 里写了 no humans，又没有 1girl、2boys、multiple girls 这类有人的 */
