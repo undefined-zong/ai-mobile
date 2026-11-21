@@ -68,8 +68,8 @@ export interface ImagePromptInput {
   /** 最近几句对话（帮助理解画面），纯文本 */
   recent?: string[];
   /**
-   * "你"可以入画：只给预设里的宏 {{user}} {{user_appearance}} {{user_outfit}} 和类型 duo，程序不往提示词里加别的；
-   * 画不画你、画几个人全看模型写的 image###
+   * "你"（这条聊天的人设）：有人设就给，不看场景、画的是谁、外观填没填。只用在预设里的宏 {{user}} {{user_appearance}} {{user_outfit}}
+   * 和你立绘的 Vibe 上，程序不往提示词里加别的；画不画你、画几个人全看模型写的 image###
    */
   withUser?: {
     name: string;
@@ -84,6 +84,8 @@ export interface ImagePromptInput {
   size?: PromptSize;
   /** 不同框、只在预设里出现的另一个人（{{user}}）：画"你"这边时是她，陪着你但不在画面里 */
   companionName?: string;
+  /** 你坐在她旁边（场景的状态）：这一次的类型多一个 duo，预设里触发条件写了 duo 的块才发；只是个标记，不管你能不能入画 */
+  duo?: boolean;
 }
 
 /** 提示词里能用的画幅（竖图、横图、方图） */
@@ -143,13 +145,13 @@ export function imagePromptMacros(input: ImagePromptInput): Record<string, strin
   };
 }
 
-/** 这一次的类型：画什么（scene / portrait / face / background）+ 场景里的时刻；"你"入画（双人图）时多一个 duo，预设里只在双人时发的块按它发；服装参考关着时多一个 outfit-free */
+/** 这一次的类型：画什么（scene / portrait / face / background）+ 场景里的时刻；你坐在她旁边时多一个 duo；服装参考关着时多一个 outfit-free */
 export function imagePromptTypes(input: ImagePromptInput): string[] {
   const mode = input.mode ?? 'scene';
   return [
     mode,
     ...(input.moment ? [input.moment] : []),
-    ...(input.withUser && mode === 'scene' ? ['duo'] : []),
+    ...(input.duo && mode === 'scene' ? ['duo'] : []),
     ...(input.outfitFree && mode !== 'background' ? ['outfit-free'] : []),
   ];
 }
@@ -159,7 +161,7 @@ export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPr
   return assembleTaskPrompt({
     preset,
     fills: imagePromptFills(input),
-    macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.withUser?.name ?? input.companionName ?? '', extra: imagePromptMacros(input) },
+    macros: { char: input.character.name, pronoun: input.character.pronoun, user: input.companionName ?? input.withUser?.name ?? '', extra: imagePromptMacros(input) },
     type: imagePromptTypes(input),
   }).messages;
 }
@@ -230,7 +232,7 @@ function characterTags(tags: string | undefined): string {
   return joinTags(...subjects, rest);
 }
 
-/** image### 里画了两个人以上（人数 tags 加起来，或者 | 分了人），而且"你"可以入画：带上你立绘的 Vibe */
+/** image### 里画了两个人以上（人数 tags 加起来，或者 | 分了人）：带上你立绘的 Vibe */
 export function hasUserInFrame(out: ImagePromptOutput, input: ImagePromptInput): boolean {
   if (!input.withUser || input.mode === 'background') return false;
   const n = headCount(leadCountTags(out.tags).lead) ?? (out.others?.length ? out.others.length + 1 : 0);
