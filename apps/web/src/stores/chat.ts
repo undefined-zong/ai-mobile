@@ -798,6 +798,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * 给一条消息里的配图出图：生图预设写 tags（生图提示词）→ 生图 API 出图 → 存进本机素材库。
+   * 已经画好过的（存了出图请求）再画时是"重新生成"：同样的 tags 换个种子再画，不再让模型重写 tags。
    * 生图 API 没接通时卡片上直接写原因，不拿占位画冒充"画好了"。
    * await 之后按 id 重新取消息和卡片（设计文档 §3.1 的教训：生成期间对象可能被替换）
    */
@@ -835,12 +836,16 @@ export const useChatStore = defineStore('chat', () => {
       });
       return;
     }
+    // 画好过的：照存下的出图请求再画（updatePart 会改到 before，先记下）
+    const requestKey = before.requestKey;
     // 重画时旧图先留着（画失败了也还在），画好了再换
     updatePart({ generated: false, error: undefined, errorDetail: undefined });
     try {
       // 没写描述（"生成配图"空着）：不发描述，类型多一个 auto-caption，句子在配图预设里；以前存下的默认句子也当没写
       const auto = !caption.trim() || isLegacyAutoCaption(caption, character.name);
-      const out = await services.image.illustrate({
+      // 重新生成：同样的 tags 换个种子（同 NovelAI 的重新生成）；以前的图没存请求、或者找不到了才从头画
+      const again = requestKey ? await services.image.redraw(requestKey) : null;
+      const out = again ?? await services.image.illustrate({
         characterId: character.id,
         ...(auto ? { types: ['auto-caption'] } : { caption }),
         mode: before.mode,
@@ -861,6 +866,7 @@ export const useChatStore = defineStore('chat', () => {
         negative: out.negative,
         seed: out.seed ?? undefined,
         model: out.model,
+        requestKey: out.requestKey,
         generated: true,
         error: undefined,
         errorDetail: undefined,

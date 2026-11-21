@@ -36,6 +36,8 @@ export interface GalleryItem {
   seed: number | null;
   model: string;
   vibeComparison?: IllustrateOutcome['vibeComparison'];
+  /** 出图请求（本机素材库里的 JSON）：重画时照它换个种子再画，不再让模型重写 tags；以前的图没有，重画时从头画 */
+  requestKey?: string;
   locationId: string | null;
   /** 地点的名字（不是世界里的地点时，比如约会从背景库里选的地方）：重画时照旧 */
   place?: string;
@@ -192,6 +194,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       seed: out.seed,
       model: out.model,
       vibeComparison: out.vibeComparison,
+      ...(out.requestKey ? { requestKey: out.requestKey } : {}),
       locationId: r.locationId,
       ...(req.place ? { place: req.place } : {}),
       outfit: r.outfit,
@@ -208,7 +211,8 @@ export const useGalleryStore = defineStore('gallery', () => {
   }
 
   /**
-   * 重画图库里的一张：同一个画面（场景、时刻、描述、地点、画幅）再画一张，换掉这一张的图（还是这一条，时间不变）。
+   * 重画图库里的一张，换掉这一张的图（还是这一条，时间不变）：存了出图请求的同样的 tags 换个种子再画（同 NovelAI 的重新生成，
+   * 不再让模型重写 tags）；以前的图没存请求，按同一个画面（场景、时刻、描述、地点、画幅）从头画。
    * 返回换下来的旧图 key（聊天卡片里用着它的跟着换，见 services/redraw.ts）
    */
   async function redraw(id: string): Promise<{ ok: true; item: GalleryItem; oldKey: string | null; oldUrl?: string } | { ok: false; reason: string; detail?: string; busy?: boolean }> {
@@ -220,7 +224,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       ...(before.vars ? { caption: before.caption, vars: before.vars, types: before.types ?? [] } : {}),
       locationId: before.locationId, ...(before.place ? { place: before.place } : {}), ...(before.size ? { size: before.size } : {}), lockOutfit: before.lockOutfit ?? before.sceneId !== 'heart',
       ...(before.withUser ? { withUser: true } : {}),
-    });
+    }, before.requestKey);
     if (!r.ok) return r;
     // await 之后按 id 重新取（期间可能被删掉了）
     const item = items.value.find((i) => i.id === id);
@@ -231,11 +235,16 @@ export const useGalleryStore = defineStore('gallery', () => {
     Object.assign(item, { assetKey: out.assetKey, prompt: out.prompt, negative: out.negative, seed: out.seed, model: out.model, vibeComparison: out.vibeComparison, title: out.caption || item.title });
     if (out.url) item.url = out.url;
     else delete item.url;
+    if (out.requestKey) item.requestKey = out.requestKey;
+    else delete item.requestKey;
     return { ok: true, item, oldKey, oldUrl };
   }
 
-  /** 照一个请求画一张（不进图库）：draw 和 redraw 共用。同一个场景同时只画一张 */
-  async function paint(req: SceneDrawRequest): Promise<{ ok: true; out: IllustrateOutcome; locationId: string | null; outfit: string | null } | { ok: false; reason: string; detail?: string; busy?: boolean }> {
+  /**
+   * 照一个请求画一张（不进图库）：draw 和 redraw 共用。同一个场景同时只画一张。
+   * requestKey：重画时存下的出图请求，照它换个种子再画；找不到时按 req 从头画
+   */
+  async function paint(req: SceneDrawRequest, requestKey?: string): Promise<{ ok: true; out: IllustrateOutcome; locationId: string | null; outfit: string | null } | { ok: false; reason: string; detail?: string; busy?: boolean }> {
     const k = key(req.characterId, req.sceneId);
     if (drawing[k]) return { ok: false, reason: '正在画上一张', busy: true };
     const c = useCharacterStore().byId(req.characterId);
@@ -248,7 +257,12 @@ export const useGalleryStore = defineStore('gallery', () => {
     drawing[k] = { moment: req.moment, stage: 'queued', priority: req.priority };
     delete failures[k];
     try {
-      const out = await services.image.illustrate(
+      const onStage = (stage: DrawingState['stage']) => {
+        const d = drawing[k];
+        if (d) d.stage = stage;
+      };
+      const again = requestKey ? await services.image.redraw(requestKey, { priority: req.priority, onStage }) : null;
+      const out = again ?? await services.image.illustrate(
         {
           characterId: c.id,
           ...(req.caption ? { caption: req.caption } : {}),
@@ -265,13 +279,7 @@ export const useGalleryStore = defineStore('gallery', () => {
           ...(req.size ? { size: req.size } : {}),
           ...(req.withUser ? { withUser: true } : {}),
         },
-        {
-          priority: req.priority,
-          onStage: (stage) => {
-            const d = drawing[k];
-            if (d) d.stage = stage;
-          },
-        },
+        { priority: req.priority, onStage },
       );
       return { ok: true, out, locationId: locationId ?? null, outfit: outfit?.name ?? null };
     } catch (e) {

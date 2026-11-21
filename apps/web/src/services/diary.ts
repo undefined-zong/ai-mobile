@@ -143,7 +143,7 @@ const autoTried = new Set<string>();
 /**
  * 画这篇日记的第 index 张图（模型写了画面，这里交给生图）。
  * auto：写好、收到云端写的时自动画，守着"自动画"的规矩（NovelAI 只在不花点的设置下画）；user：你点的。
- * redo：已经画好的再画一张换掉
+ * redo：已经画好的再画一张换掉：同样的 tags 换个种子（同 NovelAI 的重新生成），不再让模型重写 tags；以前的图没存出图请求时从头画
  */
 export async function drawDiaryImage(entryId: string, index = 0, priority: 'user' | 'auto' = 'user', opts: { redo?: boolean } = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
   const store = useDiaryStore();
@@ -167,7 +167,8 @@ export async function drawDiaryImage(entryId: string, index = 0, priority: 'user
   store.busy[key] = true;
   delete img.error;
   try {
-    const out = await services.image.illustrate(
+    const again = opts.redo && img.requestKey ? await services.image.redraw(img.requestKey, { priority }) : null;
+    const out = again ?? await services.image.illustrate(
       // 日记的配图参考节律里今天的衣着（同朋友圈）
       // 日记正文给宏 {{diary_text}}，怎么写在配图预设里（触发条件 diary）
       { characterId: c.id, caption: img.caption, use: 'image', outfitRef: true, vars: { diary_text: e.text.slice(0, 300) }, types: ['diary'] },
@@ -179,6 +180,8 @@ export async function drawDiaryImage(entryId: string, index = 0, priority: 'user
       delete now.error;
       if (out.url) now.url = out.url;
       else delete now.url;
+      if (out.requestKey) now.requestKey = out.requestKey;
+      else delete now.requestKey;
     }
     return { ok: true };
   } catch (err) {

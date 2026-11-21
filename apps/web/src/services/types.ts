@@ -154,6 +154,11 @@ export interface IllustrateOutcome {
   promptModel: string | null;
   /** 带 Vibe 的 NovelAI 场景图：原始生成参数存进素材库，供关闭 Vibe 对比。 */
   vibeComparison?: { assetKey: string };
+  /**
+   * 这一张的出图请求（存在素材库里的 JSON：tags、分人物、画幅、Vibe……套生图风格之前的那份）：
+   * "重新生成"照它换个种子再画（同 NovelAI 网页版的重新生成），不再让生图提示词智能体重写 tags。没存下来时为空
+   */
+  requestKey?: string;
   /** 写 tags 用的生图预设；没有预设时为空 */
   presetName: string | null;
 }
@@ -163,6 +168,12 @@ export interface ImageClient {
   readonly live: boolean;
   /** 配图：生图提示词智能体写 tags → 生图智能体出图 → 存进本机素材库。所有出图排队，一次一张 */
   illustrate(req: IllustrateRequest, opts?: IllustrateOptions): Promise<IllustrateOutcome>;
+  /**
+   * 重新生成：照 illustrate 存下的出图请求（IllustrateOutcome.requestKey）换个种子再画一张，同 NovelAI 网页版的重新生成——
+   * tags 一个字不改，不再调用生图提示词智能体。生图风格、API 按现在的设置。
+   * 找不到存下的请求时返回 null（调用方按原来的办法从头画）
+   */
+  redraw(requestKey: string, opts?: IllustrateOptions): Promise<IllustrateOutcome | null>;
   /** 保留原图，复用其参数再生成一张关闭 Vibe 的对比图。 */
   compareVibe(sourceAssetKey: string, opts?: IllustrateOptions): Promise<Pick<IllustrateOutcome, 'assetKey' | 'url' | 'seed'>>;
 }

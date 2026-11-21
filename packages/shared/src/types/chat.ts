@@ -36,6 +36,8 @@ export type MessagePart =
       seed?: number;
       /** 出图的模型（nai-diffusion-4-5-full …） */
       model?: string;
+      /** 出图请求（本机素材库里的 JSON）："重新生成"照它换个种子再画，不再让模型重写 tags；以前的图没有，重画时从头画 */
+      requestKey?: string;
       generated: boolean;
       /** 生成失败的原因（界面显示，可以重画） */
       error?: string;

@@ -9,6 +9,8 @@ import {
   parseSidestory,
   samplerRequest,
   type ImagePromptInput,
+  type ImageRequest,
+  type ImageResult,
   type VibeComparisonSource,
   type Sidestory,
   type VoiceSpec,
@@ -244,6 +246,41 @@ export function enqueueImage<T>(priority: 'user' | 'auto', work: () => Promise<T
   });
 }
 
+/**
+ * 存进素材库的出图请求（"重新生成"用）：生图提示词智能体写好、程序按预设拼好的那份（套生图风格之前），种子不存。
+ * 重新生成时照它换个种子再画，不再让模型重写 tags
+ */
+interface SavedDraw {
+  v: 1;
+  request: Omit<ImageRequest, 'signal' | 'seed'>;
+  /** 这一次指定的生图模型（副对话选的）；不写沿用 API 设置 */
+  model?: string;
+  /** 生图提示词智能体起的标题 */
+  caption: string;
+  presetName: string | null;
+}
+
+async function saveDraw(saved: SavedDraw): Promise<string | undefined> {
+  try {
+    return await putAsset(new TextEncoder().encode(JSON.stringify(saved)), 'application/json');
+  } catch {
+    // 存不下来（本机数据库不可用）不耽误这张图：重新生成时按原来的办法从头画
+    return undefined;
+  }
+}
+
+/** 读出存下的出图请求；本机和云端都找不到、或者认不出来时为空 */
+async function loadDraw(key: string): Promise<SavedDraw | null> {
+  try {
+    const url = await assetUrl(key);
+    if (!url) return null;
+    const saved = (await (await fetch(url)).json()) as SavedDraw | null;
+    return saved?.v === 1 && typeof saved.request?.prompt === 'string' && saved.request.prompt.trim() ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 export class RoutedImage implements ImageClient {
   get live(): boolean {
     return useAiStore().isLive('image');
@@ -257,6 +294,11 @@ export class RoutedImage implements ImageClient {
   illustrate(req: IllustrateRequest, opts: IllustrateOptions = {}): Promise<IllustrateOutcome> {
     if (this.busy) opts.onStage?.('queued');
     return enqueueImage(opts.priority ?? 'user', () => this.illustrateNow(req, opts), opts.signal);
+  }
+
+  redraw(requestKey: string, opts: IllustrateOptions = {}): Promise<IllustrateOutcome | null> {
+    if (this.busy) opts.onStage?.('queued');
+    return enqueueImage(opts.priority ?? 'user', () => this.redrawNow(requestKey, opts), opts.signal);
   }
 
   compareVibe(sourceAssetKey: string, opts: IllustrateOptions = {}): Promise<Pick<IllustrateOutcome, 'assetKey' | 'url' | 'seed'>> {
@@ -338,31 +380,47 @@ export class RoutedImage implements ImageClient {
       // 请求记录：这一张是怎么拼的（出图前记，出图失败也看得到）
       onTrace: (trace) => useRequestLogStore().addImage([c?.name ?? req.authorName ?? '', useLabel(req.use ?? 'image'), req.moment].filter(Boolean).join(' · '), trace),
     });
-    const img = r.image.images[0];
-    const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;
-    if (!assetKey && !img?.url) throw new AiError('empty', '生图接口返回了，但里面没有图片', { detail: JSON.stringify(r.image).slice(0, 4000) });
-    const source: VibeComparisonSource = {
-      connectionId: r.image.connectionId,
-      model: r.image.model,
-      prompt: r.image.prompt,
-      negative: r.image.negative,
-      params: r.image.params,
-    };
-    const vibeComparison = r.image.provider === 'novelai' && (r.image.params.reference_image_multiple as unknown[] | undefined)?.length
-      ? { assetKey: await putAsset(new TextEncoder().encode(JSON.stringify(source)), 'application/json') }
-      : undefined;
+    const kept = await this.keep(r.image);
+    // 出图请求存一份：重新生成时照它换个种子再画（种子不存）
+    const { signal: _signal, seed: _seed, ...request } = r.request;
+    const requestKey = await saveDraw({ v: 1, request, ...(req.model ? { model: req.model } : {}), caption: r.prompt.caption, presetName: preset?.name ?? null });
     return {
-      assetKey,
-      url: img?.url,
+      ...kept,
       caption: r.prompt.caption,
-      prompt: r.image.prompt,
-      negative: r.image.negative,
-      seed: r.image.seed,
-      model: r.image.model,
-      vibeComparison,
       promptModel: r.promptBy?.model ?? null,
       presetName: preset?.name ?? null,
+      ...(requestKey ? { requestKey } : {}),
     };
+  }
+
+  /**
+   * 重新生成（同 NovelAI 网页版）：存下的出图请求原样再发一次，种子随机换一个——tags、分人物、画幅、Vibe 都不变，
+   * 不调用生图提示词智能体。生图风格、API 按现在的设置
+   */
+  private async redrawNow(requestKey: string, opts: IllustrateOptions): Promise<IllustrateOutcome | null> {
+    const saved = await loadDraw(requestKey);
+    if (!saved) return null;
+    opts.onStage?.('image');
+    const image = await useAiStore().system.draw({ ...saved.request, signal: opts.signal }, { signal: opts.signal, ...(saved.model ? { model: saved.model } : {}) });
+    return { ...(await this.keep(image)), caption: saved.caption, promptModel: null, presetName: saved.presetName, requestKey };
+  }
+
+  /** 画好的图存进素材库；带 Vibe 的 NovelAI 图另存一份实际发出的参数（关闭 Vibe 对比用） */
+  private async keep(image: ImageResult & { connectionId: string }): Promise<Pick<IllustrateOutcome, 'assetKey' | 'url' | 'prompt' | 'negative' | 'seed' | 'model' | 'vibeComparison'>> {
+    const img = image.images[0];
+    const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;
+    if (!assetKey && !img?.url) throw new AiError('empty', '生图接口返回了，但里面没有图片', { detail: JSON.stringify(image).slice(0, 4000) });
+    const source: VibeComparisonSource = {
+      connectionId: image.connectionId,
+      model: image.model,
+      prompt: image.prompt,
+      negative: image.negative,
+      params: image.params,
+    };
+    const vibeComparison = image.provider === 'novelai' && (image.params.reference_image_multiple as unknown[] | undefined)?.length
+      ? { assetKey: await putAsset(new TextEncoder().encode(JSON.stringify(source)), 'application/json') }
+      : undefined;
+    return { assetKey, url: img?.url, prompt: image.prompt, negative: image.negative, seed: image.seed, model: image.model, vibeComparison };
   }
 }
 

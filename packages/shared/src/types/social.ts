@@ -34,6 +34,8 @@ export interface MomentImage {
   photo?: boolean;
   /** 识图看到的内容（你发的照片）：角色据此评论 */
   seen?: string;
+  /** 出图请求（本机素材库里的 JSON）："重新生成"照它换个种子再画，不再让模型重写 tags；以前的图没有，重画时从头画 */
+  requestKey?: string;
   /** 没画出来的原因 */
   error?: string;
 }

@@ -8,7 +8,8 @@ import { useGalleryStore, type GalleryItem } from '@/stores/gallery';
 
 /**
  * 看大图时的"重新生成"：场景里画的图（图库里的一张）和聊天卡片上的那几张（饭卡、学习卡、约会回忆）。
- * 照图库里记的画面（场景、时刻、描述、地点、画幅）再画一张换掉；聊天卡片里用着旧图的跟着换。
+ * 照这张图存下的出图请求换个种子再画一张换掉（同 NovelAI 的重新生成，不再让模型重写 tags；以前的图没存请求时按图库里记的画面从头画）；
+ * 聊天卡片里用着旧图的跟着换。
  * 朋友圈、社群的图各自按帖子里写的画面重画（services/social.ts、services/community.ts 的 redo）。
  */
 
