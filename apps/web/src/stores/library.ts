@@ -34,7 +34,7 @@ import { autoSave, getAll, getOne, write } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
 import { lorebooks as demoLorebooks } from '@/mock/library';
 import { uid } from '@/utils/id';
-import { addImageBlocks, moveCharNegativeIntoSprite, moveImageIntoPreset, needsImageBlocks } from './imagePresetMigration';
+import { addImageBlocks, addUserBlocks, moveCharNegativeIntoSprite, moveImageIntoPreset, needsImageBlocks, refreshImageWording } from './imagePresetMigration';
 
 /**
  * App 自带的预设：src/presets/ 里的预设文件（App 自己的格式）。往这个文件夹里加一个 .json 就多一个自带预设。
@@ -922,6 +922,24 @@ export const useLibraryStore = defineStore('library', () => {
     }
     // 每次打开都查：负责生图、但一块生图的块都没有的预设（别的分类拿来生图、后来新建导入的、被同步盖回旧版的）补上
     for (const p of ensureImageBlocks()) if (!migrated.includes(p)) migrated.push(p);
+    // 双人时你的外观（#80 删掉的"你可以入画"那块）做成预设里的块；过时的说法（"程序会加……"、照"你可以入画"写 char### / user###）换掉。
+    // 生图分类的预设、和补过生图块的别的分类的预设都改；只做一次
+    const userUpgrade = 'image:user-blocks';
+    if (!upgradesDone.has(userUpgrade)) {
+      upgradesDone.add(userUpgrade);
+      const imageSeed = SEEDS.find((s) => s.file === 'image.json')?.preset;
+      const freshIds = new Set(fresh.map((s) => s.preset.id));
+      for (const p of list) {
+        if (freshIds.has(p.id)) continue;
+        if (p.category !== 'image' && !p.blocks.some((b) => !b.marker && b.identifier === 'imageSubject')) continue;
+        const a = imageSeed ? addUserBlocks(p, imageSeed) : false;
+        const b = refreshImageWording(p);
+        if (a || b) {
+          p.updatedAt = Date.now();
+          if (!migrated.includes(p)) migrated.push(p);
+        }
+      }
+    }
 
     for (const s of SEEDS) done.add(s.file);
     await write('settings', [

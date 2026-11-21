@@ -110,7 +110,7 @@
       "identifier": "duoScene",
       "name": "双人 · 坐在旁边（你入画时才发）",
       "role": "system",
-      "content": "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"、时刻里的第一视角（pov）和\"你不在画面里\"这次不算：两个人并肩坐在同一张桌前（sitting next to each other），各自面前有自己那份饭（按\"要画的画面\"写具体的食物）；碰杯时两个人举杯碰在一起（toast, holding cup），笑着看向对方（looking at another）。",
+      "content": "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。{{user}}的长相照\"{{user}}入画时的外观\"那块写；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，还有每个人的表情、动作、服装（要分开写每个人时用 | 或者 Character 1 Prompt / Character 2 Prompt）。规则里\"画面里只有{{char}}一个人（solo）\"、时刻里的第一视角（pov）和\"你不在画面里\"这次不算：两个人并肩坐在同一张桌前（sitting next to each other），各自面前有自己那份饭（按\"要画的画面\"写具体的食物）；碰杯时两个人举杯碰在一起（toast, holding cup），笑着看向对方（looking at another）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -173,6 +173,36 @@
       },
       "triggers": [
         "outfit-locked"
+      ]
+    },
+    {
+      "identifier": "imageUser",
+      "name": "你入画时的外观（双人时才发）",
+      "role": "user",
+      "content": "{{user}}入画时的外观 tags（照抄进 image###；分开写每个人时写进{{user}}那一份）：{{user_appearance}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "duo+has:user_appearance"
+      ]
+    },
+    {
+      "identifier": "imageUserOutfit",
+      "name": "你常穿的衣服（双人时才发）",
+      "role": "user",
+      "content": "{{user}}常穿：{{user_outfit}}（入画时照它写{{user}}的衣服，画面要换装时可以换）",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "duo+has:user_outfit"
       ]
     },
     {

@@ -1,4 +1,5 @@
 import type { Preset, PromptBlock } from '@app/shared';
+import imageWording from '@/migrations/imageWording.json';
 
 /**
  * 生图里以前程序自己加的东西，一次性变成预设里看得见、能改的块（升级 image:all-in-preset）：
@@ -13,7 +14,7 @@ import type { Preset, PromptBlock } from '@app/shared';
 
 /** 以前的程序填充块 → 换成自带预设里的这几块（后面紧跟着的 cap… 场景块一起） */
 const MARKER_GROUPS: Record<string, string[]> = {
-  imageSubject: ['imageSubject', 'imageOutfit', 'imageOutfitLocked'],
+  imageSubject: ['imageSubject', 'imageOutfit', 'imageOutfitLocked', 'imageUser', 'imageUserOutfit'],
   imageScene: ['imageScene', 'imageTime', 'imageWeather', 'imageExpression', 'imageSizeLine'],
   imageRecent: ['imageRecent'],
   imageCaption: ['imageCaption'],
@@ -123,6 +124,38 @@ export function moveCharNegativeIntoSprite(p: Preset): boolean {
   for (const b of p.blocks) {
     if (b.marker || !b.triggers?.includes('sprite-negative') || b.content.includes('{{char_negative}}')) continue;
     b.content = [b.content.trim().replace(/,+$/, ''), '{{char_negative}}'].filter(Boolean).join(', ');
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * 你坐在她旁边（双人）时你的外观、常穿的衣服（以前程序填的"你可以入画"那块，#80 删了没放进预设）：
+ * 照自带预设加两块"你入画时的外观""你常穿的衣服"，放在"锁定的衣服"后面（没有就放在"角色和外观"后面、再没有放最后）。已经有的不加
+ */
+export function addUserBlocks(p: Preset, seed: Preset): boolean {
+  const add = ['imageUser', 'imageUserOutfit'].filter((id) => !p.blocks.some((b) => b.identifier === id)).map((id) => seed.blocks.find((b) => b.identifier === id)).filter((b): b is PromptBlock => !!b).map(clone);
+  if (!add.length) return false;
+  if (p.category !== 'image') for (const b of add) if (!b.triggers?.length) b.triggers = ['image-task'];
+  const after = ['imageOutfitLocked', 'imageOutfit', 'imageSubject'].map((id) => p.blocks.findIndex((b) => b.identifier === id)).find((i) => i >= 0);
+  p.blocks.splice(after === undefined ? p.blocks.length : after + 1, 0, ...add);
+  return true;
+}
+
+/**
+ * 以前自带预设里说"程序会加……"、让模型照"你可以入画"写 char### / user### 的句子，换成现在的说法：
+ * 整块和以前自带的一模一样（你没改过）就整块换成现在的；改过别的地方的只换这几句原话。你自己写的句子不动
+ */
+export function refreshImageWording(p: Preset): boolean {
+  let changed = false;
+  const whole = imageWording.blocks as { id: string; old: string; new: string }[];
+  for (const b of p.blocks) {
+    if (b.marker) continue;
+    const hit = whole.find((w) => w.id === b.identifier && w.old === b.content);
+    let content = hit ? hit.new : b.content;
+    for (const [from, to] of imageWording.sentences as [string, string][]) if (content.includes(from)) content = content.split(from).join(to);
+    if (content === b.content) continue;
+    b.content = content;
     changed = true;
   }
   return changed;
