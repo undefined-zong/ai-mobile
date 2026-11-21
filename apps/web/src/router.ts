@@ -47,6 +47,7 @@ import VoicePage from '@/pages/me/VoicePage.vue';
 import WatchSettingsPage from '@/pages/me/WatchSettingsPage.vue';
 import WorkoutDataPage from '@/pages/me/WorkoutDataPage.vue';
 import ReadSettingsPage from '@/pages/me/ReadSettingsPage.vue';
+import RequestLogPage from '@/pages/me/RequestLogPage.vue';
 
 /** 社媒上次停在哪一页（朋友圈 / 社群）：从别的页签回来时还在那一页 */
 let lastSocial = '/social/moments';
@@ -102,6 +103,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/me/messages', component: MessagesPage, meta: { title: '消息设置' } },
   { path: '/me/obfuscation', component: ObfuscationPage, meta: { title: '混淆设置' } },
   { path: '/me/api', component: ApiPage, meta: { title: 'API 设置' } },
+  { path: '/me/requests', component: RequestLogPage, meta: { title: '请求记录' } },
   { path: '/me/voice', component: VoicePage, meta: { title: '语音' } },
   { path: '/me/proactive', component: ProactivePage, meta: { title: '主动消息' } },
   { path: '/me/rhythm', component: RhythmPage, meta: { title: '节律' } },

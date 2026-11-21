@@ -34,7 +34,7 @@ import { autoSave, getAll, getOne, write } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
 import { lorebooks as demoLorebooks } from '@/mock/library';
 import { uid } from '@/utils/id';
-import { moveCharNegativeIntoSprite, moveImageIntoPreset } from './imagePresetMigration';
+import { addImageBlocks, moveCharNegativeIntoSprite, moveImageIntoPreset, needsImageBlocks } from './imagePresetMigration';
 
 /**
  * App 自带的预设：src/presets/ 里的预设文件（App 自己的格式）。往这个文件夹里加一个 .json 就多一个自带预设。
@@ -920,6 +920,8 @@ export const useLibraryStore = defineStore('library', () => {
       }
       for (const p of migrated) p.updatedAt = Date.now();
     }
+    // 每次打开都查：负责生图、但一块生图的块都没有的预设（别的分类拿来生图、后来新建导入的、被同步盖回旧版的）补上
+    for (const p of ensureImageBlocks()) if (!migrated.includes(p)) migrated.push(p);
 
     for (const s of SEEDS) done.add(s.file);
     await write('settings', [
@@ -997,6 +999,39 @@ export const useLibraryStore = defineStore('library', () => {
 
   function setUse(use: PresetUseId, id: string | null) {
     uses[use] = id;
+    // 换了生图用的预设：它要是一块生图的块都没有，马上补上（看得见、能改能删）
+    ensureImageBlocks();
+  }
+
+  /** 生图用途对应的自带生图预设（没有时不是生图用途） */
+  function imageSeedFor(use: PresetUseId): Preset | undefined {
+    return SEEDS.find((s) => s.defaultFor.includes(use) && s.preset.category === 'image')?.preset;
+  }
+
+  /**
+   * 负责生图（配图、心跳、学习……）的预设，不管哪个分类，缺生图的块就照它负责的用途的自带预设补上（见 imagePresetMigration.ts）。返回改了的
+   */
+  function ensureImageBlocks(): Preset[] {
+    const served = new Map<Preset, Preset[]>();
+    for (const u of PRESET_USES) {
+      const seed = imageSeedFor(u.id);
+      const p = seed ? presetForUse(u.id) : undefined;
+      if (!seed || !p) continue;
+      const list = served.get(p) ?? [];
+      if (!list.includes(seed)) list.push(seed);
+      served.set(p, list);
+    }
+    const changed: Preset[] = [];
+    for (const [p, seeds] of served) {
+      if (!needsImageBlocks(p)) continue;
+      const own = SEEDS.find((s) => s.file === p.seedFile && s.preset.category === 'image')?.preset;
+      const primary = own ?? seeds[0]!;
+      if (addImageBlocks(p, primary, seeds.filter((x) => x !== primary))) {
+        p.updatedAt = Date.now();
+        changed.push(p);
+      }
+    }
+    return changed;
   }
 
   /** 用着这个预设的用途 */
@@ -1109,7 +1144,9 @@ export const useLibraryStore = defineStore('library', () => {
   function createPreset(category: PresetCategory, templateFile?: string): Preset {
     const template = TEMPLATES.find((t) => t.file === templateFile)?.preset;
     const ref = (SEEDS.find((s) => s.preset.category === category && s.defaultFor.length) ?? SEEDS.find((s) => s.preset.category === category))?.preset;
-    const blocks = seedMarkerBlocks(category);
+    // 生图预设空白新建时也带上生图的块（角色和外观、要画的画面、出图 · 最终提示词……），照配图的自带预设，都能改能删
+    const imageBlocks = category === 'image' ? (SEEDS.find((s) => s.file === 'image.json')?.preset.blocks ?? []).filter((b) => /^(?:image|cap)/.test(b.identifier)).map(clone) : [];
+    const blocks = [...seedMarkerBlocks(category), ...imageBlocks];
     const label = PRESET_CATEGORIES[category].label;
     let data: Omit<Preset, 'id' | 'createdAt' | 'updatedAt'>;
     if (template) data = clone(template);

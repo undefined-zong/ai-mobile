@@ -1,4 +1,5 @@
 import { abortError, isAbortError, networkError, rememberRequest } from './errors.ts';
+import { describeBody, describeResponse, headersOf, nextRecordId, requestObserver, urlOf, type LabeledTransport } from './requestLog.ts';
 
 /**
  * 发请求的函数。默认是全局 fetch；连接打开"经 Worker 转发"时换成转发到自己 Worker 的版本，
@@ -16,12 +17,34 @@ export const defaultTransport: Transport = (url, init) => fetch(url, init);
 export async function request(transport: Transport, provider: string, url: string, init: RequestInit): Promise<Response> {
   if (init.signal?.aborted) throw abortError();
   const method = init.method ?? 'GET';
+  // 请求记录（"请求记录"页）：照实际发出去的记
+  const log = requestObserver();
+  const id = log ? nextRecordId() : '';
+  const started = Date.now();
+  if (log) {
+    log.begin({
+      id,
+      at: started,
+      ...((transport as LabeledTransport).role ? { role: (transport as LabeledTransport).role } : {}),
+      provider,
+      method,
+      url: urlOf(url),
+      headers: headersOf(init.headers),
+      body: describeBody(init.body),
+    });
+  }
   let res: Response;
   try {
     res = await transport(url, init);
   } catch (e) {
+    log?.end(id, { ms: Date.now() - started, error: e instanceof Error ? e.message : String(e) });
     if (isAbortError(e) || init.signal?.aborted) throw abortError();
     throw networkError(provider, e, { method, url });
+  }
+  if (log) {
+    const ms = Date.now() - started;
+    log.end(id, { status: res.status, ms });
+    void describeResponse(res).then((r) => log.end(id, r));
   }
   // 记下这个响应是哪个请求的：出错时完整报错里列出请求地址
   rememberRequest(res, method, url);

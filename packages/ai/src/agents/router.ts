@@ -1,6 +1,7 @@
 import { AGENT_META, apiKeyId, followOf, type AgentRole, type AgentRoute, type Capability, type ConnectionKind, type FeatureApi, type TextObfuscationSettings } from '@app/shared';
 import { apiLabel, kindOf, needsKey } from '../channels.ts';
-import type { Endpoint } from '../core/endpoint.ts';
+import { transportOf, type Endpoint } from '../core/endpoint.ts';
+import type { LabeledTransport } from '../core/requestLog.ts';
 import { AiError, annotateError, errorText, shouldFailover } from '../core/errors.ts';
 import { canEmbed } from '../embedding/client.ts';
 import { canDraw } from '../image/client.ts';
@@ -173,7 +174,11 @@ export class AgentRouter {
         firstProblem ??= new AiError(e.code, e.reason);
         continue;
       }
-      out.push({ endpoint: e.endpoint, source, fallback: item.fallback, api: item.api });
+      // 请求记录里标上是哪个功能发的
+      const base = transportOf(e.endpoint);
+      const labeled: LabeledTransport = (url, init) => base(url, init);
+      labeled.role = role;
+      out.push({ endpoint: { ...e.endpoint, transport: labeled }, source, fallback: item.fallback, api: item.api });
     }
     if (!out.length) throw firstProblem ?? new AiError('no_route', this.problem(role).reason);
     return out;

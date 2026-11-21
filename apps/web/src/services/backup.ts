@@ -16,8 +16,8 @@ const VERSION = 1;
 export const MEDIA_STORES: readonly StoreName[] = ['assets', 'live2d'];
 /** 云端登录令牌绑定这台设备；新设备用备份里的密码重新连接一次即可 */
 const DEVICE_SECRETS = new Set(['hub:token']);
-/** 多设备同步的记账（每条记录同步到哪一版、还没推的）只对这台设备有效：不进备份，也不从备份里恢复 */
-const LEDGER_STORES = new Set<string>(['syncState', 'syncOutbox']);
+/** 多设备同步的记账（每条记录同步到哪一版、还没推的）、请求记录只对这台设备有效：不进备份，也不从备份里恢复 */
+const LEDGER_STORES = new Set<string>(['syncState', 'syncOutbox', 'requestLog']);
 
 export interface BackupOptions {
   /** 带上生成的图片、语音、Live2D 模型 */

@@ -26,7 +26,8 @@ import { canonical, hashText, mergeValue } from './merge';
 const DELETED = '-';
 const META = '@meta';
 /** 只在这台设备上的表 */
-const LOCAL_STORES = new Set<string>(['secrets', 'syncState', 'syncOutbox']);
+// requestLog：请求记录只在这台设备上看，不同步
+const LOCAL_STORES = new Set<string>(['secrets', 'syncState', 'syncOutbox', 'requestLog']);
 /**
  * settings 表里只在这台设备上的：云端连接（地址、各种游标）、正在进行的授权、早就迁移掉的旧格式，
  * 图片缓存留几天和每张图上次用到是哪天（每台设备各自的）

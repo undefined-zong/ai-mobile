@@ -7,7 +7,7 @@ import { reactive, watch, type WatchSource } from 'vue';
  */
 
 const DB_NAME = 'ai-mobile';
-const VERSION = 12;
+const VERSION = 13;
 /**
  * - settings：API 设置（按功能）、回复修剪等设置（以后随同步走）
  * - secrets：API Key，只存这台设备，永远不进同步数据
@@ -23,7 +23,7 @@ const VERSION = 12;
  * - album：相册（你从生成的图里存下来的，能删、能拖动排序），一张一条（v12）
  * - syncState / syncOutbox：多设备同步（services/sync）：每条记录上次同步到哪一版、本机改了还没传的记录（发件箱）
  */
-export const STORES = ['characters', 'lorebooks', 'presets', 'chats', 'chatMessages', 'settings', 'secrets', 'assets', 'books', 'rhythm', 'gallery', 'memories', 'slices', 'summaries', 'profiles', 'live2d', 'moments', 'communities', 'communityPosts', 'diaries', 'album', 'syncState', 'syncOutbox'] as const;
+export const STORES = ['characters', 'lorebooks', 'presets', 'chats', 'chatMessages', 'settings', 'secrets', 'assets', 'books', 'rhythm', 'gallery', 'memories', 'slices', 'summaries', 'profiles', 'live2d', 'moments', 'communities', 'communityPosts', 'diaries', 'album', 'syncState', 'syncOutbox', 'requestLog'] as const;
 export type StoreName = (typeof STORES)[number];
 
 export const databaseState = reactive({ status: 'opening' as 'opening' | 'blocked' | 'ready' | 'error' | 'outdated' });

@@ -90,3 +90,4 @@ export * from './agents/diary.ts';
 export * from './agents/parallel.ts';
 export * from './agents/community.ts';
 export * from './places.ts';
+export { observeRequests, type RequestObserver, type RequestRecord } from './core/requestLog.ts';
