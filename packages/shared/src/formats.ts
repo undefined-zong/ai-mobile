@@ -204,11 +204,14 @@ function mentions(text: string, key: string): boolean {
 /** 不是 JSON 的输出格式：写给助手的说明（只在看这一类预设时给） */
 const OUTPUT_NOTES: Partial<Record<PresetCategory, string>> = {
   image: [
-    '【生图预设的输出】不是 JSON，是几段"名字###内容###"，程序读了再拼成生图请求（标题、画幅、长相、衣服都由程序加）：',
-    ...IMAGE_PROMPT_SECTIONS.map((k) => `- ${k}###…###：${IMAGE_PROMPT_SECTION_DOCS[k]}`),
-    '- 程序只读这三段，别的段（例如 char###、user###）不读；画几个人、画谁全按 image###',
-    `- 用 | 分人物时，两个人之间的动作写在各自那一段里，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出发起、承受、相互；NovelAI V4 起分人物时认，整体那一段和不分人物的接口程序会去掉前缀`,
-    '旧写法（{"caption", "tags", "negative", "size"} 的 JSON、characters 字段）程序不再读：照参照预设的输出格式那块换成这种写法，规则里讲到 negative、size 的句子也跟着换成 negative###、size###。',
+    '【生图预设】发给模型的每一个字、出图时加的每一个 tag 都在这个预设的块里，程序不往里加任何字，只给这一次的数据（宏）和类型（块的触发条件按它挑）。',
+    '- 数据宏：{{char}} {{pronoun}} {{user}}；{{char_appearance}}（她的外观 tags）{{char_count}}（里面的人数 tags）{{char_look}}（除了人数的）{{char_outfit}}（今天那套：名字（tags））{{char_outfit_name}} {{char_outfit_tags}} {{char_outfit_locked}}（锁定时的衣服 tags）{{char_negative}}；{{user_appearance}} {{user_outfit}} {{user_negative}}；{{image_place}} {{image_time}} {{image_weather}} {{image_expression}} {{image_size}} {{image_caption}}（写好的画面描述）{{image_recent}}（最近的对话，{{image_recent::N}} 是最后 N 句）；场景自己的数据（heart_where、study_progress、meal_label、date_spot……）。',
+    '- 类型：画什么（scene / portrait / face / background）、时刻（open、peek……）、场景名（heart、study、meal、sleep、date）、怎么在一起（remote / visit / bring）、duo（坐在她旁边）、outfit-free / outfit-locked / outfit-unlocked、size:<画幅>、场景自己的（heat-high、her-dozing、auto-caption……）；每个数据宏有值时多一个 has:<名字>，没值时多一个 no:<名字>。',
+    '- 触发条件写几个时有一个对上就发；用 + 连起来（例如 heart+now、meal+side+has:meal_her_food）要每一部分都对上。',
+    `- 模型的输出：${IMAGE_PROMPT_SECTIONS.map((k) => `${k}###…###（${IMAGE_PROMPT_SECTION_DOCS[k]}）`).join('；')}。别的段程序不读。`,
+    `- 用 | 分人物时，两个人之间的动作写在各自那一段里，用 ${ACTION_TAG_PREFIXES.map((p) => `${p}#`).join(' / ')} 标出发起、承受、相互。`,
+    '- 不发给模型、程序按它做事的块（触发条件）：image-prompt:<拼法> 拼出图的正向提示词，image-negative:<拼法> 拼负面词，image-size:<拼法> 是没定画幅时的画幅（拼法：scene / portrait / face / background / no-humans，no-humans 是 image### 写了 no humans 时）；这几块里还能用 {{image}}（image### 整段）{{image_count}}（里面的人数 tags）{{image_tags}}（除了人数的）{{negative}}（negative###）。没有 image-prompt 块时出图就是 image### 原样，没有 image-negative 块时负面词就是 negative### 原样。retry：格式不对时发给模型让它重写（没有就不重写）。vibe:<类型>：这次的类型对上时带上你人设立绘的 Vibe。',
+    '旧写法（{"caption", "tags", "negative", "size"} 的 JSON、characters 字段、char### / user###）程序不再读：照参照预设的输出格式那块换成这种写法。',
   ].join('\n'),
   device: [
     '【控制指令预设的输出】不是 JSON：把Ta那一句照抄一遍、在要变的地方插 <device>"VIBRATE": 40</device>（键的写法同隐藏标签 <device>），程序按抄的字放回原话的位置；可以只抄到最后一个 <device> 为止，这一句不用变时原样抄、不插。',
@@ -223,9 +226,13 @@ const LEGACY_OUTPUTS: { category: PresetCategory; re: RegExp; message: string }[
   { category: 'device', re: /"(?:steps|at|do)"\s*:/, message: '输出格式还是 {"steps": [{"at", "do"}]}：程序现在读照抄原话、插在里面的 <device>，旧写法读不到，照参照预设的输出格式改' },
 ];
 
-/** 触发条件是不是用户自己起名的那种（尺度、立绘的构图表情动作）或者开关（家务、健康），不算任务 */
+/** 生图预设里按数据挑的触发条件（has:… no:… size:…）和程序按它做事的块（出图、重写、Vibe）：不算任务 */
+const DATA_TRIGGER = /^(?:has:|no:|size:|vibe:|image-prompt:|image-negative:|image-size:|retry$|outfit-(?:free|locked|unlocked)$)/;
+
+/** 触发条件是不是用户自己起名的那种（尺度、立绘的构图表情动作）、开关（家务、健康）或者按数据挑的，不算任务 */
 export function isNamedTrigger(t: string): boolean {
-  return t in LIFE_FLAGS || [...LEVEL_PREFIXES, SPRITE_EXPR, SPRITE_POSE, SPRITE_FRAME].some((p) => t.startsWith(p));
+  if (t.includes('+')) return t.split('+').every((part) => isNamedTrigger(part.trim()));
+  return t in LIFE_FLAGS || DATA_TRIGGER.test(t) || [...LEVEL_PREFIXES, SPRITE_EXPR, SPRITE_POSE, SPRITE_FRAME].some((p) => t.startsWith(p));
 }
 
 /** 自带预设里有、但预设里没有时程序用自带那块顶上的块（不算缺） */
@@ -236,8 +243,6 @@ const KEY_TASK_MARKERS = new Set([
   'storyCharacter',
   'summaryTranscript',
   'consolidateInput',
-  'imageCaption',
-  'imageSubject',
   'rhythmCharacter',
   'rhythmAsk',
   'healthProfile',

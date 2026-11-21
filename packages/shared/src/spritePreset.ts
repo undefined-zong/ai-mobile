@@ -295,14 +295,14 @@ export interface SpriteDrawInput {
 
 /**
  * 按画法、负面两块拼 NovelAI 的提示词：宏换成这一次的，去掉空的和重复的、这种构图不要的（半身去掉鞋袜），
- * 人数 tags（1girl、solo）挪到最前面；负面接上这种构图的负面 tags 和角色自己的
+ * 人数 tags（1girl、solo）挪到最前面；负面接上这种构图的负面 tags（角色自己的负面 tags 是负面块里的 {{char_negative}}）
  */
 export function spritePrompt(preset: Pick<Preset, 'blocks'> | undefined, input: SpriteDrawInput): { prompt: string; negative: string } {
   const framing = input.framing;
   const ctx = {
     char: input.name,
     user: '',
-    extra: { char_appearance: input.appearance, char_outfit: input.outfit, framing: framing?.tags ?? '', expression: input.expression, pose: input.pose },
+    extra: { char_appearance: input.appearance, char_outfit: input.outfit, char_negative: input.negative ?? '', framing: framing?.tags ?? '', expression: input.expression, pose: input.pose },
   };
   const own = new Set((framing?.tags ?? '').split(',').map((t) => t.trim().toLowerCase()));
   const kept = joinTags(substituteMacros(spriteText(preset, SPRITE_DRAW), ctx))
@@ -312,6 +312,7 @@ export function spritePrompt(preset: Pick<Preset, 'blocks'> | undefined, input: 
   const { lead, rest } = leadCountTags(kept);
   return {
     prompt: joinTags(lead, rest),
-    negative: joinTags(substituteMacros(spriteText(preset, SPRITE_NEGATIVE), ctx), framing?.negative, input.negative),
+    // 角色自己的负面 tags 用宏 {{char_negative}} 写在负面块里，不另外加
+    negative: joinTags(substituteMacros(spriteText(preset, SPRITE_NEGATIVE), ctx), framing?.negative),
   };
 }

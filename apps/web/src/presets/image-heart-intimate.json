@@ -6,7 +6,7 @@
   "worldInfoEnabled": false,
   "name": "生图 · 心跳 · 亲密",
   "defaultFor": [],
-  "description": "心跳的背景：跟着对话走，到了亲密的时候照实画（会加 nsfw），没到时画暧昧。人物都是成年人。",
+  "description": "心跳的背景：跟着对话走，到了亲密的时候照实画（会加 nsfw），没到时画暧昧。人物都是成年人。 发给模型的每一句、出图加的每个词都在下面的块里，能改能删。",
   "blocks": [
     {
       "identifier": "main",
@@ -24,7 +24,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头 → 表情与动作 → 服装 → 场景与背景 → 光线、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 衣服按\"要画的画面\"和最近的对话写：没换就照\"{{char}}今天穿\"写，对话里换了、脱了就照对话。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只有{{char}}一个人（solo）；{{char}}是成年人，不写任何显得年幼的 tags。\n- 竖图 portrait：这张图铺满整个手机屏幕，是画面的中心；人物在中间偏上，下面三分之一会压着对话和心跳，别把脸放在那里。",
+      "content": "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头 → 表情与动作 → 服装 → 场景与背景 → 光线、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），「出图 · 最终提示词」那块会把长相加在最前面。\n- 衣服按\"要画的画面\"和最近的对话写：没换就照\"{{char}}今天穿\"写，对话里换了、脱了就照对话。\n- 不要写画师名和质量词（masterpiece、best quality 之类「出图 · 最终提示词」那块会加）。\n- 画面里只有{{char}}一个人（solo）；{{char}}是成年人，不写任何显得年幼的 tags。\n- 竖图 portrait：这张图铺满整个手机屏幕，是画面的中心；人物在中间偏上，下面三分之一会压着对话和心跳，别把脸放在那里。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -36,7 +36,7 @@
       "identifier": "outfitFree",
       "name": "服装参考关着（AI 自己设计衣服）",
       "role": "system",
-      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时各自的衣服写进 char### 和 user### 那一行，两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相程序会加）。",
+      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时两个人的衣服都写进 image###（用 | 分人时写进各自那一段），两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相「出图 · 最终提示词」那块会加）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -120,8 +120,8 @@
       "identifier": "imageSubject",
       "name": "角色和外观 tags",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "角色：{{char}}（{{pronoun}}）；外观 tags（出图时「最终提示词」那块会加上，不要重复）：{{char_appearance}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
@@ -129,40 +129,374 @@
       }
     },
     {
-      "identifier": "imageScene",
-      "name": "地点、服装、时间天气、表情",
+      "identifier": "imageOutfit",
+      "name": "今天穿什么（衣服没锁时）",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "{{char}}今天穿：{{char_outfit}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "outfit-unlocked"
+      ]
+    },
+    {
+      "identifier": "imageOutfitLocked",
+      "name": "锁定的衣服（衣服锁定时）",
+      "role": "user",
+      "content": "服装：{{char_outfit_name}}；服装 tags（出图时「最终提示词」那块会加在外观后面，不要重复，也不要另写别的衣服）：{{char_outfit_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "outfit-locked"
+      ]
+    },
+    {
+      "identifier": "imageScene",
+      "name": "地点",
+      "role": "user",
+      "content": "地点：{{image_place}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_place"
+      ]
+    },
+    {
+      "identifier": "imageTime",
+      "name": "时段",
+      "role": "user",
+      "content": "时段：{{image_time}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_time"
+      ]
+    },
+    {
+      "identifier": "imageWeather",
+      "name": "天气",
+      "role": "user",
+      "content": "天气：{{image_weather}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_weather"
+      ]
+    },
+    {
+      "identifier": "imageExpression",
+      "name": "此刻的表情",
+      "role": "user",
+      "content": "此刻的表情：{{image_expression}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_expression"
+      ]
+    },
+    {
+      "identifier": "imageSizeLine",
+      "name": "画幅（场景定了画幅时）",
+      "role": "user",
+      "content": "画幅：{{image_size}}（portrait 竖图 / landscape 横图 / square 方图），出图按这个画幅，构图照它来",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_size"
+      ]
     },
     {
       "identifier": "imageRecent",
       "name": "最近的对话",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "最近的对话：\n{{image_recent::6}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "has:image_recent"
+      ]
     },
     {
       "identifier": "imageCaption",
       "name": "要画的画面",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "要画的画面：{{image_caption}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "has:image_caption"
+      ]
+    },
+    {
+      "identifier": "capHeartOpen",
+      "name": "要画的画面 · 开场",
+      "role": "user",
+      "content": "要画的画面：{{user}}刚来，{{char}}在等{{user}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "heart+open"
+      ]
+    },
+    {
+      "identifier": "capHeartNow",
+      "name": "要画的画面 · 这一刻",
+      "role": "user",
+      "content": "要画的画面：{{char}}此刻的样子（按最近的对话）",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "heart+now"
+      ]
+    },
+    {
+      "identifier": "capHeartRemote",
+      "name": "要画的画面 · 连线时她在哪",
+      "role": "user",
+      "content": "{{char}}在{{heart_where}}，和{{user}}连线",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "heart+remote+has:heart_where",
+        "heart+bring+has:heart_where"
+      ]
+    },
+    {
+      "identifier": "capHeartRemoteNoPlace",
+      "name": "要画的画面 · 连线时（不知道她在哪）",
+      "role": "user",
+      "content": "{{char}}在{{pronoun}}那边，和{{user}}连线",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "heart+remote+no:heart_where",
+        "heart+bring+no:heart_where"
+      ]
+    },
+    {
+      "identifier": "capHeartHeatHigh",
+      "name": "要画的画面 · 气氛正浓",
+      "role": "user",
+      "content": "气氛正浓，心跳很快",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "heart+heat-high"
+      ]
+    },
+    {
+      "identifier": "capHeartHeatWarm",
+      "name": "要画的画面 · 气氛升温",
+      "role": "user",
+      "content": "气氛渐渐升温",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "heart+heat-warm"
+      ]
+    },
+    {
+      "identifier": "imageFinal",
+      "name": "出图 · 最终提示词（不发给模型）",
+      "role": "system",
+      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:scene",
+        "image-prompt:portrait",
+        "image-prompt:face"
+      ]
+    },
+    {
+      "identifier": "imageFinalNoHumans",
+      "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
+      "role": "system",
+      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageFinalBackground",
+      "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "best quality, amazing quality, very aesthetic, absurdres, no humans, scenery, {{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:background"
+      ]
+    },
+    {
+      "identifier": "imageNegative",
+      "name": "出图 · 最终负面词（不发给模型）",
+      "role": "system",
+      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, {{char_negative}}, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:scene",
+        "image-negative:portrait",
+        "image-negative:face",
+        "image-negative:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageNegativeBackground",
+      "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, 1girl, 1boy, people, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:background"
+      ]
+    },
+    {
+      "identifier": "imageSizeDefault",
+      "name": "出图 · 场景和模型都没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "portrait",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:scene",
+        "image-size:portrait",
+        "image-size:face",
+        "image-size:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageSizeBackground",
+      "name": "出图 · 只画背景、没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "landscape",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:background"
+      ]
+    },
+    {
+      "identifier": "imageRetry",
+      "name": "格式不对时让模型重写（只在重写时发）",
+      "role": "user",
+      "content": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "retry"
+      ]
+    },
+    {
+      "identifier": "imageVibe",
+      "name": "带上你立绘的 Vibe（不发给模型；人设里开着 Vibe 才有）",
+      "role": "system",
+      "content": "触发条件对上这一次的类型时，出图带上你人设立绘的 Vibe。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "vibe:duo"
+      ]
     }
   ],
   "sampler": {

@@ -11,7 +11,7 @@ import type { GeneratedImage, ImageRequest, ImageResult } from './types.ts';
 /**
  * OpenAI 兼容生图：POST …/images/generations（写法对照 SleepTogether 的 image-manager）。各家字段不一样：
  * - OpenAI：size 只有几档（按宽高比选）、n、quality（gpt-image：low / medium / high；dall-e-3：hd / standard）；
- *   没有负面词参数，负面词写在提示词后面"Avoid: …"；
+ *   没有负面词参数，负面词不发（不往提示词里加别的字）；
  * - 硅基流动（Kolors、FLUX）：image_size、batch_size、num_inference_steps、guidance_scale、negative_prompt、seed，回 images[].url。
  * 按地址认硅基流动；返回的图片按 extractImage 找（b64_json、url、各家中转的写法），接口不认的参数按报错自动去掉。
  */
@@ -43,7 +43,7 @@ export async function openaiImages(ep: Endpoint, req: ImageRequest): Promise<Ima
   const { quality, ...extra } = req.extra ?? {};
   // 这些接口不分人物写：两个人同框时每个人的那一份并进整体提示词
   const flat = flattenCharacters(req);
-  let prompt = flat.prompt;
+  const prompt = flat.prompt;
   const body: Record<string, unknown> = { model };
   if (siliconflow) {
     body.image_size = `${width}x${height}`;
@@ -58,7 +58,6 @@ export async function openaiImages(ep: Endpoint, req: ImageRequest): Promise<Ima
     const q = openaiQuality(model, quality);
     if (q) body.quality = q;
     if (/dall-e/i.test(model)) body.response_format = 'b64_json';
-    if (flat.negative) prompt = `${prompt}\n\nAvoid: ${flat.negative}`;
   }
   body.prompt = prompt;
   Object.assign(body, extra);

@@ -44,8 +44,11 @@ export interface GalleryItem {
   size?: ImageShape;
   /** 画的时候没锁今天那身衣服（心跳）；以前的图没记，按场景算 */
   lockOutfit?: boolean;
-  /** 画的时候"你"可以入画（约会）：重画时照旧 */
+  /** 画的时候你坐在她旁边（类型 duo）：重画时照旧 */
   withUser?: boolean;
+  /** 场景给的数据和类型（生图预设里的宏和触发条件）：重画时照旧；以前的图没有（那时的画面描述是程序拼的句子，重画时不再发） */
+  vars?: Record<string, string>;
+  types?: string[];
   /** 节律日 */
   day: string;
   at: number;
@@ -57,7 +60,12 @@ export interface SceneDrawRequest {
   characterId: string;
   sceneId: string;
   moment: string;
-  caption: string;
+  /** 写好的画面描述（约会里 [cg:] 的、你说的）：生图预设里的 {{image_caption}}；场景自己的句子都在预设的块里 */
+  caption?: string;
+  /** 场景给的数据（生图预设里的宏 {{名字}}） */
+  vars?: Record<string, string>;
+  /** 场景给的类型（生图预设里块的触发条件） */
+  types?: string[];
   /** user：你点的（排在前面）；auto：场景自己画的 */
   priority: 'user' | 'auto';
   locationId?: string | null;
@@ -69,7 +77,7 @@ export interface SceneDrawRequest {
   size?: ImageShape;
   /** 衣服锁成节律里今天这一套（默认锁）；心跳里不锁，衣服按画面写 */
   lockOutfit?: boolean;
-  /** "你"可以入画（按人设的外观 tags、立绘的 Vibe）；画不画你、单人还是双人由这个场景的生图预设定 */
+  /** 你坐在她旁边：生图的类型多一个 duo */
   withUser?: boolean;
 }
 
@@ -131,7 +139,8 @@ export const useGalleryStore = defineStore('gallery', () => {
           i.characterId === characterId &&
           i.sceneId === sceneId &&
           (!opts.moment || i.moment === opts.moment) &&
-          (!opts.today || i.day === day) &&
+          // 今天的图拿来接着用时只用现在这样画的（记了数据的）：以前的图画面描述是程序拼的句子
+          (!opts.today || (i.day === day && !!i.vars)) &&
           (opts.locationId === undefined || i.locationId === opts.locationId) &&
           (opts.outfit === undefined || i.outfit === opts.outfit) &&
           (!opts.size || shapeOf(i) === opts.size) &&
@@ -174,7 +183,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       characterId: req.characterId,
       sceneId: req.sceneId,
       moment: req.moment,
-      caption: req.caption,
+      caption: req.caption ?? '',
       title: out.caption || momentLabel(req.moment) || '',
       assetKey: out.assetKey,
       url: out.url,
@@ -189,6 +198,8 @@ export const useGalleryStore = defineStore('gallery', () => {
       ...(req.size ? { size: req.size } : {}),
       ...(req.lockOutfit === false ? { lockOutfit: false } : {}),
       ...(req.withUser ? { withUser: true } : {}),
+      vars: { ...(req.vars ?? {}) },
+      types: [...(req.types ?? [])],
       day: rhythmDate(new Date()),
       at: Date.now(),
     };
@@ -204,7 +215,9 @@ export const useGalleryStore = defineStore('gallery', () => {
     const before = items.value.find((i) => i.id === id);
     if (!before) return { ok: false, reason: '图库里已经没有这张了' };
     const r = await paint({
-      characterId: before.characterId, sceneId: before.sceneId, moment: before.moment, caption: before.caption, priority: 'user',
+      characterId: before.characterId, sceneId: before.sceneId, moment: before.moment, priority: 'user',
+      // 以前的图（没记数据）：那时的画面描述是程序拼的句子，不再发
+      ...(before.vars ? { caption: before.caption, vars: before.vars, types: before.types ?? [] } : {}),
       locationId: before.locationId, ...(before.place ? { place: before.place } : {}), ...(before.size ? { size: before.size } : {}), lockOutfit: before.lockOutfit ?? before.sceneId !== 'heart',
       ...(before.withUser ? { withUser: true } : {}),
     });
@@ -238,7 +251,10 @@ export const useGalleryStore = defineStore('gallery', () => {
       const out = await services.image.illustrate(
         {
           characterId: c.id,
-          caption: req.caption,
+          ...(req.caption ? { caption: req.caption } : {}),
+          ...(req.vars ? { vars: req.vars } : {}),
+          // 场景名（heart、study……）也是一个类型：不同场景的同名时刻（心跳和哄睡都有 now）在预设里分得开
+          types: [req.sceneId, ...(req.types ?? [])],
           use: sceneImageUse(req.sceneId),
           moment: req.moment,
           sceneId: req.sceneId,

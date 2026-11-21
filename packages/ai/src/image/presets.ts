@@ -106,8 +106,8 @@ export const NOVELAI_EMOTIONS = [
 export const NOVELAI_EMOTION_LEVELS = ['正常', '稍弱', '弱', '更弱', '很弱', '最弱'] as const;
 
 /**
- * NovelAI 网页版勾选"质量标签"时追加在提示词末尾的词。服务端不会自动加，直接调接口要自己加。
- * 是可以改的默认值：想完全自己控制时请求里传 quality: false。
+ * NovelAI 网页版勾选"质量标签"时追加在提示词末尾的词。出图时不再自动加：
+ * 以前开着"追加官网的质量词"的，升级时把它写进生图预设的「最终提示词」（和下面的负面预设一起）
  */
 export const NOVELAI_QUALITY_TAGS: Record<string, string> = {
   'nai-diffusion-4-5-full': 'very aesthetic, masterpiece, no text',

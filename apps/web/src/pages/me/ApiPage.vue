@@ -415,12 +415,7 @@ async function runReindex() {
           </div>
         </template>
         <template v-if="draft.role === 'image' && draft.imageStyle">
-          <label class="field-label" for="style-prefix">固定前缀（画风、质量词；写 {prompt} 可以指定提示词放在哪）</label>
-          <textarea id="style-prefix" v-model="draft.imageStyle.prefix" class="textarea" rows="2" spellcheck="false" />
-          <label class="field-label" for="style-suffix">固定后缀</label>
-          <input id="style-suffix" v-model="draft.imageStyle.suffix" class="input" autocomplete="off" spellcheck="false" />
-          <label class="field-label" for="style-negative">固定负面词</label>
-          <textarea id="style-negative" v-model="draft.imageStyle.negative" class="textarea" rows="3" spellcheck="false" />
+          <p class="text-[12px] text-ink-3 mt-3 mb-0">画风、质量词、负面词写在生图预设的「最终提示词」「最终负面词」块里（立绘写在立绘预设的「画法」「负面」里），这里不再加任何词。</p>
           <div class="flex items-center justify-between gap-3 mt-3">
             <div>
               <div class="text-[14px]">服装参考</div>
@@ -429,13 +424,6 @@ async function runReindex() {
             <van-switch class="shrink-0" :model-value="draft.imageStyle.outfitRef !== false" size="22px" data-testid="image-outfit-ref" @update:model-value="draft.imageStyle.outfitRef = $event ? undefined : false" />
           </div>
           <template v-if="imageKind === 'novelai'">
-            <div class="flex items-center justify-between gap-3 mt-3">
-              <div>
-                <div class="text-[14px]">追加官网的质量词</div>
-                <div class="text-[12px] text-ink-3">同 NovelAI 网页版的 Add Quality Tags 和负面预设；前缀里写了质量词就关着</div>
-              </div>
-              <van-switch v-model="draft.imageStyle.naiQuality" class="shrink-0" size="22px" />
-            </div>
             <div class="flex items-center justify-between gap-3 mt-3">
               <div>
                 <div class="text-[14px]">Variety Boost</div>

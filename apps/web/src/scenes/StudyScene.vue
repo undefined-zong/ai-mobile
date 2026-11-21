@@ -476,7 +476,7 @@ function lookAtHer() {
   }
   const noticed = !dozing.value && Math.random() < 0.4;
   chars.setExpression(her.value.id, noticed ? 'shy' : herStuck.value ? 'pout' : 'neutral');
-  void drawMoment('peek', 'user', noticed ? `${her.value.name}发现你在看${her.value.pronoun}，抬头和你对上了眼` : `${her.value.name}没发现你在看${her.value.pronoun}`);
+  void drawMoment('peek', 'user', noticed ? 'noticed' : 'unnoticed');
 }
 const herState = computed(() => {
   if (dozing.value) return `${her.value.pronoun}趴在桌上睡着了`;
@@ -520,27 +520,38 @@ async function preview(item: { assetKey: string | null; url?: string } | null) {
   else showToast('本机找不到这张图了');
 }
 
-/** 她此刻的状态（数据，给生图提示词看） */
-function stateLine(): string {
-  const p = `进度 ${Math.round(herProgress.value)}%`;
-  if (dozing.value) return `${her.value.name}趴在桌上睡着了（${p}）`;
-  if (herStuck.value) return `${her.value.name}卡住了，盯着书皱眉（${p}）`;
-  return `${her.value.name}在专心${herGoal.value ? `做"${herGoal.value}"` : '学习'}（${p}）`;
-}
-function where(): string {
-  const place = location.value?.name ?? '图书馆';
-  if (mode.value === 'visit') return `在${place}，${userName.value}坐在${her.value.pronoun}旁边`;
-  if (mode.value === 'bring') return `在${place}，${her.value.pronoun}坐在${userName.value}对面`;
-  const how = focusMode.value === 'solo' ? '各自专注' : '一起专注';
-  return `在${place}，和${userName.value}连线自习、${how}（${userName.value}在${yourPlace.value || '自己那边'}）`;
-}
-function captionFor(m: Moment, extra?: string): string {
-  if (m === 'peek') return [`${cue.value}中`, stateLine(), where(), extra].filter(Boolean).join('；');
-  return [`今天一起学完了：${Math.round(focusedMs.value / 60_000)} 分钟`, keptLine(), where(), extra].filter(Boolean).join('；');
+/**
+ * 生图的数据和类型：句子都写在陪伴学习的生图预设里（要画的画面那几块），这里只给数据。
+ * 偷拍时多给这一段是第几个、什么计时（focus-pomodoro / break-other……）、她的状态（her-dozing / her-stuck / her-focus），
+ * 你点"看一眼"时她发现没发现你（noticed / unnoticed）；奖励时多给约定做没做到（promise-kept / promise-missed）
+ */
+function artPrompt(m: Moment, look?: 'noticed' | 'unnoticed'): { vars: Record<string, string>; types: string[] } {
+  const n = blocks.value;
+  const ph = phase.value;
+  const round = ph === 'focus' ? n + 1 : n;
+  const cue = ph === 'setup' ? 'study-setup' : ph === 'done' ? 'study-done' : ph === 'focus' ? `focus-${timerKind.value}` : timerKind.value === 'pomodoro' ? 'break-pomodoro' : 'break-other';
+  const state = dozing.value ? 'her-dozing' : herStuck.value ? 'her-stuck' : 'her-focus';
+  const promised = promise.value.trim();
+  return {
+    vars: {
+      study_round: String(round),
+      study_progress: String(Math.round(herProgress.value)),
+      study_goal: herGoal.value ?? '',
+      study_minutes: String(Math.round(focusedMs.value / 60_000)),
+      study_promise: promised,
+      study_your_place: yourPlace.value,
+    },
+    types: [
+      mode.value,
+      `focus-${focusMode.value}`,
+      ...(m === 'peek' ? [cue, state, ...(look ? [look] : [])] : []),
+      ...(m === 'reward' && promised ? [goalReached() ? 'promise-kept' : 'promise-missed'] : []),
+    ],
+  };
 }
 
 let autoNoted = false;
-async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string): Promise<GalleryItem | null> {
+async function drawMoment(m: Moment, priority: 'user' | 'auto', look?: 'noticed' | 'unnoticed'): Promise<GalleryItem | null> {
   if (priority === 'auto') {
     const chk = gallery.autoCheck();
     if (!chk.ok) {
@@ -554,11 +565,11 @@ async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string):
     characterId: her.value.id,
     sceneId: 'study',
     moment: m,
-    caption: captionFor(m, extra),
+    ...artPrompt(m, look),
     priority,
     locationId: location.value?.id ?? null,
     expression: chars.expression[her.value.id],
-    recent: chatId.value ? chat.recentLines(chatId.value, 4) : [],
+    recent: chatId.value ? chat.recentLines(chatId.value, 20) : [],
     size: m === 'reward' ? 'portrait' : artShape.value,
     // 连线画她一个人，坐在她旁边画两个人同框
     withUser: mode.value === 'visit',
@@ -662,11 +673,6 @@ async function pickPhoto(file: File) {
     showToast('这张图读不出来，换一张试试');
   }
 }
-function mineCaption(): string {
-  const place = yourPlace.value || '自己那边';
-  const desc = persona.value.description.trim();
-  return [`${userName.value}在${place}的书桌前学习`, desc ? `${userName.value}的人设：${desc}` : '', `${her.value.name}在${herWhere.value}，隔着屏幕陪着（不在画面里）`].filter(Boolean).join('；');
-}
 async function drawMine(priority: 'user' | 'auto') {
   if (mineDrawing.value) return;
   if (priority === 'auto' && !gallery.autoCheck().ok) return;
@@ -682,7 +688,9 @@ async function drawMine(priority: 'user' | 'auto') {
     const out = await services.image.illustrate(
       {
         characterId: her.value.id,
-        caption: mineCaption(),
+        // 句子在陪伴学习的生图预设里（你这边那一块），这里只给数据
+        vars: { study_your_place: yourPlace.value, study_persona: persona.value.description.trim(), study_her_place: herWhere.value },
+        types: ['study', mode.value, `focus-${focusMode.value}`],
         use: sceneImageUse('study'),
         moment: 'mine',
         sceneId: 'study',
@@ -769,10 +777,6 @@ function goalReached(): boolean {
   if (timerKind.value === 'countdown') return countdownDone.value;
   return focusedMs.value >= COUNTUP_PROMISE_MIN * 60_000;
 }
-function keptLine(): string {
-  return promise.value.trim() ? `约定"${promise.value.trim()}"${goalReached() ? '做到了' : '没做到'}` : '';
-}
-
 async function begin() {
   if (!chatId.value) return;
   // 白噪声：上次开着的接着放（点"开始"是一次点击，浏览器允许出声）

@@ -45,7 +45,9 @@ export {
   NOVELAI_EMOTIONS,
   NOVELAI_DEFAULT_MODEL,
   NOVELAI_MODELS,
+  NOVELAI_QUALITY_TAGS,
   NOVELAI_REFERENCE_CANVASES,
+  NOVELAI_UC_PRESETS,
   NOVELAI_SAMPLERS,
   NOVELAI_SCHEDULES,
   freeForOpus,
@@ -56,7 +58,7 @@ export {
   supportsCharacterReference,
   supportsVibeTransfer,
 } from './image/presets.ts';
-export { applyImageStyle, composePrompt, DEFAULT_IMAGE_STYLE } from './image/style.ts';
+export { applyImageStyle, DEFAULT_IMAGE_STYLE, LEGACY_IMAGE_STYLE } from './image/style.ts';
 export { extractImage, sniffImageMime } from './image/extract.ts';
 export { listZip, readZipEntry, unzipFirst, type ZipEntry } from './image/zip.ts';
 

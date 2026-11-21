@@ -46,6 +46,11 @@ import { ReplyTimeline, type TimedCommand } from '@/services/toyPlayer';
 import { secondaryChat } from '@/services/secondaryChat';
 import { uid } from '@/utils/id';
 
+/** 以前"生成配图"没写描述时程序替你填的那几句（存在旧消息里）：重画时当没写，不再发 */
+function isLegacyAutoCaption(caption: string, name: string): boolean {
+  return caption === '按最近的聊天，画此刻的画面' || caption === `${name}此刻的全身像` || caption === `${name}此刻的脸部特写` || caption.endsWith(`${name}此刻所在的地方`);
+}
+
 /** 聊天里她打来的电话响多久（过了没接就成了未接来电） */
 export const RING_MS = 30_000;
 
@@ -833,9 +838,11 @@ export const useChatStore = defineStore('chat', () => {
     // 重画时旧图先留着（画失败了也还在），画好了再换
     updatePart({ generated: false, error: undefined, errorDetail: undefined });
     try {
+      // 没写描述（"生成配图"空着）：不发描述，类型多一个 auto-caption，句子在配图预设里；以前存下的默认句子也当没写
+      const auto = !caption.trim() || isLegacyAutoCaption(caption, character.name);
       const out = await services.image.illustrate({
         characterId: character.id,
-        caption,
+        ...(auto ? { types: ['auto-caption'] } : { caption }),
         mode: before.mode,
         use: before.use ?? 'image',
         moment: before.moment,
@@ -844,7 +851,8 @@ export const useChatStore = defineStore('chat', () => {
         sceneId: chat.currentScene,
         place: getLocation(chat.togetherAt ?? character.locationId)?.name,
         expression: chars.expression[character.id],
-        recent: recentLines(chatId),
+        // 给 20 句，预设里 {{image_recent::N}} 自己挑用几句
+        recent: recentLines(chatId, 20),
       });
       updatePart({
         assetKey: out.assetKey ?? out.url ?? null,
@@ -865,20 +873,13 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * "生成配图"：不经过对话模型，直接按"生图"预设写 tags、调生图 API。
    * 画好的图作为她发来的一张图放进聊天（发给模型的聊天记录里是"[图片：标题]"）。
-   * caption 不写时按这次画什么、她在哪、最近的聊天画。
+   * caption 不写时不发描述，生图类型多一个 auto-caption（写什么在配图预设的块里）。
    */
   function drawImage(chatId: string, req: { mode: ImageMode; caption: string }) {
     const chat = chatById(chatId);
     const character = useCharacterStore().byId(chat?.characterId);
     if (!chat || !character) return;
-    const place = getLocation(chat.togetherAt ?? character.locationId)?.name;
-    const auto: Record<ImageMode, string> = {
-      scene: '按最近的聊天，画此刻的画面',
-      portrait: `${character.name}此刻的全身像`,
-      face: `${character.name}此刻的脸部特写`,
-      background: place ? `${place}，${character.name}此刻所在的地方` : `${character.name}此刻所在的地方`,
-    };
-    const caption = req.caption.trim() || auto[req.mode];
+    const caption = req.caption.trim();
     const msg = push(chatId, 'assistant', [{ type: 'image', assetKey: null, caption, mode: req.mode, generated: false }]);
     msg.meta.agent = 'image';
     void drawPart(chatId, msg.id, caption);

@@ -311,7 +311,9 @@ export class RoutedImage implements ImageClient {
       // 你坐在她旁边：预设里触发条件写了 duo 的块才发
       ...(req.withUser ? { duo: true } : {}),
       ...(req.size ? { size: req.size } : {}),
-      caption: req.caption,
+      ...(req.caption ? { caption: req.caption } : {}),
+      ...(req.vars ? { vars: req.vars } : {}),
+      ...(req.types?.length ? { types: req.types } : {}),
       scene: free || !c
         ? { ...(req.place ? { place: req.place } : {}) }
         : {
@@ -331,7 +333,7 @@ export class RoutedImage implements ImageClient {
       seed: req.seed,
       model: req.model,
       preset,
-      ...(persona ? { userVibes: () => personaVibes(persona, { model: req.model, signal: opts.signal }), userIsSubject: !!req.subject } : {}),
+      ...(persona ? { userVibes: () => personaVibes(persona, { model: req.model, signal: opts.signal }) } : {}),
     });
     const img = r.image.images[0];
     const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;

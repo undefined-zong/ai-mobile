@@ -8,7 +8,7 @@
   "defaultFor": [
     "image:meal"
   ],
-  "description": "一起吃饭时画的图：对面（共同吃饭的整屏背景，竖图）、Ta那边（各吃各的上半屏，Ta在自己那边）、碰杯（Ta举杯朝你伸过来）；每块按触发条件只发这次画的那一块。长相（同人是角色 tag + 作品 tag）和今天这身衣服由程序按角色加在最前面；画幅由程序按画面定（共同吃饭竖图，各吃各的按半屏画方图或横图），预设只管构图、光线、桌上的饭和这一刻在做什么。",
+  "description": "一起吃饭时画的图：对面（共同吃饭的整屏背景，竖图）、Ta那边（各吃各的上半屏，Ta在自己那边）、碰杯（Ta举杯朝你伸过来）；每块按触发条件只发这次画的那一块。长相（同人是角色 tag + 作品 tag）和今天这身衣服由「出图 · 最终提示词」那块加在最前面；画幅由程序按画面定（共同吃饭竖图，各吃各的按半屏画方图或横图），预设只管构图、光线、桌上的饭和这一刻在做什么。 发给模型的每一句、出图加的每个词都在下面的块里，能改能删。",
   "blocks": [
     {
       "identifier": "main",
@@ -26,7 +26,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 桌上的食物和饮料 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），程序会把长相加在最前面。\n- 写了\"服装（程序会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类程序会加）。\n- 画面里只有{{char}}一个人（solo）；{{user}}最多露出手或者碗盘的一角，不画脸。\n- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。",
+      "content": "规则：\n- tags 顺序：人数（1girl / 1boy）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 桌上的食物和饮料 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），「出图 · 最终提示词」那块会把长相加在最前面。\n- 写了\"服装（出图时会加…）\"时不要写任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类「出图 · 最终提示词」那块会加）。\n- 画面里只有{{char}}一个人（solo）；{{user}}最多露出手或者碗盘的一角，不画脸。\n- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -38,7 +38,7 @@
       "identifier": "outfitFree",
       "name": "服装参考关着（AI 自己设计衣服）",
       "role": "system",
-      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时各自的衣服写进 char### 和 user### 那一行，两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相程序会加）。",
+      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时两个人的衣服都写进 image###（用 | 分人时写进各自那一段），两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相「出图 · 最终提示词」那块会加）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -137,8 +137,8 @@
       "identifier": "imageSubject",
       "name": "角色和外观 tags",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "角色：{{char}}（{{pronoun}}）；外观 tags（出图时「最终提示词」那块会加上，不要重复）：{{char_appearance}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
@@ -146,40 +146,561 @@
       }
     },
     {
-      "identifier": "imageScene",
-      "name": "地点、服装、时间天气、表情",
+      "identifier": "imageOutfit",
+      "name": "今天穿什么（衣服没锁时）",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "{{char}}今天穿：{{char_outfit}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "outfit-unlocked"
+      ]
+    },
+    {
+      "identifier": "imageOutfitLocked",
+      "name": "锁定的衣服（衣服锁定时）",
+      "role": "user",
+      "content": "服装：{{char_outfit_name}}；服装 tags（出图时「最终提示词」那块会加在外观后面，不要重复，也不要另写别的衣服）：{{char_outfit_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "outfit-locked"
+      ]
+    },
+    {
+      "identifier": "imageScene",
+      "name": "地点",
+      "role": "user",
+      "content": "地点：{{image_place}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_place"
+      ]
+    },
+    {
+      "identifier": "imageTime",
+      "name": "时段",
+      "role": "user",
+      "content": "时段：{{image_time}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_time"
+      ]
+    },
+    {
+      "identifier": "imageWeather",
+      "name": "天气",
+      "role": "user",
+      "content": "天气：{{image_weather}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_weather"
+      ]
+    },
+    {
+      "identifier": "imageExpression",
+      "name": "此刻的表情",
+      "role": "user",
+      "content": "此刻的表情：{{image_expression}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_expression"
+      ]
+    },
+    {
+      "identifier": "imageSizeLine",
+      "name": "画幅（场景定了画幅时）",
+      "role": "user",
+      "content": "画幅：{{image_size}}（portrait 竖图 / landscape 横图 / square 方图），出图按这个画幅，构图照它来",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_size"
+      ]
     },
     {
       "identifier": "imageRecent",
       "name": "最近的对话",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "最近的对话：\n{{image_recent::4}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "has:image_recent"
+      ]
     },
     {
       "identifier": "imageCaption",
       "name": "要画的画面",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "要画的画面：{{image_caption}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "has:image_caption"
+      ]
+    },
+    {
+      "identifier": "capMealTable",
+      "name": "要画的画面 · 对面",
+      "role": "user",
+      "content": "要画的画面：{{user}}和{{char}}坐在同一张桌子两边一起吃{{meal_label}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+table"
+      ]
+    },
+    {
+      "identifier": "capMealTableHerFood",
+      "name": "要画的画面 · 对面 · 她吃的",
+      "role": "user",
+      "content": "{{char}}吃的是{{meal_her_food}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+table+has:meal_her_food"
+      ]
+    },
+    {
+      "identifier": "capMealTableHerFoodBring",
+      "name": "要画的画面 · 对面 · 她吃的（带她出门时）",
+      "role": "user",
+      "content": "{{char}}吃的是在{{meal_her_place}}点的",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+table+bring"
+      ]
+    },
+    {
+      "identifier": "capMealTableMyFood",
+      "name": "要画的画面 · 对面 · 你吃的",
+      "role": "user",
+      "content": "{{user}}吃的是{{meal_my_food}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+table+has:meal_my_food"
+      ]
+    },
+    {
+      "identifier": "capMealTablePlace",
+      "name": "要画的画面 · 对面 · 在哪",
+      "role": "user",
+      "content": "在{{meal_her_place}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+table+has:meal_her_place"
+      ]
+    },
+    {
+      "identifier": "capMealSide",
+      "name": "要画的画面 · Ta那边",
+      "role": "user",
+      "content": "要画的画面：",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side"
+      ]
+    },
+    {
+      "identifier": "capMealCheers",
+      "name": "要画的画面 · 碰杯",
+      "role": "user",
+      "content": "要画的画面：{{char}}举起手边的杯子和{{user}}碰杯（第 {{meal_cheers}} 次）",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+cheers"
+      ]
+    },
+    {
+      "identifier": "capMealTogether",
+      "name": "要画的画面 · 共同吃饭",
+      "role": "user",
+      "content": "两个人坐在同一张桌子两边吃{{meal_label}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-together",
+        "meal+cheers+eat-together"
+      ]
+    },
+    {
+      "identifier": "capMealTogetherHerFood",
+      "name": "要画的画面 · 共同吃饭 · 她吃的",
+      "role": "user",
+      "content": "{{char}}吃的是{{meal_her_food}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-together+has:meal_her_food",
+        "meal+cheers+eat-together+has:meal_her_food"
+      ]
+    },
+    {
+      "identifier": "capMealTogetherHerFoodBring",
+      "name": "要画的画面 · 共同吃饭 · 她吃的（带她出门时）",
+      "role": "user",
+      "content": "{{char}}吃的是在{{meal_her_place}}点的",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-together+bring",
+        "meal+cheers+eat-together+bring"
+      ]
+    },
+    {
+      "identifier": "capMealSoloHerPlace",
+      "name": "要画的画面 · 各吃各的 · 她在哪",
+      "role": "user",
+      "content": "{{char}}在{{meal_her_place}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-solo+has:meal_her_place",
+        "meal+cheers+eat-solo+has:meal_her_place"
+      ]
+    },
+    {
+      "identifier": "capMealSoloHerNoPlace",
+      "name": "要画的画面 · 各吃各的 · 她在哪（不知道时）",
+      "role": "user",
+      "content": "{{char}}在自己那边",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-solo+no:meal_her_place",
+        "meal+cheers+eat-solo+no:meal_her_place"
+      ]
+    },
+    {
+      "identifier": "capMealSoloHerStatus",
+      "name": "要画的画面 · 各吃各的 · 她在做什么",
+      "role": "user",
+      "content": "{{char}}此刻：{{meal_her_status}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-solo+has:meal_her_status",
+        "meal+cheers+eat-solo+has:meal_her_status"
+      ]
+    },
+    {
+      "identifier": "capMealSoloHerFood",
+      "name": "要画的画面 · 各吃各的 · 她在吃什么",
+      "role": "user",
+      "content": "{{char}}在吃{{meal_her_food}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-solo+has:meal_her_food",
+        "meal+cheers+eat-solo+has:meal_her_food"
+      ]
+    },
+    {
+      "identifier": "capMealSoloHerFoodBring",
+      "name": "要画的画面 · 各吃各的 · 她在吃什么（带她出门时）",
+      "role": "user",
+      "content": "{{char}}在吃在{{meal_her_place}}点的",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+eat-solo+bring",
+        "meal+cheers+eat-solo+bring"
+      ]
+    },
+    {
+      "identifier": "capMealMineVisit",
+      "name": "要画的画面 · Ta那边 · 你坐在她旁边",
+      "role": "user",
+      "content": "{{user}}坐在{{char}}旁边吃{{meal_label}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+visit"
+      ]
+    },
+    {
+      "identifier": "capMealMineVisitFood",
+      "name": "要画的画面 · Ta那边 · 你坐在她旁边吃的",
+      "role": "user",
+      "content": "{{user}}吃的是{{meal_my_food}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+visit+has:meal_my_food"
+      ]
+    },
+    {
+      "identifier": "capMealMineRemote",
+      "name": "要画的画面 · Ta那边 · 你不在画面里",
+      "role": "user",
+      "content": "{{user}}在{{meal_your_place}}吃{{meal_label}}，{{char}}隔着屏幕陪着（{{user}}不在画面里）",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "meal+side+remote",
+        "meal+side+bring"
+      ]
+    },
+    {
+      "identifier": "imageFinal",
+      "name": "出图 · 最终提示词（不发给模型）",
+      "role": "system",
+      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:scene",
+        "image-prompt:portrait",
+        "image-prompt:face"
+      ]
+    },
+    {
+      "identifier": "imageFinalNoHumans",
+      "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
+      "role": "system",
+      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageFinalBackground",
+      "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "best quality, amazing quality, very aesthetic, absurdres, no humans, scenery, {{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:background"
+      ]
+    },
+    {
+      "identifier": "imageNegative",
+      "name": "出图 · 最终负面词（不发给模型）",
+      "role": "system",
+      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, {{char_negative}}, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:scene",
+        "image-negative:portrait",
+        "image-negative:face",
+        "image-negative:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageNegativeBackground",
+      "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, 1girl, 1boy, people, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:background"
+      ]
+    },
+    {
+      "identifier": "imageSizeDefault",
+      "name": "出图 · 场景和模型都没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "portrait",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:scene",
+        "image-size:portrait",
+        "image-size:face",
+        "image-size:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageSizeBackground",
+      "name": "出图 · 只画背景、没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "landscape",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:background"
+      ]
+    },
+    {
+      "identifier": "imageRetry",
+      "name": "格式不对时让模型重写（只在重写时发）",
+      "role": "user",
+      "content": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "retry"
+      ]
+    },
+    {
+      "identifier": "imageVibe",
+      "name": "带上你立绘的 Vibe（不发给模型；人设里开着 Vibe 才有）",
+      "role": "system",
+      "content": "触发条件对上这一次的类型时，出图带上你人设立绘的 Vibe。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "vibe:duo"
+      ]
     }
   ],
   "sampler": {
