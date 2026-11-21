@@ -146,6 +146,36 @@
       ]
     },
     {
+      "identifier": "imageUser",
+      "name": "你入画时的外观（双人时才发）",
+      "role": "user",
+      "content": "{{user}}入画时的外观 tags（照抄进 image###；分开写每个人时写进{{user}}那一份）：{{user_appearance}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "duo+has:user_appearance"
+      ]
+    },
+    {
+      "identifier": "imageUserOutfit",
+      "name": "你常穿的衣服（双人时才发）",
+      "role": "user",
+      "content": "{{user}}常穿：{{user_outfit}}（入画时照它写{{user}}的衣服，画面要换装时可以换）",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "duo+has:user_outfit"
+      ]
+    },
+    {
       "identifier": "imageScene",
       "name": "地点",
       "role": "user",

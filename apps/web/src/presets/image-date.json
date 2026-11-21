@@ -26,7 +26,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），「出图 · 最终提示词」那块会加上；{{user}}入画时照抄{{user}}的外观 tags：{{user_appearance}}。\n- 写了\"服装（出图时会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 双人图：image### 写两个人的人数（例如 1boy, 1girl）、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，两个人各自的表情、动作、服装都写进去；要分开写时用 | 分人。\n- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。",
+      "content": "规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），「出图 · 最终提示词」那块会加上；{{user}}的长相照\"{{user}}入画时的外观\"那块写。\n- 写了\"服装（出图时会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 双人图：image### 写两个人的人数（例如 1boy, 1girl）、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，两个人各自的表情、动作、服装都写进去；要分开写时用 | 分人。\n- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -53,7 +53,7 @@
       "identifier": "duoRules",
       "name": "双人 · 人数、动作归属、负面词和位置",
       "role": "system",
-      "content": "双人画面按以下规则写（单人仍按单人规则）：\n- image### 写总人数，例如 1boy, 1girl 或 2girls；char### / user### 里写不带数字的 boy / girl / other，按该人物的信息填写。不要把人数或 solo 写进人物那一行。人物类别要写，其他已有外观仍由程序补上。\n- 人物之间的动作写在各自那一行：主动拥抱者写 source#hug，被拥抱者写 target#hug；相互拥抱时双方都写 mutual#hug。source# 表示发起，target# 表示承受，mutual# 表示相互；按画面里的真实动作使用，不把普通物件或外观词一律加前缀。指向对方的示例是 source#pointing at another，对方写 target#pointing。必要时用简短英文句子说明谁对谁做什么，保留 # 写法。\n- 拿手机、比耶等属于某个人的动作只写进那个人的那一行，不写进 image###。自拍时在持手机者那一行说明 holding phone, taking selfie，并用英文明确由这个人拿手机；另一人的手势写在另一行。\n- 只针对一个人的额外负面词写在 char negative### / user negative### 里，可用来避免另一人的特征或动作串过来；negative### 只写整张画面的限制。\n- 位置明确时在 char / user 后面空一格写 left、right 或 center（例如 char left###…###），并按画面从左到右排这两行；英文描述、人物顺序、位置一致。位置不明确时不写位置，交给模型安排，不给两个人都写 center。",
+      "content": "双人画面按以下规则写（单人仍按单人规则）：\n- image### 写成分人物的写法：Scene Composition: 整体画面（总人数，例如 1boy, 1girl 或 2girls；构图、场景、光线）; Character 1 Prompt: 第一个人; Character 1 UC: 只针对第一个人的负面; Character 2 Prompt: 第二个人; Character 2 UC: 只针对第二个人的负面。人物那一份写不带数字的 boy / girl / other，按该人物的信息填写；不要把人数或 solo 写进人物那一份。{{char}}的长相「出图 · 最终提示词」那块会加；{{user}}的长相照\"{{user}}入画时的外观\"那块写进{{user}}那一份。\n- 人物之间的动作写在各自那一份：主动拥抱者写 source#hug，被拥抱者写 target#hug；相互拥抱时双方都写 mutual#hug。source# 表示发起，target# 表示承受，mutual# 表示相互；按画面里的真实动作使用，不把普通物件或外观词一律加前缀。指向对方的示例是 source#pointing at another，对方写 target#pointing。必要时用简短英文句子说明谁对谁做什么，保留 # 写法。\n- 拿手机、比耶等属于某个人的动作只写进那个人的那一份，不写进 Scene Composition。自拍时在持手机者那一份说明 holding phone, taking selfie，并用英文明确由这个人拿手机；另一人的手势写在另一份。\n- 只针对一个人的额外负面词写在那个人的 Character N UC 里，可用来避免另一人的特征或动作串过来；negative### 只写整张画面的限制。\n- 按画面从左到右的顺序写 Character 1、Character 2。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -174,6 +174,36 @@
       },
       "triggers": [
         "outfit-locked"
+      ]
+    },
+    {
+      "identifier": "imageUser",
+      "name": "你入画时的外观（双人时才发）",
+      "role": "user",
+      "content": "{{user}}入画时的外观 tags（照抄进 image###；分开写每个人时写进{{user}}那一份）：{{user_appearance}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "duo+has:user_appearance"
+      ]
+    },
+    {
+      "identifier": "imageUserOutfit",
+      "name": "你常穿的衣服（双人时才发）",
+      "role": "user",
+      "content": "{{user}}常穿：{{user_outfit}}（入画时照它写{{user}}的衣服，画面要换装时可以换）",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "duo+has:user_outfit"
       ]
     },
     {
