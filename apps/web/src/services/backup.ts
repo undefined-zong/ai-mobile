@@ -5,7 +5,7 @@ import { forgetSyncForRestore } from '@/services/sync';
  * 整机备份：把本机 IndexedDB 的所有表（角色卡、预设、世界书、聊天、记忆、各项设置、API 与 Key……）
  * 和 localStorage 打成一个文件，换设备时整份导入。
  *
- * 文件是 JSON Lines：第一行是文件头，之后每行一条记录，读的时候按行解析，
+ * 文件是 JSON Lines：第一行是文件头，之后每行一条记录，读的时候按字节流式解析（见 readLines），
  * 不需要把几百 MB 的素材拼成一个大字符串。二进制（图片、语音、Live2D 模型）转成 base64。
  */
 
@@ -84,30 +84,40 @@ function encode(v: unknown, pending: Promise<void>[]): unknown {
   return out;
 }
 
-function decode(v: unknown): unknown {
+/** 大的 base64 在读文件时已经解出来了（见 readLines），行里的 d 是占位符 "\u0000序号" */
+function binary(d: unknown, bins: unknown[]): unknown {
+  return typeof d === 'string' && d.charCodeAt(0) === 0 ? bins[Number(d.slice(1))] : undefined;
+}
+function bytesOf(d: unknown, bins: unknown[]): Uint8Array<ArrayBuffer> {
+  const b = binary(d, bins);
+  return b instanceof Uint8Array ? (b as Uint8Array<ArrayBuffer>) : fromBase64(String(d ?? ''));
+}
+
+function decode(v: unknown, bins: unknown[] = []): unknown {
   if (v === null || typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map(decode);
+  if (Array.isArray(v)) return v.map((x) => decode(x, bins));
   const o = v as Record<string, unknown>;
   switch (o.$$t) {
-    case 'buf': return fromBase64(String(o.d)).buffer;
+    case 'buf': return bytesOf(o.d, bins).buffer;
     case 'view': {
-      const bytes = fromBase64(String(o.d));
+      const bytes = bytesOf(o.d, bins);
       const C = VIEWS[o.c as ViewName] ?? Uint8Array;
       return C === DataView ? new DataView(bytes.buffer) : new (C as typeof Uint8Array)(bytes.buffer);
     }
     case 'blob': {
-      const bytes = fromBase64(String(o.d ?? ''));
+      const b = binary(o.d, bins);
+      const body = b instanceof Blob ? b : bytesOf(o.d, bins);
       const type = String(o.type ?? '');
       return typeof o.name === 'string'
-        ? new File([bytes], o.name, { type, lastModified: Number(o.lastModified) || Date.now() })
-        : new Blob([bytes], { type });
+        ? new File([body], o.name, { type, lastModified: Number(o.lastModified) || Date.now() })
+        : new Blob([body], { type });
     }
     case 'date': return new Date(Number(o.ms));
-    case 'map': return new Map((o.d as unknown[]).map(decode) as [unknown, unknown][]);
-    case 'set': return new Set((o.d as unknown[]).map(decode));
+    case 'map': return new Map((o.d as unknown[]).map((x) => decode(x, bins)) as [unknown, unknown][]);
+    case 'set': return new Set((o.d as unknown[]).map((x) => decode(x, bins)));
   }
   const out: Record<string, unknown> = {};
-  for (const [k, x] of Object.entries(o)) out[k] = decode(x);
+  for (const [k, x] of Object.entries(o)) out[k] = decode(x, bins);
   return out;
 }
 
@@ -167,21 +177,154 @@ export function downloadBlob(blob: Blob, name: string) {
 // 分两遍读文件：第一遍只检查（每行都能解析、条数和文件头一致，防止下载不完整的文件把本机清空），
 // 第二遍边读边分批写。整份解码后一次写入时，带图片语音和 Live2D 的备份会把手机内存撑爆、页面被系统杀掉。
 
-/** 按块读文件、按行给出（大文件也不会拼成一个超长字符串） */
-async function* lines(file: File): AsyncGenerator<string> {
-  const decoder = new TextDecoder();
-  const CHUNK = 4 << 20;
-  let rest = '';
-  for (let pos = 0; pos < file.size; pos += CHUNK) {
-    rest += decoder.decode(await file.slice(pos, pos + CHUNK).arrayBuffer(), { stream: true });
-    const cut = rest.lastIndexOf('\n');
-    if (cut < 0) continue;
-    const done = rest.slice(0, cut);
-    rest = rest.slice(cut + 1);
-    for (const line of done.split('\n')) if (line.trim()) yield line;
+// 一行也可能很大：一个 Live2D 模型的所有贴图在同一条记录里，几十到几百 MB。整行拼成字符串再 JSON.parse 的话，
+// 行字符串、解析出的 base64、解码后的字节同时在内存里，iOS 上页面直接被系统杀掉（Safari「重复出现问题」）。
+// 所以按字节读：{"$$t":…, "d":"<base64>"} 里的 d 超过 BIG 就不进字符串，边读边解码（blob 每攒几 MB 收进 Blob，
+// 数据交给浏览器存，不留在页面内存里），行里只留占位符，剩下的小 JSON 再 JSON.parse。
+
+const CHUNK = 4 << 20;
+/** base64 超过这么长就边读边解码 */
+const BIG = 256 << 10;
+/** blob 解出来的字节攒到这么多就收进 Blob */
+const FOLD = 8 << 20;
+const ENC = new TextEncoder();
+const ASCII = new TextDecoder();
+const TAG = ENC.encode('{"$$t":"');
+const KEY = ENC.encode('"d":"');
+const B64 = new Uint8Array(256);
+for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=') B64[c.charCodeAt(0)] = 1;
+
+function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
+
+/** 一个大 base64 值：一段段喂进来，按 4 个字符对齐解码 */
+class Binary {
+  private carry: Uint8Array = new Uint8Array(0);
+  private parts: Uint8Array<ArrayBuffer>[] = [];
+  private blobs: Blob[] = [];
+  private held = 0;
+  constructor(private readonly blob: boolean, private readonly keep: boolean) {}
+  feed(ascii: Uint8Array) {
+    if (!this.keep || !ascii.length) return;
+    const all = this.carry.length ? concat([this.carry, ascii]) : ascii;
+    const n = all.length - (all.length % 4);
+    this.carry = all.slice(n);
+    if (n) this.push(fromBase64(ASCII.decode(all.subarray(0, n))));
   }
-  rest += decoder.decode();
-  if (rest.trim()) yield rest;
+  private push(bytes: Uint8Array<ArrayBuffer>) {
+    this.parts.push(bytes);
+    this.held += bytes.length;
+    if (this.blob && this.held >= FOLD) { this.blobs.push(new Blob(this.parts)); this.parts = []; this.held = 0; }
+  }
+  end(): Blob | Uint8Array<ArrayBuffer> | null {
+    if (!this.keep) return null;
+    if (this.carry.length) this.push(fromBase64(ASCII.decode(this.carry)));
+    return this.blob ? new Blob([...this.blobs, ...this.parts]) : concat(this.parts);
+  }
+}
+
+interface Line {
+  /** 去掉大 base64 后的 JSON */
+  text: string;
+  /** 占位符 "\u0000序号" 对应的数据（keep 为 false 时是 null） */
+  bins: unknown[];
+  /** 这一行在文件里的字节数 */
+  size: number;
+}
+
+/** 按块读文件、按行给出。keep 为 false（第一遍检查）时大的 base64 只看字符、不解码 */
+async function* readLines(file: File, keep: boolean): AsyncGenerator<Line> {
+  const utf8 = new TextDecoder();
+  let text: Uint8Array[] = [];
+  let bins: unknown[] = [];
+  let start = 0;
+  let tagM = 0;
+  let keyM = 0;
+  /** 在 {"$$t":"… 对象里（之后没再遇到 { 或 }） */
+  let tagged = false;
+  /** 刚匹配完 TAG：1 等类型的第一个字母，2 等第二个 */
+  let kind = 0;
+  let firstLetter = 0;
+  let isBlob = false;
+  /** 正在读 d 的值，还不知道多长 */
+  let val: Uint8Array[] | null = null;
+  let valLen = 0;
+  /** d 的值超过 BIG：边读边解码 */
+  let bin: Binary | null = null;
+  const finish = (end: number): Line => {
+    const out = { text: utf8.decode(text.length === 1 ? text[0] : concat(text)), bins, size: end - start };
+    text = []; bins = []; start = end + 1;
+    tagM = keyM = kind = 0; tagged = false;
+    return out;
+  };
+
+  for (let pos = 0; pos < file.size; pos += CHUNK) {
+    const buf = new Uint8Array(await file.slice(pos, pos + CHUNK).arrayBuffer());
+    let i = 0;
+    /** buf 里从 seg 起的字节还没收进 text */
+    let seg = 0;
+    while (i < buf.length) {
+      if (val || bin) {
+        let j = i;
+        while (j < buf.length && B64[buf[j]!]) j++;
+        const run = buf.subarray(i, j);
+        if (!bin && valLen + run.length >= BIG) {
+          bin = new Binary(isBlob, keep);
+          for (const p of val!) bin.feed(p);
+          val = null;
+        }
+        if (j === buf.length) {
+          if (bin) bin.feed(run);
+          else { val!.push(run.slice()); valLen += run.length; }
+          i = seg = j;
+          break;
+        }
+        if (bin) {
+          if (buf[j] !== 34) throw new Error('备份文件损坏（二进制数据不完整），请重新导出或重新下载');
+          bin.feed(run);
+          bins.push(bin.end());
+          text.push(ENC.encode(`\\u0000${bins.length - 1}`));
+          bin = null;
+          seg = j;
+        } else {
+          // 不长（或不是 base64）：照原样留在 JSON 里
+          text.push(...val!);
+          val = null;
+        }
+        valLen = 0;
+        i = j;
+        continue;
+      }
+      for (; i < buf.length; i++) {
+        const b = buf[i]!;
+        if (b === 10) {
+          text.push(buf.subarray(seg, i));
+          seg = i + 1;
+          const line = finish(pos + i);
+          if (line.text.trim()) yield line;
+          continue;
+        }
+        if (kind === 1) { firstLetter = b; kind = 2; } else if (kind === 2) { isBlob = firstLetter === 98 && b === 108; kind = 0; }
+        if (b === 123 || b === 125) tagged = false;
+        tagM = b === TAG[tagM] ? tagM + 1 : b === TAG[0] ? 1 : 0;
+        if (tagM === TAG.length) { tagM = 0; tagged = true; kind = 1; }
+        keyM = b === KEY[keyM] ? keyM + 1 : b === KEY[0] ? 1 : 0;
+        if (keyM === KEY.length) {
+          keyM = 0;
+          if (tagged) { i++; text.push(buf.slice(seg, i)); seg = i; val = []; valLen = 0; break; }
+        }
+      }
+    }
+    if (seg < buf.length) text.push(buf.slice(seg));
+  }
+  // 文件在值中间断了：原样留着，JSON.parse 会报损坏
+  if (val) text.push(...val);
+  const line = finish(file.size);
+  if (line.text.trim()) yield line;
 }
 
 /** 第一遍：检查整个文件，返回文件头（不解码、不留数据） */
@@ -190,10 +333,10 @@ export async function inspectBackup(file: File): Promise<BackupHeader> {
   const seen: Partial<Record<string, number>> = {};
   let local = 0;
   let n = 0;
-  for await (const line of lines(file)) {
+  for await (const line of readLines(file, false)) {
     n++;
     let row: unknown;
-    try { row = JSON.parse(line); } catch { throw new Error(`备份文件第 ${n} 行损坏，可能没下载完整`); }
+    try { row = JSON.parse(line.text); } catch { throw new Error(`备份文件第 ${n} 行损坏，可能没下载完整`); }
     if (!header) {
       const h = row as Partial<BackupHeader>;
       if (h?.format !== FORMAT) throw new Error('这不是本 App 导出的备份文件');
@@ -240,16 +383,16 @@ export async function restoreBackup(file: File, header: BackupHeader, progress?:
     batch = [];
     bytes = 0;
   };
-  for await (const line of lines(file)) {
+  for await (const line of readLines(file, true)) {
     if (first) { first = false; continue; }
-    const r = JSON.parse(line) as Row;
+    const r = JSON.parse(line.text) as Row;
     if ('ls' in r) { if (typeof r.v === 'string') local.push([r.ls, r.v]); continue; }
     if (!include.has(storeOf(r.s)) || (r.s === 'secrets' && DEVICE_SECRETS.has(String(r.k)))) continue;
     if ((r.s as string) === 'messages') {
-      const list = decode(r.v);
+      const list = decode(r.v, line.bins);
       if (Array.isArray(list)) for (const m of list as { id?: unknown }[]) if (m && typeof m.id === 'string') batch.push({ store: 'chatMessages', key: msgKey(String(r.k), m.id), value: m });
-    } else batch.push({ store: r.s, key: String(r.k), value: decode(r.v) });
-    bytes += line.length;
+    } else batch.push({ store: r.s, key: String(r.k), value: decode(r.v, line.bins) });
+    bytes += line.size;
     if (bytes > 4 << 20 || batch.length >= 300) await commit();
   }
   await commit();
