@@ -1,4 +1,4 @@
-import { STORE_NAMES, beginRestore, flushAll, getEntries, msgKey, restoreRows, type StoreName } from '@/db/idb';
+import { STORE_NAMES, beginRestore, flushAll, getKeys, getMany, msgKey, restoreRows, type StoreName } from '@/db/idb';
 import { forgetSyncForRestore } from '@/services/sync';
 
 /**
@@ -61,26 +61,31 @@ const VIEWS = {
 } as const;
 type ViewName = keyof typeof VIEWS;
 
-/** 把 IndexedDB 里的值变成能 JSON 化的样子；Blob 要异步读，先占位，读完填进去 */
-function encode(v: unknown, pending: Promise<void>[]): unknown {
+type Bin = Blob | Uint8Array;
+/** 导出时二进制先在 JSON 里占位（d 的值），写文件时再在这个位置一段段写 base64 */
+const HOLE = `@@bin-${Math.random().toString(36).slice(2)}-`;
+const hole = (bins: Bin[], b: Bin) => `${HOLE}${bins.push(b) - 1}`;
+
+/** 把 IndexedDB 里的值变成能 JSON 化的样子；二进制收进 bins，留占位符（d 必须是对象的最后一个键，导入时按这个顺序找） */
+function encode(v: unknown, bins: Bin[]): unknown {
   if (v === null || typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map((x) => encode(x, pending));
+  if (Array.isArray(v)) return v.map((x) => encode(x, bins));
   if (v instanceof Blob) {
     const o: Record<string, unknown> = { $$t: 'blob', type: v.type };
     if (v instanceof File) { o.name = v.name; o.lastModified = v.lastModified; }
-    pending.push(v.arrayBuffer().then((b) => { o.d = toBase64(new Uint8Array(b)); }));
+    o.d = hole(bins, v);
     return o;
   }
-  if (v instanceof ArrayBuffer) return { $$t: 'buf', d: toBase64(new Uint8Array(v)) };
+  if (v instanceof ArrayBuffer) return { $$t: 'buf', d: hole(bins, new Uint8Array(v)) };
   if (ArrayBuffer.isView(v)) {
     const name = v.constructor.name in VIEWS ? v.constructor.name : 'Uint8Array';
-    return { $$t: 'view', c: name, d: toBase64(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)) };
+    return { $$t: 'view', c: name, d: hole(bins, new Uint8Array(v.buffer, v.byteOffset, v.byteLength)) };
   }
   if (v instanceof Date) return { $$t: 'date', ms: v.getTime() };
-  if (v instanceof Map) return { $$t: 'map', d: [...v].map((e) => encode(e, pending)) };
-  if (v instanceof Set) return { $$t: 'set', d: [...v].map((e) => encode(e, pending)) };
+  if (v instanceof Map) return { $$t: 'map', d: [...v].map((e) => encode(e, bins)) };
+  if (v instanceof Set) return { $$t: 'set', d: [...v].map((e) => encode(e, bins)) };
   const out: Record<string, unknown> = {};
-  for (const [k, x] of Object.entries(v)) out[k] = encode(x, pending);
+  for (const [k, x] of Object.entries(v)) out[k] = encode(x, bins);
   return out;
 }
 
@@ -122,6 +127,70 @@ function decode(v: unknown, bins: unknown[] = []): unknown {
 }
 
 // —— 导出 ——
+// 以前整张表读出来、每个文件整段 arrayBuffer → base64 → 整行 JSON.stringify，最后所有行的字符串一起拼 Blob：
+// 带 Live2D（一个模型几百 MB）时同一时刻页面里有好几份完整数据，iOS 直接把页面杀掉（闪退）。
+// 现在一条条读，二进制每次切 3 MB 转 base64，写出的字符串攒到几 MB 就收进 Blob（交给浏览器存，不留在页面内存里）。
+
+/** 每次转 base64 的字节数：3 的倍数，分段转出来拼起来和整段转的一样 */
+const SLICE = 3 << 20;
+/** 导出的字符串攒到这么长就收进 Blob */
+const SPILL = 4 << 20;
+
+class Sink {
+  private parts: string[] = [];
+  private held = 0;
+  private blobs: Blob[] = [];
+  push(s: string) {
+    this.parts.push(s);
+    this.held += s.length;
+    if (this.held >= SPILL) this.spill();
+  }
+  private spill() {
+    if (!this.parts.length) return;
+    this.blobs.push(new Blob(this.parts));
+    this.parts = [];
+    this.held = 0;
+  }
+  end(): Blob[] {
+    this.spill();
+    return this.blobs;
+  }
+}
+
+async function writeBase64(sink: Sink, bin: Bin) {
+  const size = bin instanceof Blob ? bin.size : bin.length;
+  for (let i = 0; i < size; i += SLICE) {
+    const bytes = bin instanceof Blob ? new Uint8Array(await bin.slice(i, i + SLICE).arrayBuffer()) : bin.subarray(i, i + SLICE);
+    sink.push(toBase64(bytes));
+  }
+}
+
+/** 写一行：占位符的地方换成流式写出的 base64 */
+async function writeRow(sink: Sink, row: Row, bins: Bin[]) {
+  const json = JSON.stringify(row);
+  let at = 0;
+  if (bins.length) {
+    for (const m of json.matchAll(new RegExp(`"${HOLE}(\\d+)"`, 'g'))) {
+      sink.push(json.slice(at, m.index));
+      sink.push('"');
+      await writeBase64(sink, bins[Number(m[1])]!);
+      sink.push('"');
+      at = m.index + m[0].length;
+    }
+  }
+  sink.push(`${json.slice(at)}\n`);
+}
+
+/** 一批批读表（素材表一次一条：值可能是几百 MB 的模型，不一次全读进内存） */
+async function* storeRows(s: StoreName): AsyncGenerator<{ key: string; value: unknown }> {
+  const keys = await getKeys(s);
+  const step = MEDIA_STORES.includes(s) || s === 'books' ? 1 : 200;
+  for (let i = 0; i < keys.length; i += step) {
+    const part = keys.slice(i, i + step);
+    const values = await getMany<unknown>(s, part);
+    for (let j = 0; j < part.length; j++) if (values[j] !== undefined) yield { key: part[j]!, value: values[j] };
+  }
+}
 
 function localEntries(): [string, string][] {
   try {
@@ -140,27 +209,25 @@ function localEntries(): [string, string][] {
 export async function exportBackup(opts: BackupOptions, progress?: (text: string) => void): Promise<{ blob: Blob; header: BackupHeader }> {
   await flushAll();
   const stores = STORE_NAMES.filter((s) => !LEDGER_STORES.has(s) && (opts.media || !MEDIA_STORES.includes(s)) && (opts.secrets || s !== 'secrets'));
-  const parts: string[] = [];
+  const sink = new Sink();
   const counts: Partial<Record<StoreName, number>> = {};
   for (const s of stores) {
     progress?.(`正在读取 ${s}…`);
-    const rows = await getEntries<unknown>(s);
     let n = 0;
-    for (const { key, value } of rows) {
+    for await (const { key, value } of storeRows(s)) {
       if (s === 'secrets' && DEVICE_SECRETS.has(key)) continue;
-      const pending: Promise<void>[] = [];
-      const v = encode(value, pending);
-      if (pending.length) await Promise.all(pending);
-      parts.push(`${JSON.stringify({ s, k: key, v } satisfies Row)}\n`);
+      const bins: Bin[] = [];
+      const v = encode(value, bins);
+      await writeRow(sink, { s, k: key, v }, bins);
       n++;
+      if (bins.length) progress?.(`正在读取 ${s}（${n}）…`);
     }
     counts[s] = n;
   }
   const ls = localEntries();
-  for (const [k, v] of ls) parts.push(`${JSON.stringify({ ls: k, v } satisfies Row)}\n`);
+  for (const [k, v] of ls) sink.push(`${JSON.stringify({ ls: k, v } satisfies Row)}\n`);
   const header: BackupHeader = { format: FORMAT, version: VERSION, exportedAt: Date.now(), stores, counts, localStorage: ls.length };
-  parts.unshift(`${JSON.stringify(header)}\n`);
-  return { blob: new Blob(parts, { type: 'application/x-ndjson' }), header };
+  return { blob: new Blob([`${JSON.stringify(header)}\n`, ...sink.end()], { type: 'application/x-ndjson' }), header };
 }
 
 export function downloadBlob(blob: Blob, name: string) {
