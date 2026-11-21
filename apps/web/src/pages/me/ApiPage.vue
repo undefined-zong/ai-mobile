@@ -415,7 +415,7 @@ async function runReindex() {
           </div>
         </template>
         <template v-if="draft.role === 'image' && draft.imageStyle">
-          <p class="text-[12px] text-ink-3 mt-3 mb-0">画风、质量词、负面词写在生图预设的「最终提示词」「最终负面词」块里（立绘写在立绘预设的「画法」「负面」里），这里不再加任何词。</p>
+          <p class="text-[12px] text-ink-3 mt-3 mb-0">这里不往提示词里加任何词；要加画风词、负面词，写在生图预设的「出图 · 最终提示词」「出图 · 最终负面词」块里（立绘写在立绘预设的「画法」「负面」里）。</p>
           <div class="flex items-center justify-between gap-3 mt-3">
             <div>
               <div class="text-[14px]">服装参考</div>

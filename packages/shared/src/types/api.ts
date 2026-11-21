@@ -91,14 +91,6 @@ export function apiKeyId(role: AgentRole, backup = false): string {
 
 /** 生图风格（生图智能体用）：固定的前后缀和负面词、采样器，同 SleepTogether / SillyTavern 的生图设置 */
 export interface ImageStyle {
-  /**
-   * 以前的固定前缀、后缀、负面词和"追加官网的质量词"：已经搬进生图预设的「最终提示词」「最终负面词」和立绘预设的「画法」「负面」，
-   * 出图时不再用；留着只为了升级时把你填的搬过去
-   */
-  prefix?: string;
-  suffix?: string;
-  negative?: string;
-  naiQuality?: boolean;
   sampler?: string;
   /** NovelAI 的 noise_schedule：native / karras / exponential / polyexponential */
   schedule?: string;

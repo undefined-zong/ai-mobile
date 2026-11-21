@@ -27,7 +27,6 @@ import {
   type PresetUse,
   type PresetUseId,
   type PromptBlock,
-  type ImageStyle,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -35,7 +34,7 @@ import { autoSave, getAll, getOne, write } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
 import { lorebooks as demoLorebooks } from '@/mock/library';
 import { uid } from '@/utils/id';
-import { legacyStyle, moveImageIntoPreset, moveStyleIntoSprite } from './imagePresetMigration';
+import { moveCharNegativeIntoSprite, moveImageIntoPreset } from './imagePresetMigration';
 
 /**
  * App 自带的预设：src/presets/ 里的预设文件（App 自己的格式）。往这个文件夹里加一个 .json 就多一个自带预设。
@@ -907,8 +906,6 @@ export const useLibraryStore = defineStore('library', () => {
     const migrated: Preset[] = [];
     if (!upgradesDone.has(imageUpgrade)) {
       upgradesDone.add(imageUpgrade);
-      const routes = await getOne<{ role?: string; api?: { channel?: string; model?: string } | null; imageStyle?: ImageStyle }[]>('settings', 'apiFeatures');
-      const style = legacyStyle(Array.isArray(routes) ? routes.find((r) => r?.role === 'image') : undefined);
       const freshIds = new Set(fresh.map((s) => s.preset.id));
       const seedFor = (use: PresetUseId) => SEEDS.find((s) => s.defaultFor.includes(use) && s.preset.category === 'image')?.preset;
       const imageSeed = SEEDS.find((s) => s.file === 'image.json')?.preset;
@@ -918,8 +915,8 @@ export const useLibraryStore = defineStore('library', () => {
           const own = SEEDS.find((s) => s.file === p.seedFile)?.preset;
           const served = [...new Set(PRESET_USES.filter((u) => presetForUse(u.id)?.id === p.id).map((u) => seedFor(u.id)).filter((x): x is Preset => !!x))];
           const primary = own ?? served[0] ?? imageSeed;
-          if (primary && moveImageIntoPreset(p, primary, served.filter((x) => x !== primary), style)) migrated.push(p);
-        } else if (p.category === 'sprite' && moveStyleIntoSprite(p, style)) migrated.push(p);
+          if (primary && moveImageIntoPreset(p, primary, served.filter((x) => x !== primary))) migrated.push(p);
+        } else if (p.category === 'sprite' && moveCharNegativeIntoSprite(p)) migrated.push(p);
       }
       for (const p of migrated) p.updatedAt = Date.now();
     }

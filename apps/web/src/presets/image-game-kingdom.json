@@ -275,7 +275,7 @@
       "identifier": "imageFinal",
       "name": "出图 · 最终提示词（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "content": "{{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -292,7 +292,7 @@
       "identifier": "imageFinalNoHumans",
       "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image}}",
+      "content": "{{image}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -307,7 +307,7 @@
       "identifier": "imageFinalBackground",
       "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, no humans, scenery, {{image}}",
+      "content": "no humans, scenery, {{image}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -322,7 +322,7 @@
       "identifier": "imageNegative",
       "name": "出图 · 最终负面词（不发给模型）",
       "role": "system",
-      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, {{char_negative}}, {{negative}}",
+      "content": "{{char_negative}}, {{negative}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -340,7 +340,7 @@
       "identifier": "imageNegativeBackground",
       "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
       "role": "system",
-      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, 1girl, 1boy, people, {{negative}}",
+      "content": "1girl, 1boy, people, {{negative}}",
       "marker": false,
       "enabled": true,
       "injection": {

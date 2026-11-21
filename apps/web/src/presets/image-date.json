@@ -26,7 +26,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），「出图 · 最终提示词」那块会加上；{{user}}入画时照抄{{user}}的外观 tags：{{user_appearance}}。\n- 写了\"服装（出图时会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类「出图 · 最终提示词」那块会加）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 双人图：image### 写两个人的人数（例如 1boy, 1girl）、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，两个人各自的表情、动作、服装都写进去；要分开写时用 | 分人。\n- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。",
+      "content": "规则：\n- tags 顺序：人数（单人 1girl / 1boy；两个人按两人的性别写 1girl, 1boy 这类）→ 构图与镜头（pov, upper body, cowboy shot, from side…）→ 表情与动作 → 场景与背景 → 光线、天气、时段 → 氛围。\n- 不要写{{char}}的长相（发色、瞳色、发型、体型），「出图 · 最终提示词」那块会加上；{{user}}入画时照抄{{user}}的外观 tags：{{user_appearance}}。\n- 写了\"服装（出图时会加…）\"时不要写{{char}}的任何衣服；没写时按\"{{char}}今天穿\"写衣服的 tags。\n- 不要写画师名和质量词（masterpiece、best quality 之类）。\n- 单人图：画面里只画{{char}}一个人（solo），{{user}}最多露出手、手臂或者肩膀（pov, pov hands, holding hands），不画脸。\n- 双人图：image### 写两个人的人数（例如 1boy, 1girl）、整体构图（第三人称镜头：from side, from behind, wide shot…）、场景和光线，两个人各自的表情、动作、服装都写进去；要分开写时用 | 分人。\n- 画幅：写了\"画幅\"就照它构图（程序按它出图）；没写时按竖图构图（在手机上竖着看）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -450,7 +450,7 @@
       "identifier": "imageFinal",
       "name": "出图 · 最终提示词（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "content": "{{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -467,7 +467,7 @@
       "identifier": "imageFinalNoHumans",
       "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image}}",
+      "content": "{{image}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -482,7 +482,7 @@
       "identifier": "imageFinalBackground",
       "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, no humans, scenery, {{image}}",
+      "content": "no humans, scenery, {{image}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -497,7 +497,7 @@
       "identifier": "imageNegative",
       "name": "出图 · 最终负面词（不发给模型）",
       "role": "system",
-      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, {{char_negative}}, {{negative}}",
+      "content": "{{char_negative}}, {{negative}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -515,7 +515,7 @@
       "identifier": "imageNegativeBackground",
       "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
       "role": "system",
-      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, 1girl, 1boy, people, {{negative}}",
+      "content": "1girl, 1boy, people, {{negative}}",
       "marker": false,
       "enabled": true,
       "injection": {

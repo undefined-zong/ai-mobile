@@ -26,7 +26,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（no humans / 1girl / 1boy…）→ 构图与镜头（from above, close-up, still life, selfie, pov…）→ 主体（食物、物件、人物的表情和动作）→ 场景与背景 → 光线、时段 → 氛围。\n- 食物、物件、风景这类画面用 no humans；食物写清楚是什么、装在什么里、冒不冒热气（food focus, steam…）。\n- 吃的、东西要画对：Danbooru 上有的直接用那个 tag；冷门的（地方小吃、家常菜）写最接近的 tag，再用 tags 写出外形（皮的厚薄透明、形状褶边、汤色、配料、切法……），\"要画的画面\"和正文里写到的细节都画进去；容易被画成别的东西的（馄饨画成饺子、肠粉画成春卷），在 negative### 里写那个别的东西。\n- 画面描述很短时，补上合适的构图、背景和光线，让画面完整。\n- 不要写画师名和质量词（masterpiece、best quality 之类「出图 · 最终提示词」那块会加）。\n- 画幅按内容选（写在 size### 里）：俯拍的一桌菜、一碗面用 square，竖着拍的街景、人物用 portrait，横着拍的风景用 landscape。",
+      "content": "规则：\n- tags 顺序：人数（no humans / 1girl / 1boy…）→ 构图与镜头（from above, close-up, still life, selfie, pov…）→ 主体（食物、物件、人物的表情和动作）→ 场景与背景 → 光线、时段 → 氛围。\n- 食物、物件、风景这类画面用 no humans；食物写清楚是什么、装在什么里、冒不冒热气（food focus, steam…）。\n- 吃的、东西要画对：Danbooru 上有的直接用那个 tag；冷门的（地方小吃、家常菜）写最接近的 tag，再用 tags 写出外形（皮的厚薄透明、形状褶边、汤色、配料、切法……），\"要画的画面\"和正文里写到的细节都画进去；容易被画成别的东西的（馄饨画成饺子、肠粉画成春卷），在 negative### 里写那个别的东西。\n- 画面描述很短时，补上合适的构图、背景和光线，让画面完整。\n- 不要写画师名和质量词（masterpiece、best quality 之类）。\n- 画幅按内容选（写在 size### 里）：俯拍的一桌菜、一碗面用 square，竖着拍的街景、人物用 portrait，横着拍的风景用 landscape。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -272,7 +272,7 @@
       "identifier": "imageFinal",
       "name": "出图 · 最终提示词（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "content": "{{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -289,7 +289,7 @@
       "identifier": "imageFinalNoHumans",
       "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, {{image}}",
+      "content": "{{image}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -304,7 +304,7 @@
       "identifier": "imageFinalBackground",
       "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
       "role": "system",
-      "content": "best quality, amazing quality, very aesthetic, absurdres, no humans, scenery, {{image}}",
+      "content": "no humans, scenery, {{image}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -319,7 +319,7 @@
       "identifier": "imageNegative",
       "name": "出图 · 最终负面词（不发给模型）",
       "role": "system",
-      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, {{char_negative}}, {{negative}}",
+      "content": "{{char_negative}}, {{negative}}",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -337,7 +337,7 @@
       "identifier": "imageNegativeBackground",
       "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
       "role": "system",
-      "content": "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, 1girl, 1boy, people, {{negative}}",
+      "content": "1girl, 1boy, people, {{negative}}",
       "marker": false,
       "enabled": true,
       "injection": {
