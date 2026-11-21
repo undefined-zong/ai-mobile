@@ -192,6 +192,7 @@ size###{{ e.trace.parsed.size }}###</template><template v-for="(o, i) in e.trace
                 <div class="kv"><span>拼法</span><span>{{ KIND[e.trace.compose.kind] ?? e.trace.compose.kind }}（image-prompt:{{ e.trace.compose.kind }}）</span></div>
                 <div class="kv"><span>正向用的块</span><span>{{ e.trace.compose.promptBlocks.join('、') || '没有 image-prompt 块：用 image### 原样' }}</span></div>
                 <div class="kv"><span>负面用的块</span><span>{{ e.trace.compose.negativeBlocks.join('、') || '没有 image-negative 块：用 negative### 原样' }}</span></div>
+                <div v-for="(names, i) in e.trace.compose.charBlocks ?? []" :key="`c${i}`" class="kv"><span>第 {{ i + 1 }} 个人</span><span>{{ names.join('、') || '没有 image-char 块：用模型写的原样' }}</span></div>
                 <div class="kv"><span>画幅</span><span>{{ e.trace.request.size }}（{{ SIZE_FROM[e.trace.compose.sizeFrom] }}）</span></div>
                 <div class="kv"><span>你立绘的 Vibe</span><span>{{ e.trace.request.vibes ? `带了 ${e.trace.request.vibes} 张` : '没带' }}</span></div>
               </section>

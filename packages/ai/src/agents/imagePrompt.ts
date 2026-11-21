@@ -175,15 +175,18 @@ export function buildImagePromptReport(input: ImagePromptInput, preset: TaskPres
   });
 }
 
-/** 预设里触发条件对得上这个（再加上这次的类型，可以写成 image-prompt:scene+duo）的块（开着的） */
-function presetBlocks(preset: Pick<TaskPreset, 'blocks'> | null | undefined, trigger: string, input: ImagePromptInput): PromptBlock[] {
-  const types = new Set([trigger, ...imagePromptTypes(input)]);
+/**
+ * 预设里触发条件对得上这个（再加上这次的类型，可以写成 image-prompt:scene+duo）的块（开着的）。
+ * 出图时多出来的宏（{{image}}、{{char_prompt}}……）也有 has:<名字> / no:<名字>
+ */
+function presetBlocks(preset: Pick<TaskPreset, 'blocks'> | null | undefined, trigger: string, input: ImagePromptInput, extra: Record<string, string> = {}): PromptBlock[] {
+  const types = new Set([trigger, ...imagePromptTypes(input), ...Object.entries(extra).map(([k, v]) => `${v.trim() ? 'has' : 'no'}:${k}`)]);
   return (preset?.blocks ?? []).filter((b) => b.enabled && !b.marker && b.triggers?.some((t) => t.split('+')[0]!.trim() === trigger && triggerMatches([t], types)));
 }
 
 /** 这些块的宏换成这次的数据后用逗号接起来；一块都没有时为 null */
 function presetText(preset: Pick<TaskPreset, 'blocks'> | null | undefined, trigger: string, input: ImagePromptInput, extra: Record<string, string> = {}): string | null {
-  const blocks = presetBlocks(preset, trigger, input);
+  const blocks = presetBlocks(preset, trigger, input, extra);
   if (!blocks.length) return null;
   const ctx = macroContext(input, extra);
   return blocks.map((b) => substituteMacros(withRecentCount(b.content, input.recent), ctx).trim()).filter(Boolean).join(', ');
@@ -235,10 +238,50 @@ function sections(text: string): { name: string; body: string }[] {
   });
 }
 
+/**
+ * image### 里 NovelAI 网页版那种分人物的写法：
+ *   Scene Composition: 整体画面; Character 1 Prompt: 第一个人; Character 1 UC: 只针对第一个人的负面; Character 2 Prompt: …
+ * 也认 Base Prompt / Base Caption（整体画面）、Scene UC / Base UC / Undesired Content（整体的负面）、Character N（不写 Prompt）、
+ * Character N Undesired Content；冒号中英文都行，段和段之间用分号或换行。没有这些标签时为 null
+ */
+const LABEL_RE = /(scene\s*composition|base\s*(?:prompt|caption)|scene\s*uc|base\s*uc|undesired\s*content|character\s*(\d+)(?:\s*(prompt|uc|undesired\s*content))?)\s*[:：]/gi;
+function labeledParts(body: string): { base: string; negative: string; people: { tags: string; negative: string }[] } | null {
+  const heads = [...body.matchAll(LABEL_RE)];
+  if (!heads.length) return null;
+  const strip = (t: string) => t.replace(/^[\s;；]+|[\s;；]+$/g, '');
+  let base = strip(body.slice(0, heads[0]!.index ?? 0));
+  let negative = '';
+  const people = new Map<number, { tags: string; negative: string }>();
+  heads.forEach((m, i) => {
+    const value = strip(body.slice((m.index ?? 0) + m[0].length, heads[i + 1]?.index ?? body.length));
+    const label = m[1]!.toLowerCase();
+    if (m[2]) {
+      const n = Number(m[2]);
+      const who = people.get(n) ?? { tags: '', negative: '' };
+      if (m[3] && /uc|undesired/i.test(m[3])) who.negative = [who.negative, value].filter(Boolean).join(', ');
+      else who.tags = [who.tags, value].filter(Boolean).join(', ');
+      people.set(n, who);
+    } else if (/uc|undesired/.test(label)) negative = [negative, value].filter(Boolean).join(', ');
+    else base = [base, value].filter(Boolean).join(', ');
+  });
+  return { base, negative, people: [...people.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v) };
+}
+
 /** 读模型的输出（image###tags###，另外认 negative###、size###）；没有 image### 或者里面是空的时为 null（让模型重写） */
 export function parseImagePrompt(text: string): ImagePromptOutput | null {
   const list = sections(text);
   const body = (name: string) => list.filter((x) => x.name === name).map((x) => x.body).join(', ');
+  // NovelAI 网页版那种 Scene Composition / Character N Prompt / Character N UC 的写法
+  const labeled = labeledParts(body('image'));
+  if (labeled) {
+    const tags = cleanTags(labeled.base);
+    if (!tags) return null;
+    const size = list.find((x) => x.name === 'size')?.body.toLowerCase();
+    const out: ImagePromptOutput = { caption: '', tags, negative: cleanTags([labeled.negative, body('negative')].filter(Boolean).join(', ')), ...(size && SIZES.has(size) ? { size: size as PromptSize } : {}) };
+    const others = labeled.people.map((p) => ({ tags: cleanTags(p.tags), negative: cleanTags(p.negative) })).filter((o) => o.tags);
+    if (others.length) out.others = others;
+    return out;
+  }
   // NovelAI 的 | 写法：第一段是整体画面，后面每段一个人；负面 tags 按同样的顺序
   const [base = '', ...people] = body('image').split(IMAGE_PROMPT_PERSON_SEPARATOR);
   const tags = cleanTags(base);
@@ -274,8 +317,10 @@ export function composeKind(out: ImagePromptOutput, input: ImagePromptInput): st
  * - 正向：触发条件写了 image-prompt:<拼法> 的块；预设里没有这类块、或者拼出来是空的，就是 image### 原样；
  * - 负面：触发条件写了 image-negative:<拼法> 的块；预设里没有这类块时是 negative### 原样；
  * - 画幅：场景定的 → 模型写的 size### → 触发条件写了 image-size:<拼法> 的块 → portrait；
- * - image### 用 | 分了人：后面每段原样做 NovelAI V4 的人物提示词，负面是 negative### 里同一个位置的那段。
- * 拼的时候能用的宏：发给模型时的那些，加上 {{image}}（image### 整段）、{{image_count}}（里面的人数 tags）、{{image_tags}}（除了人数的）、{{negative}}（negative###）
+ * - 分了人（image### 里用 | 或者 Character N Prompt 写的）：第 N 个人按触发条件写了 image-char:<N> 的块拼、负面按 image-char-negative:<N> 的块拼
+ *   （块里用 {{char_prompt}} {{char_uc}} 是模型给这个人写的）；没有这样的块就是模型写的原样。
+ * 拼的时候能用的宏：发给模型时的那些，加上 {{image}}（image### 整体那段）、{{image_count}}（里面的人数 tags）、{{image_tags}}（除了人数的）、
+ * {{negative}}（整体的负面）、{{image_chars}}（分了几个人），这些也有 has: / no:
  */
 export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, preset?: Pick<TaskPreset, 'blocks'> | null, seed?: number): ImageRequest {
   return composeImageRequest(out, input, preset, seed).request;
@@ -288,25 +333,35 @@ export interface ImageCompose {
   promptBlocks: string[];
   negativeBlocks: string[];
   sizeFrom: 'scene' | 'model' | 'preset' | 'default';
+  /** 每个人用到的块（image-char:<N> / image-char-negative:<N>）；没有时是空的（用的是模型写的原样） */
+  charBlocks?: string[][];
 }
 
 /** 同 toImageRequest，另外给出是怎么拼的 */
 export function composeImageRequest(out: ImagePromptOutput, input: ImagePromptInput, preset?: Pick<TaskPreset, 'blocks'> | null, seed?: number): { request: ImageRequest; compose: ImageCompose } {
   const kind = composeKind(out, input);
   const { lead, rest } = leadCountTags(out.tags);
-  const extra = { image: out.tags, image_count: lead, image_tags: rest, negative: out.negative };
+  const others = out.others ?? [];
+  const extra = { image: out.tags, image_count: lead, image_tags: rest, negative: out.negative, image_chars: others.length ? String(others.length) : '' };
   const prompt = joinTags(presetText(preset, `image-prompt:${kind}`, input, extra) ?? '') || out.tags;
   const negative = presetHas(preset, 'image-negative:') ? joinTags(presetText(preset, `image-negative:${kind}`, input, extra) ?? '') : out.negative;
   const presetSize = presetText(preset, `image-size:${kind}`, input, extra)?.split(',').map((s) => s.trim().toLowerCase()).find((s) => SIZES.has(s));
   const size: ImageSize = input.size ?? out.size ?? (presetSize as PromptSize | undefined) ?? 'portrait';
-  const characters: ImageCharacter[] = (out.others ?? []).map((o) => ({ prompt: o.tags, negative: o.negative }));
+  // 每个人：预设里有第 N 个人的块就按块拼，没有就是模型写的原样
+  const charExtra = (o: { tags: string; negative: string }) => ({ ...extra, char_prompt: o.tags, char_uc: o.negative });
+  const characters: ImageCharacter[] = others.map((o, i) => {
+    const p = presetText(preset, `image-char:${i + 1}`, input, charExtra(o));
+    const n = presetText(preset, `image-char-negative:${i + 1}`, input, charExtra(o));
+    return { prompt: p === null ? o.tags : joinTags(p), negative: n === null ? o.negative : joinTags(n) };
+  });
   return {
     request: { prompt, negative, size, seed, ...(characters.length ? { characters } : {}) },
     compose: {
       kind,
-      promptBlocks: presetBlocks(preset, `image-prompt:${kind}`, input).map((b) => b.name || b.identifier),
-      negativeBlocks: presetBlocks(preset, `image-negative:${kind}`, input).map((b) => b.name || b.identifier),
+      promptBlocks: presetBlocks(preset, `image-prompt:${kind}`, input, extra).map((b) => b.name || b.identifier),
+      negativeBlocks: presetBlocks(preset, `image-negative:${kind}`, input, extra).map((b) => b.name || b.identifier),
       sizeFrom: input.size ? 'scene' : out.size ? 'model' : presetSize ? 'preset' : 'default',
+      ...(others.length ? { charBlocks: others.map((o, i) => [...presetBlocks(preset, `image-char:${i + 1}`, input, charExtra(o)), ...presetBlocks(preset, `image-char-negative:${i + 1}`, input, charExtra(o))].map((b) => b.name || b.identifier)) } : {}),
     },
   };
 }

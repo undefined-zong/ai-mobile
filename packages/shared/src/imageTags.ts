@@ -14,7 +14,7 @@ export const IMAGE_PROMPT_PERSON_SEPARATOR = '|';
 
 /** 每一段写什么（写给助手看的说明，也是预设里输出格式的依据） */
 export const IMAGE_PROMPT_SECTION_DOCS: Record<(typeof IMAGE_PROMPT_SECTIONS)[number], string> = {
-  image: `画面的英文 tags（必须有），画几个人、画谁只看这一段；要分人物时用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开（NovelAI 的写法）：第一段是整体画面（总人数、构图、场景、光线），后面每段一个人`,
+  image: `画面的英文 tags（必须有），画几个人、画谁只看这一段；要分人物时用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开（第一段是整体画面：总人数、构图、场景、光线，后面每段一个人），或者写成 NovelAI 网页版那样：Scene Composition: 整体画面; Character 1 Prompt: 第一个人; Character 1 UC: 只针对第一个人的负面; Character 2 Prompt: …`,
   negative: `额外的负面 tags（可以不写）；image### 用了 ${IMAGE_PROMPT_PERSON_SEPARATOR} 时也按同样的顺序隔开，第一段是整体的，后面每段只针对那个人`,
   size: '画幅 portrait / landscape / square（可以不写：不写是竖图，程序给了画幅时照程序的）',
 };
