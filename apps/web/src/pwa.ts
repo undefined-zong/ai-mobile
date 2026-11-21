@@ -1,3 +1,4 @@
+import { showConfirmDialog } from 'vant';
 import { reactive } from 'vue';
 
 /**
@@ -77,6 +78,51 @@ export function initPwa(registerWorker: boolean): void {
       });
   if (document.readyState === 'complete') void register();
   else window.addEventListener('load', () => void register(), { once: true });
+  watchUpdates();
+}
+
+/** index.html 里的入口脚本（构建后文件名带哈希，每次部署都会变） */
+function entryScript(html: string): string | null {
+  const attrs = [...html.matchAll(/<script\b([^>]*)>/g)].map((m) => m[1] ?? '').find((a) => /\btype="module"/.test(a) && /\bsrc="/.test(a));
+  return attrs?.match(/\bsrc="([^"]+)"/)?.[1] ?? null;
+}
+
+/**
+ * iOS 主屏幕 App 切回来时是接着上次的页面，不会重新加载，部署了新版本也一直停在旧版（以前只能删掉重装，数据跟着没了）。
+ * 启动时和每次切回 App 时向服务器要一份 index.html（sw.js 对它只走网络），入口脚本和正在跑的不一样就是有新版本，
+ * 问一次要不要更新：更新 = 重新加载页面；聊天、角色等数据在本机 IndexedDB 里，不受影响。点了"稍后"，这个版本这次不再问。
+ */
+function watchUpdates(): void {
+  const running = document.querySelector('script[type="module"][src]')?.getAttribute('src');
+  if (!running) return;
+  let checkedAt = 0;
+  let asking = false;
+  let skipped = '';
+  const check = async () => {
+    if (asking || document.visibilityState !== 'visible' || Date.now() - checkedAt < 60_000) return;
+    checkedAt = Date.now();
+    let latest: string | null = null;
+    try {
+      const res = await fetch(new URL('./index.html', location.href), { cache: 'no-store' });
+      if (res.ok) latest = entryScript(await res.text());
+    } catch {
+      return; // 断网等，下次切回来再看
+    }
+    if (!latest || latest === running || latest === skipped) return;
+    asking = true;
+    const update = await showConfirmDialog({
+      title: '有新版本',
+      message: '更新会重新载入页面，聊天、角色等数据都在本机，不会丢。',
+      confirmButtonText: '更新',
+      cancelButtonText: '稍后',
+    }).then(() => true, () => false);
+    asking = false;
+    if (update) location.reload();
+    else skipped = latest;
+  };
+  document.addEventListener('visibilitychange', () => void check());
+  window.addEventListener('pageshow', (e) => { if (e.persisted) void check(); });
+  void check();
 }
 
 /** 弹出浏览器的安装确认；浏览器没给安装机会时返回 unavailable */

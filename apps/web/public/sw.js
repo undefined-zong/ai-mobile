@@ -1,7 +1,7 @@
 // 让浏览器认可"安装到主屏幕"，断网时也能打开。
 // 只处理本站的 GET 请求；发给 AI 服务商的请求（跨域）不经过这里，也不缓存。
 // 换版本号时，激活后删掉旧版本的缓存。
-const CACHE = 'ai-mobile-v5';
+const CACHE = 'ai-mobile-v6';
 const SHELL = ['./', './manifest.webmanifest', './icons/icon-192.png?v=little-world', './icons/icon-512.png?v=little-world'];
 
 self.addEventListener('install', (event) => {
@@ -80,7 +80,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   // manifest 和 sw.js 本身总是先走网络：改了安装信息（名字、图标、id）浏览器能马上看到
-  if (/\/(?:manifest\.webmanifest|sw\.js)$/.test(url.pathname)) {
+  // index.html 也走网络：页面靠它检查有没有新版本（pwa.ts），用缓存就永远看不到新版
+  if (/\/(?:manifest\.webmanifest|sw\.js|index\.html)$/.test(url.pathname)) {
     event.respondWith(fetch(req).catch(() => caches.match(req).then((hit) => hit || Response.error())));
     return;
   }
