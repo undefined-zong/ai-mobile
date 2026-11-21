@@ -2,7 +2,7 @@
 import { errorText, isAbortError } from '@app/ai';
 import {
   KINGDOM_ACTIONS, KINGDOM_DYNASTIES, KINGDOM_FOCUSES, KINGDOM_METRICS, KINGDOM_OFFICES, KINGDOM_POLICIES, KINGDOM_ROLES, KINGDOM_SCENARIOS, KINGDOM_TURNS,
-  appointKingdomMinister, kingdomAge, kingdomBattleChance, kingdomBuffs, kingdomDate, kingdomDynasty, kingdomLands, kingdomNpcAge,
+  appointKingdomMinister, imageAppearance, kingdomAge, kingdomBattleChance, kingdomBuffs, kingdomDate, kingdomDynasty, kingdomLands, kingdomNpcAge,
   kingdomOrderCost, kingdomOrderReason, kingdomQuarterIncome, scoreKingdom, toggleKingdomPolicy,
   type KingdomAction, type KingdomNpc, type KingdomOffice, type KingdomRole,
 } from '@app/shared';
@@ -90,7 +90,7 @@ async function begin() {
     await store.start({ ...draft, participants: chars.list.filter(c => participants[c.id]).map(c => ({
       characterId: c.id, name: c.name, role: participants[c.id] as KingdomRole,
       description: [c.card.description, c.card.personality, c.card.scenario].filter(Boolean).join('\n'),
-      appearanceTags: c.appearanceTags, gender: c.pronoun === '他' ? 'male' : 'female',
+      appearanceTags: imageAppearance(c), gender: c.pronoun === '他' ? 'male' : 'female',
     })) });
     view.value = 'reign'; tab.value = 'city';
   } catch (e) { problem.value = errorText(e); }

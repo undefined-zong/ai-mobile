@@ -1,10 +1,11 @@
 import { illustrate, samplerRequest } from '@app/ai';
-import { assembleTaskPrompt, KINGDOM_OFFICES, kingdomDate, kingdomDynasty, kingdomNpcAge, type KingdomNpc, type KingdomPortrait, type KingdomRun } from '@app/shared';
+import { assembleTaskPrompt, imageAppearance, KINGDOM_OFFICES, kingdomDate, kingdomDynasty, kingdomNpcAge, type KingdomNpc, type KingdomPortrait, type KingdomRun } from '@app/shared';
 import { enqueueImage } from './ai';
 import { putAsset } from './assets';
 import { MissingPresetError } from './prompt';
 import type { IllustrateStage } from './types';
 import { useAiStore } from '@/stores/ai';
+import { useCharacterStore } from '@/stores/characters';
 import { useLibraryStore } from '@/stores/library';
 
 /** 独立任务提示词不依赖聊天会话，也不会把未加入对局的角色送入王国世界。 */
@@ -58,17 +59,20 @@ export async function talkKingdomNpc(run: KingdomRun, npc: KingdomNpc, user: str
   return value;
 }
 
-/** 使用既有 NovelAI/生图路由、排队和素材库；锁定人物外观与朝代服装，不借用聊天角色的现代衣柜。 */
+/** 使用既有 NovelAI/生图路由、排队和素材库；锁定人物外观与朝代服装，不借用聊天角色的现代衣柜。
+ * 加入对局的角色按角色卡当前的 tags 画（同人角色带角色 tag、作品 tag，以及负面 tags）；角色已删除时退回开局记下的外观。 */
 export async function drawKingdomNpc(run: KingdomRun, npc: KingdomNpc, signal: AbortSignal, onStage: (stage: IllustrateStage) => void): Promise<KingdomPortrait> {
   const dynasty = kingdomDynasty(run.dynastyId);
   const office = KINGDOM_OFFICES.find(o => run.cabinet[o] === npc.id);
   const title = office ? dynasty.offices[office] : npc.title;
+  const card = npc.characterId ? useCharacterStore().byId(npc.characterId) : undefined;
+  const appearanceTags = card ? imageAppearance(card) : npc.appearanceTags;
   onStage('queued');
   return enqueueImage('user', async () => {
     const preset = useLibraryStore().presetForUse('game-kingdom-image');
     const image = await illustrate(useAiStore().system, {
       mode: 'portrait', moment: 'kingdom-portrait', size: 'portrait',
-      character: { name: npc.name, appearanceTags: npc.appearanceTags,
+      character: { name: npc.name, appearanceTags, negativeTags: card?.negativeTags,
         outfit: { name: `${dynasty.name} · ${title}`, tags: dynasty.clothing } },
       lockOutfit: true,
       caption: 'solo, full body, standing, character portrait, simple background, detailed clothing',
