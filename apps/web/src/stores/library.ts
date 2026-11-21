@@ -676,6 +676,13 @@ const SEED_UPGRADES: SeedUpgrade[] = [
     files: ['image.json', 'image-date.json', 'image-study.json', 'image-meal.json', 'image-sleep.json', 'image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json', 'image-workshop.json', 'image-community.json', 'image-game-kingdom.json'],
     added: ['outfitFree'],
   },
+  {
+    // 心跳的双人图：去掉写死的"坐在旁边、并肩坐着、靠在肩上、依偎、对视"和构图，姿势、距离只照对话；本机那块还是旧的默认内容就跟上
+    id: 'image-heart:duo-follow-chat',
+    files: ['image-heart-ambient.json', 'image-heart-eyes.json', 'image-heart-intimate.json'],
+    renamed: { blocks: { duoScene: ['双人 · 坐在旁边（你入画时才发）', '双人（你入画时才发）'] } },
+    replaced: { duoScene: ["这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算，其余照旧：两个人挨得很近（并肩坐着、靠在肩上、依偎、对视），距离和表情按\"要画的画面\"和最近的对话；两个人都是成年人。竖图里两个人都放在中间偏上。", "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"只有{{char}}一个人入镜\"和\"镜头是{{user}}的眼睛（pov）\"这次不算：换成第三人称的近景（upper body 或 cowboy shot），把两个人都拍进去，离得很近（并肩坐着、靠在肩上、依偎、额头相抵），{{char}}看着{{user}}（looking at another）；两个人都是成年人。竖图里两个人都放在中间偏上。", "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"这一条这次不算，其余照旧：两个人挨得很近（并肩坐着、靠在肩上、依偎、对视），姿势和距离照对话里发生到哪一步来画；两个人都是成年人。竖图里两个人都放在中间偏上。"] },
+  },
 ];
 
 /** 更新自带内容和所有预设的程序块位置，返回改了的那些。 */

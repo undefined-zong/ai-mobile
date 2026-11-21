@@ -359,10 +359,11 @@ let repliesSinceArt = 0;
 let autoNoted = false;
 
 function captionFor(moment: 'open' | 'now'): string {
-  const how = mode.value === 'visit' ? `${userName.value}坐在${her.value.pronoun}旁边` : `${her.value.name}在${herWhere.value}，和${userName.value}连线`;
-  if (moment === 'open') return `${userName.value}刚来，${her.value.name}在等${userName.value}；${how}`;
+  // 你在她身边（双人图）时不写你们在哪、怎么待着，姿势和距离只照最近的对话
+  const how = mode.value === 'visit' ? '' : `；${her.value.name}在${herWhere.value}，和${userName.value}连线`;
+  if (moment === 'open') return `${userName.value}刚来，${her.value.name}在等${userName.value}${how}`;
   const heat = toys.intensity >= 60 ? '；气氛正浓，心跳很快' : toys.intensity > 0 ? '；气氛渐渐升温' : '';
-  return `${her.value.name}此刻的样子（按最近的对话）；${how}${heat}`;
+  return `${her.value.name}此刻的样子（按最近的对话）${how}${heat}`;
 }
 async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
   if (priority === 'auto') {
@@ -384,7 +385,7 @@ async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
     recent: chatId.value ? chat.recentLines(chatId.value, 6) : [],
     size: 'portrait',
     lockOutfit: false,
-    // 连线画她一个人，坐在她旁边画两个人同框
+    // 连线画她一个人，在她身边画两个人同框
     withUser: mode.value === 'visit',
   });
   if (r.ok) {
