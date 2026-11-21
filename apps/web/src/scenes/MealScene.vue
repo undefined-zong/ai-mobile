@@ -272,26 +272,26 @@ function placeArt(item: GalleryItem) {
   if (shapeOf(item) === 'portrait') tableArt.value = item;
   else sideArt.value = item;
 }
-function herSideLine(): string {
-  const s = herSlot.value;
-  return `${her.value.name}在${herPlace.value || '自己那边'}${s ? `，${s.status}` : ''}${herMeal.value ? `，在吃${herMeal.value}` : ''}`;
-}
 function myFood(): string {
   return food.value.trim() || seen.value?.food || (planned.value && planMeal.value ? planMeal.value.name : '');
 }
-function captionFor(m: Moment, extra?: string): string {
-  const mine = myFood();
-  if (m === 'table') {
-    return [`${userName.value}和${her.value.name}坐在同一张桌子两边一起吃${label.value}`, herMeal.value ? `${her.value.name}吃的是${herMeal.value}` : '', mine ? `${userName.value}吃的是${mine}` : '', herPlace.value ? `在${herPlace.value}` : '', extra]
-      .filter(Boolean)
-      .join('；');
-  }
-  const where = how.value === 'together' ? `两个人坐在同一张桌子两边吃${label.value}${herMeal.value ? `，${her.value.name}吃的是${herMeal.value}` : ''}` : herSideLine();
-  const mineSide = together.value === 'visit'
-    ? `${userName.value}坐在${her.value.name}旁边吃${label.value}${mine ? `（${mine}）` : ''}`
-    : `${userName.value}在${yourPlace.value || '自己那边'}吃${label.value}，${her.value.name}隔着屏幕陪着（${userName.value}不在画面里）`;
-  if (m === 'side') return [where, mineSide, extra].filter(Boolean).join('；');
-  return [`${her.value.name}举起手边的杯子和${userName.value}碰杯（第 ${cheers.value} 次）`, where, extra].filter(Boolean).join('；');
+/**
+ * 生图的数据和类型：句子都写在一起吃饭的生图预设里（要画的画面那几块），这里只给数据。
+ * 类型里多给怎么在一起（remote / visit / bring）、怎么吃（eat-together / eat-solo）
+ */
+function artPrompt(): { vars: Record<string, string>; types: string[] } {
+  return {
+    vars: {
+      meal_label: label.value,
+      meal_her_food: together.value === 'bring' || !herMealSlot.value ? '' : herFoodOf(herMealSlot.value),
+      meal_my_food: myFood(),
+      meal_her_place: herPlace.value,
+      meal_her_status: herSlot.value?.status ?? '',
+      meal_your_place: yourPlace.value,
+      meal_cheers: String(cheers.value),
+    },
+    types: [together.value, `eat-${how.value}`],
+  };
 }
 function cardImage(i: GalleryItem) {
   return { assetKey: i.assetKey, ...(i.url ? { url: i.url } : {}), title: i.title, moment: i.moment };
@@ -299,7 +299,7 @@ function cardImage(i: GalleryItem) {
 /** 吃完后才画好的（碰杯画得慢）：放进刚发的饭卡 */
 let cardRef: { chatId: string; messageId: string } | null = null;
 let autoNoted = false;
-async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string): Promise<void> {
+async function drawMoment(m: Moment, priority: 'user' | 'auto'): Promise<void> {
   if (priority === 'auto') {
     const chk = gallery.autoCheck();
     if (!chk.ok) {
@@ -312,11 +312,11 @@ async function drawMoment(m: Moment, priority: 'user' | 'auto', extra?: string):
     characterId: her.value.id,
     sceneId: 'meal',
     moment: m,
-    caption: captionFor(m, extra),
+    ...artPrompt(),
     priority,
     locationId: herLocId.value,
     expression: chars.expression[her.value.id],
-    recent: chatId.value ? chat.recentLines(chatId.value, 4) : [],
+    recent: chatId.value ? chat.recentLines(chatId.value, 20) : [],
     size: m === 'table' || (m === 'cheers' && how.value === 'together') ? 'portrait' : halfShape.value,
     // 连线画她一个人，坐在她旁边画两个人同框
     withUser: together.value === 'visit',
@@ -340,12 +340,12 @@ function ensureArt() {
   const size: ImageShape = m === 'table' ? 'portrait' : halfShape.value;
   const duo = together.value === 'visit';
   const have = m === 'table' ? tableArt.value : sideArt.value;
-  if (have && shapeOf(have) === size && have.caption.includes(label.value) && !!have.withUser === duo) return;
+  if (have && shapeOf(have) === size && have.vars?.meal_label === label.value && !!have.withUser === duo) return;
   const outfit = rhythm.outfitFor(her.value.id, 'meal')?.name ?? null;
   const status = herSlot.value?.status ?? '';
   const found = gallery
     .find(her.value.id, 'meal', { moment: m, today: true, locationId: herLocId.value, outfit, size, withUser: duo })
-    .find((i) => i.caption.includes(label.value) && (m === 'table' || !status || i.caption.includes(status)));
+    .find((i) => i.vars?.meal_label === label.value && (m === 'table' || !status || i.vars?.meal_her_status === status));
   if (found) placeArt(found);
   else void drawMoment(m, 'auto');
 }

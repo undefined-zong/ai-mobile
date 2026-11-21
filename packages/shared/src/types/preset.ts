@@ -269,13 +269,8 @@ export const TASK_MARKERS: Record<'theater' | 'summary' | 'image' | 'rhythm' | '
     summaryMemories: '已有记忆',
     summaryTranscript: '要整理的聊天',
   },
-  image: {
-    imageCharacters: '你可以入画：你的长相和两个人同框时的输出格式（场景里你可以入画、人设里填了外观 tags 时才填）',
-    imageSubject: '角色和外观 tags',
-    imageScene: '地点、服装、时间天气、表情',
-    imageRecent: '最近的对话',
-    imageCaption: '要画的画面',
-  },
+  // 生图没有程序填充块：要发什么都写在预设的块里，这一次的数据用宏（{{image_caption}}……，见 formats.ts 里生图预设的说明）
+  image: {},
   rhythm: {
     rhythmCharacter: '角色（名字、描述、性格、场景）',
     rhythmSource: '建世界的材料（角色卡的世界观、世界书）',

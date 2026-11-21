@@ -315,7 +315,7 @@ function retry() {
 function afterTurn(r: { cg?: string } | null) {
   if (!r?.cg || turns.value - lastCgTurn < CG_GAP) return;
   lastCgTurn = turns.value;
-  void drawMoment('highlight', 'auto', `${r.cg}；在${spot.value.name}约会`);
+  void drawMoment('highlight', 'auto', { caption: r.cg, vars: { date_spot: spot.value.name }, types: ['date-cg'] });
 }
 
 // —— 开始：选地点或者从地图来；从背景库 roll 的、选的地方还算在地点 p 上进出 ——
@@ -388,7 +388,7 @@ async function finish() {
   }
   if (chatId.value && chat.streams[chatId.value]) chat.stop(chatId.value);
   ending.value = true;
-  void waitIdle().then(() => drawMoment('keepsake', 'auto', keepsakeCaption()));
+  void waitIdle().then(() => drawMoment('keepsake', 'auto', keepsakeData()));
   const r = await ask('date-end', [
     ...contextLines().slice(0, 3),
     `${userName.value}说今天的约会就到这里`,
@@ -407,11 +407,15 @@ function farewellLine(): string | undefined {
   const line = [...beats.value].reverse().find((b) => b.kind === 'line')?.text;
   return line ? (line.length > 60 ? `${line.slice(0, 60)}…` : line) : undefined;
 }
-function keepsakeCaption(): string {
+/** 留念那张的数据和类型（句子写在约会的生图预设里） */
+function keepsakeData(): { vars: Record<string, string>; types: string[] } {
   const mood = Object.entries(picks.value)
     .sort((a, b) => b[1] - a[1])
     .map(([k]) => k)[0];
-  return `约会快结束了，${her.value.name}在${spot.value.name}和${userName.value}留一张纪念照${raining.value && !spot.value.indoor ? '，外面在下雨' : ''}${mood ? `；今天${userName.value}总是${mood === OWN ? '自己找话说' : mood}` : ''}`;
+  return {
+    vars: { date_spot: spot.value.name, date_mood: mood && mood !== OWN ? mood : '' },
+    types: [...(raining.value ? [spot.value.indoor ? 'rain-indoor' : 'rain-outdoor'] : []), ...(mood === OWN ? ['mood-own'] : [])],
+  };
 }
 function showMemory() {
   postMemory(done.value ? farewellLine() : undefined);
@@ -481,7 +485,7 @@ const drawingText = computed(() => {
 });
 let autoNoted = false;
 
-async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority: 'user' | 'auto', caption: string): Promise<void> {
+async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority: 'user' | 'auto', data: { caption?: string; vars: Record<string, string>; types: string[] }): Promise<void> {
   if (priority === 'auto') {
     const chk = gallery.autoCheck();
     if (!chk.ok) {
@@ -494,12 +498,12 @@ async function drawMoment(moment: 'arrive' | 'highlight' | 'keepsake', priority:
     characterId: her.value.id,
     sceneId: 'date',
     moment,
-    caption,
+    ...data,
     priority,
     locationId: spot.value.id,
     ...(bg.value ? { place: spot.value.name } : {}),
     expression: chars.expression[her.value.id],
-    recent: chatId.value ? chat.recentLines(chatId.value, 6) : [],
+    recent: chatId.value ? chat.recentLines(chatId.value, 20) : [],
     size: 'portrait',
     withUser: true,
   });
@@ -525,7 +529,7 @@ function ensureArt() {
   const outfit = rhythm.outfitFor(her.value.id, 'date')?.name ?? null;
   const p = spot.value;
   if (useAiStore().outfitRef() && gallery.find(her.value.id, 'date', { moment: 'arrive', today: true, locationId: p.id, outfit, size: 'portrait' }).length) return;
-  void drawMoment('arrive', 'auto', `${her.value.name}和${userName.value}刚到${p.name}约会${raining.value ? (p.indoor ? '，外面在下雨' : '，在下雨') : ''}${p.blurb ? `；${p.blurb}` : ''}`);
+  void drawMoment('arrive', 'auto', { vars: { date_spot: p.name, date_blurb: p.blurb ?? '' }, types: raining.value ? [p.indoor ? 'rain-indoor' : 'rain-outdoor'] : [] });
 }
 function snap() {
   if (drawingNow.value) {
@@ -537,7 +541,7 @@ function snap() {
     .slice(-3)
     .map((b) => (b.kind === 'narration' ? `（${b.text}）` : `${her.value.name}：${b.text}`))
     .join(' ');
-  void drawMoment('highlight', 'user', `在${spot.value.name}约会，画此刻的画面${said ? `：${said}` : ''}`);
+  void drawMoment('highlight', 'user', { vars: { date_spot: spot.value.name, date_said: said }, types: ['date-snap'] });
 }
 function waitIdle(): Promise<void> {
   if (!drawingNow.value) return Promise.resolve();

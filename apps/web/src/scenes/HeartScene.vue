@@ -358,12 +358,10 @@ const drawingText = computed(() => {
 let repliesSinceArt = 0;
 let autoNoted = false;
 
-function captionFor(moment: 'open' | 'now'): string {
-  // 你在她身边（双人图）时不写你们在哪、怎么待着，姿势和距离只照最近的对话
-  const how = mode.value === 'visit' ? '' : `；${her.value.name}在${herWhere.value}，和${userName.value}连线`;
-  if (moment === 'open') return `${userName.value}刚来，${her.value.name}在等${userName.value}${how}`;
-  const heat = toys.intensity >= 60 ? '；气氛正浓，心跳很快' : toys.intensity > 0 ? '；气氛渐渐升温' : '';
-  return `${her.value.name}此刻的样子（按最近的对话）${how}${heat}`;
+/** 生图的数据和类型：句子都写在心跳的生图预设里（要画的画面那几块），这里只给数据 */
+function artPrompt(moment: 'open' | 'now'): { vars: Record<string, string>; types: string[] } {
+  const heat = moment === 'now' ? (toys.intensity >= 60 ? 'heat-high' : toys.intensity > 0 ? 'heat-warm' : 'heat-calm') : '';
+  return { vars: { heart_where: location.value?.name ?? '' }, types: [mode.value, ...(heat ? [heat] : [])] };
 }
 async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
   if (priority === 'auto') {
@@ -378,11 +376,11 @@ async function drawMoment(moment: 'open' | 'now', priority: 'user' | 'auto') {
     characterId: her.value.id,
     sceneId: 'heart',
     moment,
-    caption: captionFor(moment),
+    ...artPrompt(moment),
     priority,
     locationId: location.value?.id ?? null,
     expression: chars.expression[her.value.id],
-    recent: chatId.value ? chat.recentLines(chatId.value, 6) : [],
+    recent: chatId.value ? chat.recentLines(chatId.value, 20) : [],
     size: 'portrait',
     lockOutfit: false,
     // 连线画她一个人，在她身边画两个人同框

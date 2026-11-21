@@ -343,7 +343,6 @@ export async function drawPostImage(postId: string, index = 0, priority: 'user' 
   }
   const author = useCharacterStore().byId(p.authorId);
   const moment: CommunityImageMoment = author ? 'community-member' : 'community-netizen';
-  const recent = [p.title, p.text].filter(Boolean).join('：');
   store.busy[key] = true;
   delete img.error;
   try {
@@ -352,7 +351,8 @@ export async function drawPostImage(postId: string, index = 0, priority: 'user' 
         // 社群的配图始终参考节律里的衣着（不看服装参考开关）
         characterId: author?.id ?? '', caption: img.caption, use: 'community-image', moment, outfitRef: true,
         ...(author ? {} : { free: true, authorName: communityNames()(p.authorId) }),
-        ...(recent ? { recent: [`这一帖：${recent.slice(0, 300)}`] } : {}),
+        // 这一帖的标题、正文给宏 {{post_title}} {{post_text}}，怎么写在社群的生图预设里
+        vars: { post_title: p.title ?? '', post_text: (p.text ?? '').slice(0, 300) },
       },
       { priority },
     );

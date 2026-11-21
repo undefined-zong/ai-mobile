@@ -8,13 +8,13 @@
   "defaultFor": [
     "game-kingdom-image"
   ],
-  "description": "按朝代、身份与固定外观绘制大臣、后宫和他国人物；使用已有NovelAI生图设置，单人竖幅全身立绘。",
+  "description": "按朝代、身份与固定外观绘制大臣、后宫和他国人物；使用已有NovelAI生图设置，单人竖幅全身立绘。 发给模型的每一句、出图加的每个词都在下面的块里，能改能删。",
   "blocks": [
     {
       "identifier": "main",
       "name": "朝代人物立绘",
       "role": "system",
-      "content": "你是NovelAI提示词写手，为王国模拟中的单个人物写英文Danbooru风格tags。严格依照朝代、性别、年龄、人物身份、外貌和用户架空世界。锁定外貌与服饰由程序加入，不重复、不更换。只写构图、动作、表情、细节配饰与光线。成年人物用adult woman或adult man。禁止把秦汉人物画成清朝服饰，不混入现代服饰、器械或日本和服。",
+      "content": "你是NovelAI提示词写手，为王国模拟中的单个人物写英文Danbooru风格tags。严格依照朝代、性别、年龄、人物身份、外貌和用户架空世界。锁定外貌与服饰由「出图 · 最终提示词」那块加入，不重复、不更换。只写构图、动作、表情、细节配饰与光线。成年人物用adult woman或adult man。禁止把秦汉人物画成清朝服饰，不混入现代服饰、器械或日本和服。",
       "enabled": true,
       "marker": false,
       "injection": {
@@ -26,7 +26,7 @@
       "identifier": "outfitFree",
       "name": "服装参考关着（AI 自己设计衣服）",
       "role": "system",
-      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时各自的衣服写进 char### 和 user### 那一行，两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相程序会加）。",
+      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时两个人的衣服都写进 image###（用 | 分人时写进各自那一段），两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相「出图 · 最终提示词」那块会加）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -40,41 +40,179 @@
     {
       "identifier": "imageSubject",
       "name": "人物与固定服饰",
-      "role": "system",
-      "content": "",
+      "role": "user",
+      "content": "角色：{{char}}（{{pronoun}}）；外观 tags（出图时「最终提示词」那块会加上，不要重复）：{{char_appearance}}",
+      "marker": false,
       "enabled": true,
-      "marker": true,
       "injection": {
         "position": "relative",
-        "depth": 0
+        "depth": 4
+      }
+    },
+    {
+      "identifier": "imageOutfit",
+      "name": "今天穿什么（衣服没锁时）",
+      "role": "user",
+      "content": "{{char}}今天穿：{{char_outfit}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
       },
-      "origin": "app"
+      "triggers": [
+        "outfit-unlocked"
+      ]
+    },
+    {
+      "identifier": "imageOutfitLocked",
+      "name": "锁定的衣服（衣服锁定时）",
+      "role": "user",
+      "content": "服装：{{char_outfit_name}}；服装 tags（出图时「最终提示词」那块会加在外观后面，不要重复，也不要另写别的衣服）：{{char_outfit_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "outfit-locked"
+      ]
     },
     {
       "identifier": "imageScene",
-      "name": "朝代王庭",
-      "role": "system",
-      "content": "",
+      "name": "地点",
+      "role": "user",
+      "content": "地点：{{image_place}}",
+      "marker": false,
       "enabled": true,
-      "marker": true,
       "injection": {
         "position": "relative",
-        "depth": 0
+        "depth": 4
       },
-      "origin": "app"
+      "triggers": [
+        "has:image_place"
+      ]
+    },
+    {
+      "identifier": "imageTime",
+      "name": "时段",
+      "role": "user",
+      "content": "时段：{{image_time}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_time"
+      ]
+    },
+    {
+      "identifier": "imageWeather",
+      "name": "天气",
+      "role": "user",
+      "content": "天气：{{image_weather}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_weather"
+      ]
+    },
+    {
+      "identifier": "imageExpression",
+      "name": "此刻的表情",
+      "role": "user",
+      "content": "此刻的表情：{{image_expression}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_expression"
+      ]
+    },
+    {
+      "identifier": "imageSizeLine",
+      "name": "画幅（场景定了画幅时）",
+      "role": "user",
+      "content": "画幅：{{image_size}}（portrait 竖图 / landscape 横图 / square 方图），出图按这个画幅，构图照它来",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_size"
+      ]
+    },
+    {
+      "identifier": "capKingdomCourt",
+      "name": "王庭",
+      "role": "user",
+      "content": "地点：{{kingdom_realm}}，{{kingdom_dynasty}}风格王庭",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "kingdom-portrait"
+      ]
     },
     {
       "identifier": "imageRecent",
-      "name": "人物生平与世界",
-      "role": "system",
-      "content": "",
+      "name": "最近的对话",
+      "role": "user",
+      "content": "最近的对话：\n{{image_recent}}",
+      "marker": false,
       "enabled": true,
-      "marker": true,
       "injection": {
         "position": "relative",
-        "depth": 0
+        "depth": 4
       },
-      "origin": "app"
+      "triggers": [
+        "has:image_recent"
+      ]
+    },
+    {
+      "identifier": "capKingdomWorld",
+      "name": "世界",
+      "role": "user",
+      "content": "世界：{{kingdom_world}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "kingdom-portrait"
+      ]
+    },
+    {
+      "identifier": "capKingdomPerson",
+      "name": "人物",
+      "role": "user",
+      "content": "人物：{{char}}，{{kingdom_age}}岁，{{kingdom_title}}，{{kingdom_personality}}。{{kingdom_bio}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "kingdom-portrait"
+      ]
     },
     {
       "identifier": "portrait",
@@ -93,16 +231,33 @@
     },
     {
       "identifier": "imageCaption",
-      "name": "画面要求",
-      "role": "system",
-      "content": "",
+      "name": "要画的画面",
+      "role": "user",
+      "content": "要画的画面：{{image_caption}}",
+      "marker": false,
       "enabled": true,
-      "marker": true,
       "injection": {
         "position": "relative",
-        "depth": 0
+        "depth": 4
       },
-      "origin": "app"
+      "triggers": [
+        "has:image_caption"
+      ]
+    },
+    {
+      "identifier": "capKingdomAsk",
+      "name": "画面要求",
+      "role": "user",
+      "content": "画面要求：solo, full body, standing, character portrait, simple background, detailed clothing",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "kingdom-portrait"
+      ]
     },
     {
       "identifier": "format",
@@ -115,6 +270,149 @@
         "position": "relative",
         "depth": 0
       }
+    },
+    {
+      "identifier": "imageFinal",
+      "name": "出图 · 最终提示词（不发给模型）",
+      "role": "system",
+      "content": "{{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:scene",
+        "image-prompt:portrait",
+        "image-prompt:face"
+      ]
+    },
+    {
+      "identifier": "imageFinalNoHumans",
+      "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
+      "role": "system",
+      "content": "{{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageFinalBackground",
+      "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "no humans, scenery, {{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:background"
+      ]
+    },
+    {
+      "identifier": "imageNegative",
+      "name": "出图 · 最终负面词（不发给模型）",
+      "role": "system",
+      "content": "{{char_negative}}, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:scene",
+        "image-negative:portrait",
+        "image-negative:face",
+        "image-negative:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageNegativeBackground",
+      "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "1girl, 1boy, people, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:background"
+      ]
+    },
+    {
+      "identifier": "imageSizeDefault",
+      "name": "出图 · 场景和模型都没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "portrait",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:scene",
+        "image-size:portrait",
+        "image-size:face",
+        "image-size:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageSizeBackground",
+      "name": "出图 · 只画背景、没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "landscape",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:background"
+      ]
+    },
+    {
+      "identifier": "imageRetry",
+      "name": "格式不对时让模型重写（只在重写时发）",
+      "role": "user",
+      "content": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "retry"
+      ]
+    },
+    {
+      "identifier": "imageVibe",
+      "name": "带上你立绘的 Vibe（不发给模型；人设里开着 Vibe 才有）",
+      "role": "system",
+      "content": "触发条件对上这一次的类型时，出图带上你人设立绘的 Vibe。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "vibe:duo"
+      ]
     }
   ],
   "sampler": {

@@ -34,6 +34,7 @@ import { autoSave, getAll, getOne, write } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
 import { lorebooks as demoLorebooks } from '@/mock/library';
 import { uid } from '@/utils/id';
+import { moveCharNegativeIntoSprite, moveImageIntoPreset } from './imagePresetMigration';
 
 /**
  * App 自带的预设：src/presets/ 里的预设文件（App 自己的格式）。往这个文件夹里加一个 .json 就多一个自带预设。
@@ -900,6 +901,26 @@ export const useLibraryStore = defineStore('library', () => {
       if (!(u in uses) && list.some((p) => p.id === id)) uses[u] = id;
     }
 
+    // 生图里以前程序自己加的东西变成预设里看得见的块（见 imagePresetMigration.ts）；要知道你自己的预设负责哪些用途，所以放在读完用途之后
+    const imageUpgrade = 'image:all-in-preset';
+    const migrated: Preset[] = [];
+    if (!upgradesDone.has(imageUpgrade)) {
+      upgradesDone.add(imageUpgrade);
+      const freshIds = new Set(fresh.map((s) => s.preset.id));
+      const seedFor = (use: PresetUseId) => SEEDS.find((s) => s.defaultFor.includes(use) && s.preset.category === 'image')?.preset;
+      const imageSeed = SEEDS.find((s) => s.file === 'image.json')?.preset;
+      for (const p of list) {
+        if (freshIds.has(p.id)) continue;
+        if (p.category === 'image') {
+          const own = SEEDS.find((s) => s.file === p.seedFile)?.preset;
+          const served = [...new Set(PRESET_USES.filter((u) => presetForUse(u.id)?.id === p.id).map((u) => seedFor(u.id)).filter((x): x is Preset => !!x))];
+          const primary = own ?? served[0] ?? imageSeed;
+          if (primary && moveImageIntoPreset(p, primary, served.filter((x) => x !== primary))) migrated.push(p);
+        } else if (p.category === 'sprite' && moveCharNegativeIntoSprite(p)) migrated.push(p);
+      }
+      for (const p of migrated) p.updatedAt = Date.now();
+    }
+
     for (const s of SEEDS) done.add(s.file);
     await write('settings', [
       { key: 'seededPresetFiles', value: [...done] },
@@ -925,6 +946,7 @@ export const useLibraryStore = defineStore('library', () => {
     // 新放进来的预设要写进本机（start 只记下现在的样子，不会自己写）
     if (fresh.length) await write('presets', fresh.map((s) => ({ key: s.preset.id, value: clone(presets.value.find((p) => p.id === s.preset.id)) })));
     if (touched.length) await write('presets', touched.map((p) => ({ key: p.id, value: clone(p) })));
+    if (migrated.length) await write('presets', migrated.map((p) => ({ key: p.id, value: clone(p) })));
   }
 
   function presetById(id: string | null | undefined): Preset | undefined {

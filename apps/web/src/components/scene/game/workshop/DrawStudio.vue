@@ -61,17 +61,19 @@ const IDEAS = computed(() =>
     : ['雨夜的旧书店，暖黄的灯光，一只猫睡在柜台上', '少女站在漂浮的岛屿边缘，远处是巨大的鲸鱼在云海里游'],
 );
 
-/** 选了参考的小说：设定、大纲和最近一章的开头带给提示词智能体（"最近的对话"那一块） */
-function reference(): string[] {
+/** 选了参考的小说：书名、类型、设定、文风、最近一章的开头给宏（ws_title……），怎么写在创意工坊的生图预设里 */
+function reference(): Record<string, string> {
   const n = ws.novelById(novelId.value);
-  if (!n) return [];
+  if (!n) return {};
   const last = n.chapters.at(-1);
-  return [
-    `参考：小说《${n.title}》${n.genre ? `（${n.genre}）` : ''}`,
-    n.setting.trim() ? `设定和人物：${n.setting.trim().replace(/\s+/g, ' ').slice(0, 600)}` : '',
-    n.style.trim() ? `文风：${n.style.trim()}` : '',
-    last ? `最近一篇「${chapterLabel(n, last)}」的开头：${last.text.replace(/\s+/g, ' ').slice(0, 300)}` : '',
-  ].filter(Boolean);
+  return {
+    ws_title: n.title,
+    ws_genre: n.genre ?? '',
+    ws_setting: n.setting.trim().replace(/\s+/g, ' ').slice(0, 600),
+    ws_style: n.style.trim(),
+    ws_chapter: last ? chapterLabel(n, last) : '',
+    ws_chapter_head: last ? last.text.replace(/\s+/g, ' ').slice(0, 300) : '',
+  };
 }
 
 async function draw(text = caption.value) {
@@ -90,7 +92,7 @@ async function draw(text = caption.value) {
         moment: who.value === 'her' ? 'ws-her' : 'ws-free',
         free: who.value === 'free',
         size: size.value,
-        recent: reference(),
+        vars: reference(),
       },
       {
         signal: abort.signal,

@@ -103,7 +103,8 @@ async function trialDraw() {
     const out = await services.image.illustrate({
       characterId: c.id,
       mode: 'portrait',
-      caption: `${c.name}的全身像：白色背景，站着看向镜头，表情自然${isFandom(c) ? '；看看画出来是不是原作里的样子' : ''}`,
+      // 句子写在配图预设里（触发条件 character-portrait；同人角色多一个 fandom）
+      types: ['character-portrait', ...(isFandom(c) ? ['fandom'] : [])],
       lockOutfit: !!todayOutfit.value,
     });
     trial.value = { busy: false, out };

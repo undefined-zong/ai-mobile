@@ -75,9 +75,11 @@ export async function drawKingdomNpc(run: KingdomRun, npc: KingdomNpc, signal: A
       character: { name: npc.name, appearanceTags, negativeTags: card?.negativeTags,
         outfit: { name: `${dynasty.name} · ${title}`, tags: dynasty.clothing } },
       lockOutfit: true,
-      caption: 'solo, full body, standing, character portrait, simple background, detailed clothing',
-      scene: { place: `${run.name}，${dynasty.name}风格王庭` },
-      recent: [`世界：${run.setting}`, `人物：${npc.name}，${kingdomNpcAge(run, npc)}岁，${title}，${npc.personality}。${npc.biography}`],
+      // 画面要求、王庭、世界、人物的句子都写在王国的生图预设里，这里只给数据
+      vars: {
+        kingdom_realm: run.name, kingdom_dynasty: dynasty.name, kingdom_world: run.setting,
+        kingdom_age: String(kingdomNpcAge(run, npc)), kingdom_title: title, kingdom_personality: npc.personality, kingdom_bio: npc.biography,
+      },
     }, { preset, signal, onStage });
     const first = image.image.images[0];
     if (!first) throw new Error('生图接口没有返回图片，可以重新生成');

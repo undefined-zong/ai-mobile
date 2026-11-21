@@ -204,7 +204,8 @@ export async function drawMomentImage(momentId: string, index = 0, priority: 'us
   try {
     const out = await services.image.illustrate(
       // 朋友圈的配图始终参考节律里的衣着（不看服装参考开关）
-      { characterId: c.id, caption: img.caption, use: 'image', place: m.location, outfitRef: true, recent: m.text ? [`${c.name}的朋友圈：${m.text}`] : undefined },
+      // 朋友圈正文给宏 {{moments_text}}，怎么写在配图预设里（触发条件 moments）
+      { characterId: c.id, caption: img.caption, use: 'image', place: m.location, outfitRef: true, vars: { moments_text: m.text ?? '' }, types: ['moments'] },
       { priority },
     );
     // await 之后按 id 重新取（期间这条可能被删、被替换）

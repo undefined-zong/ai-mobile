@@ -8,7 +8,7 @@
   "defaultFor": [
     "game-workshop-image"
   ],
-  "description": "创意工坊里你想画的画：画{{char}}（ws-her，长相由程序按角色加在最前面）或者自由画（ws-free，小说里的一幕、原创人物、风景……画面里谁长什么样全按你的描述写）。你写的画面描述最优先；预设只把它翻成 tags、补上构图和光线。",
+  "description": "创意工坊里你想画的画：画{{char}}（ws-her，长相由「出图 · 最终提示词」那块加在最前面）或者自由画（ws-free，小说里的一幕、原创人物、风景……画面里谁长什么样全按你的描述写）。你写的画面描述最优先；预设只把它翻成 tags、补上构图和光线。 发给模型的每一句、出图加的每个词都在下面的块里，能改能删。",
   "sampler": {
     "temperature": 0.7,
     "topP": 1,
@@ -49,7 +49,7 @@
       "identifier": "rules",
       "name": "规则",
       "role": "system",
-      "content": "规则：\n- tags 顺序：人数（1girl / 1boy / 2girls / no humans…）→ 构图与镜头（upper body, cowboy shot, full body, from above, close-up…）→ 人物的表情、动作、服装 → 场景与背景 → 光线、时段、天气 → 氛围和画风。\n- {{user}}写了画风（水彩、厚涂、像素、赛博朋克……）就加对应的 tags（watercolor, impasto, pixel art, cyberpunk…）；没写就不加画风 tags。\n- {{user}}的描述很短时，补上合适的构图、背景和光线，让画面完整；描述很长时抓住最重要的几样，tags 控制在 40 个以内。\n- 参考资料（\"最近的对话\"）里有小说的设定或片段时，用它补全人物的样子和场景，但以\"要画的画面\"为准。\n- 不要写质量词（masterpiece、best quality 之类），程序会加。\n- 画面里有两个以上的人时，image### 里用 | 隔开：第一段写整体画面（总人数如 2girls、1boy, 1girl，构图、场景、光线），后面每段写一个人（girl / boy / other 不带数字、长相、表情、动作、服装），每个人的特征就不会串；两个人之间的动作用 source# / target# / mutual# 写在各自那一段（例如 source#hug、target#hug，相互的两边都写 mutual#hug）；只针对某个人的负面 tags 在 negative### 里按同样的顺序用 | 隔开（第一段是整体的）。",
+      "content": "规则：\n- tags 顺序：人数（1girl / 1boy / 2girls / no humans…）→ 构图与镜头（upper body, cowboy shot, full body, from above, close-up…）→ 人物的表情、动作、服装 → 场景与背景 → 光线、时段、天气 → 氛围和画风。\n- {{user}}写了画风（水彩、厚涂、像素、赛博朋克……）就加对应的 tags（watercolor, impasto, pixel art, cyberpunk…）；没写就不加画风 tags。\n- {{user}}的描述很短时，补上合适的构图、背景和光线，让画面完整；描述很长时抓住最重要的几样，tags 控制在 40 个以内。\n- 参考资料（\"最近的对话\"）里有小说的设定或片段时，用它补全人物的样子和场景，但以\"要画的画面\"为准。\n- 不要写质量词（masterpiece、best quality 之类）。\n- 画面里有两个以上的人时，image### 里用 | 隔开：第一段写整体画面（总人数如 2girls、1boy, 1girl，构图、场景、光线），后面每段写一个人（girl / boy / other 不带数字、长相、表情、动作、服装），每个人的特征就不会串；两个人之间的动作用 source# / target# / mutual# 写在各自那一段（例如 source#hug、target#hug，相互的两边都写 mutual#hug）；只针对某个人的负面 tags 在 negative### 里按同样的顺序用 | 隔开（第一段是整体的）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -61,7 +61,7 @@
       "identifier": "outfitFree",
       "name": "服装参考关着（AI 自己设计衣服）",
       "role": "system",
-      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时各自的衣服写进 char### 和 user### 那一行，两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相程序会加）。",
+      "content": "服装参考关着（生图设置里关了\"服装参考\"）：这次不参考{{char}}设定里的衣服、今天穿的那套，也不参考{{user}}常穿的那套，衣服由你按这一刻自己设计。\n- 按地点、在做什么、季节和天气、时段、氛围给出合适的穿搭，写成具体的服装 tags：上衣、下装或连衣裙、外套、鞋、配饰，颜色、材质和款式写清楚（例如 white blouse, pleated skirt, beige cardigan, loafers）。\n- \"要画的画面\"里写了穿什么（泳装、浴衣、睡衣……）就照它画。\n- 单人图把衣服写进 image###；两个人同框时两个人的衣服都写进 image###（用 | 分人时写进各自那一段），两个人的穿搭可以互相搭配。\n- 只写衣服，不写长相（长相「出图 · 最终提示词」那块会加）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -76,7 +76,7 @@
       "identifier": "wsHer",
       "name": "画Ta（只在画{{char}}时发）",
       "role": "system",
-      "content": "这一次画的是{{char}}：{{char}}的长相（发色、瞳色、发型、体型）程序会加在最前面，tags 里不要再写；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。画面里没提到别人就只画{{char}}一个人（1girl 或 1boy 按{{char}}的性别）。画面里除了{{char}}还有别人时，{{char}}那一份另起一行写 char###…###（长相程序会加），别人照规则用 | 写在 image### 里。",
+      "content": "这一次画的是{{char}}：{{char}}的长相（发色、瞳色、发型、体型）「出图 · 最终提示词」那块会加在最前面，tags 里不要再写；按\"要画的画面\"写{{char}}的表情、动作、服装和场景。画面里没提到别人就只画{{char}}一个人（1girl 或 1boy 按{{char}}的性别）。画面里除了{{char}}还有别人时，照规则用 | 分人写在 image### 里；{{char}}那一段只写人物类别、表情、动作、服装（长相「出图 · 最终提示词」那块会加在最前面）。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -91,7 +91,7 @@
       "identifier": "wsFree",
       "name": "自由画（只在自由画时发）",
       "role": "system",
-      "content": "这一次是自由画：程序不会加任何人的长相，画面里有谁、长什么样（发色、瞳色、发型、服装）都按\"要画的画面\"和参考资料写进 tags。上面的\"角色\"只是陪{{user}}画画的人，不在画面里（除非\"要画的画面\"里写了{{char}}）。没有人物的画面（风景、物件）用 no humans, scenery。",
+      "content": "这一次是自由画：不会加任何人的长相（自由画不给外观 tags），画面里有谁、长什么样（发色、瞳色、发型、服装）都按\"要画的画面\"和参考资料写进 tags。上面的\"角色\"只是陪{{user}}画画的人，不在画面里（除非\"要画的画面\"里写了{{char}}）。没有人物的画面（风景、物件）用 no humans, scenery。",
       "marker": false,
       "enabled": true,
       "injection": {
@@ -118,8 +118,8 @@
       "identifier": "imageSubject",
       "name": "角色和外观 tags",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "角色：{{char}}（{{pronoun}}）；外观 tags（出图时「最终提示词」那块会加上，不要重复）：{{char_appearance}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
@@ -127,40 +127,357 @@
       }
     },
     {
-      "identifier": "imageScene",
-      "name": "地点、服装、时间天气、表情",
+      "identifier": "imageOutfit",
+      "name": "今天穿什么（衣服没锁时）",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "{{char}}今天穿：{{char_outfit}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "outfit-unlocked"
+      ]
+    },
+    {
+      "identifier": "imageOutfitLocked",
+      "name": "锁定的衣服（衣服锁定时）",
+      "role": "user",
+      "content": "服装：{{char_outfit_name}}；服装 tags（出图时「最终提示词」那块会加在外观后面，不要重复，也不要另写别的衣服）：{{char_outfit_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "outfit-locked"
+      ]
+    },
+    {
+      "identifier": "imageScene",
+      "name": "地点",
+      "role": "user",
+      "content": "地点：{{image_place}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_place"
+      ]
+    },
+    {
+      "identifier": "imageTime",
+      "name": "时段",
+      "role": "user",
+      "content": "时段：{{image_time}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_time"
+      ]
+    },
+    {
+      "identifier": "imageWeather",
+      "name": "天气",
+      "role": "user",
+      "content": "天气：{{image_weather}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_weather"
+      ]
+    },
+    {
+      "identifier": "imageExpression",
+      "name": "此刻的表情",
+      "role": "user",
+      "content": "此刻的表情：{{image_expression}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_expression"
+      ]
+    },
+    {
+      "identifier": "imageSizeLine",
+      "name": "画幅（场景定了画幅时）",
+      "role": "user",
+      "content": "画幅：{{image_size}}（portrait 竖图 / landscape 横图 / square 方图），出图按这个画幅，构图照它来",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:image_size"
+      ]
     },
     {
       "identifier": "imageRecent",
       "name": "最近的对话",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "最近的对话：\n{{image_recent}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "has:image_recent"
+      ]
+    },
+    {
+      "identifier": "capWsTitle",
+      "name": "参考的小说",
+      "role": "user",
+      "content": "参考：小说《{{ws_title}}》",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:ws_title"
+      ]
+    },
+    {
+      "identifier": "capWsGenre",
+      "name": "参考的小说 · 类型",
+      "role": "user",
+      "content": "类型：{{ws_genre}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:ws_genre"
+      ]
+    },
+    {
+      "identifier": "capWsSetting",
+      "name": "参考的小说 · 设定和人物",
+      "role": "user",
+      "content": "设定和人物：{{ws_setting}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:ws_setting"
+      ]
+    },
+    {
+      "identifier": "capWsStyle",
+      "name": "参考的小说 · 文风",
+      "role": "user",
+      "content": "文风：{{ws_style}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:ws_style"
+      ]
+    },
+    {
+      "identifier": "capWsChapter",
+      "name": "参考的小说 · 最近一篇的开头",
+      "role": "user",
+      "content": "最近一篇「{{ws_chapter}}」的开头：{{ws_chapter_head}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "has:ws_chapter_head"
+      ]
     },
     {
       "identifier": "imageCaption",
       "name": "要画的画面",
       "role": "user",
-      "content": "",
-      "marker": true,
+      "content": "要画的画面：{{image_caption}}",
+      "marker": false,
       "enabled": true,
       "injection": {
         "position": "relative",
         "depth": 4
-      }
+      },
+      "triggers": [
+        "has:image_caption"
+      ]
+    },
+    {
+      "identifier": "imageFinal",
+      "name": "出图 · 最终提示词（不发给模型）",
+      "role": "system",
+      "content": "{{image_count}}, {{char_look}}, {{char_outfit_locked}}, {{image_tags}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:scene",
+        "image-prompt:portrait",
+        "image-prompt:face"
+      ]
+    },
+    {
+      "identifier": "imageFinalNoHumans",
+      "name": "出图 · 最终提示词 · image### 写了 no humans 时（不发给模型）",
+      "role": "system",
+      "content": "{{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageFinalBackground",
+      "name": "出图 · 最终提示词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "no humans, scenery, {{image}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-prompt:background"
+      ]
+    },
+    {
+      "identifier": "imageNegative",
+      "name": "出图 · 最终负面词（不发给模型）",
+      "role": "system",
+      "content": "{{char_negative}}, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:scene",
+        "image-negative:portrait",
+        "image-negative:face",
+        "image-negative:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageNegativeBackground",
+      "name": "出图 · 最终负面词 · 只画背景（不发给模型）",
+      "role": "system",
+      "content": "1girl, 1boy, people, {{negative}}",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-negative:background"
+      ]
+    },
+    {
+      "identifier": "imageSizeDefault",
+      "name": "出图 · 场景和模型都没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "portrait",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:scene",
+        "image-size:portrait",
+        "image-size:face",
+        "image-size:no-humans"
+      ]
+    },
+    {
+      "identifier": "imageSizeBackground",
+      "name": "出图 · 只画背景、没定画幅时用（不发给模型）",
+      "role": "system",
+      "content": "landscape",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "image-size:background"
+      ]
+    },
+    {
+      "identifier": "imageRetry",
+      "name": "格式不对时让模型重写（只在重写时发）",
+      "role": "user",
+      "content": "上面的输出没有按要求的写法。请只输出 image###逗号分隔的英文 tags### 这样的一段（需要时另起一行 negative###…###），不要 JSON、不要任何其他文字。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "retry"
+      ]
+    },
+    {
+      "identifier": "imageVibe",
+      "name": "带上你立绘的 Vibe（不发给模型；人设里开着 Vibe 才有）",
+      "role": "system",
+      "content": "触发条件对上这一次的类型时，出图带上你人设立绘的 Vibe。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "vibe:duo"
+      ]
     }
   ],
   "regex": []

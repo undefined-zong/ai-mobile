@@ -23,7 +23,7 @@ const WORLD_INFO_BLOCKS = new Set(['worldInfoBefore', 'worldInfoAfter']);
 function taskWorldInfo(input: TaskPromptInput, ctx: MacroContext): Record<string, string> {
   const books = input.preset.lorebooks ?? [];
   if (input.preset.worldInfoEnabled !== true || !books.length) return {};
-  const text = Object.values(input.fills).filter((v) => v.trim()).join('\n\n');
+  const text = [...Object.values(input.fills), ...(input.scan ?? [])].filter((v) => v.trim()).join('\n\n');
   const lore = scanWorldInfo({ books, messages: text ? [text] : [], chatLength: 0, dryRun: true, trigger: 'quiet', macro: (t) => substituteMacros(t, ctx) });
   // 任务没有聊天记录和作者注：按深度、示例前后、作者注位置的条目都放在"角色后"
   const after = [lore.after, ...lore.anTop, ...lore.anBottom, ...lore.emTop, ...lore.emBottom, ...lore.depth.map((d) => d.content)].filter((s) => s.trim());
@@ -34,6 +34,8 @@ export interface TaskPromptInput {
   preset: TaskPresetLike;
   /** 程序填充块的内容：块的 identifier → 这一次的内容（空的不发） */
   fills: Record<string, string>;
+  /** 世界书另外按这些文字扫描（任务把输入放在宏里、不用程序填充块时，例如生图） */
+  scan?: string[];
   macros?: MacroContext;
   /**
    * 这一次的类型（生图：scene / portrait / face / background，场景里的时刻 seat / peek……；节律：build-world / plan-day……）：
@@ -57,6 +59,13 @@ export interface TaskBlockReport {
 export interface TaskPromptResult {
   messages: { role: PromptBlock['role']; content: string }[];
   blocks: TaskBlockReport[];
+}
+
+/**
+ * 块的触发条件对不对得上这一次的类型：写了几个时有一个对上就发；一个里用 + 连起来的（例如 peek+visit）要每一部分都对上
+ */
+export function triggerMatches(triggers: readonly string[], types: ReadonlySet<string>): boolean {
+  return triggers.some((t) => t.split('+').every((part) => types.has(part.trim())));
 }
 
 export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
@@ -86,7 +95,7 @@ export function assembleTaskPrompt(input: TaskPromptInput): TaskPromptResult {
       report.note = '预设里关闭了';
       continue;
     }
-    if (b.triggers?.length && !b.triggers.some((t) => types.has(t))) {
+    if (b.triggers?.length && !triggerMatches(b.triggers, types)) {
       report.note = `只在 ${b.triggers.join(' / ')} 时发送`;
       continue;
     }

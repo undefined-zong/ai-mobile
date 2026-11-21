@@ -119,7 +119,7 @@
       "identifier": "negative",
       "name": "负面",
       "role": "system",
-      "content": "multiple views, from behind, scenery, detailed background, text, logo, watermark, signature, speech bubble",
+      "content": "multiple views, from behind, scenery, detailed background, text, logo, watermark, signature, speech bubble, {{char_negative}}",
       "marker": false,
       "enabled": true,
       "injection": {

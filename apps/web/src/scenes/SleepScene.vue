@@ -443,7 +443,7 @@ const drawingText = computed(() => {
   return d.stage === 'queued' ? `${what}：排队等前一张画完` : d.stage === 'prompt' ? `${what}：正在写 tags` : `${what}：正在画`;
 });
 let autoNoted = false;
-async function drawMoment(moment: 'mic' | 'now', priority: 'user' | 'auto', caption: string): Promise<void> {
+async function drawMoment(moment: 'mic' | 'now', priority: 'user' | 'auto', data: { vars: Record<string, string>; types: string[] }): Promise<void> {
   if (priority === 'auto') {
     const chk = gallery.autoCheck();
     if (!chk.ok) {
@@ -457,11 +457,11 @@ async function drawMoment(moment: 'mic' | 'now', priority: 'user' | 'auto', capt
     characterId: her.value.id,
     sceneId: 'sleep',
     moment,
-    caption,
+    ...data,
     priority,
     locationId: location.value?.id ?? null,
     expression: 'sleepy',
-    recent: chatId.value ? chat.recentLines(chatId.value, 4) : [],
+    recent: chatId.value ? chat.recentLines(chatId.value, 20) : [],
     size: 'portrait',
   });
   if (!r.ok) {
@@ -471,7 +471,8 @@ async function drawMoment(moment: 'mic' | 'now', priority: 'user' | 'auto', capt
   artIssue.value = null;
   art.value = r.item;
 }
-const lightLine = () => (lightsOff.value ? '已经熄灯了，只有一点月光' : '床头灯还亮着');
+/** 生图的类型：熄没熄灯（句子写在哄睡的生图预设里） */
+const lightType = () => (lightsOff.value ? 'lights-off' : 'lights-on');
 /** 连上麦：今天同一身睡衣画过的直接用，没有就画一张 */
 function ensureArt() {
   if (art.value || drawingNow.value) return;
@@ -481,7 +482,7 @@ function ensureArt() {
     art.value = found;
     return;
   }
-  void drawMoment('mic', 'auto', `睡前，${her.value.name}躺在床上和${userName.value}连麦，刚连上，小声说着话；${lightLine()}`);
+  void drawMoment('mic', 'auto', { vars: {}, types: [lightType()] });
 }
 function snap() {
   if (drawingNow.value) {
@@ -489,7 +490,7 @@ function snap() {
     return;
   }
   const said = lastHerCaption.value;
-  void drawMoment('now', 'user', `睡前，${her.value.name}躺在床上和${userName.value}连麦，画${her.value.pronoun}此刻的样子${said ? `：${her.value.pronoun}刚小声说"${said.slice(0, 60)}"` : ''}；${lightLine()}`);
+  void drawMoment('now', 'user', { vars: { sleep_said: said.slice(0, 60) }, types: [lightType()] });
 }
 function toggleAutoDraw() {
   gallery.autoDraw = !gallery.autoDraw;

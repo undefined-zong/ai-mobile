@@ -85,8 +85,12 @@ export interface IllustrateRequest {
   characterId: string;
   /** 这一次使用生图 API 上的哪个模型；不写沿用 API 设置 */
   model?: string;
-  /** 要画的画面（[cg:] 标签里的描述、"生成配图"里写的、场景里这一刻的状态） */
-  caption: string;
+  /** 写好的画面描述（[cg:] 里的、"生成配图"里你写的、日记朋友圈的模型写的）：生图预设里的 {{image_caption}} */
+  caption?: string;
+  /** 场景给的数据：生图预设里的宏 {{名字}}（场景里的句子都写在预设的块里，程序只给数据） */
+  vars?: Record<string, string>;
+  /** 场景给的类型（连线 remote / 坐在旁边 visit / 她在你这边 bring、气氛几级……）：预设里触发条件写了它的块才发 */
+  types?: string[];
   /** 画什么：场景（默认）/ 全身像 / 脸部特写 / 只画背景 */
   mode?: ImageMode;
   /** 用哪个用途的生图预设：配图（默认），或者一起做事时这个场景的（image:study；没单独选时跟随配图） */
@@ -112,8 +116,8 @@ export interface IllustrateRequest {
    */
   subject?: 'user';
   /**
-   * "你"可以入画（约会）：人设里填了外观 tags 时告诉生图预设你的长相，画不画你、单人还是双人由预设定；
-   * 真画了两个人时带上你立绘的 Vibe
+   * 你坐在她旁边（约会、心跳 / 学习 / 吃饭里坐在旁边）：生图的类型多一个 duo，预设里触发条件写了 duo 的块才发。
+   * 只是个标记：你的长相、衣服（宏）和立绘的 Vibe 不看它，有人设就给；画不画你、画几个人全看模型写的 image###
    */
   withUser?: boolean;
   /**

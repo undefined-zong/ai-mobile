@@ -285,13 +285,14 @@ export class RoutedImage implements ImageClient {
     const weatherStore = useWeatherStore();
     const atReal = getLocation(c?.locationId)?.area === 'real';
     const sky = req.subject || atReal || !c ? weatherStore.mine : weatherStore.forCharacter(c);
-    // "你"：这条聊天用的人设（预设里的 {{user}}）；入画要填了外观 tags
+    // "你"：这条聊天用的人设（预设里的 {{user}}）
     const persona = c && !free ? personaOf(useChatStore().chatOfCharacter(c.id)) : null;
     const looks = persona?.image;
-    // 你常穿的那套：服装参考开着时给（和她的衣服一起锁就由程序加进你那一份，否则只告诉模型）
+    // 你常穿的那套：服装参考开着时给（{{user_outfit}}）
     const yourOutfit = outfitRef ? looks?.outfitTags.trim() : '';
-    const withUser = persona && req.withUser && !req.subject && looks?.appearanceTags.trim()
-      ? { name: persona.name, appearanceTags: looks.appearanceTags.trim(), negativeTags: looks.negativeTags.trim(), ...(yourOutfit ? { outfit: { tags: yourOutfit, locked: !!req.lockOutfit } } : {}) }
+    // 你：有人设就给（宏 {{user_appearance}} {{user_outfit}}、立绘的 Vibe），不看场景、画的是谁、外观填没填
+    const withUser = persona
+      ? { name: persona.name, appearanceTags: looks?.appearanceTags.trim() ?? '', negativeTags: looks?.negativeTags.trim() ?? '', ...(yourOutfit ? { outfit: { tags: yourOutfit } } : {}) }
       : null;
     const input: ImagePromptInput = {
       mode: req.mode,
@@ -307,8 +308,12 @@ export class RoutedImage implements ImageClient {
       ...(outfitRef ? {} : { outfitFree: true }),
       ...(req.subject && c ? { companionName: c.name } : persona ? { companionName: persona.name } : {}),
       ...(withUser ? { withUser } : {}),
+      // 你坐在她旁边：预设里触发条件写了 duo 的块才发
+      ...(req.withUser ? { duo: true } : {}),
       ...(req.size ? { size: req.size } : {}),
-      caption: req.caption,
+      ...(req.caption ? { caption: req.caption } : {}),
+      ...(req.vars ? { vars: req.vars } : {}),
+      ...(req.types?.length ? { types: req.types } : {}),
       scene: free || !c
         ? { ...(req.place ? { place: req.place } : {}) }
         : {
@@ -328,7 +333,7 @@ export class RoutedImage implements ImageClient {
       seed: req.seed,
       model: req.model,
       preset,
-      ...(persona && (withUser || req.subject) ? { userVibes: () => personaVibes(persona, { model: req.model, signal: opts.signal }), userIsSubject: !!req.subject } : {}),
+      ...(persona ? { userVibes: () => personaVibes(persona, { model: req.model, signal: opts.signal }) } : {}),
     });
     const img = r.image.images[0];
     const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;
