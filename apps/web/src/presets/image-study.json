@@ -122,21 +122,6 @@
       ]
     },
     {
-      "identifier": "duoScene",
-      "name": "双人 · 坐在旁边（你入画时才发）",
-      "role": "system",
-      "content": "这一次{{user}}就坐在{{char}}旁边：画双人图，{{char}}和{{user}}两个人同框。照\"{{user}}可以入画\"那里的写法分别写 char### 和 user###；image### 写总人数（按两个人的性别写 1girl, 1boy 这类，不写 solo）、整体构图（第三人称镜头）、场景和光线，每个人的表情、动作、服装写进各自那一行。规则里\"画面里只有{{char}}一个人（solo）\"和时刻里\"像坐在{{char}}对面看过去\"这次不算：两个人并肩坐在同一张桌前（sitting next to each other），镜头从桌子对面拍过去（from front, upper body），两个人的脸都看得到；按这一刻写各自在做什么——偷拍时两个人都低头看书、写字，或者{{char}}偷偷看{{user}}一眼；学完时两个人一起伸懒腰、相视而笑或者一起比耶。",
-      "marker": false,
-      "enabled": true,
-      "injection": {
-        "position": "relative",
-        "depth": 4
-      },
-      "triggers": [
-        "duo"
-      ]
-    },
-    {
       "identifier": "format",
       "name": "输出格式（### 和它前面的英文词别改）",
       "role": "system",

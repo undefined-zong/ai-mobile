@@ -116,6 +116,8 @@ export interface IllustrateRequest {
    * 真画了两个人时带上你立绘的 Vibe
    */
   withUser?: boolean;
+  /** 坐在Ta旁边的双人图（"双人图"的预设）：只给两个人的外观、服装 tags 和最近的对话，别的都不发 */
+  duo?: boolean;
   /**
    * 自由画（创意工坊里画小说的一幕、画什么都行）：不加她的长相和衣服，也不填她在哪、天气；
    * 画面里有谁、长什么样全按 caption 和生图预设来。生图预设仍按 characterId 那个角色选

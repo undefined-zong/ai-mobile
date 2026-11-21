@@ -88,6 +88,11 @@ export interface ImagePromptInput {
   size?: PromptSize;
   /** 不同框、只在预设里出现的另一个人（{{user}}）：画"你"这边时是她，陪着你但不在画面里 */
   companionName?: string;
+  /**
+   * 坐在Ta旁边时的双人图（心跳、陪伴学习、一起吃饭；"双人图"的预设）：程序只填两个人的外观、服装 tags 和最近的对话，
+   * 地点、时间天气、表情、画幅、要画的画面、双人图的写法说明都不发；没有生图提示词智能体时也不拿画面描述当 tags
+   */
+  duo?: boolean;
 }
 
 /** 提示词里能用的画幅（竖图、横图、方图） */
@@ -126,6 +131,32 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
   const outfit = c.outfit;
   const locked = lockedOutfit(input);
   const youOutfit = withUser?.outfit?.tags.trim();
+  const imageSubject = [
+    `角色：${c.name}${c.pronoun ? `（${c.pronoun}）` : ''}；外观 tags（程序会加，不要重复）：${c.appearanceTags || '（无）'}`,
+    locked && outfit ? `服装：${outfit.name}；服装 tags（程序会加在外观后面，不要重复，也不要另写别的衣服）：${locked}` : outfit ? `${c.name}今天穿：${outfit.name}（${outfit.tags}）` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const imageRecent = input.recent?.length ? `最近的对话：\n${input.recent.slice(-6).join('\n')}` : '';
+  // 双人图：只有两个人的 tags 和最近的对话
+  if (input.duo) {
+    return {
+      imageSubject,
+      imageCharacters: withUser
+        ? [
+            `${withUser.name}：外观 tags（程序会加，不要重复）：${withUser.appearanceTags || '（无）'}`,
+            ...(youOutfit
+              ? [lockedUserOutfit(input)
+                  ? `${withUser.name}的服装 tags（程序会加，不要重复，也不要另写别的衣服）：${youOutfit}`
+                  : `${withUser.name}常穿：${youOutfit}`]
+              : []),
+          ].join('\n')
+        : '',
+      imageScene: '',
+      imageRecent,
+      imageCaption: '',
+    };
+  }
   return {
     // "你"可以入画时：你的长相和两个人同框时的输出字段（解析时按 characters 读每个人的动作）；单人图不写 characters
     imageCharacters:
@@ -146,12 +177,7 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
             `画面里还有别的人时，在 image### 里用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开：第一段写整体画面，后面每段写一个人（人物类别、长相、表情、动作、服装）；只针对这些人的负面 tags 在 negative### 里按同样的顺序用 ${IMAGE_PROMPT_PERSON_SEPARATOR} 隔开。`,
           ].join('\n')
         : '',
-    imageSubject: [
-      `角色：${c.name}${c.pronoun ? `（${c.pronoun}）` : ''}；外观 tags（程序会加，不要重复）：${c.appearanceTags || '（无）'}`,
-      locked && outfit ? `服装：${outfit.name}；服装 tags（程序会加在外观后面，不要重复，也不要另写别的衣服）：${locked}` : outfit ? `${c.name}今天穿：${outfit.name}（${outfit.tags}）` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    imageSubject,
     imageScene: [
       scene.place ? `地点：${scene.place}` : '',
       scene.outfit ? `服装：${scene.outfit}` : '',
@@ -161,7 +187,7 @@ export function imagePromptFills(input: ImagePromptInput): Record<string, string
     ]
       .filter(Boolean)
       .join('\n'),
-    imageRecent: input.recent?.length ? `最近的对话：\n${input.recent.slice(-6).join('\n')}` : '',
+    imageRecent,
     imageCaption: `要画的画面：${input.caption}`,
   };
 }
@@ -364,6 +390,8 @@ function noHumans(lead: string): boolean {
 
 /** 没有分配生图提示词智能体时的退路：外观 tags + 画面描述原文（V4 起能读懂一些自然语言） */
 export function fallbackImagePrompt(input: ImagePromptInput): ImagePromptOutput {
+  // 双人图不拿画面描述当 tags：只用两个人的外观（程序在人物那两份里加）
+  if (input.duo) return { caption: input.caption.slice(0, 30), tags: '', negative: '', characters: [{ who: 'char', tags: '' }, ...(input.withUser ? [{ who: 'user' as const, tags: '' }] : [])] };
   const lead = { scene: '', portrait: 'full body', face: 'close-up, portrait', background: '' }[input.mode ?? 'scene'];
   return { caption: input.caption.slice(0, 30), tags: joinTags(lead, input.caption), negative: '' };
 }

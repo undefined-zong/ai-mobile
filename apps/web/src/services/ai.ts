@@ -307,6 +307,7 @@ export class RoutedImage implements ImageClient {
       ...(outfitRef ? {} : { outfitFree: true }),
       ...(req.subject && c ? { companionName: c.name } : persona ? { companionName: persona.name } : {}),
       ...(withUser ? { withUser } : {}),
+      ...(req.duo ? { duo: true } : {}),
       ...(req.size ? { size: req.size } : {}),
       caption: req.caption,
       scene: free || !c
