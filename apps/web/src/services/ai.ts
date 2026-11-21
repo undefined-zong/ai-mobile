@@ -18,7 +18,7 @@ import { showToast } from 'vant';
 import { assetUrl, putAsset } from './assets';
 import { playBytes, stopAudio } from './audio';
 import { personaVibes } from './personaVibe';
-import { MissingPresetError, personaOf } from './prompt';
+import { MissingPresetError, personaOf, useLabel } from './prompt';
 import type {
   EmbeddingClient,
   IllustrateOptions,
@@ -39,6 +39,7 @@ import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { useLibraryStore } from '@/stores/library';
 import { useMemoryStore } from '@/stores/memory';
+import { useRequestLogStore } from '@/stores/requestLog';
 import { useRhythmStore } from '@/stores/rhythm';
 import { useWeatherStore } from '@/stores/weather';
 import { sleep } from '@/utils/id';
@@ -334,6 +335,8 @@ export class RoutedImage implements ImageClient {
       model: req.model,
       preset,
       ...(persona ? { userVibes: () => personaVibes(persona, { model: req.model, signal: opts.signal }) } : {}),
+      // 请求记录：这一张是怎么拼的（出图前记，出图失败也看得到）
+      onTrace: (trace) => useRequestLogStore().addImage([c?.name ?? req.authorName ?? '', useLabel(req.use ?? 'image'), req.moment].filter(Boolean).join(' · '), trace),
     });
     const img = r.image.images[0];
     const assetKey = img?.bytes ? await putAsset(img.bytes, img.mime) : null;

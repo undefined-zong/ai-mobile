@@ -57,6 +57,7 @@ import { useRealWorldStore } from './stores/realworld';
 import { useWeatherStore } from './stores/weather';
 import { startup } from './startup';
 import { startSyncTracking } from './services/sync';
+import { useRequestLogStore } from '@/stores/requestLog';
 import { startAssetCache } from './services/assetCache';
 
 if (import.meta.env.MODE === 'preview') {
@@ -80,6 +81,8 @@ const app = createApp(App).use(createPinia()).use(router);
 // 所有 store 仍并发读取；升级阻塞或读取失败时展示恢复入口，不能挂载可编辑的空数据页面。
 const hydrated = Promise.allSettled([
   useAiStore().hydrate(),
+  // 请求记录先接上：读本机数据时就开始记
+  useRequestLogStore().hydrate(),
   // 地图、天气、音乐的 Key 和地址（真实世界、天气要先读出来）
   useServicesStore().hydrate(),
   useLibraryStore().hydrate(),

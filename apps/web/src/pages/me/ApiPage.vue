@@ -288,7 +288,11 @@ async function runReindex() {
 
 <template>
   <div class="page" data-page="api">
-    <PageHeader title="API 设置" subtitle="按功能设置：每个功能自己选渠道、填地址和 Key" fallback="/me" />
+    <PageHeader title="API 设置" subtitle="按功能设置：每个功能自己选渠道、填地址和 Key" fallback="/me">
+      <template #right>
+        <RouterLink to="/me/requests" class="text-[14px] text-accent-ink px-2" aria-label="请求记录">请求记录</RouterLink>
+      </template>
+    </PageHeader>
     <div class="page-scroll pb-10">
       <template v-for="g in GROUPS" :key="g.title">
         <div class="group-title">{{ g.title }}</div>

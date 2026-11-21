@@ -6,6 +6,7 @@ import { MissingPresetError } from './prompt';
 import type { IllustrateStage } from './types';
 import { useAiStore } from '@/stores/ai';
 import { useCharacterStore } from '@/stores/characters';
+import { useRequestLogStore } from '@/stores/requestLog';
 import { useLibraryStore } from '@/stores/library';
 
 /** 独立任务提示词不依赖聊天会话，也不会把未加入对局的角色送入王国世界。 */
@@ -80,7 +81,7 @@ export async function drawKingdomNpc(run: KingdomRun, npc: KingdomNpc, signal: A
         kingdom_realm: run.name, kingdom_dynasty: dynasty.name, kingdom_world: run.setting,
         kingdom_age: String(kingdomNpcAge(run, npc)), kingdom_title: title, kingdom_personality: npc.personality, kingdom_bio: npc.biography,
       },
-    }, { preset, signal, onStage });
+    }, { preset, signal, onStage, onTrace: (trace) => useRequestLogStore().addImage(`${npc.name} · 王国立绘`, trace) });
     const first = image.image.images[0];
     if (!first) throw new Error('生图接口没有返回图片，可以重新生成');
     return { assetKey: first.bytes ? await putAsset(first.bytes, first.mime) : null, url: first.url,

@@ -155,6 +155,7 @@ const groups = computed((): { title: string; rows: Row[] }[] => [
     title: 'AI 与语音',
     rows: [
       { icon: 'i-lucide-cpu', label: 'API 设置', value: liveAgents.value ? `${liveAgents.value} 个功能已接通` : '还没填 Key', to: '/me/api' },
+      { icon: 'i-lucide-scroll-text', label: '请求记录', value: '每个请求实际发了什么', to: '/me/requests' },
       { icon: 'i-lucide-shuffle', label: '混淆设置', value: ai.textObfuscation.enabled ? '已开启' : '已关闭', to: '/me/obfuscation' },
       { icon: 'i-lucide-audio-lines', label: '语音', value: '', to: '/me/voice' },
       { icon: 'i-lucide-plug-zap', label: '地图、天气、音乐', value: servicesValue.value, to: '/me/services' },

@@ -1,4 +1,4 @@
-import { assembleTaskPrompt, IMAGE_PROMPT_PERSON_SEPARATOR, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags, substituteMacros, triggerMatches, type PromptBlock } from '@app/shared';
+import { assembleTaskPrompt, IMAGE_PROMPT_PERSON_SEPARATOR, IMAGE_PROMPT_SECTIONS, joinTags, leadCountTags, substituteMacros, triggerMatches, type PromptBlock, type TaskBlockReport } from '@app/shared';
 import type { ImageCharacter, ImageRequest, ImageSize } from '../image/types.ts';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
@@ -160,6 +160,11 @@ function withRecentCount(text: string, recent: string[] | undefined): string {
 
 /** 按"生图"预设拼发给模型的提示词：块按触发条件和这次的类型挑，宏换成这次的数据；世界书按这次的数据扫描 */
 export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPreset): ChatMessage[] {
+  return buildImagePromptReport(input, preset).messages;
+}
+
+/** 同 buildImagePromptMessages，另外给出每一块发没发、为什么没发（请求记录里看） */
+export function buildImagePromptReport(input: ImagePromptInput, preset: TaskPreset): { messages: ChatMessage[]; blocks: TaskBlockReport[] } {
   const blocks: PromptBlock[] = preset.blocks.map((b) => (b.content.includes('{{') ? { ...b, content: withRecentCount(b.content, input.recent) } : b));
   return assembleTaskPrompt({
     preset: { ...preset, blocks },
@@ -167,13 +172,18 @@ export function buildImagePromptMessages(input: ImagePromptInput, preset: TaskPr
     scan: Object.values(imagePromptMacros(input)).filter((v) => v.trim()),
     macros: macroContext(input),
     type: imagePromptTypes(input),
-  }).messages;
+  });
 }
 
-/** 预设里触发条件对得上这个（再加上这次的类型，可以写成 image-prompt:scene+duo）的块（开着的），宏换成这次的数据后用逗号接起来；一块都没有时为 null */
-function presetText(preset: Pick<TaskPreset, 'blocks'> | null | undefined, trigger: string, input: ImagePromptInput, extra: Record<string, string> = {}): string | null {
+/** 预设里触发条件对得上这个（再加上这次的类型，可以写成 image-prompt:scene+duo）的块（开着的） */
+function presetBlocks(preset: Pick<TaskPreset, 'blocks'> | null | undefined, trigger: string, input: ImagePromptInput): PromptBlock[] {
   const types = new Set([trigger, ...imagePromptTypes(input)]);
-  const blocks = (preset?.blocks ?? []).filter((b) => b.enabled && !b.marker && b.triggers?.some((t) => t.split('+')[0]!.trim() === trigger && triggerMatches([t], types)));
+  return (preset?.blocks ?? []).filter((b) => b.enabled && !b.marker && b.triggers?.some((t) => t.split('+')[0]!.trim() === trigger && triggerMatches([t], types)));
+}
+
+/** 这些块的宏换成这次的数据后用逗号接起来；一块都没有时为 null */
+function presetText(preset: Pick<TaskPreset, 'blocks'> | null | undefined, trigger: string, input: ImagePromptInput, extra: Record<string, string> = {}): string | null {
+  const blocks = presetBlocks(preset, trigger, input);
   if (!blocks.length) return null;
   const ctx = macroContext(input, extra);
   return blocks.map((b) => substituteMacros(withRecentCount(b.content, input.recent), ctx).trim()).filter(Boolean).join(', ');
@@ -268,6 +278,20 @@ export function composeKind(out: ImagePromptOutput, input: ImagePromptInput): st
  * 拼的时候能用的宏：发给模型时的那些，加上 {{image}}（image### 整段）、{{image_count}}（里面的人数 tags）、{{image_tags}}（除了人数的）、{{negative}}（negative###）
  */
 export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, preset?: Pick<TaskPreset, 'blocks'> | null, seed?: number): ImageRequest {
+  return composeImageRequest(out, input, preset, seed).request;
+}
+
+/** 出图是怎么拼的（请求记录里看）：哪种拼法、用了预设里哪几块、画幅从哪来 */
+export interface ImageCompose {
+  kind: string;
+  /** 用到的正向、负面块的名字；没有这类块时为空（用的是 image### / negative### 原样） */
+  promptBlocks: string[];
+  negativeBlocks: string[];
+  sizeFrom: 'scene' | 'model' | 'preset' | 'default';
+}
+
+/** 同 toImageRequest，另外给出是怎么拼的 */
+export function composeImageRequest(out: ImagePromptOutput, input: ImagePromptInput, preset?: Pick<TaskPreset, 'blocks'> | null, seed?: number): { request: ImageRequest; compose: ImageCompose } {
   const kind = composeKind(out, input);
   const { lead, rest } = leadCountTags(out.tags);
   const extra = { image: out.tags, image_count: lead, image_tags: rest, negative: out.negative };
@@ -276,7 +300,15 @@ export function toImageRequest(out: ImagePromptOutput, input: ImagePromptInput, 
   const presetSize = presetText(preset, `image-size:${kind}`, input, extra)?.split(',').map((s) => s.trim().toLowerCase()).find((s) => SIZES.has(s));
   const size: ImageSize = input.size ?? out.size ?? (presetSize as PromptSize | undefined) ?? 'portrait';
   const characters: ImageCharacter[] = (out.others ?? []).map((o) => ({ prompt: o.tags, negative: o.negative }));
-  return { prompt, negative, size, seed, ...(characters.length ? { characters } : {}) };
+  return {
+    request: { prompt, negative, size, seed, ...(characters.length ? { characters } : {}) },
+    compose: {
+      kind,
+      promptBlocks: presetBlocks(preset, `image-prompt:${kind}`, input).map((b) => b.name || b.identifier),
+      negativeBlocks: presetBlocks(preset, `image-negative:${kind}`, input).map((b) => b.name || b.identifier),
+      sizeFrom: input.size ? 'scene' : out.size ? 'model' : presetSize ? 'preset' : 'default',
+    },
+  };
 }
 
 /** 没有分配生图提示词智能体、或者没有生图预设时：image### 就是写好的画面描述原文 */
