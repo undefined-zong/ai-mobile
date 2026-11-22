@@ -876,6 +876,7 @@ export const {
   seek,
   setVolume,
   cycleMode,
+  fadeOut,
   sessionSummary,
   stop,
 } = together;

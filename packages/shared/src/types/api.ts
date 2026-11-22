@@ -135,6 +135,7 @@ export type AgentRole =
   | 'companion'
   | 'decor'
   | 'date'
+  | 'rest'
   | 'sidestory'
   | 'novel'
   | 'summary'
@@ -239,6 +240,13 @@ export const AGENT_META: Record<
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-heart-handshake',
+  },
+  rest: {
+    label: '休息',
+    desc: '休息（午睡、散步、泡澡、静坐）时Ta说的话：开始时、换了一幅画面时、计时到点时说一句，回你说的话。默认跟随「陪伴 · 快速」，改成单独设置后只给休息用、不和它共用；提示词在"功能 → 休息"预设里调',
+    capability: 'chat',
+    runsOn: 'client',
+    icon: 'i-lucide-leaf',
   },
   sidestory: {
     label: '番外 · Ta的生活',

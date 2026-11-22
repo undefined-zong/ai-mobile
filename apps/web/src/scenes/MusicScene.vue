@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { characterPronoun } from '@app/shared';
+import { characterPronoun, restActivity } from '@app/shared';
 import { expressionField, lrcIndexAt, type MessagePart } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FlyingDanmaku from '@/components/scene/FlyingDanmaku.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
+import TimerButton from '@/components/scene/TimerButton.vue';
+import TimerPop from '@/components/scene/TimerPop.vue';
+import { useSceneTimer } from '@/composables/useSceneTimer';
 import Avatar from '@/components/common/Avatar.vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
 import { danmaku as demoDanmaku, songs as demoSongs } from '@/mock/music';
@@ -18,6 +21,7 @@ import {
   current,
   cycleMode,
   enqueue,
+  fadeOut,
   next,
   onPlayerEvent,
   player,
@@ -28,6 +32,7 @@ import {
   removeAt,
   seek,
   setVolume,
+  stop as stopMusic,
   toggle,
 } from '@/services/musicPlayer';
 import { personaOf } from '@/services/prompt';
@@ -46,6 +51,9 @@ import { clock, listTime } from '@/utils/time';
  * - 右上角一列：音量（音乐的音量记在网易云的设置里，开着白噪音时一起调）、白噪音（本机合成，和歌叠着放，services/ambience.ts）、
  *   这首歌的弹幕（从聊天记录里按歌名找，以前听这首时她说的也在）；
  * - 去聊天、打电话时歌还在放；离开这件事时停。
+ * - 一个人听（?solo=1，休息里的"听音乐"）：没有她，不发弹幕、不能跟她说，也不记进聊天；离开这一页歌就停。
+ * - 唱片放歌时慢慢转；手指按住能拨着转（松手带一点惯性），轻点一下是暂停 / 播放。
+ * - 右上角白噪音下面是计时器：要的时候才开，到点响两声，歌和白噪音慢慢停（睡前听着睡）。
  * 没填 Worker 地址时是示例歌曲（虚构的歌、原创占位歌词、不出声）。
  */
 const app = useAppStore();
@@ -54,6 +62,8 @@ const chat = useChatStore();
 const svc = useServicesStore();
 const route = useRoute();
 const router = useRouter();
+/** 一个人听：休息里的"听音乐"（没有角色时也是一个人） */
+const solo = computed(() => route.query.solo === '1' || !chars.list.length);
 const her = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
 const chatId = computed(() => chat.chatOfCharacter(her.value.id)?.id ?? '');
 const userName = computed(() => personaOf(chat.chatById(chatId.value)).name);
@@ -143,7 +153,7 @@ function parseBatch(valid: Set<number>) {
 /** 一首歌开始、歌词到了：让她一次写好这首歌的弹幕（「陪伴 · 快速」+"一起听歌"预设的"批量写弹幕"） */
 async function planReactions() {
   const s = song.value;
-  if (!s || player.lyricState !== 'ok' || plannedFor.value === s.id || !chatId.value) return;
+  if (solo.value || !s || player.lyricState !== 'ok' || plannedFor.value === s.id || !chatId.value) return;
   plannedFor.value = s.id;
   reactions = [];
   const lines = lyricLines();
@@ -407,7 +417,7 @@ const MODE = {
 } as const;
 
 // —— 右上角一列：音量、白噪音、这首歌的弹幕（同出逃、戳戳乐：竖着排在顶栏下面，面板在左边展开，同一时间只开一个） ——
-type Pop = 'volume' | 'noise' | 'danmaku';
+type Pop = 'volume' | 'noise' | 'danmaku' | 'timer';
 const pop = ref<Pop | null>(null);
 function togglePop(p: Pop) {
   pop.value = pop.value === p ? null : p;
@@ -477,10 +487,92 @@ function pickNoise(kind: NoiseKind | null) {
 watch(noiseVolume, (v) => {
   if (noisePlaying.value) ambience.setMix(mixOf(noise.value, v));
 });
-// 离开这一页歌就停了（chat.leaveScene），白噪音也停
-onBeforeUnmount(() => ambience.stop());
+// 离开这一页歌就停了（chat.leaveScene；一个人听时不经过聊天，在这里停），白噪音也停
+onBeforeUnmount(() => {
+  ambience.stop();
+  if (solo.value) stopMusic();
+});
+
+// —— 计时器：右上角白噪音下面，要的时候才开；到点歌和白噪音慢慢停 ——
+const TIMER_OPTIONS = restActivity('music')?.minutes ?? [15, 30, 45, 60];
+const timer = useSceneTimer({
+  chimes: () => 2,
+  onEnd: () => {
+    if (player.playing) void fadeOut(8);
+    if (noisePlaying.value) void ambience.fadeOut(8);
+  },
+});
+
+// —— 唱片：放歌时慢慢转；手指按住能拨着转，松手带一点惯性，再慢慢回到原来的速度；轻点一下是暂停 / 播放 ——
+const vinylEl = ref<HTMLElement | null>(null);
+const angle = ref(0);
+/** 放歌时 14 秒一圈（很慢，系统开了"减少动态效果"也照样转：唱片转不转是在不在放歌的样子） */
+const SPIN = 360 / 14;
+let fling = 0;
+let raf = 0;
+let lastFrame = 0;
+let drag: { a: number; t: number; v: number; moved: number; at: number } | null = null;
+function spinning() {
+  return !!drag || Math.abs(fling) > 0 || player.playing;
+}
+function frame(t: number) {
+  const dt = lastFrame ? Math.min(0.1, (t - lastFrame) / 1000) : 0;
+  lastFrame = t;
+  if (!drag) {
+    angle.value = (angle.value + ((player.playing ? SPIN : 0) + fling) * dt) % 360;
+    fling *= Math.pow(0.3, dt);
+    if (Math.abs(fling) < 2) fling = 0;
+  }
+  if (spinning()) raf = requestAnimationFrame(frame);
+  else {
+    raf = 0;
+    lastFrame = 0;
+  }
+}
+function kick() {
+  if (!raf && spinning()) raf = requestAnimationFrame(frame);
+}
+watch(() => player.playing, kick, { immediate: true });
+onBeforeUnmount(() => cancelAnimationFrame(raf));
+function pointerAngle(e: PointerEvent): number {
+  const r = vinylEl.value!.getBoundingClientRect();
+  return (Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180) / Math.PI;
+}
+function onVinylDown(e: PointerEvent) {
+  if (!vinylEl.value) return;
+  vinylEl.value.setPointerCapture?.(e.pointerId);
+  drag = { a: pointerAngle(e), t: performance.now(), v: 0, moved: 0, at: performance.now() };
+  fling = 0;
+  kick();
+}
+function onVinylMove(e: PointerEvent) {
+  if (!drag) return;
+  const a = pointerAngle(e);
+  let d = a - drag.a;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  angle.value += d;
+  const t = performance.now();
+  drag.v = (d / Math.max(8, t - drag.t)) * 1000;
+  drag.moved += Math.abs(d);
+  drag.a = a;
+  drag.t = t;
+}
+function onVinylUp() {
+  if (!drag) return;
+  const { v, moved, at } = drag;
+  drag = null;
+  // 几乎没动、很快松开：当作点了一下
+  if (moved < 6 && performance.now() - at < 350) {
+    if (player.queue.length) onToggle();
+    return;
+  }
+  fling = Math.max(-1080, Math.min(1080, v));
+  kick();
+}
 
 const line = computed(() => {
+  if (solo.value) return '';
   if (talking.value) return herLine.value;
   // 她的弹幕正飘着：上面那行先收起来，不重复
   if (flyEl.value?.count) return '';
@@ -496,7 +588,7 @@ const subtitle = computed(() => {
 </script>
 
 <template>
-  <SceneShell class="music-shell" scene-id="music" hide-figure :line="line" :typing="talking">
+  <SceneShell class="music-shell" scene-id="music" hide-figure :hide-mode="solo" :title="solo ? '听音乐' : undefined" :line="solo ? undefined : line" :typing="!solo && talking">
     <template #actions>
       <button class="pill-btn" aria-label="搜歌" @click="openSearch"><span class="i-lucide-search" /></button>
       <button class="pill-btn" aria-label="播放列表和我们的歌单" @click="listOpen = true"><span class="i-lucide-list-music" /></button>
@@ -504,13 +596,27 @@ const subtitle = computed(() => {
 
     <template #overlay>
       <div class="vinyl-wrap">
-        <div class="vinyl" :class="{ spin: player.playing }" :style="{ '--hue': song?.hue ?? 210 }">
+        <div
+          ref="vinylEl"
+          class="vinyl"
+          role="button"
+          tabindex="0"
+          :aria-label="player.playing ? '唱片：轻点暂停，按住拨着转' : '唱片：轻点播放，按住拨着转'"
+          :style="{ '--hue': song?.hue ?? 210, transform: `rotate(${angle}deg)` }"
+          data-testid="music-vinyl"
+          @pointerdown="onVinylDown"
+          @pointermove="onVinylMove"
+          @pointerup="onVinylUp"
+          @pointercancel="onVinylUp"
+          @keydown.enter.prevent="onToggle"
+          @keydown.space.prevent="onToggle"
+        >
           <img v-if="song?.cover" :src="`${song.cover}?param=300y300`" class="label-img" alt="" referrerpolicy="no-referrer" />
           <span v-else class="label" />
         </div>
       </div>
       <!-- 她的弹幕：从右往左飘过唱片 -->
-      <div class="dm-zone">
+      <div v-if="!solo" class="dm-zone">
         <FlyingDanmaku ref="flyEl" :character="her" :top="0" :fill="1" />
       </div>
 
@@ -530,7 +636,9 @@ const subtitle = computed(() => {
         >
           <span :class="ambience.state.loading ? 'i-lucide-loader-circle spin-icon' : noisePlaying ? NOISE_LABEL[noise].icon : 'i-lucide-audio-lines'" />
         </button>
+        <TimerButton class="pill-btn" :timer="timer" :aria-expanded="pop === 'timer'" @click="togglePop('timer')" />
         <button
+          v-if="!solo"
           type="button"
           class="pill-btn relative"
           :aria-expanded="pop === 'danmaku'"
@@ -569,7 +677,10 @@ const subtitle = computed(() => {
         <p v-if="ambience.state.error" class="text-[12px] text-bad mt-2 mb-0">{{ ambience.state.error }}</p>
         <p class="text-[11.5px] text-ink-3 mt-2 mb-0">和歌叠着放；在这台设备上合成，不联网、不用流量</p>
       </div>
-      <div v-if="pop === 'danmaku'" class="side-pop" role="dialog" aria-label="这首歌的弹幕" data-testid="music-danmaku">
+      <div v-if="pop === 'timer'" class="side-pop" role="dialog" aria-label="计时器">
+        <TimerPop :timer="timer" :options="TIMER_OPTIONS" :preferred="30" hint="到点响两声，歌和白噪音慢慢停" />
+      </div>
+      <div v-if="pop === 'danmaku' && !solo" class="side-pop" role="dialog" aria-label="这首歌的弹幕" data-testid="music-danmaku">
         <div class="flex items-center gap-2 mb-1">
           <Avatar :character="her" :size="22" />
           <span class="flex-1 min-w-0 truncate text-[13.5px] font-600">{{ song ? `《${song.title}》的弹幕` : '弹幕' }}</span>
@@ -625,15 +736,16 @@ const subtitle = computed(() => {
       <button class="ctl" :aria-label="MODE[player.mode].label" :title="MODE[player.mode].label" @click="cycleMode"><span :class="MODE[player.mode].icon" /></button>
     </div>
 
-    <button v-if="suggestion" class="suggest" @click="playSuggestion">
+    <button v-if="suggestion && !solo" class="suggest" @click="playSuggestion">
       <span class="i-lucide-music-2 text-accent-ink" /><span class="flex-1 min-w-0 truncate text-left">{{ her.name }}推荐：《{{ suggestion.title }}》{{ suggestion.artist }}</span><span class="text-accent-ink">听这首</span>
     </button>
-    <form class="talk" @submit.prevent="sendTalk">
+    <form v-if="!solo" class="talk" @submit.prevent="sendTalk">
       <input v-model="talk" class="field" :placeholder="`边听边跟${her.name}说…`" :aria-label="`跟${her.name}说`" enterkeyhint="send" />
       <button type="submit" class="send" :disabled="!talk.trim() || talking" :aria-label="talking ? `${her.name}正在回复` : '发送'"><span :class="talking ? 'i-lucide-loader-circle spin-icon' : 'i-lucide-send-horizontal'" /></button>
     </form>
     <ErrorDetails v-if="talkError" :detail="talkError" title="回复失败" max-height="120px" />
-    <p v-if="notConnected && !player.demo" class="hint">{{ her.name }}不会发弹幕：{{ notConnected }}</p>
+    <p v-if="solo" class="hint">一个人听：不记进聊天，离开这一页歌就停</p>
+    <p v-else-if="notConnected && !player.demo" class="hint">{{ her.name }}不会发弹幕：{{ notConnected }}</p>
     <p v-else-if="planning" class="hint">{{ her.name }}在听这首歌的歌词……</p>
 
     <!-- 搜歌 / 导入歌单 -->
@@ -907,14 +1019,21 @@ const subtitle = computed(() => {
   object-fit: cover;
   box-shadow: 0 0 0 3px #0f0c13;
 }
-.vinyl.spin {
-  animation: spin 14s linear infinite;
+.vinyl {
+  touch-action: none;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  will-change: transform;
 }
-/* 弹幕飘过的那一条：右上角那一列下面（一列从 56 开始，三个 38 的按钮、两个 8 的间隔），唱片中下部，三道（FlyingDanmaku 一道 34px） */
+.vinyl:active {
+  cursor: grabbing;
+}
+/* 弹幕飘过的那一条：右上角那一列下面（一列从 56 开始，四个 38 的按钮、三个 8 的间隔），唱片下部，三道（FlyingDanmaku 一道 34px） */
 .dm-zone {
   position: absolute;
   z-index: 7;
-  top: calc(var(--safe-top) + 194px);
+  top: calc(var(--safe-top) + 240px);
   left: 0;
   right: 0;
   height: 102px;
@@ -998,6 +1117,12 @@ const subtitle = computed(() => {
 }
 .spin-icon {
   animation: spin 1s linear infinite;
+}
+/* scoped 样式里别的文件的 @keyframes 会被改名，这里要自己有一份（以前唱片和转圈的图标都因为找不到它而不转） */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .suggest {
   display: flex;

@@ -6,40 +6,44 @@ import {
   REST_ACTIVITIES,
   breathAt,
   characterPronoun,
-  minutesLabel,
   pronounText,
   restActivity,
   type BackgroundPlace,
   type Character,
+  type EscapeView,
   type RestKind,
   type RestNoise,
 } from '@app/shared';
 import { computed, inject, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Avatar from '@/components/common/Avatar.vue';
+import EscapeBackdrop from '@/components/scene/escape/EscapeBackdrop.vue';
 import PlaylistMusic from '@/components/scene/PlaylistMusic.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
-import TimerRing from '@/components/scene/TimerRing.vue';
+import TimerButton from '@/components/scene/TimerButton.vue';
+import TimerPop from '@/components/scene/TimerPop.vue';
 import { SCENE_FIGURE_LAYOUTS, SCENE_LOCATION } from '@/components/scene/location';
-import { goBack } from '@/router';
+import { BACKGROUND_ASSETS, backgroundUrl } from '@/backgrounds/library';
+import { useSceneTimer } from '@/composables/useSceneTimer';
 import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseMix } from '@/services/ambience';
-import { prepareChime, type Chime } from '@/services/chime';
 import { restMusic } from '@/services/musicPlayer';
 import { restSearches } from '@/services/playlistSearches';
+import { pexelsMedia } from '@/services/previewMedia';
 import { personaOf } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
-import { clock } from '@/utils/time';
 
 /**
- * 休息：午睡、散步、泡澡、静坐、听音乐（每种的时长、背景、姿势在 @app/shared 的 rest.ts）。
- * - 一个人（?solo=1）：只有画面、计时、白噪音和音乐，不记进任何聊天；随时可以"叫上"一个角色；
- * - 和她一起：她也在做同样的事（午睡也躺下、静坐坐在旁边），开始、中途、到点各说一句，也能跟她说话；
- *   午睡、静坐时她不主动说话，只在开始和结束时说一句。聊天里记"来到…"（ScenePage）。
- * - 先选怎么休息、多久、开什么白噪音，点开始；定了时长的到点响铃（本机合成）、震一下，她叫你。
- * - 静坐：跟着圆圈呼吸（放松 4-6、方块 4-4-4-4、4-7-8）。
- * - 白噪音（services/ambience.ts，本机合成）和音乐（网易云歌单 restMusic）可以叠着放；她说话时不压低（她只说一两句）。
+ * 休息：午睡、散步、泡澡、静坐、听音乐（每种的背景、姿势、计时可选的时长在 @app/shared 的 rest.ts）。
+ * - 先选怎么休息（选的时候背景就换过去），点开始；面板只留在哪、和她说话、换一幅 / 换个方式。
+ * - 散步、泡澡、静坐的背景会动（同出逃：Pexels 的实拍视频、素材库的插画叠热气 / 花瓣 / 光点），"换一幅"在几幅里轮换。
+ * - 右上角竖着一列：音乐（网易云歌单）、白噪音（本机合成）、计时器（要的时候才开：选几分钟，到点轻轻响铃、震一下，她叫你）。
+ * - 静坐：画面中间是跟着呼吸的圆圈（放松 4-6、方块 4-4-4-4、4-7-8）。
+ * - 听音乐：去"一起听歌"（一个人时是它的一个人模式，中间的唱片能用手拨着转）。
+ * - 一个人（?solo=1）：不记进任何聊天，随时能"叫上谁一起"；和她一起：她也在做同样的事（午睡也躺下、一分钟后睡着；
+ *   静坐坐在呼吸圈旁边），开始、换了画面、到点各说一句，也能打字跟她说；午睡、静坐时她不主动说话，输入框收起来。
+ *   聊天里记"来到…"（ScenePage）。她说的话用"休息"这一项 API（默认跟随「陪伴 · 快速」）和"休息"功能预设。
  */
 const route = useRoute();
 const router = useRouter();
@@ -53,12 +57,13 @@ const her = computed<Character | null>(() => chars.byId(app.activeCharacterId) ?
 const chatId = computed(() => (solo.value || !her.value ? undefined : chat.chatOfCharacter(her.value.id)?.id));
 const pronoun = computed(() => characterPronoun(her.value));
 
-// —— 记在这台设备上：上次选的休息方式、每种的时长和白噪音、音量、呼吸节奏 ——
+// —— 记在这台设备上：上次选的休息方式、每种的白噪音、看的哪一幅、计时选的几分钟，音量、呼吸节奏 ——
 const SAVE_KEY = 'ai-mobile:rest:v1';
 interface Saved {
   kind?: string;
   minutes?: Partial<Record<RestKind, number>>;
   noise?: Partial<Record<RestKind, RestNoise | null>>;
+  view?: Partial<Record<RestKind, string>>;
   volume?: number;
   breath?: string;
 }
@@ -85,131 +90,109 @@ const noiseOf = reactive(
     }),
   ) as Record<RestKind, RestNoise | null>,
 );
+const viewOf = reactive<Partial<Record<RestKind, string>>>({ ...(saved.view ?? {}) });
 const noiseVolume = ref(typeof saved.volume === 'number' ? Math.max(0, Math.min(100, saved.volume)) : 55);
 const breathId = ref(BREATH_PATTERNS.some((p) => p.id === saved.breath) ? saved.breath! : BREATH_PATTERNS[0]!.id);
 const pattern = computed(() => BREATH_PATTERNS.find((p) => p.id === breathId.value) ?? BREATH_PATTERNS[0]!);
 watch(
-  () => [kind.value, { ...minutesOf }, { ...noiseOf }, noiseVolume.value, breathId.value] as const,
-  ([k, minutes, noise, volume, breath]) => {
+  () => [kind.value, { ...minutesOf }, { ...noiseOf }, { ...viewOf }, noiseVolume.value, breathId.value] as const,
+  ([k, minutes, noise, view, volume, breath]) => {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ kind: k, minutes, noise, volume, breath }));
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ kind: k, minutes, noise, view, volume, breath }));
     } catch {
       /* 无痕模式：下次用默认的 */
     }
   },
 );
 
-// —— 计时：选好 → 开始 → 到点（或自己结束） ——
-type Phase = 'setup' | 'running' | 'done';
+// —— 先选，再开始 ——
+type Phase = 'setup' | 'resting';
 const phase = ref<Phase>('setup');
-/** 这一次定的分钟数（0 是不计时）：开始时记下，中途改设置不影响 */
-const runMinutes = ref(0);
 const startedAt = ref(0);
-const pausedTotal = ref(0);
-const pausedAt = ref<number | null>(null);
-const now = ref(Date.now());
-const timed = computed(() => runMinutes.value > 0);
-const elapsedSec = computed(() => (startedAt.value ? Math.max(0, ((pausedAt.value ?? now.value) - startedAt.value - pausedTotal.value) / 1000) : 0));
-const totalSec = computed(() => runMinutes.value * 60);
-const remainSec = computed(() => Math.max(0, totalSec.value - elapsedSec.value));
-const progress = computed(() => (timed.value ? Math.min(1, elapsedSec.value / totalSec.value) : 0));
-const finished = ref<{ sec: number; byTimer: boolean } | null>(null);
 
-let ticker = 0;
-let chime: Chime | null = null;
-let midSaid = false;
-let lastTalkAt = 0;
-
-/** 在点击里调用：借好提示音、开白噪音都要点击当下 */
+/** 在点击里调用：开白噪音要点击当下 */
 function start() {
-  runMinutes.value = minutesOf[kind.value];
+  if (kind.value === 'music') {
+    goMusic();
+    return;
+  }
+  phase.value = 'resting';
   startedAt.value = Date.now();
-  now.value = startedAt.value;
-  pausedTotal.value = 0;
-  pausedAt.value = null;
-  finished.value = null;
-  midSaid = false;
-  phase.value = 'running';
-  chime?.dispose();
-  chime = timed.value ? prepareChime() : null;
+  doneNote.value = '';
   const n = noiseOf[kind.value];
-  if (n) playNoise(n);
-  else if (noisePlaying.value) ambience.stop();
+  if (n && shownNoise.value !== n) playNoise(n);
   if (her.value && !solo.value) chars.setExpression(her.value.id, activity.value.expression);
-  clearInterval(ticker);
-  ticker = window.setInterval(tick, 1000);
   breathLoop();
   void speak('rest-start');
 }
-function tick() {
-  now.value = Date.now();
-  if (phase.value !== 'running' || pausedAt.value) return;
-  if (timed.value && remainSec.value <= 0) {
-    finish(true);
-    return;
-  }
-  midCheck();
-}
-function togglePause() {
-  if (phase.value !== 'running') return;
-  if (pausedAt.value) {
-    pausedTotal.value += Date.now() - pausedAt.value;
-    pausedAt.value = null;
-    breathLoop();
-  } else {
-    pausedAt.value = Date.now();
-  }
-}
-function finish(byTimer: boolean) {
-  if (phase.value !== 'running') return;
-  now.value = Date.now();
-  // 到点的按定的时长算（切到后台时计时器会晚醒一会儿）
-  finished.value = { sec: byTimer ? totalSec.value : elapsedSec.value, byTimer };
-  phase.value = 'done';
-  pausedAt.value = null;
-  clearInterval(ticker);
-  if (byTimer) chime?.ring(kind.value === 'nap' ? 4 : 2);
-  // 到点了：白噪音慢慢小下去；午睡、静坐的音乐也停（散步、泡澡、听音乐的歌接着放）
-  if (noisePlaying.value) void ambience.fadeOut(byTimer ? 6 : 2);
-  if (byTimer && (kind.value === 'nap' || kind.value === 'sit') && restMusic.state.playing) void restMusic.fadeOut(6);
-  if (her.value && !solo.value) chars.setExpression(her.value.id, 'smile');
-  void speak('rest-end');
-}
-function again() {
-  start();
+/** 听音乐就去"一起听歌"：一个人时是它的一个人模式 */
+function goMusic() {
+  void router.push({ path: '/scene/music', query: solo.value ? { solo: '1' } : {} });
 }
 function backToSetup() {
   phase.value = 'setup';
-  finished.value = null;
   line.value = '';
+  doneNote.value = '';
+  talkOpen.value = false;
+  clearTimeout(remarkTimer);
+  timer.cancel();
 }
-onBeforeUnmount(() => {
-  clearInterval(ticker);
-  cancelAnimationFrame(breathRaf);
-  chime?.dispose();
-  ambience.stop();
-  restMusic.stop();
-});
 
-/** 散步、泡澡、听音乐：一半的时候（不计时的到 10 分钟）她随口说一句；你刚说过话就不插嘴 */
-function midCheck() {
-  if (midSaid || activity.value.quiet || !chatId.value) return;
-  const at = timed.value ? totalSec.value / 2 : 600;
-  if (elapsedSec.value < at) return;
-  midSaid = true;
-  if (Date.now() - lastTalkAt < 60_000) return;
-  void speak('rest-check');
+// —— 会动的背景：散步、泡澡、静坐有几幅画面 ——
+const views = computed<EscapeView[]>(() => activity.value.views ?? []);
+const view = computed<EscapeView | null>(() => views.value.find((v) => v.id === viewOf[kind.value]) ?? views.value[0] ?? null);
+function show(id: string) {
+  viewOf[kind.value] = id;
+  pickerOpen.value = false;
+  scheduleRemark();
 }
+function nextView() {
+  const list = views.value;
+  if (!list.length || !view.value) return;
+  const i = list.findIndex((v) => v.id === view.value!.id);
+  show(list[(i + 1) % list.length]!.id);
+}
+const pickerOpen = ref(false);
+function thumbOf(v: EscapeView): string {
+  if (v.kind === 'video') return pexelsMedia(v.poster);
+  const asset = BACKGROUND_ASSETS.find((a) => a.id === v.image);
+  return asset ? backgroundUrl(asset) : '';
+}
+
+// —— 计时器：右上角白噪音下面，要的时候才开 ——
+const doneNote = ref('');
+const timer = useSceneTimer({
+  chimes: () => (kind.value === 'nap' ? 4 : 2),
+  onEnd: (m) => {
+    doneNote.value = `到点了 · ${activity.value.doneVerb} ${m} 分钟`;
+    // 白噪音慢慢小下去；午睡、静坐的音乐也停（散步、泡澡的歌接着放）
+    if (noisePlaying.value) void ambience.fadeOut(6);
+    if ((kind.value === 'nap' || kind.value === 'sit') && restMusic.state.playing) void restMusic.fadeOut(6);
+    if (her.value && !solo.value) chars.setExpression(her.value.id, 'smile');
+    void speak('rest-end', m);
+  },
+});
+// 记下这种休息上次选的几分钟，下次面板里先亮着它
+watch(
+  () => timer.state.startedAt,
+  () => {
+    if (timer.running.value) minutesOf[kind.value] = timer.state.minutes;
+  },
+);
+const timerHint = computed(() => {
+  const base = kind.value === 'nap' ? '到点轻轻响几声铃、震一下' : '到点响两声，白噪音慢慢停';
+  return !solo.value && her.value ? `${base}，${her.value.name}${kind.value === 'nap' ? '叫你起来' : '跟你说一声'}` : base;
+});
 
 // —— 静坐：跟着圆圈呼吸 ——
 const breathT = ref(0);
 let breathRaf = 0;
 function breathLoop() {
   cancelAnimationFrame(breathRaf);
-  if (kind.value !== 'sit' || phase.value !== 'running' || pausedAt.value) return;
+  if (kind.value !== 'sit' || phase.value !== 'resting') return;
   const step = () => {
-    if (kind.value !== 'sit' || phase.value !== 'running' || pausedAt.value) return;
-    breathT.value = (Date.now() - startedAt.value - pausedTotal.value) / 1000;
+    if (kind.value !== 'sit' || phase.value !== 'resting') return;
+    breathT.value = (Date.now() - startedAt.value) / 1000;
     breathRaf = requestAnimationFrame(step);
   };
   step();
@@ -231,7 +214,7 @@ function playNoise(k: RestNoise) {
   playingNoise.value = k;
   void ambience.start(mixOf(k, noiseVolume.value));
 }
-/** 在点击里调用：选了就放（选的时候能先听听），null 是关掉 */
+/** 在点击里调用：选了就放，记成这种休息的白噪音；null 是关掉 */
 function pickNoise(k: RestNoise | null) {
   noiseOf[kind.value] = k;
   if (!k) {
@@ -246,80 +229,93 @@ watch(noiseVolume, (v) => {
 });
 const shownNoise = computed<RestNoise | null>(() => (noisePlaying.value ? playingNoise.value : null));
 
-// —— 音乐：网易云的歌单（听音乐时就在面板里，别的时候在右上角） ——
+// —— 右上角一列：音乐、白噪音、计时器，面板同一时间只开一个 ——
+type Pop = 'music' | 'noise' | 'timer';
+const pop = ref<Pop | null>(null);
+function togglePop(p: Pop) {
+  pop.value = pop.value === p ? null : p;
+}
 const musicPlaying = computed(() => restMusic.state.playing && !restMusic.state.fading);
-const musicOpen = ref(false);
-const noiseOpen = ref(false);
-function toggleMusicPop() {
-  noiseOpen.value = false;
-  musicOpen.value = !musicOpen.value;
-}
-function toggleNoisePop() {
-  musicOpen.value = false;
-  noiseOpen.value = !noiseOpen.value;
-}
-function closePops() {
-  musicOpen.value = false;
-  noiseOpen.value = false;
-}
-const musicInPanel = computed(() => kind.value === 'music' && phase.value !== 'setup');
+
+onBeforeUnmount(() => {
+  cancelAnimationFrame(breathRaf);
+  clearTimeout(remarkTimer);
+  ambience.stop();
+  restMusic.stop();
+});
 
 // —— 她说话 ——
 const line = ref('');
 const typing = ref(false);
 const failed = ref('');
 const notConnected = ref('');
-const mins = (sec: number) => Math.max(0, Math.round(sec / 60));
-
+const said: string[] = [];
+const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
 const userName = computed(() => personaOf(chatId.value ? chat.chatById(chatId.value) : undefined).name);
-function sceneInput(): string {
+
+function sceneInput(endedMinutes?: number): string {
   const a = activity.value;
   const you = userName.value;
-  const lines = [
-    `${you}在休息：${a.name}${phase.value === 'setup' ? '' : timed.value ? `，定了 ${runMinutes.value} 分钟` : '，不计时'}`,
-    `你也在${a.name}，陪着${you}`,
-  ];
-  if (phase.value === 'running') lines.push(`已经 ${mins(elapsedSec.value)} 分钟${timed.value ? `，还剩 ${Math.max(1, mins(remainSec.value))} 分钟` : ''}${pausedAt.value ? '（暂停了）' : ''}`);
-  if (phase.value === 'done' && finished.value) lines.push(`${finished.value.byTimer ? '到点了' : `${you}自己结束了`}，一共 ${Math.max(1, mins(finished.value.sec))} 分钟`);
+  const lines = [`${you}在休息：${a.name}`, `你也在${a.name}，陪着${you}`];
+  if (view.value) lines.push(`眼前：${view.value.desc}`);
+  if (phase.value === 'resting' && startedAt.value) lines.push(`已经歇了 ${mins((Date.now() - startedAt.value) / 1000)} 分钟`);
+  if (timer.running.value) lines.push(`定了 ${timer.state.minutes} 分钟的计时，还剩 ${mins(timer.remainSec.value)} 分钟`);
+  if (endedMinutes) lines.push(`计时到点了：${a.doneVerb} ${endedMinutes} 分钟`);
   if (a.id === 'sit') lines.push(`呼吸节奏：${pattern.value.name}（${pattern.value.desc}）`);
   if (shownNoise.value) lines.push(`开着白噪音：${NOISE_LABEL[shownNoise.value].label}`);
   const song = restMusic.current();
   if (song && musicPlaying.value) lines.push(`在听歌：《${song.title}》- ${song.artist}${restMusic.state.demo ? '（示例歌曲）' : ''}`);
+  if (said.length) lines.push(`你刚才说过：${said.slice(-3).join(' / ')}`);
   return lines.join('\n');
 }
-async function speak(task: 'rest-start' | 'rest-check' | 'rest-end') {
+function sayIt(text: string, expr?: string | null) {
+  line.value = text;
+  said.push(text);
+  if (expr && her.value) chars.setExpression(her.value.id, expr);
+}
+async function speak(task: 'rest-start' | 'rest-check' | 'rest-end', endedMinutes?: number) {
   const id = chatId.value;
   if (!id || typing.value) return;
   typing.value = true;
   failed.value = '';
-  const r = await chat.sceneReply(id, { task, input: sceneInput(), cue: `休息 · ${activity.value.name}`, allowedTags: ['expr'] });
+  const r = await chat.sceneReply(id, { task, input: sceneInput(endedMinutes), cue: `休息 · ${activity.value.name}`, allowedTags: ['expr'], agent: 'rest' });
   typing.value = false;
   if (!r.ok) {
     if (r.notConnected) notConnected.value = r.reason;
-    // 中途那句没说上就算了
+    // 换了画面那句没说上就算了
     else if (task !== 'rest-check') failed.value = r.reason;
     return;
   }
   notConnected.value = '';
-  line.value = r.message.text || '……';
-  if (r.message.expression && her.value) chars.setExpression(her.value.id, r.message.expression);
+  sayIt(r.message.text || '……', r.message.expression);
+}
+
+/** 散步、泡澡换了一幅画面：等画面停下来一会儿她再说一句（一直在翻就不说；午睡、静坐不打扰） */
+let remarkTimer = 0;
+let lastTalkAt = 0;
+function scheduleRemark() {
+  clearTimeout(remarkTimer);
+  if (!chatId.value || phase.value !== 'resting' || activity.value.quiet) return;
+  remarkTimer = window.setTimeout(() => {
+    if (Date.now() - lastTalkAt < 30_000) return;
+    void speak('rest-check');
+  }, 2400);
 }
 
 const talk = ref('');
 /** 午睡、静坐时输入框收起来，点"小声说一句"才出来 */
 const talkOpen = ref(false);
-const showTalk = computed(() => !solo.value && !!her.value && phase.value !== 'setup' && (!activity.value.quiet || talkOpen.value || phase.value === 'done'));
-/** 一个人休息时画面中间有大计时圈，面板里就不再写一遍时间 */
-const ringShown = computed(() => phase.value === 'running' && solo.value && kind.value !== 'sit');
+const showTalk = computed(() => !solo.value && !!her.value && phase.value === 'resting' && (!activity.value.quiet || talkOpen.value));
 async function sendTalk() {
   const text = talk.value.trim();
   const id = chatId.value;
   if (!text || !id || typing.value) return;
+  clearTimeout(remarkTimer);
   talk.value = '';
   lastTalkAt = Date.now();
   typing.value = true;
   failed.value = '';
-  const r = await chat.sceneReply(id, { task: 'rest-chat', input: sceneInput(), userText: text, cue: `休息 · ${activity.value.name}`, allowedTags: ['expr'] });
+  const r = await chat.sceneReply(id, { task: 'rest-chat', input: sceneInput(), userText: text, cue: `休息 · ${activity.value.name}`, allowedTags: ['expr'], agent: 'rest' });
   typing.value = false;
   if (!r.ok) {
     if (r.notConnected) notConnected.value = r.reason;
@@ -327,8 +323,7 @@ async function sendTalk() {
     return;
   }
   notConnected.value = '';
-  line.value = r.message.text || '……';
-  if (r.message.expression && her.value) chars.setExpression(her.value.id, r.message.expression);
+  sayIt(r.message.text || '……', r.message.expression);
 }
 
 // —— 一个人 ⇄ 叫上她 ——
@@ -346,15 +341,16 @@ function invite(c: Character) {
 }
 function goSolo() {
   if (solo.value) return;
+  clearTimeout(remarkTimer);
   line.value = '';
   failed.value = '';
   notConnected.value = '';
   talkOpen.value = false;
   void router.replace({ query: { ...route.query, solo: '1' } });
 }
-// 休息到一半叫上了她：她说一句"来了"
+// 歇到一半叫上了她：她说一句
 watch(chatId, (id, old) => {
-  if (id && id !== old && phase.value === 'running') void speak('rest-start');
+  if (id && id !== old && phase.value === 'resting') void speak('rest-start');
 });
 
 // —— 画面：背景、她躺着还是坐着、午睡时暗下来 ——
@@ -368,21 +364,27 @@ const backgroundPlace = computed<BackgroundPlace>(() => {
     ...(a.backgroundSet ? { backgroundSet: a.backgroundSet } : {}),
   };
 });
-const layoutKey = computed(() => (phase.value === 'running' && kind.value === 'nap' ? 'rest:nap' : kind.value === 'sit' && phase.value === 'running' ? 'rest:sit' : 'rest'));
+const layoutKey = computed(() => {
+  if (phase.value === 'resting' && kind.value === 'nap') return 'rest:nap';
+  if (phase.value === 'resting' && kind.value === 'sit') return 'rest:sit';
+  return view.value ? 'rest:view' : 'rest';
+});
 const layout = computed(() => SCENE_FIGURE_LAYOUTS.find((s) => s.id === layoutKey.value)!.layout!);
 const pose = computed(() => (phase.value === 'setup' && kind.value === 'nap' ? 'sit' : activity.value.pose));
-/** 午睡一分钟以后她也睡着了（到点她先醒，叫你） */
-const expression = computed(() => (phase.value === 'running' && kind.value === 'nap' && elapsedSec.value > 60 ? 'sleep' : undefined));
-const dim = computed(() => (phase.value === 'running' && kind.value === 'nap' ? 0.45 : 0));
-const title = computed(() => (phase.value === 'setup' ? '休息' : `休息 · ${activity.value.name}`));
+/** 午睡一分钟以后她也睡着了（到点她先醒，叫你）；顺便给面板上的钟用 */
+const now = ref(Date.now());
+const nowTick = window.setInterval(() => (now.value = Date.now()), 15_000);
+onBeforeUnmount(() => clearInterval(nowTick));
+const expression = computed(() => (phase.value === 'resting' && kind.value === 'nap' && !doneNote.value && now.value - startedAt.value > 60_000 ? 'sleep' : undefined));
+const dim = computed(() => (phase.value === 'resting' && kind.value === 'nap' && !doneNote.value ? 0.45 : 0));
+/** 顶栏要给"连线 / 坐在旁边"和聊天记录让地方：休息中只写在做什么 */
+const title = computed(() => (phase.value === 'setup' ? '休息' : activity.value.name));
 const herDoing = computed(() => (her.value ? pronounText(activity.value.together, her.value) : ''));
-const doneText = computed(() => {
-  const f = finished.value;
-  if (!f) return '';
-  const m = Math.max(1, mins(f.sec));
-  return `${activity.value.doneVerb} ${m} 分钟`;
+const placeLabel = computed(() => view.value?.label ?? BACKGROUND_KINDS[activity.value.backdrop].label);
+const clockText = computed(() => {
+  const d = new Date(now.value);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 });
-const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.value] ? ` · ${minutesOf[kind.value]} 分钟` : ''}`);
 </script>
 
 <template>
@@ -392,7 +394,7 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
     :title="title"
     :backdrop="activity.backdrop"
     :background-location="backgroundPlace"
-    :rain="shownNoise === 'rain' && kind !== 'bath'"
+    :rain="shownNoise === 'rain' && !view"
     :dim="dim"
     :pose="pose"
     :outfit="activity.outfit"
@@ -404,18 +406,20 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
     :layout="layout"
     :layout-key="layoutKey"
   >
+    <template v-if="view" #backdrop>
+      <EscapeBackdrop :view="view" />
+    </template>
     <template #overlay>
-      <!-- 右上角：音乐、白噪音，竖着排在顶栏下面（同出逃） -->
+      <!-- 右上角：音乐、白噪音、计时器，竖着排在顶栏下面（同出逃） -->
       <div class="side-tools">
         <button
-          v-if="!musicInPanel"
           type="button"
           class="tool"
           :class="{ on: musicPlaying }"
-          :aria-expanded="musicOpen"
+          :aria-expanded="pop === 'music'"
           :aria-label="musicPlaying ? `音乐：${restMusic.current()?.title ?? '正在播放'}` : '音乐'"
           data-testid="rest-music-btn"
-          @click="toggleMusicPop"
+          @click="togglePop('music')"
         >
           <span :class="restMusic.state.loading ? 'i-lucide-loader-circle spin' : musicPlaying ? 'i-lucide-disc-3 spin-slow' : 'i-lucide-music'" />
         </button>
@@ -423,22 +427,23 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
           type="button"
           class="tool"
           :class="{ on: noisePlaying }"
-          :aria-expanded="noiseOpen"
+          :aria-expanded="pop === 'noise'"
           :aria-label="`白噪音：${shownNoise ? NOISE_LABEL[shownNoise].label : '关'}`"
           data-testid="rest-noise-btn"
-          @click="toggleNoisePop"
+          @click="togglePop('noise')"
         >
           <span :class="[shownNoise ? NOISE_LABEL[shownNoise].icon : 'i-lucide-audio-lines', { spin: ambience.state.loading }]" />
         </button>
+        <TimerButton class="tool" :timer="timer" :aria-expanded="pop === 'timer'" @click="togglePop('timer')" />
       </div>
-      <div v-if="musicOpen || noiseOpen" class="pop-catcher" @click="closePops" />
-      <div v-if="musicOpen" class="side-pop" role="dialog" aria-label="音乐">
+      <div v-if="pop" class="pop-catcher" @click="pop = null" />
+      <div v-if="pop === 'music'" class="side-pop" role="dialog" aria-label="音乐">
         <PlaylistMusic :player="restMusic" :searches="restSearches" test-id="rest-music" />
       </div>
-      <div v-if="noiseOpen" class="side-pop noise" role="dialog" aria-label="白噪音" data-testid="rest-noise">
+      <div v-if="pop === 'noise'" class="side-pop pad" role="dialog" aria-label="白噪音" data-testid="rest-noise">
         <div class="flex gap-2 flex-wrap">
           <button type="button" class="chip" :class="{ on: !shownNoise }" @click="pickNoise(null)"><span class="i-lucide-volume-x" />关</button>
-          <button v-for="k in NOISE_KINDS" :key="k" type="button" class="chip" :class="{ on: shownNoise === k }" :aria-pressed="shownNoise === k" @click="pickNoise(k)">
+          <button v-for="k in NOISE_KINDS" :key="k" type="button" class="chip" :class="{ on: shownNoise === k }" :aria-pressed="shownNoise === k" :data-noise="k" @click="pickNoise(k)">
             <span :class="NOISE_LABEL[k].icon" />{{ NOISE_LABEL[k].label }}
           </button>
         </div>
@@ -447,32 +452,25 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
           <van-slider v-model="noiseVolume" class="flex-1" bar-height="4px" button-size="16px" aria-label="白噪音音量" />
         </div>
         <p v-if="ambience.state.error" class="text-[12px] text-bad mt-2 mb-0">{{ ambience.state.error }}</p>
-        <p class="text-[11.5px] text-ink-3 mt-2 mb-0">在这台设备上合成，不联网、不用流量</p>
+        <p class="text-[11.5px] text-ink-3 mt-2 mb-0">在这台设备上合成，不联网、不用流量；选了的下次{{ activity.name }}时自动开</p>
+      </div>
+      <div v-if="pop === 'timer'" class="side-pop pad" role="dialog" aria-label="计时器">
+        <TimerPop :timer="timer" :options="activity.minutes" :preferred="minutesOf[kind]" :hint="timerHint" />
       </div>
 
-      <!-- 画面中间：一个人时的大计时圈；静坐时的呼吸圈 -->
-      <div v-if="phase === 'running' && kind === 'sit'" class="breath-wrap" :class="{ beside: !solo }" aria-live="polite" data-testid="rest-breath">
+      <!-- 静坐：跟着呼吸的圆圈 -->
+      <div v-if="phase === 'resting' && kind === 'sit'" class="breath-wrap" :class="{ beside: !solo }" aria-live="polite" data-testid="rest-breath">
         <div class="breath-halo" :style="{ transform: `scale(${breathScale})` }" />
         <div class="breath-core" :style="{ transform: `scale(${0.6 + breathScale * 0.4})` }">
-          <span class="breath-word">{{ pausedAt ? '暂停' : BREATH_PHASE_LABEL[breath.phase] }}</span>
-          <span v-if="!pausedAt" class="num breath-count">{{ breath.left }}</span>
+          <span class="breath-word">{{ BREATH_PHASE_LABEL[breath.phase] }}</span>
+          <span class="num breath-count">{{ breath.left }}</span>
         </div>
-      </div>
-      <div v-else-if="ringShown" class="center-ring" :class="{ nap: kind === 'nap' }">
-        <TimerRing
-          :remain-sec="timed ? remainSec : elapsedSec"
-          :total-sec="timed ? totalSec : 3600"
-          :count-up="!timed"
-          :size="196"
-          tone="var(--tint)"
-          :label="pausedAt ? '暂停中' : timed ? `${activity.name} · 还剩` : `${activity.name} · 已经`"
-        />
       </div>
     </template>
 
     <div v-if="!solo && notConnected" class="mini-notice" data-testid="rest-not-connected">
       <span class="i-lucide-plug-zap shrink-0" /><span class="flex-1 min-w-0">{{ her?.name }}说不了话：{{ notConnected }}</span>
-      <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=companion')">去设置</button>
+      <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=rest')">去设置</button>
     </div>
     <div v-else-if="!solo && failed" class="mini-notice">
       <span class="i-lucide-circle-alert shrink-0" /><span class="flex-1 min-w-0">{{ pronoun }}没回上来：{{ failed }}</span>
@@ -509,96 +507,84 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
       </div>
       <p class="blurb">{{ activity.blurb }}</p>
 
-      <div class="opt">
-        <span class="opt-label">多久</span>
-        <div class="chips">
-          <button v-for="m in activity.minutes" :key="m" type="button" class="chip" :class="{ on: minutesOf[kind] === m }" :aria-pressed="minutesOf[kind] === m" @click="minutesOf[kind] = m">
-            {{ minutesLabel(m) }}
-          </button>
-        </div>
+      <div v-if="kind === 'sit'" class="chips">
+        <button v-for="p in BREATH_PATTERNS" :key="p.id" type="button" class="chip" :class="{ on: breathId === p.id }" :aria-pressed="breathId === p.id" @click="breathId = p.id">
+          {{ p.name }}<span class="text-ink-3 text-[11px]">{{ p.desc }}</span>
+        </button>
       </div>
-      <div v-if="kind === 'sit'" class="opt">
-        <span class="opt-label">呼吸</span>
-        <div class="chips">
-          <button v-for="p in BREATH_PATTERNS" :key="p.id" type="button" class="chip" :class="{ on: breathId === p.id }" :aria-pressed="breathId === p.id" @click="breathId = p.id">
-            {{ p.name }}<span class="text-ink-3 text-[11px]">{{ p.desc }}</span>
-          </button>
-        </div>
-      </div>
-      <div class="opt">
-        <span class="opt-label">白噪音</span>
-        <div class="chips">
-          <button type="button" class="chip" :class="{ on: !noiseOf[kind] }" @click="pickNoise(null)">关</button>
-          <button v-for="k in NOISE_KINDS" :key="k" type="button" class="chip" :class="{ on: noiseOf[kind] === k }" :aria-pressed="noiseOf[kind] === k" :data-noise="k" @click="pickNoise(k)">
-            <span :class="NOISE_LABEL[k].icon" />{{ NOISE_LABEL[k].label }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="!solo && her" class="her-row">
+      <div v-if="!solo && her && kind !== 'music'" class="her-row">
         <Avatar :character="her" :size="26" />
         <span class="truncate">{{ herDoing }}</span>
       </div>
-      <button type="button" class="primary" data-testid="rest-start" @click="start"><span :class="activity.icon" />{{ startLabel }}</button>
+      <button type="button" class="primary" data-testid="rest-start" @click="start">
+        <span :class="activity.icon" />{{ kind === 'music' ? (solo ? '去听音乐' : `去和${her?.name ?? 'Ta'}一起听歌`) : `开始${activity.name}` }}
+      </button>
     </template>
 
-    <!-- 休息中 -->
-    <template v-else-if="phase === 'running'">
-      <div class="run-head">
-        <span class="run-icon"><span :class="activity.icon" /></span>
-        <div v-if="ringShown" class="flex-1 min-w-0">
-          <div class="text-[16px] font-600">{{ activity.name }}{{ pausedAt ? ' · 暂停中' : '' }}</div>
-          <div class="text-[12.5px] text-ink-3">{{ timed ? `定了 ${runMinutes} 分钟` : '不计时，想停就停' }}</div>
-        </div>
-        <div v-else class="flex-1 min-w-0">
-          <div class="text-[13px] text-ink-3">{{ pausedAt ? '暂停中' : timed ? `${activity.name} · 还剩` : `${activity.name} · 已经` }}</div>
-          <div class="num run-time">{{ clock(timed ? remainSec : elapsedSec) }}</div>
-        </div>
-        <button type="button" class="round" :aria-label="pausedAt ? '继续' : '暂停'" data-testid="rest-pause" @click="togglePause"><span :class="pausedAt ? 'i-lucide-play' : 'i-lucide-pause'" /></button>
-        <button type="button" class="round end" aria-label="结束" data-testid="rest-end" @click="finish(false)"><span class="i-lucide-square" /></button>
-      </div>
-      <div v-if="timed" class="bar" aria-hidden="true"><span :style="{ width: `${progress * 100}%` }" /></div>
-
-      <div v-if="!solo && her" class="her-row">
-        <Avatar :character="her" :size="26" />
-        <span class="flex-1 min-w-0 truncate">{{ herDoing }}</span>
-        <button v-if="activity.quiet && !talkOpen" type="button" class="text-accent-ink text-[12.5px] shrink-0" @click="talkOpen = true">小声说一句</button>
-      </div>
-      <p v-else-if="activity.tip" class="tip"><span class="i-lucide-lightbulb shrink-0" />{{ activity.tip }}</p>
-
-      <div v-if="musicInPanel" class="music-box">
-        <PlaylistMusic :player="restMusic" :searches="restSearches" test-id="rest-music" />
-      </div>
-    </template>
-
-    <!-- 结束了 -->
+    <!-- 休息中：只留在哪、和她说话、换一幅 / 换个方式 -->
     <template v-else>
-      <div class="done" data-testid="rest-done">
-        <span class="done-icon"><span class="i-lucide-check" /></span>
-        <div class="flex-1 min-w-0">
-          <div class="text-[17px] font-700">{{ doneText }}</div>
-          <div class="text-[12.5px] text-ink-3">{{ finished?.byTimer ? (kind === 'nap' ? '到点了，起来伸个懒腰' : '到点了') : '提前结束也没关系' }}</div>
-        </div>
+      <div v-if="doneNote" class="done" data-testid="rest-done">
+        <span class="i-lucide-alarm-clock-check shrink-0" />
+        <span class="flex-1 min-w-0">{{ doneNote }}</span>
+        <button type="button" class="text-ink-3 shrink-0" aria-label="知道了" @click="doneNote = ''"><span class="i-lucide-x" /></button>
       </div>
-      <div v-if="musicInPanel" class="music-box">
-        <PlaylistMusic :player="restMusic" :searches="restSearches" test-id="rest-music" />
+      <div class="where">
+        <span :class="activity.icon" class="shrink-0" />
+        <span class="shrink-0">{{ activity.name }}</span>
+        <button v-if="views.length" type="button" class="place" aria-haspopup="dialog" :aria-label="`换个画面（现在是${placeLabel}）`" data-testid="rest-picker-btn" @click="pickerOpen = true">
+          <span class="truncate">· {{ placeLabel }}</span><span class="i-lucide-chevron-down shrink-0" />
+        </button>
+        <span v-else class="text-ink-3 truncate">· {{ placeLabel }}</span>
+        <span class="flex-1" />
+        <span class="num text-ink-3 shrink-0">{{ clockText }}</span>
       </div>
+      <p v-if="!solo && her" class="her-line"><Avatar :character="her" :size="18" /><span class="truncate">{{ herDoing }}</span></p>
+
+      <form v-if="showTalk && her" class="talk" @submit.prevent="sendTalk">
+        <input
+          v-model="talk"
+          class="field"
+          :placeholder="activity.quiet ? `小声跟${her.name}说…` : `跟${her.name}说…`"
+          :aria-label="`跟${her.name}说`"
+          enterkeyhint="send"
+          data-testid="rest-talk"
+        />
+        <button type="submit" class="send" :disabled="!talk.trim() || typing" aria-label="发送"><span class="i-lucide-send" /></button>
+      </form>
+
       <div class="row">
-        <button type="button" class="act" data-testid="rest-again" @click="again"><span class="i-lucide-rotate-ccw" />再来一次</button>
-        <button type="button" class="act" @click="backToSetup"><span class="i-lucide-leaf" />换个方式</button>
-        <button type="button" class="act" @click="goBack(app.mapPath)"><span class="i-lucide-log-out" />回去</button>
+        <button v-if="views.length" type="button" class="act" data-testid="rest-next" @click="nextView"><span class="i-lucide-refresh-cw" />换一幅</button>
+        <button v-if="!solo && her && activity.quiet && !talkOpen" type="button" class="act" @click="talkOpen = true"><span class="i-lucide-message-circle" />小声说一句</button>
+        <button type="button" class="act" data-testid="rest-change" @click="backToSetup"><span class="i-lucide-leaf" />换个方式</button>
+        <button v-if="solo" type="button" class="act" :disabled="!chars.list.length" data-testid="rest-invite" @click="wantTogether"><span class="i-lucide-user-plus" />叫上谁</button>
+        <button v-else type="button" class="act" data-testid="rest-go-solo" @click="goSolo"><span class="i-lucide-user-round" />一个人歇</button>
       </div>
     </template>
 
-    <!-- 跟她说（午睡、静坐时收起来） -->
-    <form v-if="showTalk && her" class="talk" @submit.prevent="sendTalk">
-      <input v-model="talk" class="field" :placeholder="activity.quiet && phase === 'running' ? `小声跟${her.name}说…` : `跟${her.name}说…`" :aria-label="`跟${her.name}说`" enterkeyhint="send" data-testid="rest-talk" />
-      <button type="submit" class="send" :disabled="!talk.trim() || typing" aria-label="发送"><span class="i-lucide-send" /></button>
-    </form>
-    <div v-if="phase === 'running'" class="switch">
-      <button v-if="solo" type="button" :disabled="!chars.list.length" data-testid="rest-invite" @click="wantTogether"><span class="i-lucide-user-plus" />叫上谁一起</button>
-      <button v-else type="button" data-testid="rest-go-solo" @click="goSolo"><span class="i-lucide-user-round" />一个人歇会儿</button>
-    </div>
+    <!-- 换个画面 -->
+    <van-popup v-model:show="pickerOpen" position="bottom" round teleport="body" :style="{ maxHeight: '70%' }">
+      <div class="picker" data-testid="rest-picker">
+        <div class="text-[15px] font-600">{{ activity.name }} · 换个画面</div>
+        <p class="text-[12.5px] text-ink-3 mt-1 mb-0">实拍是 Pexels 的视频（要联网）；插画是场景素材库里的图，和立绘一个画风。</p>
+        <div class="thumbs">
+          <button
+            v-for="v in views"
+            :key="v.id"
+            type="button"
+            class="thumb"
+            :class="{ on: v.id === view?.id }"
+            :aria-label="`${v.label}（${v.kind === 'video' ? '实拍' : '插画'}）`"
+            :aria-pressed="v.id === view?.id"
+            :data-view="v.id"
+            @click="show(v.id)"
+          >
+            <img :src="thumbOf(v)" alt="" loading="lazy" />
+            <span class="tag">{{ v.kind === 'video' ? '实拍' : '插画' }}</span>
+            <span class="label">{{ v.label }}</span>
+          </button>
+        </div>
+      </div>
+    </van-popup>
 
     <!-- 叫上谁 -->
     <van-popup v-model:show="inviteOpen" position="bottom" round teleport="body" :style="{ maxHeight: '70%' }">
@@ -656,6 +642,7 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
 }
 .side-tools {
   position: absolute;
+  /* 比点空白处收起面板的那一层高：面板开着时再点一下按钮就收起 */
   z-index: 10;
   top: calc(var(--safe-top) + 56px);
   right: 10px;
@@ -684,7 +671,7 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
   -webkit-backdrop-filter: blur(22px);
   box-shadow: var(--shadow);
 }
-.side-pop.noise {
+.side-pop.pad {
   padding: 12px;
 }
 .chip {
@@ -703,6 +690,13 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
   background: var(--accent-soft);
   color: var(--accent-ink);
   outline: 1px solid var(--accent-line);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 1px;
 }
 
 /* —— 选怎么休息 —— */
@@ -785,26 +779,6 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
   font-size: 13px;
   color: var(--ink-2);
 }
-.opt {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 12px;
-}
-.opt-label {
-  flex-shrink: 0;
-  width: 3.2em;
-  line-height: 30px;
-  font-size: 12.5px;
-  color: var(--ink-3);
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-  padding: 1px;
-}
 .her-row {
   display: flex;
   align-items: center;
@@ -832,88 +806,64 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
 }
 
 /* —— 休息中 —— */
-.run-head {
+.done {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-.run-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--tint) 26%, transparent);
-  font-size: 20px;
-  flex-shrink: 0;
-}
-.run-time {
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-}
-.round {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 17px;
-  flex-shrink: 0;
-}
-.round.end {
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
   background: var(--accent-soft);
   color: var(--accent-ink);
+  font-size: 13.5px;
+  font-weight: 600;
 }
-.bar {
-  height: 4px;
-  margin-top: 12px;
-  border-radius: 99px;
-  background: var(--panel-2);
-  overflow: hidden;
-}
-.bar > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--tint);
-  transition: width 0.9s linear;
-}
-.tip {
+.where {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 12px 2px 0;
+  font-size: 14px;
+}
+.place {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: inherit;
+}
+.her-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
   font-size: 12.5px;
   color: var(--ink-3);
 }
-.music-box {
-  margin-top: 8px;
-}
-.center-ring {
-  position: absolute;
-  z-index: 5;
-  left: 0;
-  right: 0;
-  top: 22%;
+.row {
   display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.act {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  pointer-events: none;
-  --ring-track: color-mix(in srgb, var(--ink) 12%, transparent);
+  gap: 5px;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
 }
-.center-ring :deep(.timer-ring) {
-  border-radius: 50%;
-  background: var(--glass);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.center-ring.nap {
-  opacity: 0.8;
+.act:disabled {
+  opacity: 0.5;
 }
 
 /* 静坐：呼吸圈 */
@@ -921,7 +871,7 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
   position: absolute;
   z-index: 5;
   left: 50%;
-  top: 20%;
+  top: 22%;
   width: 220px;
   height: 220px;
   margin-left: -110px;
@@ -971,50 +921,11 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
   color: var(--ink-3);
 }
 
-/* —— 结束 —— */
-.done {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.done-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--tint);
-  color: #fff;
-  font-size: 22px;
-  flex-shrink: 0;
-}
-.row {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
-.act {
-  flex: 1;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 38px;
-  padding: 0 8px;
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
 /* —— 跟她说、换人 —— */
 .talk {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 .field {
   flex: 1;
@@ -1045,24 +956,6 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
 .send:disabled {
   opacity: 0.5;
 }
-.switch {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
-.switch button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 99px;
-  color: var(--ink-2);
-  font-size: 12.5px;
-}
-.switch button:disabled {
-  opacity: 0.5;
-}
 .mini-notice {
   display: flex;
   align-items: center;
@@ -1079,6 +972,52 @@ const startLabel = computed(() => `开始${activity.value.name}${minutesOf[kind.
 }
 .picker {
   padding: 16px 16px calc(var(--safe-bottom) + 16px);
+}
+.thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.thumb {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid transparent;
+  background: var(--panel);
+}
+.thumb.on {
+  border-color: var(--accent);
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thumb .tag {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+}
+.thumb .label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 5px 4px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: left;
 }
 .who {
   display: flex;

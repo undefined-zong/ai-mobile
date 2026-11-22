@@ -116,8 +116,9 @@ export const SCENE_FIGURE_LAYOUTS: FigureEntry[] = [
   { id: 'game', scene: 'game', layout: { left: 78, bottom: 56, height: 30 } },
   // 出逃：站在画面右边，左边留给窗外 / 海平线
   { id: 'escape', scene: 'escape', layout: { left: 66, bottom: 22, height: 60 } },
-  // 休息：选怎么休息时站在中间；午睡躺着、静坐坐在呼吸圈旁边，各调各的
-  { id: 'rest', scene: 'rest', label: '选怎么休息 / 散步 / 泡澡 / 听音乐', layout: { left: 50, bottom: 34, height: 54 } },
+  // 休息：选怎么休息时站在中间；散步、泡澡（会动的背景）站在右边，左边留给画面；午睡躺着、静坐坐在呼吸圈旁边，各调各的
+  { id: 'rest', scene: 'rest', label: '选怎么休息', layout: { left: 50, bottom: 34, height: 54 } },
+  { id: 'rest:view', scene: 'rest', label: '散步 / 泡澡（会动的背景）', layout: { left: 66, bottom: 22, height: 60 } },
   { id: 'rest:nap', scene: 'rest', label: '午睡', layout: { left: 50, bottom: 30, height: 50 } },
   { id: 'rest:sit', scene: 'rest', label: '静坐', layout: { left: 76, bottom: 34, height: 44 } },
   // 聚焦主题的首页：下面压着她的台词、回复栏，人往上站一点

@@ -31,15 +31,15 @@ const chars = useCharacterStore();
 const GROUPS: { title: string; roles: AgentRole[]; note: string }[] = [
   {
     title: '文字',
-    roles: ['main', 'secondary', 'companion', 'decor', 'date', 'sidestory', 'novel', 'summary', 'consolidate', 'imagePrompt', 'rhythm', 'health', 'planner', 'parallel', 'device', 'proactive', 'social', 'diary', 'assistant', 'vision'],
-    note: '渠道可选自定义、Claude、OpenAI 兼容、Gemini、Vertex Agent、DeepSeek。「陪伴 · 快速」写一起做事时的短句，选便宜、快的模型；生图提示词、节律、约会和心跳的控制指令默认跟随它（约会可以改成单独设置，不和它共用）。其余功能可以跟随主对话或「陪伴 · 快速」，也可以单独设置。',
+    roles: ['main', 'secondary', 'companion', 'decor', 'date', 'rest', 'sidestory', 'novel', 'summary', 'consolidate', 'imagePrompt', 'rhythm', 'health', 'planner', 'parallel', 'device', 'proactive', 'social', 'diary', 'assistant', 'vision'],
+    note: '渠道可选自定义、Claude、OpenAI 兼容、Gemini、Vertex Agent、DeepSeek。「陪伴 · 快速」写一起做事时的短句，选便宜、快的模型；生图提示词、节律、约会、休息和心跳的控制指令默认跟随它（约会、休息可以改成单独设置，不和它共用）。其余功能可以跟随主对话或「陪伴 · 快速」，也可以单独设置。',
   },
   { title: '语音', roles: ['tts', 'stt'], note: '语音合成可选自定义（OpenAI 格式 /audio/speech）、硅基流动、MiniMax、火山引擎、Fish Audio、GPT-SoVITS；音色在"我的 → 语音"里按角色设置。' },
   { title: '图片', roles: ['image'], note: '生图可选自定义（OpenAI 格式 /images/generations）、NovelAI（含公益站）、硅基流动。' },
   { title: '记忆', roles: ['embedding'], note: '向量化可选自定义（OpenAI 格式 /embeddings）、硅基流动、Gemini。备用 API 只在模型相同时才会用：不同模型的向量不能互相比较，换了模型要重算向量。' },
 ];
 /** 提示词和采样参数在预设里的功能（温度不在这里调） */
-const PRESET_DRIVEN: Partial<Record<AgentRole, string>> = { secondary: '"功能 → 副对话"', companion: '"功能"', decor: '"功能 → 小屋 · 角色生活"', date: '"功能 → 约会"', sidestory: '"小剧场"', novel: '"小说"', summary: '"总结"', consolidate: '"总结"', imagePrompt: '"生图"', proactive: '"主动消息"', health: '"健康"', planner: '"计划"', parallel: '"平行时空"', device: '"控制指令"', social: '"社媒"', diary: '"日记"', assistant: '"助手"' };
+const PRESET_DRIVEN: Partial<Record<AgentRole, string>> = { secondary: '"功能 → 副对话"', companion: '"功能"', decor: '"功能 → 小屋 · 角色生活"', date: '"功能 → 约会"', rest: '"功能 → 休息"', sidestory: '"小剧场"', novel: '"小说"', summary: '"总结"', consolidate: '"总结"', imagePrompt: '"生图"', proactive: '"主动消息"', health: '"健康"', planner: '"计划"', parallel: '"平行时空"', device: '"控制指令"', social: '"社媒"', diary: '"日记"', assistant: '"助手"' };
 /** 后台跑的功能可以设每日上限（总结、记忆整理不设上限） */
 const BUDGETED = new Set<AgentRole>(['sidestory', 'imagePrompt', 'proactive', 'social', 'diary', 'parallel', 'embedding']);
 /** 推理强度：OpenAI 的 reasoning_effort、Claude 的思考预算 / effort、Gemini 的 thinkingBudget / thinkingLevel */

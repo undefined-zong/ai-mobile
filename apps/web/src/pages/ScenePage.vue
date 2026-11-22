@@ -38,8 +38,8 @@ function resolveLocation(): MapLocation | null {
 const location = ref<MapLocation | null>(null);
 provide(SCENE_LOCATION, location);
 
-/** 一个人出逃、一个人休息（?solo=1）：没有她，不记进聊天；从带她变成一个人时，她这一段就结束了 */
-const SOLO_SCENES: SceneId[] = ['escape', 'rest'];
+/** 一个人出逃、一个人休息、一个人听音乐（?solo=1）：没有她，不记进聊天；从带她变成一个人时，她这一段就结束了 */
+const SOLO_SCENES: SceneId[] = ['escape', 'rest', 'music'];
 const alone = computed(() => SOLO_SCENES.includes(sceneId.value) && route.query.solo === '1');
 
 /** ?how=visit 表示"去她那"（坐到她旁边）；默认连线；真实地点总是"带她来" */

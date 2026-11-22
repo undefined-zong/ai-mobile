@@ -14,6 +14,7 @@ import { useMicLink } from '@/composables/useMicLink';
 import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseKind, type NoiseMix } from '@/services/ambience';
 import { escapeMusic } from '@/services/musicPlayer';
 import { escapeSearches } from '@/services/playlistSearches';
+import { pexelsMedia } from '@/services/previewMedia';
 import { personaOf } from '@/services/prompt';
 import { SpeechQueue } from '@/services/speech';
 import { useAppStore } from '@/stores/app';
@@ -92,7 +93,7 @@ function nextView() {
 
 const pickerOpen = ref(false);
 function thumbOf(v: EscapeView): string {
-  if (v.kind === 'video') return v.poster;
+  if (v.kind === 'video') return pexelsMedia(v.poster);
   const asset = BACKGROUND_ASSETS.find((a) => a.id === v.image);
   return asset ? backgroundUrl(asset) : '';
 }
