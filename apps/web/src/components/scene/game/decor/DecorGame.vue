@@ -57,7 +57,7 @@ import {
  * 一起游戏 · 装修小屋（设计文档 §9.11）：
  * - 一套小屋好几个房间（一开始主卧、次卧、客厅、厨房、洗手间、书房，能自己再添，最多 10 个），上面一排标签换房间，一次看一间。
  * - 3D 小屋（engine.ts）：布置时点家具选中、拖着挪、转向、换色、复制、收起；每间的墙纸地面、大小、名字；撤销重做。逛逛时你的小人走动、坐下、躺下。
- *   转视角用两根手指（一起拖或者拧着转），捏合缩放。
+ *   视角用两根手指：一起拖是挪，拧着转是转，捏合缩放。
  * - 捏人（AvatarEditor.vue）：你和她的 Q 版小人（发型、发顶、刘海、渐变、套装、花纹、能多选的配饰）；她能给自己捏、帮你捏。
  * - 她：看看屋子说想法（decor-look）、动手布置（decor-plan，按格式写要添要挪的，程序照着摆、放不下的找附近空地）、
  *   捏小人（decor-avatar）、边装边聊（decor-chat）、收工时的话（decor-end）。每一步的规则都在"一起游戏 · 装修小屋"预设里。
@@ -687,7 +687,7 @@ async function finish() {
 
 const hint = computed(() =>
   mode.value === 'edit'
-    ? '点家具选中；双指拖动或拧转换视角，捏合缩放'
+    ? '点家具选中；双指拖动挪视角、拧着转，捏合缩放'
     : '点家具使用，点地面起身走动；也可以直接和角色说',
 );
 </script>
@@ -708,7 +708,7 @@ const hint = computed(() =>
     </div>
 
     <div class="view" :data-lighting="lighting" :style="{ '--room-bg': LIGHTING[lighting].background, '--room-sky': LIGHTING[lighting].skyBottom }">
-      <canvas ref="canvas" class="block w-full h-full" aria-label="3D 小屋：点家具选中，拖着挪；两根手指拖动或拧转换视角" />
+      <canvas ref="canvas" class="block w-full h-full" aria-label="3D 小屋：点家具选中，拖着挪；两根手指拖动挪视角、拧着转，捏合缩放" />
       <RoomBubbles :anchors="bubbleAnchors" :messages="bubbles" :names="{ you: userName, her: her.name }" />
       <div v-if="webglFailed" class="fallback">这台设备打不开 3D 画面（WebGL），装修小屋玩不了</div>
       <div class="view-top">

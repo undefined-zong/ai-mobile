@@ -31,7 +31,8 @@ import { disposeSurfaces, setSurfaceGlow, surface } from './surfaces';
 /**
  * 装修小屋的 3D 画面（three.js）：娃娃屋式的一间屋子（后墙 + 左墙 + 地面），家具、两个 Q 版小人。
  * - 布置：点家具选中，按住选中的家具拖着挪（对齐半格，放不下的地方变红、松手弹回去）。
- * - 视角：两根手指一起拖、或者两指拧着转是转视角，捏合是缩放；一根手指只管点选和拖家具（鼠标还是按住左键拖、滚轮缩放）。
+ * - 视角：两根手指一起拖是挪视角（看的中心不出屋子），两指拧着转是转视角，捏合是缩放；一根手指只管点选和拖家具
+ *   （鼠标还是按住左键拖着转、右键拖着挪、滚轮缩放）。
  * - 逛逛：点地面你的小人走过去，点沙发、椅子坐下，点床躺下；点小人蹦一下。
  * 她的小人自己在屋里走走、坐坐。
  * 一套小屋有好几个房间，这里一次只显示一间：换了房间（room.id 变了）小人回到屋子中间、视角回正。
@@ -164,14 +165,14 @@ export class DecorEngine {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
-    this.controls.enablePan = false;
+    this.controls.enablePan = true;
     this.controls.minAzimuthAngle = -0.2;
     this.controls.maxAzimuthAngle = Math.PI / 2 + 0.2;
     this.controls.minPolarAngle = 0.35;
     this.controls.maxPolarAngle = 1.22;
     this.controls.rotateSpeed = 0.7;
-    // 触屏：一根手指不转视角（留给点选、拖家具），两根手指一起拖是转、捏合是缩放；两指拧着转在 onMove 里自己算
-    this.controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
+    // 触屏：一根手指不动视角（留给点选、拖家具），两根手指一起拖是挪、捏合是缩放；两指拧着转在 onMove 里自己算
+    this.controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
 
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(canvas.parentElement ?? canvas);
@@ -1314,9 +1315,22 @@ export class DecorEngine {
     }
   }
 
+  /** 挪视角时看的中心不出屋子（地面到墙顶）：出去了就连相机一起拉回来，角度和远近不变 */
+  private keepTargetInRoom() {
+    const room = this.room;
+    if (!room) return;
+    const t = this.controls.target;
+    const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+    const fix = new THREE.Vector3(clamp(t.x, -room.w / 2, room.w / 2), clamp(t.y, 0, WALL_H), clamp(t.z, -room.d / 2, room.d / 2)).sub(t);
+    if (!fix.lengthSq()) return;
+    t.add(fix);
+    this.camera.position.add(fix);
+  }
+
   private tick(dt: number) {
     this.time += dt;
     this.controls.update();
+    this.keepTargetInRoom();
     this.you?.update(dt);
     this.her?.update(dt);
     if (!this.managedLife && this.her && this.time > this.herNextAt) {
