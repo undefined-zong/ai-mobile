@@ -124,6 +124,7 @@ onBeforeUnmount(() => {
     :title="game?.label"
     :fill="!!game?.fill"
     :hide-figure="!!game?.fill"
+    :cap-line="game?.id === 'truthdare'"
     :back="game ? backToList : null"
   >
     <div v-if="notConnected" class="notice">
