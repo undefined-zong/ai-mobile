@@ -842,6 +842,9 @@ export const pokeMusic = createMusicPlayer({ storageKey: 'ai-mobile:poke:music:v
 /** 出逃时的音乐：播放列表单独存，默认小声一点，和白噪音叠着也不吵 */
 export const escapeMusic = createMusicPlayer({ storageKey: 'ai-mobile:escape:music:v1', lyrics: false, volume: 0.6 });
 
+/** 休息时的音乐：播放列表单独存，默认小声一点，和白噪音叠着也不吵 */
+export const restMusic = createMusicPlayer({ storageKey: 'ai-mobile:rest:music:v1', lyrics: false, volume: 0.6 });
+
 /** 心跳时的音乐：播放列表单独存，默认小声一点，不盖过她说话 */
 export const heartMusic = createMusicPlayer({ storageKey: 'ai-mobile:heart:music:v1', lyrics: false, volume: 0.5 });
 

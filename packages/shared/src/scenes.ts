@@ -4,7 +4,7 @@ import type { Outfit, Pose } from './expressions.ts';
 import type { ControlTagKind } from './tags.ts';
 import type { ProactiveTriggerId } from './types/proactive.ts';
 
-export type SceneId = 'free' | 'exercise' | 'meal' | 'study' | 'sleep' | 'music' | 'date' | 'poke' | 'watch' | 'game' | 'read' | 'home' | 'heart' | 'escape';
+export type SceneId = 'free' | 'exercise' | 'meal' | 'study' | 'sleep' | 'music' | 'date' | 'poke' | 'watch' | 'game' | 'read' | 'home' | 'heart' | 'escape' | 'rest';
 
 export type TimeOfDay = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'dusk' | 'night' | 'late';
 
@@ -246,6 +246,23 @@ export const SCENES: SceneDef[] = [
     allowedTags: ['expr'],
     proactiveTriggers: [],
     dataSources: ['实拍：Pexels 的竖屏视频（从 Pexels 直接播放）', '插画：场景素材库里的图，慢慢平移、叠上星星和云'],
+  },
+  {
+    id: 'rest',
+    name: '休息',
+    icon: 'i-lucide-leaf',
+    tagline: '午睡、散步、泡澡、静坐、听音乐：一个人歇会儿，或者叫上{{pronoun}}',
+    backdrop: 'bedroom',
+    ambient: ['rain', 'fan'],
+    outfit: 'daily',
+    pose: 'sit',
+    tint: '#9cc9a8',
+    // 自带的"休息"功能预设里有自己的场景规则；这里只在功能预设跟随对话预设时用
+    promptFragment:
+      '【场景：休息】{{user}}在休息（午睡、散步、泡澡、静坐或听音乐，在场景任务里），你陪着，也在做同样的事。说话轻、慢、短，不聊工作和作业，不催{{user}}；午睡和静坐的时候不打扰。',
+    allowedTags: ['expr'],
+    proactiveTriggers: [],
+    dataSources: ['App 内计时', '白噪音：本机合成（雨声、炉火、海浪、风扇）', '网易云音乐 Worker：歌单'],
   },
 ];
 

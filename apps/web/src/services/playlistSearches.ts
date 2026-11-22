@@ -147,6 +147,15 @@ export const escapeSearches = playlistSearches('ai-mobile:escape:searches:v1', [
   { name: '一个人', keyword: '一个人 安静 歌单', icon: 'i-lucide-moon' },
 ]);
 
+/** 休息：放松、安静的几个 */
+export const restSearches = playlistSearches('ai-mobile:rest:searches:v1', [
+  { name: '放松', keyword: '放松 治愈 纯音乐', icon: 'i-lucide-leaf' },
+  { name: '钢琴', keyword: '安静 钢琴 轻音乐', icon: 'i-lucide-piano' },
+  { name: '冥想', keyword: '冥想 疗愈 音乐', icon: 'i-lucide-flower-2' },
+  { name: 'Lo-fi', keyword: 'lofi 午后 放松', icon: 'i-lucide-coffee' },
+  { name: '爵士', keyword: '慵懒 爵士 午后', icon: 'i-lucide-wine' },
+]);
+
 /** 心跳：暧昧、慵懒的几个 */
 export const heartSearches = playlistSearches('ai-mobile:heart:searches:v1', [
   { name: '暧昧', keyword: '暧昧 氛围 歌单', icon: 'i-lucide-heart' },

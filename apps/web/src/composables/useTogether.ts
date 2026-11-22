@@ -34,7 +34,7 @@ export interface TogetherTile {
 }
 
 /** 格子里常用的排前面 */
-const COMMON: SceneId[] = ['study', 'meal', 'exercise', 'sleep', 'music', 'date', 'watch', 'game', 'read', 'poke'];
+const COMMON: SceneId[] = ['study', 'meal', 'exercise', 'sleep', 'rest', 'music', 'date', 'watch', 'game', 'read', 'poke'];
 /** 共同的家、心跳、出逃另有一直在的入口，不进活动格子 */
 const OWN_ENTRY = new Set<SceneId>(['home', 'heart', 'escape']);
 /** "一起做点什么"里的活动：除了另有入口的那三个，一个都不能少（和她的世界里有没有地方无关） */

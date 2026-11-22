@@ -206,6 +206,8 @@ function goParallel(characterId: string) {
 
 // —— 出逃：也一直在，带她去很远的地方（你自己的世界那边可以一个人去） ——
 const escapeScene = getScene('escape');
+// —— 休息：她的世界里在"一起做点什么"里；你自己的世界那边可以一个人歇会儿 ——
+const restScene = getScene('rest');
 function goEscape(characterId: string) {
   app.activeCharacterId = characterId;
   void router.push('/scene/escape');
@@ -438,13 +440,21 @@ watch(
           <RouterLink v-else-if="!canDrawReal" to="/me/environment" class="maps-note"><span class="i-lucide-house shrink-0" />示意图 · 填家的地址（或打开定位）后显示真实地图</RouterLink>
         </div>
 
-        <div class="group-title">去远方</div>
+        <div class="group-title">一个人待会儿</div>
         <div class="px-4 grid gap-2">
           <button class="near-row press" data-act="escape-solo" @click="router.push({ path: '/scene/escape', query: { solo: '1' } })">
             <span class="near-icon"><span :class="escapeScene.icon" /></span>
             <div class="flex-1 min-w-0 text-left">
               <div class="text-[15px] font-600 truncate">一个人出逃</div>
               <div class="text-[12px] text-ink-3 truncate">火车上、海边、云上面……到了也可以叫上谁</div>
+            </div>
+            <span class="i-lucide-chevron-right text-ink-3" />
+          </button>
+          <button class="near-row press" data-act="rest-solo" @click="router.push({ path: '/scene/rest', query: { solo: '1' } })">
+            <span class="near-icon"><span :class="restScene.icon" /></span>
+            <div class="flex-1 min-w-0 text-left">
+              <div class="text-[15px] font-600 truncate">一个人歇会儿</div>
+              <div class="text-[12px] text-ink-3 truncate">午睡、散步、泡澡、静坐、听音乐，有白噪音</div>
             </div>
             <span class="i-lucide-chevron-right text-ink-3" />
           </button>
