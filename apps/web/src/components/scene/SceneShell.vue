@@ -2,7 +2,7 @@
 import { previewImages } from '@/services/imageViewer';
 import { getLocation, getScene, hasMath, type BackgroundPlace, type PokeHotspot, type TimeOfDay } from '@app/shared';
 import { showToast } from 'vant';
-import { computed, inject, ref } from 'vue';
+import { computed, inject, nextTick, ref, watch } from 'vue';
 import Avatar from '@/components/common/Avatar.vue';
 import RichText from '@/components/common/RichText.vue';
 import StageView from '@/components/stage/StageView.vue';
@@ -23,6 +23,7 @@ import { useRhythmStore } from '@/stores/rhythm';
  * bare：外壳只给背景、立绘和顶栏，她的话、面板、画好的图都由场景自己在 overlay 里摆（陪伴学习的分屏和专注画面）。
  * back：左上角返回做什么（一起游戏打开了一个游戏时回游戏列表）；不给时返回上一页。
  * hideMode：右上角不放"连线 / 坐在她旁边"（健身里点了看不出变化，那里用连麦）。
+ * capLine：她的那句话最多长到面板最高时的上沿，再长就在气泡里滚动，不盖住面板上的按钮（真心话大冒险）。
  * #backdrop 插槽：换掉素材库的背景（出逃的视频、会动的插画），立绘照样站在上面。
  */
 const props = withDefaults(
@@ -55,10 +56,12 @@ const props = withDefaults(
     bare?: boolean;
     back?: (() => void) | null;
     hideMode?: boolean;
+    /** 她的那句话限高：超过面板上沿就在气泡里滚动 */
+    capLine?: boolean;
     /** 节律里今天穿哪一套按哪个场景挑（休息的午睡、泡澡按哄睡穿睡衣）；不给就是 sceneId */
     outfitScene?: string;
   }>(),
-  { rain: false, dim: 0, typing: false, hideFigure: false, fill: false, pokeable: false, showHotspots: false, art: null, drawing: null, bare: false, back: null, hideMode: false },
+  { rain: false, dim: 0, typing: false, hideFigure: false, fill: false, pokeable: false, showHotspots: false, art: null, drawing: null, bare: false, back: null, hideMode: false, capLine: false },
 );
 const emit = defineEmits<{ (e: 'poke', h: PokeHotspot, kind: 'tap' | 'long'): void }>();
 
@@ -102,6 +105,19 @@ const figureHidden = computed(() => props.hideFigure || !!props.art);
 function openArt() {
   if (props.art) previewImages([props.art.url]);
 }
+/** 限了高的气泡：原本就停在最底下时，流式长出来的字跟着往下滚；往上翻着看的时候不打扰 */
+const sayEl = ref<HTMLElement | null>(null);
+watch(
+  () => props.line,
+  () => {
+    const el = sayEl.value;
+    if (!props.capLine || !el || el.scrollHeight - el.scrollTop - el.clientHeight > 8) return;
+    void nextTick(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  },
+  { flush: 'pre' },
+);
 </script>
 
 <template>
@@ -143,9 +159,9 @@ function openArt() {
         <RouterLink v-if="!bare" :to="chatLink" class="pill" :aria-label="`查看和${character.name}的聊天记录`" title="聊天记录"><span class="i-lucide-messages-square" /></RouterLink>
         <slot name="actions" />
       </header>
-      <div v-if="!bare && !fill && (line || typing)" class="companion" :aria-busy="typing">
+      <div v-if="!bare && !fill && (line || typing)" class="companion" :class="{ capped: capLine }" :aria-busy="typing">
         <Avatar :character="character" :size="30" live />
-        <div class="say">
+        <div ref="sayEl" class="say">
           <RichText v-if="line && hasMath(line)" :text="line" />
           <template v-else>{{ line }}</template>
           <span v-if="typing" class="inline-flex gap-1 text-accent-ink" role="status" :aria-label="`${character.name}正在回复`"><span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" /></span>
@@ -168,6 +184,10 @@ function openArt() {
 </template>
 
 <style scoped>
+.scene-shell {
+  /* 面板最高多高：限高的气泡（capLine）停在它上面 */
+  --panel-max: 64%;
+}
 .scene-art {
   position: absolute;
   inset: 0;
@@ -287,6 +307,18 @@ function openArt() {
   line-height: 1.55;
   box-shadow: var(--shadow-sm);
 }
+/* 上下都定住，气泡最多和这一格一样高；这一格本身不挡点击，只有气泡能点、能滚 */
+.companion.capped {
+  bottom: calc(var(--panel-max) + 10px);
+  pointer-events: none;
+}
+.companion.capped .say {
+  /* 屏幕特别矮时也留三行 */
+  max-height: max(100%, 4.8em);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+}
 .panel.fill {
   top: calc(var(--safe-top) + 58px);
   max-height: none;
@@ -311,7 +343,7 @@ function openArt() {
   left: 0;
   right: 0;
   bottom: 0;
-  max-height: 64%;
+  max-height: var(--panel-max);
   overflow-y: auto;
   padding: 16px 16px calc(var(--safe-bottom) + 16px);
   border-radius: 26px 26px 0 0;

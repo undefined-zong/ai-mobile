@@ -1,16 +1,15 @@
 import * as THREE from 'three';
-import type { BrawlFighter } from '@app/shared';
 import { Chibi } from '../decor/chibi';
-import { seededAvatar } from '../decor/avatar';
+import type { Avatar } from '../decor/avatar';
 import type { BrawlEngine, Effect, FighterState } from './engine';
 
-/** 与小屋共用角色造型，独立的侧视擂台与战斗动作。资源只在进入大乱斗后加载。 */
+/** 与小屋共用角色造型（小人就是装修小屋里捏的那个），独立的侧视擂台与战斗动作。资源只在进入大乱斗后加载。 */
 export class BrawlRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.OrthographicCamera(-5.8, 5.8, 3.5, -3.5, .1, 100);
   private models: Chibi[] = [];
-  private profileKeys: string[] = [];
+  private avatarKeys: string[] = [];
   private fx = new Map<number, THREE.Group>();
   private shots = new Map<number, THREE.Group>();
   private clock = 0;
@@ -63,15 +62,17 @@ export class BrawlRenderer {
     this.scene.add(new THREE.Points(geometry, new THREE.PointsMaterial({ color: '#b7c8eb', size: .025, transparent: true, opacity: .7 })));
   }
 
-  setFighters(profiles: BrawlFighter[]) {
-    profiles.forEach((p, i) => {
-      const key = JSON.stringify([p.look, p.id]);
-      if (key === this.profileKeys[i]) return;
-      this.profileKeys[i] = key;
-      if (this.models[i]) { this.scene.remove(this.models[i]!.root); this.models[i]!.dispose(); }
-      const avatar = { ...seededAvatar(p.id), hair: p.look.hair, hairColor: p.look.hairColor, hairColor2: '', skin: p.look.skin, topColor: p.look.outfit, suit: 'none', top: 'hoodie', bottom: 'pants', bottomColor: '#293249', shoesColor: '#e7e1d5', acc: [], head: .9, height: 1.12, eyes: 'round', blush: false, topPattern: 'plain', bottomPattern: 'plain' };
-      const model = new Chibi(avatar, i === 0 ? 'you' : 'her');
-      this.models[i] = model; this.scene.add(model.root);
+  /** 两个小人的样子（0 是你操控的，1 是对手）：和装修小屋里的一样；样子变了就在原地重捏 */
+  setAvatars(avatars: readonly Avatar[]) {
+    avatars.forEach((a, i) => {
+      const key = JSON.stringify(a);
+      if (key === this.avatarKeys[i]) return;
+      this.avatarKeys[i] = key;
+      // 拷一份普通对象：传进来的可能是 store 里的响应式对象
+      const avatar = JSON.parse(key) as Avatar;
+      const model = this.models[i];
+      if (model) model.setAvatar(avatar);
+      else { this.models[i] = new Chibi(avatar, i === 0 ? 'you' : 'her'); this.scene.add(this.models[i]!.root); }
     });
   }
 
@@ -126,8 +127,7 @@ export class BrawlRenderer {
 
   draw(engine: BrawlEngine, dt: number) {
     this.clock += dt;
-    this.setFighters(engine.fighters.map(f => f.profile));
-    engine.fighters.forEach((f, i) => this.pose(this.models[i]!, f, dt, i));
+    engine.fighters.forEach((f, i) => { const model = this.models[i]; if (model) this.pose(model, f, dt, i); });
     for (const p of engine.projectiles) {
       if (!this.shots.has(p.id)) { const group = this.energy(engine.fighters[p.owner].profile.color, .8 + p.skill.damage / 200); this.shots.set(p.id, group); this.scene.add(group); }
       const group = this.shots.get(p.id)!; group.position.set(p.x / 100 - 5, p.y / 100, .15); group.rotation.z = this.clock * 9;
