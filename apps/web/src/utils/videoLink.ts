@@ -36,6 +36,12 @@ export type ParsedVideoLink = { ok: true; link: VideoLink } | { ok: false; reaso
 
 export const PLATFORM_LABEL: Record<VideoPlatform, string> = { youtube: 'YouTube', bilibili: 'B 站', direct: '视频链接' };
 
+/**
+ * 嵌入播放器关掉它自己全屏按钮的地址参数；null 是没有这个参数（B 站）。
+ * 不给 iframe 全屏权限挡不住 iPhone：播放器里的视频照样能换成系统播放器，网页上的东西（弹幕）都盖不上去
+ */
+export const EMBED_NO_FULLSCREEN: Record<Exclude<VideoPlatform, 'direct'>, string | null> = { youtube: 'fs=0', bilibili: null };
+
 const URL_RE = /https?:\/\/[^\s<>"'，。！？、；（）()【】「」]+/i;
 const BV_RE = /\b(BV[0-9A-Za-z]{10})\b/;
 const VIDEO_EXT = /\.(mp4|m4v|webm|mov|ogv|ogg|mkv)$/i;
