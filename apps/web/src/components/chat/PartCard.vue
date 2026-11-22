@@ -2,7 +2,7 @@
 import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImages } from '@/services/redraw';
-import { inviteGameLabel, pokeHow, pokeLine, type Character, type MessagePart, type VideoHit } from '@app/shared';
+import { getScene, inviteGameLabel, pokeHow, pokeLine, restActivity, type Character, type MessagePart, type VideoHit } from '@app/shared';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
@@ -168,6 +168,18 @@ const invite = computed(() => {
   if (p.kind === 'sleep') return { head: '哄睡邀请', title: '陪你慢慢睡着', sub: '连麦、听故事，或去一个睡前场景', icon: 'i-lucide-moon-star', tone: '#9b8cf0', yes: '陪我睡' };
   if (p.kind === 'exercise') return { head: '一起运动邀请', title: '一起动一动', sub: '照今天的计划练，或者随便动动', icon: 'i-lucide-dumbbell', tone: '#7fd1b1', yes: '一起练' };
   if (p.kind === 'parallel') return { head: '平行时空邀请', title: '看看我们今天的安排', sub: '各自的一天，也能给彼此留句话', icon: 'i-lucide-orbit', tone: '#8fb3f0', yes: '去看看' };
+  if (p.kind === 'rest') {
+    const a = restActivity(p.activity);
+    const rest = getScene('rest');
+    return {
+      head: '休息邀请',
+      title: a ? `一起${a.name}吧` : '一起歇会儿吧',
+      sub: a ? a.blurb : '午睡、散步、泡澡、静坐、听音乐，进去再选',
+      icon: a?.icon ?? rest.icon,
+      tone: rest.tint,
+      yes: a ? `一起${a.name}` : '歇会儿',
+    };
+  }
   return { head: '一起游戏邀请', title: inviteGameLabel(p.game), sub: '去一起游戏里开一局', icon: 'i-lucide-gamepad-2', tone: '#e7b46a', yes: '来玩' };
 });
 function answerInvite(ok: boolean) {
@@ -185,6 +197,7 @@ function answerInvite(ok: boolean) {
   else if (p.kind === 'watch') void router.push({ path: '/scene/watch', query: { link: p.link, ...(p.title ? { title: p.title } : {}) } });
   else if (p.kind === 'game') void router.push({ path: '/scene/game', query: { g: p.game } });
   else if (p.kind === 'parallel') void router.push(`/parallel/${encodeURIComponent(props.character.id)}`);
+  else if (p.kind === 'rest') void router.push({ path: '/scene/rest', query: p.activity ? { do: p.activity } : {} });
   else void router.push(`/scene/${p.kind}`);
 }
 

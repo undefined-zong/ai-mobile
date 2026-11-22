@@ -1,4 +1,4 @@
-import { characterPronoun } from '@app/shared';
+import { characterPronoun, restActivity } from '@app/shared';
 import { openaiReasoningEffort } from '@app/ai';
 import {
   anniversaryLine,
@@ -145,7 +145,16 @@ function partToText(p: MessagePart, character: Character, user: string, mapText?
     case 'scene':
       return `（${p.title}${p.summary ? `：${p.summary}` : ''}）`;
     case 'invite': {
-      const activity = p.kind === 'sleep' ? '哄睡' : p.kind === 'exercise' ? '一起运动' : p.kind === 'parallel' ? '一起看平行时空' : '';
+      const activity =
+        p.kind === 'sleep'
+          ? '哄睡'
+          : p.kind === 'exercise'
+            ? '一起运动'
+            : p.kind === 'parallel'
+              ? '一起看平行时空'
+              : p.kind === 'rest'
+                ? `一起${restActivity(p.activity)?.name ?? '休息'}`
+                : '';
       const what =
         p.kind === 'study'
           ? `一起学习${p.task ? `：${p.task}` : ''}${p.minutes ? `（${p.minutes} 分钟）` : ''}`

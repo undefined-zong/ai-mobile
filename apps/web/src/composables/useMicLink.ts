@@ -1,5 +1,5 @@
 import { errorText } from '@app/ai';
-import type { Character, ControlTagKind, ParsedReply, PresetUseId } from '@app/shared';
+import { AGENT_META, type AgentRole, type Character, type ControlTagKind, type ParsedReply, type PresetUseId } from '@app/shared';
 import { computed, reactive, watch, type Ref } from 'vue';
 import { services } from '@/services';
 import { CallListener, looksLikeEcho } from '@/services/listener';
@@ -55,6 +55,8 @@ export interface MicLinkOptions {
   input?(kind: 'open' | 'reply' | 'whisper', info: { context: string; linked: string; quietMin: number }): string;
   /** 她的话按哪个用途的预设写（心跳的连麦用"心跳 · 语音"）；不给按场景的功能预设 */
   use?: PresetUseId;
+  /** 用哪个功能的 API（休息用「休息」）；不给用「陪伴 · 快速」 */
+  agent?: AgentRole;
   /** 这一次另外打开的预设触发条件（每次她开口前问一次） */
   flags?(): string[];
   /** 能执行哪些标签（不给只换表情） */
@@ -81,7 +83,8 @@ export function useMicLink(opts: MicLinkOptions) {
   const chat = useChatStore();
   const ai = useAiStore();
   const voice = useVoiceStore();
-  const companion = computed(() => ai.status('companion'));
+  const agent = opts.agent ?? 'companion';
+  const companion = computed(() => ai.status(agent));
   const sttStatus = computed(() => ai.status('stt'));
 
   const state = reactive({
@@ -272,7 +275,7 @@ export function useMicLink(opts: MicLinkOptions) {
     const id = opts.chatId.value;
     if (!id || !state.on) return;
     if (!companion.value.live) {
-      state.llmIssue = `「陪伴 · 快速」还没接通：${companion.value.reason}`;
+      state.llmIssue = `「${AGENT_META[agent].label}」还没接通：${companion.value.reason}`;
       return;
     }
     // 聊天里还有一条在生成（故事还在写、刚才在聊天页发的）：停掉，等它收尾
@@ -298,7 +301,7 @@ export function useMicLink(opts: MicLinkOptions) {
     const stream = new SentenceStream();
     let mine: string | null = null;
     const run = chat.generate(id, undefined, {
-      agent: 'companion',
+      agent,
       task: custom ?? { name: kind === 'whisper' ? (opts.tasks?.whisper ?? 'sleep-whisper') : (opts.tasks?.reply ?? 'sleep-call'), input: taskInput(kind) },
       cue: '连麦',
       allowedTags: opts.allowedTags?.() ?? ['expr'],

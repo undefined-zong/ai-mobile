@@ -55,6 +55,8 @@ const props = withDefaults(
     bare?: boolean;
     back?: (() => void) | null;
     hideMode?: boolean;
+    /** 节律里今天穿哪一套按哪个场景挑（休息的午睡、泡澡按哄睡穿睡衣）；不给就是 sceneId */
+    outfitScene?: string;
   }>(),
   { rain: false, dim: 0, typing: false, hideFigure: false, fill: false, pokeable: false, showHotspots: false, art: null, drawing: null, bare: false, back: null, hideMode: false },
 );
@@ -90,7 +92,7 @@ function toggleMode() {
 const expr = computed(() => props.expression ?? chars.expression[character.value.id] ?? 'smile');
 /** 节律里她今天在这个场景穿的那套：有立绘时按它挑服装 */
 const rhythm = useRhythmStore();
-const dayOutfit = computed(() => rhythm.outfitFor(character.value.id, props.sceneId));
+const dayOutfit = computed(() => rhythm.outfitFor(character.value.id, props.outfitScene ?? props.sceneId));
 /** 场景给的位置叠上这个角色在这个场景的微调（立绘设置 → 各场景的位置和大小） */
 const layout = computed(() =>
   adjustFigureLayout(props.layout ?? { left: 50, bottom: 40, height: 50 }, character.value.portraits?.sceneLayouts?.[props.layoutKey ?? props.sceneId]),

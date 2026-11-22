@@ -8,7 +8,7 @@
   "defaultFor": [
     "scene:rest"
   ],
-  "description": "休息时用：午睡、散步、泡澡、静坐、听音乐，Ta也在做同样的事、陪着你。场景规则在\"场景规则\"那一块里，可以改；开始、中途、到点、回你说的话各有一块；能用的标签和表情由程序按场景填。",
+  "description": "休息时用：午睡、散步、泡澡、静坐、听音乐，Ta也在做同样的事、陪着你。场景规则在\"场景规则\"那一块里，可以改；开始、换了画面、到点、回你说的话、连麦各有一块；能用的标签和表情由程序按场景填。",
   "blocks": [
     {
       "identifier": "main",
@@ -314,6 +314,21 @@
       },
       "triggers": [
         "rest-chat"
+      ]
+    },
+    {
+      "identifier": "restCall",
+      "name": "连麦",
+      "role": "system",
+      "content": "你们在连麦：{{user}}在休息的时候用语音跟你说话，你回的话会用你的声音读给{{user}}听（在做什么、眼前是什么、开着什么白噪音在场景任务里）。像就在{{user}}身边轻声说话：1–2 个短句，口语；午睡、静坐时更轻、更短，让{{user}}慢慢安静下来；接着{{user}}的话说，不写动作描写和括号，不用表情符号。",
+      "marker": false,
+      "enabled": true,
+      "injection": {
+        "position": "relative",
+        "depth": 4
+      },
+      "triggers": [
+        "rest-call"
       ]
     },
     {

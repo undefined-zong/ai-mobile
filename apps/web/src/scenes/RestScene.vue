@@ -6,6 +6,7 @@ import {
   REST_ACTIVITIES,
   breathAt,
   characterPronoun,
+  parseRestInvite,
   pronounText,
   restActivity,
   type BackgroundPlace,
@@ -14,25 +15,30 @@ import {
   type RestKind,
   type RestNoise,
 } from '@app/shared';
-import { computed, inject, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, reactive, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Avatar from '@/components/common/Avatar.vue';
 import EscapeBackdrop from '@/components/scene/escape/EscapeBackdrop.vue';
+import MicLinkBar from '@/components/scene/MicLinkBar.vue';
 import PlaylistMusic from '@/components/scene/PlaylistMusic.vue';
 import SceneShell from '@/components/scene/SceneShell.vue';
 import TimerButton from '@/components/scene/TimerButton.vue';
 import TimerPop from '@/components/scene/TimerPop.vue';
 import { SCENE_FIGURE_LAYOUTS, SCENE_LOCATION } from '@/components/scene/location';
 import { BACKGROUND_ASSETS, backgroundUrl } from '@/backgrounds/library';
+import { useMicLink } from '@/composables/useMicLink';
 import { useSceneTimer } from '@/composables/useSceneTimer';
+import { services } from '@/services';
 import { ambience, NOISE_KINDS, NOISE_LABEL, type NoiseMix } from '@/services/ambience';
 import { restMusic } from '@/services/musicPlayer';
 import { restSearches } from '@/services/playlistSearches';
 import { pexelsMedia } from '@/services/previewMedia';
 import { personaOf } from '@/services/prompt';
+import { SpeechQueue } from '@/services/speech';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
+import { clock as linkClock } from '@/utils/time';
 
 /**
  * 休息：午睡、散步、泡澡、静坐、听音乐（每种的背景、姿势、计时可选的时长在 @app/shared 的 rest.ts）。
@@ -43,7 +49,9 @@ import { useChatStore } from '@/stores/chat';
  * - 听音乐：去"一起听歌"（一个人时是它的一个人模式，中间的唱片能用手拨着转）。
  * - 一个人（?solo=1）：不记进任何聊天，随时能"叫上谁一起"；和她一起：她也在做同样的事（午睡也躺下、一分钟后睡着；
  *   静坐坐在呼吸圈旁边），开始、换了画面、到点各说一句，也能打字跟她说；午睡、静坐时她不主动说话，输入框收起来。
- *   聊天里记"来到…"（ScenePage）。她说的话用"休息"这一项 API（默认跟随「陪伴 · 快速」）和"休息"功能预设。
+ *   也能点输入框左边的"连麦"说话、她用自己的声音回（rest-call）。聊天里记"来到…"（ScenePage），离开时记这一段歇了什么。
+ *   她说的话用"休息"这一项 API（默认跟随「陪伴 · 快速」）和"休息"功能预设。
+ * - 从邀请卡（[rest:午睡]）或地图上的地点（"散散步""泡温泉"）进来时先选上那一种；开着计时器、静坐时屏幕常亮；午睡、泡澡时按节律穿睡衣。
  */
 const route = useRoute();
 const router = useRouter();
@@ -77,7 +85,9 @@ function load(): Saved {
 const saved = load();
 const isNoise = (v: unknown): v is RestNoise => (NOISE_KINDS as readonly unknown[]).includes(v);
 
-const kind = ref<RestKind>(restActivity(route.query.do as string)?.id ?? restActivity(saved.kind)?.id ?? 'nap');
+/** 地图上这个地点的说法（"散散步""泡温泉"）：从地点进来时先选上对应的那种 */
+const placeKind = parseRestInvite(location.value?.activities.find((a) => a.sceneId === 'rest')?.label ?? '').activity;
+const kind = ref<RestKind>(restActivity(route.query.do as string)?.id ?? placeKind ?? restActivity(saved.kind)?.id ?? 'nap');
 const activity = computed(() => restActivity(kind.value)!);
 const minutesOf = reactive(
   Object.fromEntries(REST_ACTIVITIES.map((a) => [a.id, a.minutes.includes(saved.minutes?.[a.id] ?? -1) ? saved.minutes![a.id]! : a.defaultMinutes])) as Record<RestKind, number>,
@@ -119,6 +129,8 @@ function start() {
   phase.value = 'resting';
   startedAt.value = Date.now();
   doneNote.value = '';
+  // 她的状态（聊天列表、地图上）写成在做什么；离开这件事时还原
+  if (her.value && !solo.value) her.value.status = `在${activity.value.name}`;
   const n = noiseOf[kind.value];
   if (n && shownNoise.value !== n) playNoise(n);
   if (her.value && !solo.value) chars.setExpression(her.value.id, activity.value.expression);
@@ -130,6 +142,7 @@ function goMusic() {
   void router.push({ path: '/scene/music', query: solo.value ? { solo: '1' } : {} });
 }
 function backToSetup() {
+  logTime();
   phase.value = 'setup';
   line.value = '';
   doneNote.value = '';
@@ -276,6 +289,11 @@ function sayIt(text: string, expr?: string | null) {
 async function speak(task: 'rest-start' | 'rest-check' | 'rest-end', endedMinutes?: number) {
   const id = chatId.value;
   if (!id || typing.value) return;
+  // 连着麦：用她的声音说；她在说、你在说时这次就不插话
+  if (link.state.on) {
+    if (link.state.her === 'idle' && link.state.you === 'idle') link.announce(task, sceneInput(endedMinutes));
+    return;
+  }
   typing.value = true;
   failed.value = '';
   const r = await chat.sceneReply(id, { task, input: sceneInput(endedMinutes), cue: `休息 · ${activity.value.name}`, allowedTags: ['expr'], agent: 'rest' });
@@ -305,11 +323,20 @@ function scheduleRemark() {
 const talk = ref('');
 /** 午睡、静坐时输入框收起来，点"小声说一句"才出来 */
 const talkOpen = ref(false);
-const showTalk = computed(() => !solo.value && !!her.value && phase.value === 'resting' && (!activity.value.quiet || talkOpen.value));
+const showTalk = computed(() => !solo.value && !!her.value && phase.value === 'resting' && (!activity.value.quiet || talkOpen.value || link.state.on));
 async function sendTalk() {
   const text = talk.value.trim();
   const id = chatId.value;
-  if (!text || !id || typing.value) return;
+  if (!text || !id) return;
+  // 连着麦：打的字也走麦里那一路，她用声音回
+  if (link.state.on) {
+    clearTimeout(remarkTimer);
+    talk.value = '';
+    lastTalkAt = Date.now();
+    void link.say(text);
+    return;
+  }
+  if (typing.value) return;
   clearTimeout(remarkTimer);
   talk.value = '';
   lastTalkAt = Date.now();
@@ -326,6 +353,101 @@ async function sendTalk() {
   sayIt(r.message.text || '……', r.message.expression);
 }
 
+// —— 连麦：说话她就听得到，用她的声音回你（输入框左边，同出逃） ——
+let speech: SpeechQueue | null = null;
+function newSpeech(o: { onSentence?(text: string, i: number): void }): SpeechQueue {
+  speech?.stop();
+  const q = new SpeechQueue({ characterId: her.value!.id, onSentence: o.onSentence });
+  speech = q;
+  restMusic.duck(true);
+  ambience.duck(true);
+  void q.drained().then(() => {
+    if (speech !== q) return;
+    restMusic.duck(false);
+    ambience.duck(false);
+  });
+  return q;
+}
+const link = useMicLink({
+  chatId: computed(() => chatId.value ?? ''),
+  // 一个人时连麦按钮不出现，用不到她
+  character: computed(() => her.value as Character),
+  userName,
+  agent: 'rest',
+  newSpeech,
+  context: () => sceneInput(),
+  herBusy: () => false,
+  onInterrupt: () => undefined,
+  autoWhisper: () => false,
+  tasks: { reply: 'rest-call' },
+  input: (k, info) =>
+    k === 'open'
+      ? `${info.context}\n你们刚连上麦，${userName.value}在休息的时候用语音跟你说话。先开口说第一句，1–2 个短句，轻一点。`
+      : `${info.context}\n连麦中（已经连了 ${info.linked}）。回${userName.value}刚才说的话。`,
+  onReply: (text) => {
+    notConnected.value = '';
+    failed.value = '';
+    sayIt(text);
+  },
+});
+function toggleLink() {
+  if (link.state.on) {
+    void link.hangUp();
+    return;
+  }
+  clearTimeout(remarkTimer);
+  link.connect();
+}
+// 换了人、变回一个人：挂断
+watch(chatId, () => {
+  if (link.state.on) void link.hangUp();
+});
+/** 连着麦时画面上显示她正在说的那句 */
+const lastSpoken = computed(() => [...link.state.captions].reverse().find((c) => c.who === 'her')?.text ?? '');
+const shownLine = computed(() => (link.state.on && lastSpoken.value) || line.value);
+const herThinking = computed(() => typing.value || link.state.her === 'thinking');
+onBeforeUnmount(() => {
+  link.dispose();
+  speech?.stop();
+});
+
+// —— 这一段一共歇了什么：离开时写进聊天（"午睡了 20 分钟、散步了 8 分钟"），同健身、吃饭 ——
+const spent = reactive<Partial<Record<RestKind, number>>>({});
+/** 这一种歇到现在的秒数记下来（换个方式、离开时） */
+function logTime() {
+  if (phase.value !== 'resting' || !startedAt.value) return;
+  spent[kind.value] = (spent[kind.value] ?? 0) + (Date.now() - startedAt.value) / 1000;
+  startedAt.value = Date.now();
+}
+function leaveSummary(): string | undefined {
+  const totals = { ...spent };
+  if (phase.value === 'resting' && startedAt.value) totals[kind.value] = (totals[kind.value] ?? 0) + (Date.now() - startedAt.value) / 1000;
+  const bits = REST_ACTIVITIES.filter((a) => (totals[a.id] ?? 0) >= 60).map((a) => `${a.doneVerb} ${Math.round(totals[a.id]! / 60)} 分钟`);
+  return bits.length ? bits.join('、') : undefined;
+}
+// 一起时登记（叫上她、变回一个人时跟着换）；离开这一页时 ScenePage 先结束这件事、取一次总结
+watch(
+  () => [solo.value, her.value?.id] as const,
+  ([alone, id], old) => {
+    if (old?.[1] && old[1] !== id) chat.setLeaveSummary(old[1], null);
+    if (id) chat.setLeaveSummary(id, alone ? null : leaveSummary);
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  if (her.value) chat.setLeaveSummary(her.value.id, null);
+});
+
+// —— 屏幕常亮：开着计时器（到点要响）或者静坐（跟着圆圈呼吸）时，同陪伴学习、健身 ——
+const awake = computed(() => phase.value === 'resting' && (timer.running.value || kind.value === 'sit'));
+watchEffect(() => {
+  // 连着麦时连麦自己管常亮
+  if (link.state.on) return;
+  void services.native.keepAwake(awake.value);
+});
+onBeforeUnmount(() => {
+  if (!link.state.on) void services.native.keepAwake(false);
+});
 // —— 一个人 ⇄ 叫上她 ——
 const inviteOpen = ref(false);
 function wantTogether() {
@@ -342,6 +464,7 @@ function invite(c: Character) {
 function goSolo() {
   if (solo.value) return;
   clearTimeout(remarkTimer);
+  void link.hangUp();
   line.value = '';
   failed.value = '';
   notConnected.value = '';
@@ -398,9 +521,10 @@ const clockText = computed(() => {
     :dim="dim"
     :pose="pose"
     :outfit="activity.outfit"
+    :outfit-scene="activity.outfit === 'pajama' ? 'sleep' : undefined"
     :expression="expression"
-    :line="solo ? undefined : line"
-    :typing="!solo && typing && !line"
+    :line="solo ? undefined : shownLine"
+    :typing="!solo && herThinking && !shownLine"
     :hide-figure="solo"
     :hide-mode="solo"
     :layout="layout"
@@ -470,7 +594,8 @@ const clockText = computed(() => {
       </div>
     </template>
 
-    <div v-if="!solo && notConnected" class="mini-notice" data-testid="rest-not-connected">
+    <MicLinkBar v-if="!solo && her && link.state.on" class="mb-2.5" :link="link" :pronoun="her.pronoun" data-testid="rest-link" />
+    <div v-else-if="!solo && notConnected" class="mini-notice" data-testid="rest-not-connected">
       <span class="i-lucide-plug-zap shrink-0" /><span class="flex-1 min-w-0">{{ her?.name }}说不了话：{{ notConnected }}</span>
       <button type="button" class="text-accent-ink shrink-0" @click="router.push('/me/api?feature=rest')">去设置</button>
     </div>
@@ -543,6 +668,17 @@ const clockText = computed(() => {
       <p v-if="!solo && her" class="her-line"><Avatar :character="her" :size="18" /><span class="truncate">{{ herDoing }}</span></p>
 
       <form v-if="showTalk && her" class="talk" @submit.prevent="sendTalk">
+        <button
+          type="button"
+          class="mic-pill"
+          :class="{ live: link.state.on }"
+          :aria-label="link.state.on ? `挂断连麦（已经连了 ${linkClock(link.state.seconds)}）` : `和${her.name}连麦：说话${her.pronoun}就听得到`"
+          data-testid="rest-mic"
+          @click="toggleLink"
+        >
+          <template v-if="link.state.on"><span class="i-lucide-phone-off shrink-0" /><span class="num">{{ linkClock(link.state.seconds) }}</span></template>
+          <template v-else><span class="i-lucide-headphones shrink-0" />连麦</template>
+        </button>
         <input
           v-model="talk"
           class="field"
@@ -551,12 +687,12 @@ const clockText = computed(() => {
           enterkeyhint="send"
           data-testid="rest-talk"
         />
-        <button type="submit" class="send" :disabled="!talk.trim() || typing" aria-label="发送"><span class="i-lucide-send" /></button>
+        <button type="submit" class="send" :disabled="!talk.trim() || (!link.state.on && typing)" aria-label="发送"><span class="i-lucide-send" /></button>
       </form>
 
       <div class="row">
         <button v-if="views.length" type="button" class="act" data-testid="rest-next" @click="nextView"><span class="i-lucide-refresh-cw" />换一幅</button>
-        <button v-if="!solo && her && activity.quiet && !talkOpen" type="button" class="act" @click="talkOpen = true"><span class="i-lucide-message-circle" />小声说一句</button>
+        <button v-if="!solo && her && activity.quiet && !talkOpen && !link.state.on" type="button" class="act" @click="talkOpen = true"><span class="i-lucide-message-circle" />小声说一句</button>
         <button type="button" class="act" data-testid="rest-change" @click="backToSetup"><span class="i-lucide-leaf" />换个方式</button>
         <button v-if="solo" type="button" class="act" :disabled="!chars.list.length" data-testid="rest-invite" @click="wantTogether"><span class="i-lucide-user-plus" />叫上谁</button>
         <button v-else type="button" class="act" data-testid="rest-go-solo" @click="goSolo"><span class="i-lucide-user-round" />一个人歇</button>
@@ -936,6 +1072,24 @@ const clockText = computed(() => {
   display: flex;
   gap: 8px;
   margin-top: 10px;
+}
+.mic-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 13px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.mic-pill.live {
+  background: var(--bad);
+  color: #fff;
 }
 .field {
   flex: 1;

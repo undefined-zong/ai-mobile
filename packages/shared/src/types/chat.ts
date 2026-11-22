@@ -1,4 +1,4 @@
-import type { InviteGameId } from '../chatModules.ts';
+import type { InviteGameId, RestInviteKind } from '../chatModules.ts';
 import type { ToyCommand } from '../device.ts';
 import type { MealSlot } from './activity.ts';
 import type { SyncMeta } from './common.ts';
@@ -64,13 +64,15 @@ export type MessagePart =
    * answered：你从卡片或横幅接了（结果由通话页另记一张）
    */
   | { type: 'call-log'; durationSec: number; scene?: string; missed?: boolean; transcriptId?: string; video?: boolean; ringUntil?: number; answered?: boolean }
-  /** 她在聊天里发的邀请：学习、观影、游戏、哄睡、运动、平行时空；点接受去对应模块，answer 是你怎么回的 */
+  /** 她在聊天里发的邀请：学习、观影、游戏、哄睡、运动、平行时空、休息；点接受去对应模块，answer 是你怎么回的 */
   | { type: 'invite'; kind: 'study'; task: string; minutes: number | null; answer?: 'yes' | 'no' }
   | { type: 'invite'; kind: 'watch'; title: string; link: string; answer?: 'yes' | 'no' }
   | { type: 'invite'; kind: 'game'; game: InviteGameId; answer?: 'yes' | 'no' }
   | { type: 'invite'; kind: 'sleep'; answer?: 'yes' | 'no' }
   | { type: 'invite'; kind: 'exercise'; answer?: 'yes' | 'no' }
   | { type: 'invite'; kind: 'parallel'; answer?: 'yes' | 'no' }
+  /** 约一起休息：activity 是哪一种（午睡、散步……），null 是进去再选 */
+  | { type: 'invite'; kind: 'rest'; activity: RestInviteKind | null; answer?: 'yes' | 'no' }
   /** 她在聊天里写的玩具指令（<device>）：连着 Intiface 时按读到的位置自动执行；text 是给人看的一句话 */
   | { type: 'toy'; command: ToyCommand; text: string }
   /**

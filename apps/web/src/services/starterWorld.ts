@@ -49,7 +49,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     name: (who) => `${who}的校园`,
     blurb: '宿舍、教学楼和学校附近常去的地方',
     areas: { home: '宿舍区', campus: '学校', city: '学校附近' },
-    home: [s('dorm', '宿舍', 'bedroom', true, '和室友一起住的小房间', [['sleep', '哄睡'], ['music', '一起听歌'], ['poke', '戳戳乐']])],
+    home: [s('dorm', '宿舍', 'bedroom', true, '和室友一起住的小房间', [['sleep', '哄睡'], ['music', '一起听歌'], ['poke', '戳戳乐'], ['rest', '休息']])],
     campus: [
       s('library', '图书馆', 'library', true, '靠窗的位置最抢手', [['study', '陪伴学习'], ['read', '一起看书']]),
       s('canteen', '食堂', 'dining', true, '二楼的窗口最好吃', [['meal', '一起吃饭']]),
@@ -59,7 +59,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     city: [
       s('cafe', '咖啡店', 'cafe', true, '学校后门的小店', [['study', '一起自习'], ['date', '约会']]),
       s('cinema', '电影院', 'cinema', true, '周末有学生票', [['watch', '一起观影'], ['date', '约会']]),
-      s('river', '江边步道', 'park', false, '晚上的风很舒服', [['date', '散步'], ['music', '一起听歌']]),
+      s('river', '江边步道', 'park', false, '晚上的风很舒服', [['date', '散步'], ['music', '一起听歌'], ['rest', '散散步']]),
       s('market', '夜市', 'night-market', false, '烤冷面和糖葫芦', [['meal', '一起吃饭'], ['date', '逛夜市']]),
       s('arcade', '电玩城', 'amusement', true, '抓娃娃机总是差一点', [['game', '一起游戏'], ['date', '约会']]),
       s('aquarium', '水族馆', 'aquarium', true, '有一整面墙的水母', [['date', '约会']]),
@@ -77,7 +77,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     name: (who) => `${who}的城市`,
     blurb: '住的公寓、上班的地方和下班后常去的地方',
     areas: { home: '住处', campus: '上班的地方', city: '城里' },
-    home: [s('apartment', '公寓', 'bedroom', true, '一个人住的小公寓', [['sleep', '哄睡'], ['music', '一起听歌'], ['meal', '一起做饭'], ['poke', '戳戳乐']])],
+    home: [s('apartment', '公寓', 'bedroom', true, '一个人住的小公寓', [['sleep', '哄睡'], ['music', '一起听歌'], ['meal', '一起做饭'], ['poke', '戳戳乐'], ['rest', '休息']])],
     campus: [
       s('office', '公司', 'library', true, '工位旁边有一盆绿萝', [['study', '陪你加班']]),
       s('cafeteria', '员工餐厅', 'dining', true, '周五有糖醋排骨', [['meal', '一起吃饭']]),
@@ -86,7 +86,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     city: [
       s('cafe', '咖啡店', 'cafe', true, '常点的燕麦拿铁', [['study', '一起自习'], ['date', '约会']]),
       s('cinema', '电影院', 'cinema', true, '最后一排的位置', [['watch', '一起观影'], ['date', '约会']]),
-      s('seaside', '海边', 'seaside', false, '周末开车就能到', [['date', '约会'], ['music', '一起听歌']]),
+      s('seaside', '海边', 'seaside', false, '周末开车就能到', [['date', '约会'], ['music', '一起听歌'], ['rest', '海边散步']]),
       s('gallery', '美术馆', 'gallery', true, '每个月换一次展', [['date', '约会']]),
       s('bar', '小酒馆', 'music', true, '周四有驻唱', [['music', '一起听歌'], ['date', '约会']]),
       s('market', '夜市', 'night-market', false, '下班路上会经过', [['meal', '一起吃饭'], ['date', '逛夜市']]),
@@ -105,7 +105,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     name: () => '青崖宗',
     blurb: '山门里的竹舍、修习的地方，和山下常去的去处',
     areas: { home: '竹林', campus: '宗门', city: '后山与山下' },
-    home: [s('bamboo', '竹舍', 'bedroom', true, '推窗就是竹林', [['sleep', '哄睡'], ['music', '听{{pronoun}}抚琴'], ['poke', '戳戳乐']])],
+    home: [s('bamboo', '竹舍', 'bedroom', true, '推窗就是竹林', [['sleep', '哄睡'], ['music', '听{{pronoun}}抚琴'], ['poke', '戳戳乐'], ['rest', '休息']])],
     campus: [
       s('scripture', '藏经阁', 'library', true, '最高一层的经卷不许外借', [['study', '一起修习'], ['read', '一起看书']]),
       s('hall', '膳堂', 'dining', true, '灵谷饭管饱', [['meal', '一起用膳']]),
@@ -131,7 +131,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     name: () => '新港第九区',
     blurb: '霓虹底下的胶囊公寓、上班的地方和下班后的街区',
     areas: { home: '公寓楼', campus: '工作区', city: '霓虹街区' },
-    home: [s('capsule', '胶囊公寓', 'bedroom', true, '窗外是一整面广告屏', [['sleep', '哄睡'], ['music', '一起听歌'], ['poke', '戳戳乐']])],
+    home: [s('capsule', '胶囊公寓', 'bedroom', true, '窗外是一整面广告屏', [['sleep', '哄睡'], ['music', '一起听歌'], ['poke', '戳戳乐'], ['rest', '休息']])],
     campus: [
       s('archive', '数据档案馆', 'library', true, '服务器的嗡嗡声很催眠', [['study', '陪你跑数据']]),
       s('canteen', '自动餐厅', 'dining', true, '营养块有七种口味', [['meal', '一起吃饭']]),
@@ -157,7 +157,7 @@ const POOLS: Record<StarterSetting, Pool> = {
     name: () => '星辉王都',
     blurb: '学院宿舍、上课的地方和王都里常去的去处',
     areas: { home: '学院宿舍', campus: '魔法学院', city: '王都' },
-    home: [s('dorm', '学院宿舍', 'bedroom', true, '窗台上养着会发光的花', [['sleep', '哄睡'], ['music', '一起听歌'], ['poke', '戳戳乐']])],
+    home: [s('dorm', '学院宿舍', 'bedroom', true, '窗台上养着会发光的花', [['sleep', '哄睡'], ['music', '一起听歌'], ['poke', '戳戳乐'], ['rest', '休息']])],
     campus: [
       s('books', '魔法书库', 'library', true, '禁书区要老师签字', [['study', '一起研读'], ['read', '一起看书']]),
       s('hall', '学院食堂', 'dining', true, '南瓜派是招牌', [['meal', '一起吃饭']]),
@@ -168,7 +168,7 @@ const POOLS: Record<StarterSetting, Pool> = {
       s('market', '集市', 'night-market', false, '矮人的铁匠铺在尽头', [['date', '逛集市'], ['meal', '一起吃点心']]),
       s('plaza', '钟楼广场', 'park', false, '整点会响起钟声', [['date', '约会']]),
       s('arena', '竞技场', 'amusement', false, '周末有魔法比赛', [['game', '一起游戏'], ['watch', '一起观赛']]),
-      s('lake', '湖畔', 'seaside', false, '传说湖里住着精灵', [['date', '约会'], ['music', '一起听歌']]),
+      s('lake', '湖畔', 'seaside', false, '传说湖里住着精灵', [['date', '约会'], ['music', '一起听歌'], ['rest', '湖边静坐']]),
     ],
     workStatus: '上课中',
     meals: { breakfast: '面包和热牛奶', lunch: '学院食堂', dinner: '酒馆的炖菜' },

@@ -1,4 +1,4 @@
-import { INVITE_GAMES, inviteGame, parseStudyInvite, parseWatchInvite, type InviteGameId } from './chatModules.ts';
+import { INVITE_GAMES, inviteGame, parseRestInvite, parseStudyInvite, parseWatchInvite, type InviteGameId, type RestInviteKind } from './chatModules.ts';
 
 /**
  * 隐藏控制标签：主对话模型在回复里夹带，用户看不到，客户端在流式输出时实时剥离并执行。
@@ -19,12 +19,13 @@ import { INVITE_GAMES, inviteGame, parseStudyInvite, parseWatchInvite, type Invi
  *   [sleep]               邀请你去哄睡（进入后选连麦、故事或睡前场景）
  *   [exercise]            约你一起运动（进入健身，照计划练或随便动动）
  *   [parallel]            邀请你看平行时空（你们俩今天的安排和留言）
+ *   [rest:午睡]           约你一起休息（午睡、散步、泡澡、静坐、听音乐；不写就是"歇会儿"，进去再选）
  *   <device>"VIBRATE": 40</device>   玩具的控制指令（尖括号写法，可以跨行；内容见 device.ts）
  *
  * 日常聊天支持全部主动卡片和游戏，世界书只提供提示词内容。
  * 兼容全角写法【expr：smile】。不认识的方括号（例如"[笑]"）原样保留为正文。
  */
-export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel'] as const;
+export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'rest'] as const;
 
 /** 尖括号写法、成对的标签：<device>…</device>（同 SillyTavern 的 Intiface 插件） */
 export const BLOCK_TAG_KINDS = ['device'] as const;
@@ -41,7 +42,8 @@ export type ControlTag =
   | { kind: 'game'; game: InviteGameId }
   | { kind: 'sleep' }
   | { kind: 'exercise' }
-  | { kind: 'parallel' };
+  | { kind: 'parallel' }
+  | { kind: 'rest'; activity: RestInviteKind | null };
 
 export type TagStreamEvent = { type: 'text'; text: string } | { type: 'tag'; tag: ControlTag };
 
@@ -68,6 +70,7 @@ export const CONTROL_TAG_DOCS: Record<ControlTagKind, { syntax: string; desc: st
   sleep: { syntax: '[sleep]', desc: '想陪对方入睡时用，显示成哄睡邀请卡片；对方接受后去选连麦、故事或睡前场景' },
   exercise: { syntax: '[exercise]', desc: '约对方一起运动，显示成邀请卡片；对方接受后进入健身，照今天的计划练或随便动动' },
   parallel: { syntax: '[parallel]', desc: '邀对方一起看你们今天的安排或留言，显示成平行时空邀请卡片；对方接受后打开你们的平行时空' },
+  rest: { syntax: '[rest:午睡]', desc: '约对方一起休息，显示成休息邀请卡片；冒号后面可以写午睡、散步、泡澡、静坐或听音乐（不写就是歇会儿，进去再选）' },
   device: {
     syntax: '<device>"VIBRATE": 强度</device>',
     desc: '对方连着成人玩具时，在发生的那句话后面写控制指令：VIBRATE / OSCILLATE / ROTATE（0–100 或 {"pattern": [..], "interval": [..]}）、LINEAR（{"start_position", "end_position", "duration"}）、"STOP": true',
@@ -101,6 +104,8 @@ function parseTag(kind: ControlTagKind, raw: string | undefined): ControlTag | n
       const [title = '', ...rest] = value.split(/\s*[-—–]\s*/);
       return { kind: 'music', title: title.trim(), artist: rest.join(' - ').trim() };
     }
+    case 'rest':
+      return parseRestInvite(value);
     case 'study':
       return parseStudyInvite(value);
     case 'watch':

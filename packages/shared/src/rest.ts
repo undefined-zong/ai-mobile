@@ -1,4 +1,5 @@
 import type { BackdropKey } from './backgrounds.ts';
+import type { RestInviteKind } from './chatModules.ts';
 import { drawnView, pexelsView, type EscapeView } from './escape.ts';
 import type { Expression, Outfit, Pose } from './expressions.ts';
 
@@ -12,7 +13,8 @@ import type { Expression, Outfit, Pose } from './expressions.ts';
  * 画面的说明（desc）写进给她的场景任务，她照着"眼前是什么"说话。
  * 听音乐不在这里放：进"一起听歌"（一个人时是它的一个人模式）。
  */
-export type RestKind = 'nap' | 'walk' | 'bath' | 'sit' | 'music';
+/** 和聊天里 [rest:午睡] 邀请认的那几种是同一组（chatModules.ts 的 RestInviteKind） */
+export type RestKind = RestInviteKind;
 
 /** 白噪音（apps/web/src/services/ambience.ts 里本机合成的那四种） */
 export type RestNoise = 'rain' | 'fire' | 'waves' | 'fan';
