@@ -65,7 +65,7 @@ const isOn = (f: BackgroundFamily) => !!current.value && (f.id === current.value
 <template>
   <div class="px-4 pb-6" data-testid="world-backgrounds">
     <template v-if="world">
-      <p class="intro">{{ world.name }}：给每个地点挑一套背景。不选就按地点名、描述和世界观自动匹配；日间、黄昏、夜间始终按时间切换。</p>
+      <p class="intro">{{ world.name }}：给每个地点挑一套背景。不选就按地点名、描述和世界观自动匹配；日间、黄昏、夜间按时间切换，挑的系列没有的时段沿用它已有的画面（不会换成别的房间）。</p>
       <button
         v-for="r in rows" :key="r.loc.id" type="button" class="loc-row press" :data-testid="`bg-loc-${r.loc.id}`"
         @click="edit(r.loc)"
