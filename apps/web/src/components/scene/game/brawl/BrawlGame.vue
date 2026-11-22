@@ -8,10 +8,12 @@ import { useChatStore } from '@/stores/chat';
 import { usePersonaStore } from '@/stores/personas';
 import { useLibraryStore } from '@/stores/library';
 import { useBrawlStore } from '@/stores/brawl';
+import { useDecorStore } from '@/stores/decor';
 import { useAiStore } from '@/stores/ai';
 import { generateBrawlFighter } from '@/services/brawl';
 import { isHandheld, useTheater } from '@/composables/useTheater';
 import { uid } from '@/utils/id';
+import { DEFAULT_AVATAR, seededAvatar, type Avatar } from '../decor/avatar';
 import { BrawlEngine } from './engine';
 import { BrawlRenderer } from './renderer';
 
@@ -19,7 +21,7 @@ const line = defineModel<string>('line', { required: true });
 const phase = defineModel<string>('phase', { required: true });
 const emit = defineEmits<{ fail: [r: { reason: string; notConnected?: boolean }]; progress: [summary: string | null]; done: [summary: string] }>();
 const app = useAppStore(), chars = useCharacterStore(), chat = useChatStore(), personas = usePersonaStore();
-const store = useBrawlStore(), lib = useLibraryStore(), ai = useAiStore();
+const store = useBrawlStore(), decor = useDecorStore(), lib = useLibraryStore(), ai = useAiStore();
 const router = useRouter(), route = useRoute();
 const opponent = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
 const chatId = computed(() => chat.chatOfCharacter(opponent.value.id)?.id ?? '');
@@ -33,6 +35,15 @@ watch(() => [chars.list.map(c => [c.id, c.name]), personas.list.map(p => [p.id, 
 const roster = computed(() => store.fighters.filter(f => f.ownerKind === 'character' ? chars.byId(f.ownerId) : personas.byId(f.ownerId)));
 const you = computed(() => store.byId(selection.value) ?? store.byId(brawlId('persona', personas.defaultPersona.id))!);
 const her = computed(() => store.byId(brawlId('character', opponent.value.id))!);
+/**
+ * 擂台上的小人和装修小屋里现在的一样（在小屋的"捏人"里改）：角色是 ta 自己那套小屋里的 ta，
+ * 人设是这次对手那套小屋里的"你"；还没进过小屋的，用小屋第一次打开时给的样子。
+ */
+function avatarOf(f: BrawlFighter): Avatar {
+  if (f.ownerKind === 'persona') return decor.homes[opponent.value.id]?.you ?? DEFAULT_AVATAR;
+  return decor.homes[f.ownerId]?.her ?? seededAvatar(f.ownerId);
+}
+const avatars = computed(() => [avatarOf(you.value), avatarOf(her.value)]);
 const preset = computed(() => lib.presetForUse('game-brawl', opponent.value));
 const presets = computed(() => [...lib.presets].sort((a, b) => Number(isBrawlPreset(b)) - Number(isBrawlPreset(a))));
 const connected = computed(() => ai.status('companion').live);
@@ -75,6 +86,7 @@ function refreshPreview() {
   tick.value++;
 }
 watch([you, her, () => store.difficulty], refreshPreview);
+watch(avatars, (a) => renderer?.setAvatars(a));
 
 function cueTone() {
   if (!soundOn.value || !audio || audio.state !== 'running') return;
@@ -286,7 +298,7 @@ onMounted(() => {
   const el = screen.value!;
   el.addEventListener('touchend', touchEnd, { passive: false }); el.addEventListener('touchmove', touchMove, { passive: false });
   document.addEventListener('gesturestart', gesture, { passive: false }); document.addEventListener('gesturechange', gesture, { passive: false });
-  try { renderer = new BrawlRenderer(canvas.value!); observer = new ResizeObserver(resize); observer.observe(stage.value!); resize(); runFrames(); }
+  try { renderer = new BrawlRenderer(canvas.value!); renderer.setAvatars(avatars.value); observer = new ResizeObserver(resize); observer.observe(stage.value!); resize(); runFrames(); }
   catch { renderError.value = '战场未能打开。请开启浏览器的硬件加速，或换一个支持 WebGL 的浏览器。'; }
   window.addEventListener('keydown', keyDown); window.addEventListener('keyup', keyUp); window.addEventListener('blur', blur);
   document.addEventListener('visibilitychange', visibility);
@@ -374,7 +386,8 @@ onBeforeUnmount(() => {
 
             <form v-if="editor" class="fighter-editor" novalidate @submit.prevent="saveEditor">
               <header><h3>编辑 {{ editor.name }}的战斗档案</h3><button type="button" class="icon-action" aria-label="关闭编辑" @click="editor = null"><span class="i-lucide-x" /></button></header>
-              <div class="editor-fields"><label>称号<input v-model="editor.title" /></label><label>战斗风格<select v-model="editor.style"><option v-for="(label, key) in BRAWL_STYLES" :key="key" :value="key">{{ label }}</option></select></label><label>血量<input v-model.number="editor.hp" type="number" min="600" max="1600" /></label><label>蓝量<input v-model.number="editor.mp" type="number" min="80" max="200" /></label><label>普攻伤害<input v-model.number="editor.attack" type="number" min="20" max="65" /></label><label>移动速度<input v-model.number="editor.speed" type="number" min="160" max="320" /></label><label>被动名称<input v-model="editor.passive.name" /></label><label>被动效果<select v-model="editor.passive.kind"><option v-for="(label, key) in BRAWL_PASSIVES" :key="key" :value="key">{{ label }}</option></select></label><label>发型<select v-model="editor.look.hair"><option value="short">短发</option><option value="long">长发</option><option value="spiky">翘发</option><option value="pony">马尾</option></select></label><label>发色<input v-model="editor.look.hairColor" type="color" /></label><label>衣服颜色<input v-model="editor.look.outfit" type="color" /></label><label>技能颜色<input v-model="editor.color" type="color" /></label></div>
+              <div class="editor-fields"><label>称号<input v-model="editor.title" /></label><label>战斗风格<select v-model="editor.style"><option v-for="(label, key) in BRAWL_STYLES" :key="key" :value="key">{{ label }}</option></select></label><label>血量<input v-model.number="editor.hp" type="number" min="600" max="1600" /></label><label>蓝量<input v-model.number="editor.mp" type="number" min="80" max="200" /></label><label>普攻伤害<input v-model.number="editor.attack" type="number" min="20" max="65" /></label><label>移动速度<input v-model.number="editor.speed" type="number" min="160" max="320" /></label><label>被动名称<input v-model="editor.passive.name" /></label><label>被动效果<select v-model="editor.passive.kind"><option v-for="(label, key) in BRAWL_PASSIVES" :key="key" :value="key">{{ label }}</option></select></label><label>技能颜色<input v-model="editor.color" type="color" /></label></div>
+              <p class="look-note"><span class="i-lucide-sofa" />小人的样子和装修小屋里的一样，在装修小屋的「捏人」里改。</p>
               <details v-for="(s, i) in editor.skills" :key="i" class="skill-editor"><summary>{{ i === 2 ? '奥义' : `技能${i + 1}` }} · {{ s.name }}</summary><div class="editor-fields"><label>招式名<input v-model="s.name" /></label><label>招式类型<select v-model="s.kind"><option v-for="(label, key) in BRAWL_KINDS" :key="key" :value="key">{{ label }}</option></select></label><label>伤害／护盾<input v-model.number="s.damage" type="number" min="30" :max="i === 2 ? 420 : 210" /></label><label>耗蓝<input v-model.number="s.mana" type="number" :min="i === 2 ? 45 : 10" :max="i === 2 ? 80 : 60" /></label><label>冷却（秒）<input v-model.number="s.cooldown" type="number" :min="i === 2 ? 14 : 3" max="35" step="0.1" /></label><label>范围<input v-model.number="s.range" type="number" min="70" :max="s.kind === 'burst' ? 300 : 650" /></label><label>前摇（秒）<input v-model.number="s.windup" type="number" min="0.1" max="1.2" step="0.01" /></label><label>后摇（秒）<input v-model.number="s.recovery" type="number" min="0.15" max="1" step="0.01" /></label><label>击退<input v-model.number="s.knockback" type="number" min="50" max="380" /></label><label class="check-label"><input v-model="s.launch" type="checkbox" />命中浮空</label></div><label>说明<input v-model="s.description" /></label></details>
               <button class="primary" type="submit">保存战斗档案 <span class="i-lucide-check" /></button>
             </form>
@@ -435,7 +448,7 @@ input, select { width: 100%; min-width: 0; color: var(--ink); background: var(--
 .text-action { color: var(--ink-2); font-size: 12px; padding: 8px 4px; text-underline-offset: 3px; }.text-action:hover { text-decoration: underline; }
 .loadout-heading { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 12px; }.loadout-heading > span { font-size: 11px; color: var(--ink-3); }.loadouts { display: grid; gap: 22px; }.loadout { border-top: 1px solid var(--border); padding-top: 14px; }.loadout header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }.loadout header strong { font-size: 16px; }.loadout header div > span { display: block; font-size: 11px; color: var(--ink-3); margin-top: 3px; }.source-label { font-size: 10px; color: var(--ink-3); padding-top: 3px; }.stats-line { display: flex; gap: 18px; font-size: 12px; margin: 12px 0; }.stats-line > span { display: flex; align-items: center; gap: 5px; }.stats-line i { color: var(--accent-ink); }
 .skill-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }.skill-list li { display: flex; align-items: start; gap: 10px; }.skill-slot { flex-shrink: 0; font-size: 10px; min-width: 38px; padding-top: 3px; color: var(--ink-3); }.skill-slot.ult { color: #b87825; font-weight: 700; }.skill-list b { font-size: 13px; }.skill-list p { font-size: 12px; color: var(--ink-2); line-height: 1.5; margin: 3px 0; }.skill-list small { font-size: 10px; color: var(--ink-3); }.passive { display: flex; gap: 6px; font-size: 11px; color: var(--ink-2); padding-top: 9px; }.loadout-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }.loadout-actions .secondary { font-size: 12px; }
-.wish { display: grid; gap: 7px; font-size: 12px; margin-top: 24px; }.connection-note, .message { font-size: 12px; line-height: 1.6; color: var(--ink-2); }.connection-note a { margin-left: 5px; color: var(--accent-ink); }.preset-row { display: flex; align-items: end; gap: 10px; margin: 15px 0; font-size: 11px; }.preset-row label { display: grid; flex: 1; min-width: 0; gap: 6px; }.preset-row a { flex-shrink: 0; padding-bottom: 10px; color: var(--accent-ink); }
+.wish { display: grid; gap: 7px; font-size: 12px; margin-top: 24px; }.connection-note, .message { font-size: 12px; line-height: 1.6; color: var(--ink-2); }.connection-note a { margin-left: 5px; color: var(--accent-ink); }.preset-row { display: flex; align-items: end; gap: 10px; margin: 15px 0; font-size: 11px; }.preset-row label { display: grid; flex: 1; min-width: 0; gap: 6px; }.preset-row a { flex-shrink: 0; padding-bottom: 10px; color: var(--accent-ink); }.look-note { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--ink-3); }
 .fighter-editor { margin: 20px 0; border-top: 1px solid var(--border); padding-top: 16px; }.fighter-editor header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }.editor-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }.fighter-editor label { font-size: 11px; display: grid; gap: 5px; }.fighter-editor input[type='color'] { padding: 3px; height: 36px; }.fighter-editor .check-label { display: flex; align-items: center; }.check-label input { width: auto; }.skill-editor { padding: 12px 0; border-bottom: 1px solid var(--border); }.skill-editor summary { font-size: 13px; cursor: pointer; }.skill-editor .editor-fields { padding: 14px 0; }.fighter-editor > .primary { margin-top: 16px; width: 100%; }.how-to { border-top: 1px solid var(--border); margin-top: 20px; padding: 16px 0; font-size: 12px; color: var(--ink-2); }.how-to summary { cursor: pointer; color: var(--ink); }.how-to p { line-height: 1.7; }.history { margin-top: 16px; }.history > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 11px 0; font-size: 11px; border-bottom: 1px solid var(--border); }.history b { font-weight: 500; flex: 1; }.history small { color: var(--ink-3); }
 /* 战斗页：铺满屏幕的固定层（横屏按它的大小算）；.brawl-box 是战斗层，竖屏时转 90°（左上角放在屏幕右上角，手机往左横过来看就是正的），安全区跟着换边；下面的布局按战斗层自己的宽高（容器查询），转没转都一样 */
 .fight-screen { position: fixed; inset: 0; z-index: 100; overflow: hidden; background: #141a2b; color: #f3ede4; overscroll-behavior: contain; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; --ink: #f3ede4; --ink-2: #ccd4e4; --ink-3: #a5b2ca; --panel: #252e43; --surface: #20293d; --border: #3b465e; }
