@@ -1,6 +1,6 @@
 import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
 import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, watchWorkoutLine, type HubWatchWorkouts, type WatchWorkout, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
-  type Character, type HubDiaries, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit } from '@app/shared';
+  type Character, type HubDiaries, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit, type VideoPage, type BiliFavFolder } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { getOne, msgKey, write } from '@/db/idb';
@@ -106,6 +106,8 @@ export const useHubStore = defineStore('hub', () => {
   const supportsParallelPlan = computed(() => !!status.value && 'lastParallelPlanError' in status.value);
   /** 云端有内置的微信读书 MCP（一起看书接微信读书用） */
   const supportsWeread = computed(() => status.value?.weread === true);
+  /** 云端的 B 站搜索能换一批、能读 B 站收藏夹 */
+  const supportsVideoBrowse = computed(() => status.value?.videoBrowse === true);
   /** 云端能用存着的登录信息调日历的单个工具（平行时空把记的事同步进 Google 日历） */
   const supportsMcpCall = computed(() => status.value?.mcpCall === true);
   /** 云端有多设备同步（聊天、朋友圈、社群、记忆、角色、设置……连着同一个 Worker 的设备都一样） */
@@ -1055,12 +1057,26 @@ export const useHubStore = defineStore('hub', () => {
     await request('/v1/push/subscribe', 'POST', { kind: 'webhook', label: data.preset === 'custom' ? '自定义 webhook' : data.preset, config: data });
     await refreshStatus();
   }
-  /** 一起观影：按片名在你的 Worker 上搜 B 站的真实视频（聊天里的看片邀请点开时用） */
-  /** 让 Hub 搜 B 站；cookie 是观影设置里的 B 站 Cookie，有就用 POST 带过去（不放进网址） */
-  async function searchVideos(q: string, cookie = ''): Promise<VideoHit[]> {
+  /**
+   * 一起观影：让 Hub 搜 B 站的真实视频的第 page 批（每批 limit 个）；cookie 是观影设置里的 B 站 Cookie，有就用 POST 带过去（不放进网址）。
+   * 旧版 Hub 不认 page，每次都给第一批，也不回 more（为 undefined）
+   */
+  async function searchVideos(q: string, cookie = '', page = 1, limit?: number): Promise<{ hits: VideoHit[]; more?: boolean }> {
     if (!connected.value) throw new Error('还没连云端 Hub（我的 → 云端同步），搜不了 B 站');
     const path = '/v1/video/search';
-    return (cookie ? await request<{ hits: VideoHit[] }>(path, 'POST', { q, cookie }) : await request<{ hits: VideoHit[] }>(`${path}?q=${encodeURIComponent(q)}`)).hits;
+    if (cookie) return request<{ hits: VideoHit[]; more?: boolean }>(path, 'POST', { q, cookie, page, ...(limit ? { limit } : {}) });
+    return request<{ hits: VideoHit[]; more?: boolean }>(`${path}?q=${encodeURIComponent(q)}&page=${page}${limit ? `&limit=${limit}` : ''}`);
+  }
+  /** 一起观影：B 站 Cookie 登录的账号自己建的收藏夹（旧版 Hub 没有这个接口） */
+  async function favFolders(cookie: string): Promise<BiliFavFolder[]> {
+    if (!connected.value) throw new Error('还没连云端 Hub（我的 → 云端同步），读不了 B 站收藏夹');
+    if (!supportsVideoBrowse.value) throw new Error('云端 Hub 是旧版，读不了 B 站收藏夹：部署最新 main 的 Hub');
+    return (await request<{ folders: BiliFavFolder[] }>('/v1/video/fav/folders', 'POST', { cookie })).folders;
+  }
+  /** 一起观影：一个 B 站收藏夹的第 page 页视频 */
+  async function favVideos(cookie: string, id: number, page: number): Promise<VideoPage> {
+    if (!connected.value) throw new Error('还没连云端 Hub（我的 → 云端同步），读不了 B 站收藏夹');
+    return request<VideoPage>('/v1/video/fav/videos', 'POST', { cookie, id, page });
   }
   /** 让 Hub 查 B 站视频第 page P 的 aid、cid（id 是 BV 号或 av 号）：iOS 上的嵌入播放器要靠它们才放得了 */
   async function videoIds(id: string, page: number): Promise<{ aid: number; cid: number }> {
@@ -1107,6 +1123,6 @@ export const useHubStore = defineStore('hub', () => {
       clearTimeout(debounce); debounce = setTimeout(() => void syncNow(), 500);
     }, { deep: true });
   }
-  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, diaryErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsDiary, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, videoIds, endpoint,
+  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, diaryErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsDiary, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsVideoBrowse, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, favFolders, favVideos, videoIds, endpoint,
     ensureStatus, pushMcpSecret, syncPlannerNow, runPlanner, mcpCall, plannerTools, oauthDiscover, oauthRegister, oauthToken, pullWatchWorkouts, createIngestToken, revokeIngestToken, start };
 });
