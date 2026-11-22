@@ -11,7 +11,10 @@ import { platform } from '@/pwa';
  *   手机真的转过来（系统把页面也转成横的）就不再转。
  * 进出放映厅都只改样式，不挪播放器的 DOM（iframe 一挪就会重新加载，YouTube 会从头放）。
  * 给了 player（视频元素）时：它自己进了全屏（iPhone、Mac 的 Safari 和火狐不认 controlslist="nofullscreen"，
- * 控件上照样有全屏按钮），那个全屏只有画面、弹幕和按钮都被盖住，就退出来改进放映厅，原来在播的接着播。
+ * 控件上照样有全屏按钮；iPhone 上双指张开也会全屏；iOS 主屏幕 App 有时不管 playsinline、一放就全屏），
+ * 那个全屏只有画面、弹幕和按钮都被盖住，就退出来改进放映厅。
+ * 退出来视频却停了（这台 iPhone 不让在页面里放），就不再拦、让它全屏放，免得一放就被拦停；
+ * 这时 playerFullscreen 是 true，页面可以把弹幕改成字幕塞进视频（系统的全屏播放器会显示字幕）。
  */
 
 /** 手机、平板（不是电脑）：有触屏、没有鼠标悬停 */
@@ -32,6 +35,8 @@ type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<v
 type FsVideo = HTMLVideoElement & { webkitDisplayingFullscreen?: boolean; webkitExitFullscreen?: () => void };
 /** iPhone 退出视频全屏的动画放完才发 webkitendfullscreen；一直没发就不等了 */
 const VIDEO_FS_EXIT_WAIT = 1500;
+/** 进全屏的动画还没放完时叫它退出会被忽略：没退掉就再叫，最多叫几次 */
+const VIDEO_FS_EXIT_TRIES = 3;
 
 function fullscreenElement(): Element | null {
   const d = document as FsDocument;
@@ -88,9 +93,8 @@ function exitPageFullscreen(): Promise<void> {
   return Promise.resolve();
 }
 
-/** 退出 iPhone 的视频全屏，等退完 */
-function exitVideoFullscreen(v: FsVideo): Promise<void> {
-  if (!v.webkitDisplayingFullscreen || !v.webkitExitFullscreen) return Promise.resolve();
+/** 叫 iPhone 的视频全屏退出一次，等它退完（或者等不到） */
+function askVideoExit(v: FsVideo): Promise<void> {
   return new Promise<void>((resolve) => {
     const done = () => {
       v.removeEventListener('webkitendfullscreen', done);
@@ -105,6 +109,12 @@ function exitVideoFullscreen(v: FsVideo): Promise<void> {
       done();
     }
   });
+}
+
+/** 退出 iPhone 的视频全屏，等退完；退完了返回 true */
+async function exitVideoFullscreen(v: FsVideo): Promise<boolean> {
+  for (let i = 0; i < VIDEO_FS_EXIT_TRIES && v.webkitDisplayingFullscreen && v.webkitExitFullscreen; i += 1) await askVideoExit(v);
+  return !v.webkitDisplayingFullscreen;
 }
 
 export function useTheater(target: Ref<HTMLElement | null>, player?: Ref<HTMLVideoElement | null>) {
@@ -145,10 +155,13 @@ export function useTheater(target: Ref<HTMLElement | null>, player?: Ref<HTMLVid
     },
     { immediate: true, flush: 'post' },
   );
+  /** 视频正在用它自己的全屏（拦不回来的时候）：页面上的弹幕看不到 */
+  const playerFullscreen = ref(false);
   const onResize = () => measure();
   const onFsChange = () => {
     const v = player?.value;
-    if (v && fullscreenElement() === v) {
+    playerFullscreen.value = !!v && fullscreenElement() === v;
+    if (v && playerFullscreen.value) {
       void fromPlayer(v);
       return;
     }
@@ -156,30 +169,50 @@ export function useTheater(target: Ref<HTMLElement | null>, player?: Ref<HTMLVid
     if (fullscreen.value && !fullscreenElement()) exit();
   };
 
-  /** 视频自己进了全屏：退出来改进放映厅（已经在放映厅里就留在里面），原来在播的接着播 */
+  /** 退出视频的全屏后它停了：这台设备不让视频在页面里放、只能全屏放，以后不再拦 */
+  let inlineBlocked = false;
   let bouncing = false;
+  /** 视频自己进了全屏：退出来改进放映厅（已经在放映厅里就留在里面） */
   async function fromPlayer(v: FsVideo) {
-    if (bouncing) return;
+    if (bouncing || inlineBlocked) return;
     bouncing = true;
     const wasPlaying = !v.paused;
     const wasOn = on.value;
     // 退出视频全屏时还会来一次全屏事件：先记成不在系统全屏，免得当成你退出了放映厅
     fullscreen.value = false;
-    if (fullscreenElement() === v) await exitPageFullscreen();
-    else await exitVideoFullscreen(v);
+    let out: boolean;
+    if (fullscreenElement() === v) {
+      await exitPageFullscreen();
+      out = fullscreenElement() !== v;
+    } else out = await exitVideoFullscreen(v);
+    bouncing = false;
     // 已经在放映厅里：视频的全屏退掉后，页面原来的系统全屏可能还在
     if (wasOn) fullscreen.value = !!fullscreenElement();
-    else enter();
-    bouncing = false;
-    if (wasPlaying && v.paused) void v.play().catch(() => undefined);
+    if (out && wasPlaying && v.paused) {
+      // 在页面里放不了：让它全屏接着放（会再进全屏，这次不拦）
+      inlineBlocked = true;
+      void v.play().catch(() => undefined);
+      return;
+    }
+    if (!wasOn) enter();
   }
-  const onVideoFs = (e: Event) => void fromPlayer(e.target as FsVideo);
+  const onVideoFsBegin = (e: Event) => {
+    playerFullscreen.value = true;
+    void fromPlayer(e.target as FsVideo);
+  };
+  const onVideoFsEnd = () => {
+    playerFullscreen.value = false;
+  };
   if (player) {
     watch(
       player,
       (v, old) => {
-        old?.removeEventListener('webkitbeginfullscreen', onVideoFs);
-        v?.addEventListener('webkitbeginfullscreen', onVideoFs);
+        old?.removeEventListener('webkitbeginfullscreen', onVideoFsBegin);
+        old?.removeEventListener('webkitendfullscreen', onVideoFsEnd);
+        v?.addEventListener('webkitbeginfullscreen', onVideoFsBegin);
+        v?.addEventListener('webkitendfullscreen', onVideoFsEnd);
+        playerFullscreen.value = false;
+        inlineBlocked = false;
       },
       { immediate: true, flush: 'post' },
     );
@@ -241,7 +274,8 @@ export function useTheater(target: Ref<HTMLElement | null>, player?: Ref<HTMLVid
   onBeforeUnmount(() => {
     exit();
     ro?.disconnect();
-    player?.value?.removeEventListener('webkitbeginfullscreen', onVideoFs);
+    player?.value?.removeEventListener('webkitbeginfullscreen', onVideoFsBegin);
+    player?.value?.removeEventListener('webkitendfullscreen', onVideoFsEnd);
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
@@ -250,5 +284,5 @@ export function useTheater(target: Ref<HTMLElement | null>, player?: Ref<HTMLVid
     }
   });
 
-  return { on, fullscreen, locked, rotate, size, box, enter, exit };
+  return { on, fullscreen, locked, rotate, size, box, playerFullscreen, enter, exit };
 }

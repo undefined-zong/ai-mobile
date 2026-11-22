@@ -436,9 +436,12 @@ interface Dm {
   who: 'her' | 'you';
   text: string;
 }
+/** 播放器上面那一列里一条弹幕留多久；视频自己全屏时她的话当字幕，也显示这么久 */
+const DM_SHOW_MS = 6000;
 const danmaku = ref<Dm[]>([]);
 let dmSeq = 0;
 function pushDanmaku(who: Dm['who'], text: string) {
+  if (who === 'her') cueHer(text);
   // 放映厅里：从画面上飘过去
   if (inTheater.value) {
     flyEl.value?.push(who, text);
@@ -446,7 +449,7 @@ function pushDanmaku(who: Dm['who'], text: string) {
   }
   const id = (dmSeq += 1);
   danmaku.value = [...danmaku.value.slice(-3), { id, who, text }];
-  setTimeout(() => (danmaku.value = danmaku.value.filter((d) => d.id !== id)), 6000);
+  setTimeout(() => (danmaku.value = danmaku.value.filter((d) => d.id !== id)), DM_SHOW_MS);
 }
 
 // —— 放映厅：横屏、铺满屏幕看 ——
@@ -454,7 +457,38 @@ function pushDanmaku(who: Dm['who'], text: string) {
 const handheld = isHandheld();
 const screenEl = ref<HTMLElement | null>(null);
 const flyEl = ref<InstanceType<typeof FlyingDanmaku> | null>(null);
-const { on: inTheater, rotate: theaterRotated, size: theaterSize, enter: enterTheater, exit: exitTheater } = useTheater(screenEl, videoEl);
+const { on: inTheater, rotate: theaterRotated, size: theaterSize, playerFullscreen, enter: enterTheater, exit: exitTheater } = useTheater(screenEl, videoEl);
+
+/**
+ * 视频自己全屏、拦不回来时（iPhone 不让在页面里放），页面上的弹幕盖不到系统的全屏播放器上：
+ * 她的话同时写成视频的字幕，只在这时打开（平时有弹幕，不重复）。B 站、YouTube 的 iframe 里的视频碰不到，只能管自己放的视频
+ */
+let herTrack: TextTrack | null = null;
+function herSubtitles(): TextTrack | null {
+  const v = videoEl.value;
+  if (!v || typeof v.addTextTrack !== 'function' || typeof VTTCue === 'undefined') return null;
+  if (!herTrack) {
+    herTrack = v.addTextTrack('subtitles', her.value.name, 'zh');
+    herTrack.mode = playerFullscreen.value ? 'showing' : 'hidden';
+  }
+  return herTrack;
+}
+function cueHer(text: string) {
+  const v = videoEl.value;
+  const track = herSubtitles();
+  if (!v || !track) return;
+  try {
+    track.addCue(new VTTCue(v.currentTime, v.currentTime + DM_SHOW_MS / 1000, `${her.value.name}：${text}`));
+  } catch {
+    // 视频还没准备好
+  }
+}
+// 换了一个视频元素：字幕轨跟着旧的走了
+watch(videoEl, () => (herTrack = null));
+watch(playerFullscreen, (on) => {
+  const track = herSubtitles();
+  if (track) track.mode = on ? 'showing' : 'hidden';
+});
 /** 在别处看时手机上没有画面，不进放映厅 */
 const canTheater = computed(() => source.value !== 'elsewhere');
 /** 屏幕竖着：里面的内容框宽高对调、转 90° */
