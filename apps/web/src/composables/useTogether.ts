@@ -81,12 +81,12 @@ export function useTogether(
   const parallel = useParallelStore();
   const rhythm = useRhythmStore();
   const who = computed(() => toValue(owner) ?? null);
-  /** 建好的世界登记在 @app/shared 里（不是响应式的）：读一下节律里的世界，新建好、重建了跟着变 */
-  const world = computed(() => (void Object.keys(rhythm.worlds).length, worldOf(who.value?.id)));
+  /** 直接跟随这个角色的小世界，新建、重建和同步后地点与活动一起更新。 */
+  const world = computed(() => rhythm.worlds[who.value?.id ?? ''] ?? worldOf(who.value?.id));
 
   /** 她此刻在她小世界里的哪儿（来你这边了、不知道在哪时是 null） */
   const here = computed<MapLocation | null>(() => {
-    const l = getLocation(who.value?.locationId);
+    const l = world.value.locations.find((loc) => loc.id === who.value?.locationId) ?? getLocation(who.value?.locationId);
     return l && !isRealPlace(l) ? l : null;
   });
 

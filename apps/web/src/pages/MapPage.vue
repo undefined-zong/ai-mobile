@@ -74,7 +74,7 @@ watch(
   },
   { immediate: true },
 );
-const world = computed(() => (owner.value ? worldOf(owner.value.id) : real.world));
+const world = computed(() => (owner.value ? rhythm.worlds[owner.value.id] ?? worldOf(owner.value.id) : real.world));
 function switchWorld(key: string) {
   locOpen.value = false;
   actOpen.value = false;

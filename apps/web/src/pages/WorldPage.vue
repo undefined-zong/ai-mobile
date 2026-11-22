@@ -197,7 +197,7 @@ watch(
       <button v-if="nowAction" class="suggest mx-4 press" :disabled="busy" @click="go(nowAction.loc, nowAction.activity)">
         <Avatar :character="owner" :size="40" live />
         <div class="flex-1 min-w-0 text-left">
-          <div class="text-[14px] leading-snug truncate">{{ here ? `${owner.name}在${here.name}${owner.status ? ` · ${owner.status}` : ''}` : owner.name }}</div>
+          <div class="text-[14px] leading-snug truncate">{{ owner.name }}<template v-if="here">在{{ here.name }}</template><template v-if="owner.status"> · {{ owner.status }}</template></div>
           <div class="text-[12px] text-ink-3 mt-0.5 truncate"><span class="i-lucide-map-pin" /> {{ nowAction.loc.name }} · {{ nowAction.activity.label }}</div>
         </div>
         <span class="go">去陪{{ owner.pronoun }}</span>
