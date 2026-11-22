@@ -5,9 +5,10 @@ import type { Expression, Outfit, Pose } from './expressions.ts';
 /**
  * 休息（RestScene.vue）：午睡、散步、泡澡、静坐、听音乐。一个人歇会儿（?solo=1），或者叫上她一起。
  * 每种休息方式自己的背景、立绘姿势、默认的白噪音、计时器可选的时长写在这里；界面、提示词（场景任务）都从这里取。
- * 散步、泡澡、静坐的背景会动（同出逃，components/scene/escape/EscapeBackdrop.vue）：
- * - 实拍：Pexels 的竖屏视频（720 宽），从 Pexels 直接播放，不打包进 App；
- * - 插画：场景素材库里的图慢慢平移，叠上热气、花瓣、光点。
+ * 午睡、散步、泡澡、静坐的背景会动（同出逃，components/scene/escape/EscapeBackdrop.vue）：
+ * - 实拍：Pexels 的竖屏视频（720 宽），从 Pexels 直接播放，不打包进 App。画面里不能有人：
+ *   挑的时候每段在整段时长里均匀抽 8 帧看过（第一人称走路露出腿脚的也不要）；换素材时照这个来；
+ * - 插画：场景素材库里的图慢慢平移，叠上花瓣、光点。
  * 画面的说明（desc）写进给她的场景任务，她照着"眼前是什么"说话。
  * 听音乐不在这里放：进"一起听歌"（一个人时是它的一个人模式）。
  */
@@ -56,6 +57,17 @@ export const REST_ACTIVITIES: RestActivity[] = [
     blurb: '闭上眼睛歇一会儿，到点轻轻叫醒你',
     minutes: [10, 20, 30, 45],
     defaultMinutes: 20,
+    views: [
+      pexelsView('nap', 1, 35873903, '床边的海', '躺在床上，窗外是海，窗帘被风轻轻吹动', '15214045_720_1280_30fps.mp4'),
+      pexelsView('nap', 2, 39686776, '白纱窗边的床', '午后的床，白纱窗帘透着光，外面是阳台', '16921634_720_1280_30fps.mp4'),
+      pexelsView('nap', 3, 15863264, '阳光照在床上', '阳光斜斜地照在床上，枕边放着一本书和一杯咖啡', '15863264-hd_720_1280_30fps.mp4'),
+      pexelsView('nap', 4, 26796112, '风吹白纱', '白纱窗帘被风吹起来，窗台上放着一个杯子，远处是山', '12008397_720_1280_30fps.mp4'),
+      pexelsView('nap', 5, 40417711, '地上的阳光', '白纱窗帘轻轻晃，阳光一格一格落在地板上', '17271537_720_1280_30fps.mp4'),
+      pexelsView('nap', 6, 38781080, '开着的窗', '窗开着，风从外面吹进来，纱帘飘起来又落下', '16478396_720_1280_25fps.mp4'),
+      pexelsView('nap', 7, 11487518, '窗外的大雨', '窗外在下大雨，雨点打在玻璃上，外面的椅子都湿了', '11487518-hd_720_1280_60fps.mp4'),
+      pexelsView('nap', 8, 34208854, '安静的卧室', '干净安静的卧室，床铺得整整齐齐', '14499028_720_1280_24fps.mp4'),
+      pexelsView('nap', 9, 34237005, '开着台灯的卧室', '傍晚的卧室，床头的小灯亮着', '14509456_720_1280_24fps.mp4'),
+    ],
     noise: 'fan',
     backdrop: 'bedroom',
     indoor: true,
@@ -75,11 +87,12 @@ export const REST_ACTIVITIES: RestActivity[] = [
     minutes: [10, 20, 30, 45],
     defaultMinutes: 20,
     views: [
-      pexelsView('walk', 1, 38344808, '春天的林间', '春天的树林，阳光从叶子缝里照下来，脚下是长满青苔的小路', '16283332_720_1280_25fps.mp4', '4k-forest-4k-nature-4k-nature-background-4k-nature-video-38344808.jpeg'),
-      pexelsView('walk', 2, 31888164, '雨后的樱花路', '刚下过雨，公园的小路湿湿的，路边的樱花开满了', '13582608_720_1280_30fps.mp4'),
-      pexelsView('walk', 3, 36107226, '竹林小径', '两边是很高的竹子，中间一条砖铺的小路一直往前', '15312351_720_1280_24fps.mp4'),
-      pexelsView('walk', 4, 40363880, '海边步道', '海边的步道，浪拍上堤岸，远处有人在慢慢走', '17244636_720_1280_30fps.mp4'),
-      drawnView('walk', 1, 'AP-daytime_forrest-11', '林间小路', '树林里的小路，阳光一束一束照下来，空气里飘着光点', ['motes']),
+      pexelsView('walk', 1, 13076309, '林间小路', '走在树林中间的小路上，两边是一排排的树，地上是落叶', '13076309-hd_720_1280_24fps.mp4'),
+      pexelsView('walk', 2, 13261590, '松林', '在松树林里慢慢往前走，阳光从树干中间照过来', '13261590-hd_720_1280_24fps.mp4'),
+      pexelsView('walk', 3, 38867809, '公园的小路', '公园里弯弯的小路，两边是草地和大树，没有别人', '16522805_720_1280_30fps.mp4', 'calm-copy-space-empty-path-environment-38867809.jpeg'),
+      pexelsView('walk', 4, 38877994, '草地上的栈道', '一条木栈道穿过草地，天很蓝，云很大', '16528311_720_1280_30fps.mp4'),
+      pexelsView('walk', 5, 32818103, '夏天的林荫路', '夏天，走在林荫路上，路弯弯地往前延伸', '13989039_720_1280_30fps.mp4', '4k-adventure-beautiful-calm-32818103.jpeg'),
+      drawnView('walk', 1, 'AP-daytime_forrest-11', '林间小路（插画）', '树林里的小路，阳光一束一束照下来，空气里飘着光点', ['motes']),
       drawnView('walk', 2, 'MC-park_in_spring-01', '樱花公园', '春天的公园，樱花开着，花瓣慢慢飘下来', ['petals', 'clouds']),
       drawnView('walk', 3, 'MC-levee_trail-02', '黄昏的河堤', '黄昏，河堤上的散步道，天边是橙色的', ['warm-clouds', 'motes']),
       drawnView('walk', 4, 'AP-daytime_forrest-28', '夕阳下的森林', '太阳快落山了，树林里的小路被照得暖暖的', ['motes']),
@@ -102,18 +115,22 @@ export const REST_ACTIVITIES: RestActivity[] = [
     minutes: [10, 15, 20, 30],
     defaultMinutes: 20,
     views: [
-      drawnView('bath', 1, 'MC-japanese_bathroom-01', '木浴缸', '木头的浴缸放满了热水，冒着热气，窗外是白天', ['steam']),
-      drawnView('bath', 2, 'MC-hot_spring-03', '夜里的露天温泉', '夜里的露天温泉，热气往上飘，天上有星星', ['steam', 'stars']),
-      drawnView('bath', 3, 'MC-hot_spring-02', '黄昏的温泉', '黄昏的温泉，水面泛着暖光，热气慢慢散开', ['steam', 'warm-clouds']),
-      pexelsView('bath', 1, 6693847, '放热水', '浴缸在放热水，水从龙头里流下来', '6693847-hd_720_1366_30fps.mp4'),
-      pexelsView('bath', 2, 8926011, '泡泡浴', '浴缸里满是泡泡，旁边点着小蜡烛', '8926011-hd_720_1366_25fps.mp4', 'bath-bathroom-bathtub-clean-8926011.jpeg'),
-      pexelsView('bath', 3, 8926013, '浴球', '一颗浴球丢进热水里，慢慢化开', '8926013-hd_720_1366_25fps.mp4', 'adult-bath-bathroom-bathtub-8926013.jpeg'),
-      pexelsView('bath', 4, 34807184, '烛火', '浴室里暗暗的，只点着一支蜡烛，火苗轻轻晃', '14757778_720_1064_30fps.mp4', 'burning-candle-burning-candles-candle-candle-flame-34807184.jpeg'),
-      pexelsView('bath', 5, 12742709, '窗上的雨', '浴室的窗外在下雨，雨点顺着玻璃往下流', '12742709-hd_720_1280_30fps.mp4', 'blue-sky-cool-day-rain-12742709.jpeg'),
+      pexelsView('bath', 1, 6810590, '泡泡浴', '浴缸里放满了热水和泡泡，上面漂着玫瑰', '6810590-hd_720_1248_30fps.mp4'),
+      pexelsView('bath', 2, 15391873, '壁炉边的浴缸', '圆圆的浴缸里撒着花瓣，旁边的壁炉烧着火', '15391873-hd_720_1280_30fps.mp4', 'beauty-spa-hotel-meditation-and-relaxation-relaxation-15391873.jpeg'),
+      pexelsView('bath', 3, 5607537, '窗边的烛光', '浴缸靠着窗，缸边点着几支蜡烛，窗外是绿叶', '5607537-hd_720_1280_24fps.mp4', 'african-american-child-african-child-asian-child-asian-children-5607537.jpeg'),
+      pexelsView('bath', 4, 34237015, '雨雾里的浴池', '浴池里冒着水泡，窗外的树林起了雾', '14509341_720_1280_24fps.mp4'),
+      pexelsView('bath', 5, 40187590, '落地窗前的浴缸', '落地窗前放着一只白色的浴缸，外面是树和天', '17167747_720_1280_30fps.mp4'),
+      pexelsView('bath', 6, 15404450, '夜里的热水池', '夜里，热水池亮着彩色的灯，旁边是壁炉', '15404450-hd_720_1280_30fps.mp4'),
+      pexelsView('bath', 7, 8195632, '水面上的花瓣', '水面上漂满了红色的玫瑰花瓣', '8195632-hd_720_1366_30fps.mp4'),
+      pexelsView('bath', 8, 34270347, '户外的石头浴缸', '院子里一只石头浴缸，水从龙头里流进来，背后是石墙', '14520056_720_1280_30fps.mp4'),
+      pexelsView('bath', 9, 5698927, '山野里的浴缸', '一只浴缸放在山野里，四周是灌木和远山', '5698927-hd_720_1280_25fps.mp4', 'bath-bathe-bathing-bathtub-5698927.jpeg'),
+      pexelsView('bath', 10, 38548099, '蓝色的温泉', '野外的温泉，水是蓝色的，冒着热气，远处是松林', '16373198_720_1280_30fps.mp4'),
+      pexelsView('bath', 11, 40375841, '冒热气的温泉河', '温泉水顺着石头流进河里，到处冒着热气', '17252087_720_1280_30fps.mp4'),
+      pexelsView('bath', 12, 6047892, '帕穆卡莱的温泉池', '白色石灰华上的温泉池，水是浅蓝色的', '6047892-hd_720_1280_30fps.mp4', 'pamukkale-6047892.jpeg'),
+      pexelsView('bath', 13, 27949894, '倒映着山林的温泉', '野外的温泉池，水面倒映着山和松林', '12270984_720_1280_60fps.mp4'),
     ],
     noise: 'rain',
     backdrop: 'bathroom',
-    backgroundSet: 'MC-japanese_bathroom',
     indoor: true,
     pose: 'sit',
     outfit: 'pajama',

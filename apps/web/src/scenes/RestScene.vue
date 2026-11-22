@@ -37,7 +37,7 @@ import { useChatStore } from '@/stores/chat';
 /**
  * 休息：午睡、散步、泡澡、静坐、听音乐（每种的背景、姿势、计时可选的时长在 @app/shared 的 rest.ts）。
  * - 先选怎么休息（选的时候背景就换过去），点开始；面板只留在哪、和她说话、换一幅 / 换个方式。
- * - 散步、泡澡、静坐的背景会动（同出逃：Pexels 的实拍视频、素材库的插画叠热气 / 花瓣 / 光点），"换一幅"在几幅里轮换。
+ * - 午睡、散步、泡澡、静坐的背景会动（同出逃：Pexels 的实拍视频、素材库的插画叠热气 / 花瓣 / 光点），"换一幅"在几幅里轮换；午睡时再压暗。
  * - 右上角竖着一列：音乐（网易云歌单）、白噪音（本机合成）、计时器（要的时候才开：选几分钟，到点轻轻响铃、震一下，她叫你）。
  * - 静坐：画面中间是跟着呼吸的圆圈（放松 4-6、方块 4-4-4-4、4-7-8）。
  * - 听音乐：去"一起听歌"（一个人时是它的一个人模式，中间的唱片能用手拨着转）。
@@ -138,7 +138,7 @@ function backToSetup() {
   timer.cancel();
 }
 
-// —— 会动的背景：散步、泡澡、静坐有几幅画面 ——
+// —— 会动的背景：午睡、散步、泡澡、静坐有几幅画面 ——
 const views = computed<EscapeView[]>(() => activity.value.views ?? []);
 const view = computed<EscapeView | null>(() => views.value.find((v) => v.id === viewOf[kind.value]) ?? views.value[0] ?? null);
 function show(id: string) {
@@ -408,6 +408,8 @@ const clockText = computed(() => {
   >
     <template v-if="view" #backdrop>
       <EscapeBackdrop :view="view" />
+      <!-- 午睡：会动的背景上再压暗一点（素材库的背景由外壳的 dim 压暗） -->
+      <div v-if="dim" class="dim-layer" :style="{ opacity: dim }" />
     </template>
     <template #overlay>
       <!-- 右上角：音乐、白噪音、计时器，竖着排在顶栏下面（同出逃） -->
@@ -565,7 +567,7 @@ const clockText = computed(() => {
     <van-popup v-model:show="pickerOpen" position="bottom" round teleport="body" :style="{ maxHeight: '70%' }">
       <div class="picker" data-testid="rest-picker">
         <div class="text-[15px] font-600">{{ activity.name }} · 换个画面</div>
-        <p class="text-[12.5px] text-ink-3 mt-1 mb-0">实拍是 Pexels 的视频（要联网）；插画是场景素材库里的图，和立绘一个画风。</p>
+        <p class="text-[12.5px] text-ink-3 mt-1 mb-0">实拍是 Pexels 的视频（要联网，画面里没有人）；插画是场景素材库里的图，和立绘一个画风。</p>
         <div class="thumbs">
           <button
             v-for="v in views"
@@ -697,6 +699,14 @@ const clockText = computed(() => {
   gap: 6px;
   margin-top: 10px;
   padding: 1px;
+}
+
+.dim-layer {
+  position: absolute;
+  inset: 0;
+  background: #05060c;
+  pointer-events: none;
+  transition: opacity 1.2s ease;
 }
 
 /* —— 选怎么休息 —— */
