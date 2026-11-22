@@ -55,6 +55,7 @@ import { alignFit, alphaInfo, faceInImage, mergeInpaint, novelaiImage, rectMask,
  *    构图（半身、全身……）是立绘预设里的块：App 里平时用半身立绘（立绘框、头像框的默认值都是按半身定的），全身也能画；
  * 3. 照着底图换表情：只重画脸（局部重绘，遮罩是头像框放大几倍；画回来在本机贴回底图，身子一像素不动、透明照底图的）/ Director Tools 换表情 / 整张图生图；
  * 4. 照着底图换动作：精准参考（V4.5）/ 同一个种子换动作 tags 重画；画完对齐到立绘框（按透明轮廓猜的脸对上头像框）。
+ *    3、4 头一回画跟底图同一个种子；点"重画"换随机种子（见 seedFor），不然画出来还是同一张。
  * 换表情、换动作都沿用底图的构图。和这个角色平时用的构图不一样的（例如半身的角色画了全身）留着备用、不参与自动挑选，免得换表情时人忽大忽小。
  * 所有出图都排进同一个队列，一次一张。画出来的图存进本机素材库，标好表情、动作、服装，各处按 pickPortrait 挑。
  */
@@ -322,6 +323,14 @@ function promptFrom(c: Character, preset: Preset, base: Portrait, framing: Sprit
 }
 
 /** 画底图用的模型（照着它局部重绘时用它的重绘版）：底图是画出来的就用当时的，导入的用预设里的 */
+/**
+ * 照着底图画时用的种子：头一回画跟底图同一个种子（更像底图）；重画（这个表情 / 动作已经有了）换一个随机的——
+ * 同样的 tags、同一张底图、同一个种子，画出来还是原来那一张
+ */
+function seedFor(base: Portrait, replace?: boolean): number | undefined {
+  return replace ? undefined : (base.gen?.seed ?? undefined);
+}
+
 function modelOf(base: Portrait, params: SpriteParams): string | undefined {
   const m = base.gen && base.gen.method !== 'emotion' ? base.gen.model.replace(/-inpainting$/, '') : '';
   return m || params.model || undefined;
@@ -574,7 +583,7 @@ export function drawExpression(c: Character, label: SpriteLabel, opts: { replace
           source = { image: src.base64, strength: params.img2imgStrength };
         }
         const r = await ai.system.draw(
-          { prompt, negative, size: { width: src.width, height: src.height }, ...drawParams(params), seed: base.gen?.seed ?? undefined, source },
+          { prompt, negative, size: { width: src.width, height: src.height }, ...drawParams(params), seed: seedFor(base, opts.replace), source },
           { signal: opts.signal, model: modelOf(base, params) },
         );
         out = { bytes: r.images[0]?.bytes ?? null, mime: r.images[0]?.mime ?? 'image/png', prompt: r.prompt, negative: r.negative, seed: r.seed, model: r.model };
@@ -627,7 +636,7 @@ export function drawPose(c: Character, label: SpriteLabel, opts: { replace?: boo
           { signal: opts.signal, model: params.referenceModel || undefined },
         );
       } else {
-        r = await ai.system.draw({ prompt, negative, size, ...drawParams(params), seed: base.gen?.seed ?? undefined }, { signal: opts.signal, model: modelOf(base, params) });
+        r = await ai.system.draw({ prompt, negative, size, ...drawParams(params), seed: seedFor(base, opts.replace) }, { signal: opts.signal, model: modelOf(base, params) });
       }
       const done = await finish(r.images[0]?.bytes ?? null, r.images[0]?.mime ?? 'image/png', params, { framing, signal: opts.signal, canEdit: true });
       const poseId = set.poses.find((x) => x.label === label.name || x.id === label.name)?.id;
