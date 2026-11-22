@@ -243,6 +243,11 @@ const { recognizing, onVoice } = useVoiceSend(chatId);
 function onAction(id: string) {
   const c = character.value;
   if (!c) return;
+  // ＋面板里的场景入口（学习、哄睡、休息……）：`scene:<场景 id>`
+  if (id.startsWith('scene:')) {
+    void router.push(`/scene/${id.slice('scene:'.length)}`);
+    return;
+  }
   switch (id) {
     case 'music':
       void router.push('/scene/music');
