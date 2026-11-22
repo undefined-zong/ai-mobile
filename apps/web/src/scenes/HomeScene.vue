@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { CHORE_KINDS, CHORE_WHEN, effectLine, type ChoreItem, type MealKey, type PlanMeal } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import Waveform from '@/components/call/Waveform.vue';
 import Segmented from '@/components/common/Segmented.vue';
 import MealCard from '@/components/health/MealCard.vue';
@@ -34,6 +34,7 @@ import { clock, hhmm } from '@/utils/time';
  * 健康计划里要提前做的饭（晚饭多做一份当明天的便当、睡前泡隔夜燕麦）也作为今天临时的家务列在这里，做的时候能看怎么做，
  * 拖着不做时她提醒你照备案来。
  * 没接通「陪伴 · 快速」时照样能勾，她不说话，界面写明原因。
+ * 从她在聊天里发的邀请卡（[home:洗衣服]，带 ?chore=）进来时，先摆出她点名的那一件。
  */
 const app = useAppStore();
 const chars = useCharacterStore();
@@ -41,6 +42,7 @@ const chat = useChatStore();
 const ai = useAiStore();
 const home = useHomeStore();
 const health = useHealthStore();
+const route = useRoute();
 const router = useRouter();
 
 const her = computed(() => chars.byId(app.activeCharacterId) ?? chars.list[0]!);
@@ -80,6 +82,24 @@ function pick(it: ChoreItem) {
   picked.value = it.key;
   services.native.vibrate(8);
 }
+/** 她在聊天里点名的那件（邀请卡带过来的 ?chore=，是她写的家务名）：先认名字、再认"刷牙 · 早上"这样的全称，最后互相包含也算 */
+function choreNamed(list: ChoreItem[], name: string): ChoreItem | undefined {
+  return list.find((it) => it.chore.name === name || it.label === name) ?? list.find((it) => (!!it.chore.name && name.includes(it.chore.name)) || it.label.includes(name));
+}
+const askedChore = typeof route.query.chore === 'string' ? route.query.chore.trim() : '';
+// 进来时挑一次：清单可能晚一点才齐（健康计划发来的饭），认到了就不再管，之后照常按顺序挑
+let askedApplied = !askedChore;
+watch(
+  pending,
+  (list) => {
+    if (askedApplied) return;
+    const hit = choreNamed(list, askedChore);
+    if (!hit) return;
+    askedApplied = true;
+    if (!doing.value) picked.value = hit.key;
+  },
+  { immediate: true },
+);
 /** 下一件那张卡的小字：为什么是这件 */
 function tagOf(it: ChoreItem): { text: string; tone: 'bad' | 'warn' | 'muted' | 'ok' } {
   if (it.overdue) return { text: it.mark.later ? `过了时间 · 拖了 ${it.mark.later} 次` : '过了时间', tone: 'bad' };

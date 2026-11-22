@@ -1,7 +1,7 @@
 import type { ControlTagKind } from './tags.ts';
 
 /**
- * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、哄睡 [sleep]、一起运动 [exercise]、一起休息 [rest:午睡]、平行时空 [parallel]、玩具指令 <device>。
+ * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、哄睡 [sleep]、一起运动 [exercise]、一起休息 [rest:午睡]、去共同的家做家务 [home:洗衣服]、平行时空 [parallel]、玩具指令 <device>。
  *
  * 日常聊天默认支持全部模块和游戏，世界书只提供提示词内容。
  */
@@ -77,8 +77,13 @@ export function parseRestInvite(value: string): { kind: 'rest'; activity: RestIn
   return { kind: 'rest', activity: (t && REST_WORDS.find(([, re]) => re.test(t))?.[0]) || null };
 }
 
+/** [home:洗衣服]：叫你去共同的家做家务，冒号后面是哪件家务（照"家务"里的叫法）；不写就是今天的清单，按顺序来 */
+export function parseHomeInvite(value: string): { kind: 'home'; chore: string } {
+  return { kind: 'home', chore: value.trim().replace(/^[「《"“](.+)[」》"”]$/, '$1').slice(0, 30) };
+}
+
 /** 日常聊天支持的主动卡片模块 */
-export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'rest', 'device'] as const satisfies readonly ControlTagKind[];
+export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'rest', 'home', 'device'] as const satisfies readonly ControlTagKind[];
 export type ModuleTag = (typeof MODULE_TAGS)[number];
 
 /** 模块的中文名（和"聊天 · 主动卡片"世界书的条目标题一致） */
@@ -92,6 +97,7 @@ export const MODULE_LABELS: Record<ModuleTag, string> = {
   exercise: '一起运动',
   parallel: '平行时空',
   rest: '一起休息',
+  home: '共同的家',
   device: '玩具指令（成人）',
 };
 
