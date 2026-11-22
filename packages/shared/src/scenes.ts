@@ -266,6 +266,12 @@ export const SCENES: SceneDef[] = [
   },
 ];
 
+/** 共同的家、心跳、出逃另有一直在的入口，不放在她世界的地点上 */
+export const OWN_ENTRY_SCENES: ReadonlySet<SceneId> = new Set<SceneId>(['home', 'heart', 'escape']);
+
+/** 能写在她世界的地点上、和她一起做的事（建世界、优化小世界、"一起做点什么"都按这个） */
+export const WORLD_ACTIVITY_SCENES: SceneDef[] = SCENES.filter((s) => !OWN_ENTRY_SCENES.has(s.id));
+
 export const FREE_SCENE: SceneDef = {
   id: 'free',
   name: '日常聊天',

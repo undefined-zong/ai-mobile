@@ -2,8 +2,10 @@ import {
   defaultLocationFor,
   getLocation,
   isRealPlace,
+  OWN_ENTRY_SCENES,
   SCENES,
   timeOfDay,
+  WORLD_ACTIVITY_SCENES,
   worldOf,
   type Character,
   type LocationActivity,
@@ -35,10 +37,8 @@ export interface TogetherTile {
 
 /** 格子里常用的排前面 */
 const COMMON: SceneId[] = ['study', 'meal', 'exercise', 'sleep', 'rest', 'music', 'date', 'watch', 'game', 'read', 'poke'];
-/** 共同的家、心跳、出逃另有一直在的入口，不进活动格子 */
-const OWN_ENTRY = new Set<SceneId>(['home', 'heart', 'escape']);
-/** "一起做点什么"里的活动：除了另有入口的那三个，一个都不能少（和她的世界里有没有地方无关） */
-export const TOGETHER_SCENES = SCENES.filter((s) => !OWN_ENTRY.has(s.id));
+/** "一起做点什么"里的活动：除了另有入口的那几个，一个都不能少（和她的世界里有没有地方无关） */
+export const TOGETHER_SCENES = WORLD_ACTIVITY_SCENES;
 
 /**
  * 在她的世界里，这件事在哪做。"建世界"是 AI 挑的地点和活动，可能哪儿都没写某件事（比如没有影院就没有一起观影）：
@@ -46,7 +46,7 @@ export const TOGETHER_SCENES = SCENES.filter((s) => !OWN_ENTRY.has(s.id));
  */
 export function scenePlaces(w: World, sceneId: SceneId): MapLocation[] {
   const places = w.locations.filter((l) => l.activities.some((a) => a.sceneId === sceneId));
-  if (places.length || OWN_ENTRY.has(sceneId)) return places;
+  if (places.length || OWN_ENTRY_SCENES.has(sceneId)) return places;
   const home = w.locations.find((l) => l.id === w.homeId) ?? w.locations[0];
   return home ? [home] : [];
 }

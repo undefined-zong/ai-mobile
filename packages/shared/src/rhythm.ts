@@ -1,4 +1,4 @@
-import { SCENES, type SceneId } from './scenes.ts';
+import { SCENES, WORLD_ACTIVITY_SCENES, type SceneId } from './scenes.ts';
 import type { LocationActivity, LocationArea, MapLocation, MapShape, World } from './locations.ts';
 import type { DayOutfit, OutfitItem, OutfitKind, RhythmDay, RhythmMeals, RhythmPerson, RhythmSettings, RhythmSlot, RhythmTemplate } from './types/rhythm.ts';
 import { shiftDate, zonedDateKey, zonedParts } from './timezone.ts';
@@ -369,7 +369,24 @@ export interface BuiltWorldSpec {
 }
 
 const AREAS = ['home', 'campus', 'city'] as const;
-const SCENE_IDS = new Set<string>(SCENES.map((s) => s.id));
+const WORLD_SCENE_IDS = new Set<string>(WORLD_ACTIVITY_SCENES.map((s) => s.id));
+const sceneName = (id: string) => SCENES.find((s) => s.id === id)?.name ?? id;
+
+/** 住处总能做的事（建世界、优化小世界时住处没写的都补上） */
+export const HOME_SCENES: SceneId[] = ['sleep', 'music', 'poke', 'rest'];
+
+/** 「节律」写的一串能一起做的事：只留能放在地点上的（另有入口的不放），没写 label 的用场景名 */
+function activitiesFrom(raw: unknown): LocationActivity[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((a) => (isObj(a) ? { sceneId: str(a.scene ?? a.sceneId), label: str(a.label) } : { sceneId: str(a), label: '' }))
+    .filter((a) => WORLD_SCENE_IDS.has(a.sceneId))
+    .map((a) => ({ sceneId: a.sceneId as SceneId, label: a.label || sceneName(a.sceneId) }));
+}
+
+/** 住处缺的那几件"总能做的事" */
+function missingHomeActivities(home: { activities: LocationActivity[] }): LocationActivity[] {
+  return HOME_SCENES.filter((id) => !home.activities.some((a) => a.sceneId === id)).map((id) => ({ sceneId: id, label: sceneName(id) }));
+}
 
 function keyFrom(raw: string, i: number): string {
   const k = raw
@@ -392,11 +409,7 @@ export function parseBuiltWorld(value: unknown): BuiltWorldSpec | null {
     while (seen.has(key)) key = `${key}-${i + 1}`;
     seen.add(key);
     const area = AREAS.includes(l.area as (typeof AREAS)[number]) ? (l.area as BuiltLocationSpec['area']) : 'city';
-    const activities = (Array.isArray(l.activities) ? l.activities : [])
-      .map((a) => (isObj(a) ? { sceneId: str(a.scene ?? a.sceneId), label: str(a.label) } : { sceneId: str(a), label: '' }))
-      // 共同的家、心跳不放在她世界的地点上（入口在地图"一起做点什么"里，一直都在）
-      .filter((a) => SCENE_IDS.has(a.sceneId) && a.sceneId !== 'free' && a.sceneId !== 'home' && a.sceneId !== 'heart')
-      .map((a) => ({ sceneId: a.sceneId as SceneId, label: a.label || (SCENES.find((s) => s.id === a.sceneId)?.name ?? a.sceneId) }));
+    const activities = activitiesFrom(l.activities);
     const backdrop = backdropKindFor({ name, blurb: str(l.blurb), backdrop: str(l.backdrop) }, guessBackdrop(area, activities));
     const build = parseTownBuild(l.build);
     locations.push({ key, name: name.slice(0, 12), area, indoor: l.indoor !== false, backdrop, blurb: str(l.blurb).slice(0, 40), activities,
@@ -406,10 +419,7 @@ export function parseBuiltWorld(value: unknown): BuiltWorldSpec | null {
   const homeRaw = str(value.homeKey ?? value.home);
   const home = locations.find((l) => l.key === keyFrom(homeRaw, 0) || l.name === homeRaw) ?? locations.find((l) => l.area === 'home') ?? locations[0]!;
   home.area = 'home';
-  // 住处总能哄睡、听歌、戳戳乐、休息
-  for (const sceneId of ['sleep', 'music', 'poke', 'rest'] as SceneId[]) {
-    if (!home.activities.some((a) => a.sceneId === sceneId)) home.activities.push({ sceneId, label: SCENES.find((s) => s.id === sceneId)?.name ?? sceneId });
-  }
+  home.activities.push(...missingHomeActivities(home));
   const wardrobe = (Array.isArray(value.wardrobe) ? value.wardrobe : [])
     .filter(isObj)
     .map((o) => ({ kind: (KINDS.includes(o.kind as OutfitKind) ? o.kind : 'daily') as OutfitKind, name: str(o.name), tags: str(o.tags).replace(/[\r\n]+/g, ', ') }))
@@ -577,4 +587,57 @@ export function locationResolver(locations: MapLocation[], characterId?: string)
     const byName = locations.find((l) => l.name === r) ?? locations.find((l) => r.includes(l.name) || l.name.includes(r));
     return byName?.id ?? null;
   };
+}
+
+// —— 优化小世界 ——
+
+/** 优化小世界：给一个已有的地点补上的事 */
+export interface WorldRefinement {
+  locationId: string;
+  activities: LocationActivity[];
+}
+
+/** 她的世界里哪儿都没写的事（现在只能在住处做） */
+export function missingScenes(world: Pick<World, 'locations'>): SceneId[] {
+  return WORLD_ACTIVITY_SCENES.filter((s) => !world.locations.some((l) => l.activities.some((a) => a.sceneId === s.id))).map((s) => s.id);
+}
+
+/**
+ * "优化小世界"的输出 → 每个地点要补的事。只加不改：地点、名字、位置、背景、小镇、作息都不动；
+ * 认不出的地点、那里已经有的事、不能放在地点上的事都去掉；住处缺的"总能做的事"也补上。
+ * 没有要补的返回空数组；输出不是 {"locations": [...]} 时返回 null（让调用方按格式不对重试）。
+ */
+export function parseRefineWorld(value: unknown, world: Pick<World, 'characterId' | 'homeId' | 'locations'>): WorldRefinement[] | null {
+  if (!isObj(value) || !Array.isArray(value.locations)) return null;
+  const resolve = locationResolver(world.locations, world.characterId);
+  const adds = new Map<string, LocationActivity[]>();
+  const add = (locationId: string, list: LocationActivity[]) => {
+    const loc = world.locations.find((l) => l.id === locationId);
+    if (!loc) return;
+    const mine = adds.get(locationId) ?? [];
+    for (const a of list) if (!loc.activities.some((x) => x.sceneId === a.sceneId) && !mine.some((x) => x.sceneId === a.sceneId)) mine.push(a);
+    if (mine.length) adds.set(locationId, mine);
+  };
+  for (const l of value.locations.filter(isObj)) {
+    const id = resolve(str(l.at ?? l.id ?? l.key ?? l.name));
+    if (id) add(id, activitiesFrom(l.activities));
+  }
+  const home = world.locations.find((l) => l.id === world.homeId);
+  if (home) add(home.id, missingHomeActivities(home));
+  return [...adds].map(([locationId, activities]) => ({ locationId, activities }));
+}
+
+/** 把补的事加进她的世界（就地改，接在每个地点原有的事后面：地图上的颜色、默认的第一件事不变）；返回加了几件 */
+export function applyRefinement(world: World, refinements: WorldRefinement[]): number {
+  let n = 0;
+  for (const r of refinements) {
+    const loc = world.locations.find((l) => l.id === r.locationId);
+    if (!loc) continue;
+    for (const a of r.activities) {
+      if (loc.activities.some((x) => x.sceneId === a.sceneId)) continue;
+      loc.activities.push({ ...a });
+      n += 1;
+    }
+  }
+  return n;
 }
