@@ -15,12 +15,18 @@ import { runDiaryScheduled } from './diary.ts';
 import { runParallelPlanScheduled } from './parallelPlan.ts';
 import { runHealthScheduled } from './health.ts';
 import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './planner.ts';
-import { bilibiliIds, searchBilibili } from './video.ts';
+import { bilibiliFavFolders, bilibiliFavVideos, bilibiliIds, searchBilibili, VIDEO_BATCH_MAX } from './video.ts';
 import { wereadMcp } from './weread.ts';
 import { publicPage } from './publicPages.ts';
 import { INGEST_POST_PATHS, ingestApi, ingestPost, ingestStatus } from './ingest.ts';
 
 const body = <T>(request: Request): Promise<T> => readJson<T>(request);
+/** App 随请求带来的 B 站 Cookie（观影设置里填的，可以为空） */
+function biliCookie(value: unknown): string {
+  const cookie = typeof value === 'string' ? value.trim() : '';
+  assert(cookie.length <= 4000 && !/[\r\n]/.test(cookie), 'B 站 Cookie 格式不对');
+  return cookie;
+}
 function https(value: string): boolean {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password; } catch { return false; }
 }
@@ -73,16 +79,45 @@ async function api(request: Request, env: Env): Promise<Response> {
   const device = await env.DB.prepare('SELECT id FROM devices WHERE token_hash = ? AND expires_at > ?').bind(await digest(token), Date.now()).first<{ id: string }>();
   if (!device) throw new HttpError(401, '登录已过期');
 
-  // 一起观影：按片名搜 B 站的真实视频（聊天里的 [watch:片名] 卡片、逛 B 站的搜索）。
-  // 填了 B 站 Cookie 时 App 用 POST { q, cookie }，Cookie 不放进网址
+  // 一起观影：按片名搜 B 站的真实视频（聊天里的 [watch:片名] 卡片、逛 B 站的搜索；page 是第几批，换一批用）。
+  // 填了 B 站 Cookie 时 App 用 POST { q, cookie, page, limit }，Cookie 不放进网址
   if (path === '/v1/video/search' && (request.method === 'GET' || request.method === 'POST')) {
-    const input = request.method === 'POST' ? await body<{ q?: unknown; cookie?: unknown }>(request) : { q: url.searchParams.get('q'), cookie: '' };
+    const input = request.method === 'POST'
+      ? await body<{ q?: unknown; cookie?: unknown; page?: unknown; limit?: unknown }>(request)
+      : { q: url.searchParams.get('q'), cookie: '', page: url.searchParams.get('page'), limit: url.searchParams.get('limit') };
     const q = typeof input.q === 'string' ? input.q.trim() : '';
-    const cookie = typeof input.cookie === 'string' ? input.cookie.trim() : '';
+    const cookie = biliCookie(input.cookie);
+    const page = input.page == null ? 1 : Number(input.page);
+    const limit = input.limit == null ? 8 : Number(input.limit);
     assert(q, '缺少关键词 q');
-    assert(cookie.length <= 4000 && !/[\r\n]/.test(cookie), 'B 站 Cookie 格式不对');
+    assert(Number.isInteger(page) && page >= 1 && page <= 1000, 'page 不对');
+    assert(Number.isInteger(limit) && limit >= 1 && limit <= VIDEO_BATCH_MAX, `limit 要在 1～${VIDEO_BATCH_MAX}`);
     try {
-      return json({ hits: await searchBilibili(q, 8, cookie) });
+      return json(await searchBilibili(q, cookie, page, limit));
+    } catch (e) {
+      throw new HttpError(502, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // 一起观影：B 站 Cookie 登录的账号自己建的收藏夹、一个收藏夹里的视频（Cookie 只随请求带来，Hub 不存）
+  if (path === '/v1/video/fav/folders' && request.method === 'POST') {
+    const input = await body<{ cookie?: unknown }>(request);
+    const cookie = biliCookie(input.cookie);
+    try {
+      return json({ folders: await bilibiliFavFolders(cookie) });
+    } catch (e) {
+      throw new HttpError(502, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (path === '/v1/video/fav/videos' && request.method === 'POST') {
+    const input = await body<{ cookie?: unknown; id?: unknown; page?: unknown }>(request);
+    const cookie = biliCookie(input.cookie);
+    const id = Number(input.id);
+    const page = input.page == null ? 1 : Number(input.page);
+    assert(Number.isSafeInteger(id) && id > 0, '收藏夹 id 不对');
+    assert(Number.isInteger(page) && page >= 1 && page <= 1000, 'page 不对');
+    try {
+      return json(await bilibiliFavVideos(cookie, id, page));
     } catch (e) {
       throw new HttpError(502, e instanceof Error ? e.message : String(e));
     }
@@ -138,7 +173,7 @@ async function api(request: Request, env: Env): Promise<Response> {
       memoryConfigured: !!memoryConfigured, lastMemoryError, socialConfigured: !!socialConfigured, lastSocialError, lastCommunityError,
       plannerConfigured: !!plannerConfigured, lastPlannerError, plannerMcp: plannerMcp.results.map((r) => r.server_id),
       parallelConfigured: !!parallelConfigured, lastParallelError, lastParallelPlanError, healthConfigured: !!healthConfigured, lastHealthError, mapsConfigured: !!mapsConfigured, diaryConfigured: !!diaryConfigured, lastDiaryError,
-      weread: true, mcpCall: true, ...ingest, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
+      weread: true, mcpCall: true, videoBrowse: true, ...ingest, ...syncStatus(env), vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null, channels: channels.results });
   }
   if (path === '/v1/proactive/enabled' && request.method === 'PUT') {
     const { enabled } = await body<{ enabled: boolean }>(request);

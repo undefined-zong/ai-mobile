@@ -1,4 +1,4 @@
-import type { VideoHit } from '@app/shared';
+import type { BiliFavFolder, VideoHit, VideoPage } from '@app/shared';
 import { useHubStore } from '@/stores/hub';
 import { useServicesStore } from '@/stores/services';
 import { clock } from '@/utils/time';
@@ -8,7 +8,12 @@ import { clock } from '@/utils/time';
  * （apps/web/scripts/update-bilibili.mjs → bilibili-data 分支），这里从 raw.githubusercontent.com 读，
  * 都是真实的视频（BV 号），用 B 站官方的嵌入播放器放。不用登录、不用自己的服务器，手机上也一样。
  * 搜索：连着云端 Hub 时先真的搜 B 站（/v1/video/search，带上"观影设置"里的 B 站 Cookie）；没连或者没搜到，在这几份片单里找（同 siios），并说明为什么。
+ * 搜索结果一批 SEARCH_BATCH 个，刷新换下一批。
+ * 收藏夹：连着 Hub 并填了 B 站 Cookie 时，经 Hub 读这个账号自己建的收藏夹（/v1/video/fav/*）。
  */
+
+/** 搜索结果一批几个（刷新换下一批） */
+export const SEARCH_BATCH = 8;
 
 export const BILI_CATEGORIES = [
   { id: 'recommend', label: '推荐' },
@@ -80,19 +85,22 @@ export function biliList(id: BiliCategory, fresh = false): Promise<BiliList> {
 }
 
 /**
- * 按关键词找 B 站视频：连着 Hub 先真的搜 B 站，再在片单里找（标题、UP 主、分区都算）；都没有时 videos 为空数组。
- * note 为空说明是真的搜 B 站得到的；不为空写着为什么是片单里找的。
+ * 按关键词找 B 站视频的第 page 批（每批 SEARCH_BATCH 个）：连着 Hub 先真的搜 B 站，再在片单里找（标题、UP 主、分区都算）；都没有时 videos 为空数组。
+ * note 为空说明是真的搜 B 站得到的；不为空写着为什么是片单里找的（或者为什么换不了一批）。more：后面还有下一批。
  */
-export async function searchBili(keyword: string): Promise<{ videos: VideoHit[]; note: string }> {
+export async function searchBili(keyword: string, page = 1): Promise<{ videos: VideoHit[]; note: string; more: boolean }> {
   const q = keyword.trim();
-  if (!q) return { videos: [], note: '' };
+  if (!q) return { videos: [], note: '', more: false };
   let hubError = '';
   const hub = useHubStore();
   if (hub.connected) {
     try {
-      const hits = await hub.searchVideos(q, useServicesStore().biliCookie);
-      if (hits.length) return { videos: hits, note: '' };
+      const r = await hub.searchVideos(q, useServicesStore().biliCookie, page, SEARCH_BATCH);
+      // 旧版 Hub 不认 page，也不回 more：只有这一批
+      if (r.more === undefined && r.hits.length) return { videos: r.hits, note: '云端 Hub 是旧版，换不了一批：部署最新 main 的 Hub', more: false };
+      if (r.hits.length || page > 1) return { videos: r.hits, note: '', more: r.more === true };
     } catch (e) {
+      if (page > 1) throw e;
       hubError = e instanceof Error ? e.message : String(e);
     }
   }
@@ -111,5 +119,24 @@ export async function searchBili(keyword: string): Promise<{ videos: VideoHit[];
   }
   if (!found.length && hubError) throw new Error(`${hubError}；片单里也没有`);
   const note = !hub.connected ? '没连云端 Hub，只在片单里找（我的 → 观影设置）' : hubError ? `B 站搜索没成功（${hubError}），下面是片单里的` : 'B 站没搜到，下面是片单里的';
-  return { videos: found.slice(0, 30), note };
+  const from = (page - 1) * SEARCH_BATCH;
+  return { videos: found.slice(from, from + SEARCH_BATCH), note, more: found.length > from + SEARCH_BATCH };
+}
+
+/** 收藏夹要经过 Hub、要 B 站 Cookie：缺哪个就说清楚去哪儿补 */
+function favCookie(): string {
+  if (!useHubStore().connected) throw new Error('读 B 站收藏夹要经过云端 Hub：先连上 Hub（我的 → 云端同步）');
+  const cookie = useServicesStore().biliCookie.trim();
+  if (!cookie) throw new Error('读 B 站收藏夹要登录：在"我的 → 观影设置"里填 B 站 Cookie（SESSDATA）');
+  return cookie;
+}
+
+/** B 站 Cookie 登录的账号自己建的收藏夹 */
+export async function biliFavFolders(): Promise<BiliFavFolder[]> {
+  return useHubStore().favFolders(favCookie());
+}
+
+/** 一个收藏夹的第 page 页视频 */
+export async function biliFavVideos(id: number, page = 1): Promise<VideoPage> {
+  return useHubStore().favVideos(favCookie(), id, page);
 }

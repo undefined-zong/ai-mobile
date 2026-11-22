@@ -112,6 +112,8 @@ export interface HubStatus {
   weread?: boolean;
   /** 能用云端存的登录信息调日历 MCP 的单个工具（/v1/planner/mcp/:id/call：平行时空把记的事同步进 Google 日历）；旧版 Worker 没有这个字段 */
   mcpCall?: boolean;
+  /** B 站搜索能换一批（/v1/video/search 带 page）、能读 B 站收藏夹（/v1/video/fav/*）；旧版 Worker 没有这个字段 */
+  videoBrowse?: boolean;
   /** 有多设备同步（/v1/sync/*）；旧版 Worker 没有这个字段 */
   sync?: boolean;
   /** 能收手表的运动数据（快捷指令、Health Auto Export 推到 /v1/ingest/*）；旧版 Worker 没有这个字段 */
@@ -141,7 +143,7 @@ export interface HubMemoryResults {
   errors: { characterId: string; date: string; reason: string }[];
 }
 
-/** 按片名搜到的 B 站视频（/v1/video/search，一起观影的邀请卡片用） */
+/** 按片名搜到的 B 站视频（/v1/video/search，一起观影的邀请卡片用；收藏夹里的视频也是这个形状） */
 export interface VideoHit {
   bvid: string;
   title: string;
@@ -151,4 +153,19 @@ export interface VideoHit {
   cover: string;
   plays: number;
   url: string;
+}
+
+/** 一批 B 站视频（搜索的第 page 批、收藏夹的第 page 页）；more：后面还有 */
+export interface VideoPage {
+  hits: VideoHit[];
+  more: boolean;
+}
+
+/** B 站账号自己建的一个收藏夹（/v1/video/fav/folders） */
+export interface BiliFavFolder {
+  /** media_id：取收藏夹里的视频用 */
+  id: number;
+  title: string;
+  /** 收藏了多少个 */
+  count: number;
 }
