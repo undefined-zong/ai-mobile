@@ -154,11 +154,14 @@ export function pickBackground(request: BackgroundRequest, tod: TimeOfDay) {
   if (fixed) return { asset: fixed, url: backgroundUrl(fixed), kind: backgroundKind(request), requestedPeriod: period, periodFallback: false };
   const ranked = backgroundFamilies(request);
   const primary = ranked[0]!;
+  // 自己选定的系列缺这个时段时，只在选定的系列里找最接近的时段，不换成别的屋子（黄昏不会突然变成电脑房）。
+  const pinned = ranked.filter((f) => f.id === request.backgroundSet || f.set === request.backgroundSet);
+  const fallbacks = pinned.length ? pinned : ranked;
   // 同一系列的对应时段 → 同系列室内通用 → 同用途其它系列对应时段 → 同用途室内通用。
   let available = primary.assets.filter((a) => a.period === period);
   if (!available.length) available = primary.assets.filter((a) => a.period === 'indoor');
-  if (!available.length) available = ranked.find((f) => f.assets.some((a) => a.period === period))?.assets.filter((a) => a.period === period) ?? [];
-  if (!available.length) available = ranked.find((f) => f.assets.some((a) => a.period === 'indoor'))?.assets.filter((a) => a.period === 'indoor') ?? [];
+  if (!available.length) available = fallbacks.find((f) => f.assets.some((a) => a.period === period))?.assets.filter((a) => a.period === period) ?? [];
+  if (!available.length) available = fallbacks.find((f) => f.assets.some((a) => a.period === 'indoor'))?.assets.filter((a) => a.period === 'indoor') ?? [];
   // 素材本身没有该时段（如机场只有日间、游乐园没有黄昏）时保留该地点的真实素材。
   if (!available.length) available = primary.assets.filter((a) => a.period === (period === 'dusk' ? 'day' : 'dusk'));
   if (!available.length) available = primary.assets;

@@ -16,7 +16,8 @@
     "style": "古典书房",
     "indoor": true,
     "periods": [
-      "day"
+      "day",
+      "night"
     ]
   },
   {
@@ -2366,6 +2367,30 @@
     "set": "MC-building_hallway",
     "scene": "走廊",
     "style": "现代楼宇",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-washitsu/客厅/矮桌和室",
+    "set": "AP-washitsu",
+    "scene": "客厅",
+    "style": "矮桌和室",
+    "indoor": true,
+    "periods": [
+      "day",
+      "dusk",
+      "night"
+    ]
+  },
+  {
+    "id": "AP-washitsu/客厅/缘侧和室",
+    "set": "AP-washitsu",
+    "scene": "客厅",
+    "style": "缘侧和室",
     "indoor": true,
     "periods": [
       "day",
