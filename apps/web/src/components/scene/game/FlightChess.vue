@@ -2,6 +2,7 @@
 import { isFlightPreset, parseControlTags, type MessagePart, type PresetUseId } from '@app/shared';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import PresetPicker from '@/components/settings/PresetPicker.vue';
 import { personaOf } from '@/services/prompt';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
@@ -59,10 +60,21 @@ const chatId = computed(() => chat.chatOfCharacter(her.value.id)?.id ?? '');
 const userName = computed(() => personaOf(chat.chatById(chatId.value)).name);
 const herMark = computed(() => her.value.name.slice(0, 1));
 
-/** 棋盘预设：功能预设里有 fly- 开头触发条件的（自带的，和你复制、导入的） */
-const boards = computed(() => [...lib.presets].sort((a, b) => Number(isFlightPreset(b)) - Number(isFlightPreset(a))));
+/**
+ * 棋盘预设：有 fly- 开头触发条件的（自带的，和你复制、导入的），开局前列成一排点着换。
+ * 别的预设也能用（"换"打开选择框，所有预设都在里面，棋盘排在前面）；不全列在面板里，免得"开始"被挤到看不见的地方
+ */
+const boards = computed(() => lib.presets.filter((p) => isFlightPreset(p)));
 const preset = computed(() => lib.presetForUse(USE, her.value));
 const presetReady = computed(() => !!preset.value);
+const presetOpen = ref(false);
+/** 棋盘按钮上的名字：去掉"飞行棋 · "前缀 */
+const boardLabel = (name: string) => name.replace(/^飞行棋\s*[·・]\s*/, '') || name;
+function pickPreset(id: string | null) {
+  if (!id) return;
+  lib.setUse(USE, id);
+  presetOpen.value = false;
+}
 
 const cells = ref<(Cell | null)[]>([]);
 const pos = reactive<Record<Who, number>>({ you: 0, her: 0 });
@@ -417,21 +429,22 @@ function again() {
 <template>
   <!-- 开始前：选棋盘 -->
   <template v-if="phase === 'menu'">
-    <div class="label !mt-0">棋盘</div>
-    <div class="grid gap-2" role="radiogroup" aria-label="棋盘预设">
-      <div v-for="p in boards" :key="p.id" class="board-pick" :class="{ on: preset?.id === p.id }">
-        <button type="button" role="radio" :aria-checked="preset?.id === p.id" class="main" @click="lib.setUse(USE, p.id)">
-          <span class="dot"><span v-if="preset?.id === p.id" class="i-lucide-check" /></span>
-          <span class="flex-1 min-w-0">
-            <span class="block text-[14px] font-600 truncate">{{ p.name }}</span>
-            <span v-if="p.description" class="block text-[12px] text-ink-3 leading-normal mt-0.5 line-clamp-2">{{ p.description }}</span>
-          </span>
+    <template v-if="boards.length">
+      <div class="label !mt-0">棋盘</div>
+      <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="棋盘">
+        <button v-for="p in boards" :key="p.id" type="button" role="radio" class="chip" :class="{ on: preset?.id === p.id }" :aria-checked="preset?.id === p.id" @click="lib.setUse(USE, p.id)">
+          {{ boardLabel(p.name) }}
         </button>
-        <RouterLink :to="`/me/presets/${p.id}`" class="edit" :aria-label="`编辑棋盘「${p.name}」`">编辑</RouterLink>
       </div>
-    </div>
-    <p v-if="!boards.length" class="warn">还没有棋盘预设：在"我的 → 预设"里导入一个，或者恢复自带的"飞行棋 · 甜蜜日常"。</p>
-    <p v-else-if="!presetReady" class="warn">选择一个预设来设计棋盘。</p>
+    </template>
+    <p v-else class="warn !mt-0">还没有棋盘预设：在"我的 → 预设"里导入一个，或者恢复自带的"飞行棋 · 甜蜜日常"。</p>
+    <div v-if="preset?.description" class="board-desc">{{ preset.description }}</div>
+    <button type="button" class="preset-row press" @click="presetOpen = true">
+      <span class="i-lucide-sliders-horizontal shrink-0 text-ink-3" />
+      <span class="flex-1 min-w-0 text-left truncate">预设：{{ preset?.name ?? '没有功能预设' }}</span>
+      <span class="text-accent-ink shrink-0">换</span>
+    </button>
+    <p v-if="!presetReady" class="warn">选择一个预设来设计棋盘。</p>
     <p class="rules">一共 {{ SIZE }} 格，你和{{ her.pronoun }}轮流掷骰子（1–6），走到哪一格就做那一格的任务，先到终点的赢。格子是开局时照选的棋盘现设计的；想要自己的棋盘，复制一张改"棋盘设计"那一块。</p>
     <van-button type="primary" round block class="!mt-3" :disabled="!presetReady" @click="start">开始</van-button>
   </template>
@@ -525,6 +538,17 @@ function again() {
       <van-button type="primary" round block @click="router.push(`/chat/${chatId}`)">回聊天</van-button>
     </div>
   </template>
+
+  <!-- 放到 body 下：场景面板有 backdrop-filter，弹层留在里面会被关在面板里 -->
+  <van-popup v-model:show="presetOpen" position="bottom" round teleport="body" :style="{ maxHeight: '80%' }">
+    <div class="p-4">
+      <div class="text-[15px] font-600">飞行棋用哪个预设</div>
+      <p class="text-[12.5px] text-ink-3 mt-1 mb-3 leading-relaxed">
+        棋盘就是预设：开局时照"棋盘设计"那一块现设计 {{ SIZE }} 格，走到的格子怎么做、做完的反应、聊两句、结束时的话也各是一块（「陪伴 · 快速」的模型）。想要自己的棋盘，复制一张改"棋盘设计"。
+      </p>
+      <PresetPicker :model-value="lib.useChoice(USE)" category="feature" :first="isFlightPreset" @update:model-value="pickPreset" @edit="presetOpen = false" />
+    </div>
+  </van-popup>
 </template>
 
 <style scoped>
@@ -533,51 +557,40 @@ function again() {
   font-size: 12.5px;
   color: var(--ink-3);
 }
-.board-pick {
-  display: flex;
-  align-items: stretch;
-  border-radius: 14px;
-  background: var(--panel);
-  border: 1px solid transparent;
-}
-.board-pick.on {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-}
-.board-pick .main {
-  display: flex;
-  flex: 1;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 0 10px 12px;
-  text-align: left;
-}
-.board-pick .dot {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
-  border-radius: 50%;
-  border: 1.5px solid var(--ink-3);
-  font-size: 13px;
-}
-.board-pick.on .dot {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.board-pick .edit {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
+.chip {
+  height: 30px;
   padding: 0 14px;
-  color: var(--accent-ink);
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--ink-2);
   font-size: 13px;
-  text-decoration: none;
+  white-space: nowrap;
+}
+.chip.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  outline: 1px solid var(--accent-line);
+}
+.board-desc {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 13px;
 }
 .warn {
   margin: 8px 0 0;
