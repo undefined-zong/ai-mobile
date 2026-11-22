@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getLocation, OUTFIT_KINDS, SCENES, slotIn, toMinutes, wallDate, worldOf, type OutfitKind, type RhythmDay, type RhythmSlot } from '@app/shared';
+import { getLocation, missingScenes, OUTFIT_KINDS, SCENES, slotIn, toMinutes, wallDate, worldOf, type LocationActivity, type OutfitKind, type RhythmDay, type RhythmSlot } from '@app/shared';
 import { showConfirmDialog, showToast } from 'vant';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -11,7 +11,7 @@ import { useAiStore } from '@/stores/ai';
 import { useAppStore } from '@/stores/app';
 import { useCharacterStore } from '@/stores/characters';
 import { useLibraryStore } from '@/stores/library';
-import { useRhythmStore, type WorldPreview } from '@/stores/rhythm';
+import { useRhythmStore, type RefinePreview, type WorldPreview } from '@/stores/rhythm';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useHubStore } from '@/stores/hub';
 import { uid } from '@/utils/id';
@@ -22,6 +22,7 @@ import { uid } from '@/utils/id';
  * - 怎么排：固定（一直用模板）/ 每天变化（作息、三餐、穿着分别勾；穿着从衣柜里挑或每天新编）；
  * - 今天：时间线、三餐、穿着（tags 能改）、手头的事；重新排今天、把今天存成模板；
  * - 模板：作息（标"固定"的每天不挪）、三餐习惯、衣柜、手头的事，都能改；
+ * - 她的世界：重建（全部重新生成），或者优化（地点、布局、作息不动，只给地点补上还没写的能一起做的事）；
  * - 最近 7 天。
  */
 const route = useRoute();
@@ -39,6 +40,7 @@ const c = computed(() => chars.byId(pickedId.value) ?? chars.list[0]);
 watch(pickedId, (id) => {
   if (route.query.char !== id) void router.replace({ query: { ...route.query, char: id } });
   preview.value = null;
+  refine.value = null;
   buildError.value = null;
 });
 watch(
@@ -51,7 +53,7 @@ watch(
 const id = computed(() => c.value?.id ?? '');
 const cfg = computed(() => rhythm.configOf(id.value));
 const hasWorld = computed(() => !!id.value && rhythm.hasWorld(id.value));
-const world = computed(() => (hasWorld.value ? worldOf(id.value) : null));
+const world = computed(() => (hasWorld.value ? (rhythm.worlds[id.value] ?? worldOf(id.value)) : null));
 const built = computed(() => !!rhythm.worlds[id.value]);
 const today = computed<RhythmDay | null>(() => (id.value ? rhythm.todayOf(id.value) : null));
 const template = computed(() => (id.value ? rhythm.templateOf(id.value) : null));
@@ -226,6 +228,33 @@ async function rebuild() {
   void buildNow();
 }
 const sceneName = (sid: string) => SCENES.find((s) => s.id === sid)?.name ?? sid;
+
+// —— 优化小世界 ——
+const refine = ref<RefinePreview | null>(null);
+/** 哪儿都还没写的事（现在只能在住处做） */
+const missing = computed(() => (world.value ? missingScenes(world.value) : []));
+async function refineNow() {
+  if (!id.value || busy.value) return;
+  if (!status.value.live) {
+    void router.push('/me/api?feature=rhythm');
+    return;
+  }
+  buildError.value = null;
+  const r = await rhythm.refineWorld(id.value);
+  if (!r.ok) {
+    buildError.value = { reason: r.reason, detail: r.detail };
+    return;
+  }
+  refine.value = r.value.refinements.length ? r.value : null;
+  if (!refine.value) showToast('没有要补的：每个地点能一起做的事都写全了');
+}
+function useRefine() {
+  if (!refine.value) return;
+  const n = rhythm.applyRefine(id.value, refine.value);
+  refine.value = null;
+  showToast(n ? `补上了 ${n} 件能一起做的事，地点和布局没动` : '没有要补的了');
+}
+const activityText = (a: LocationActivity) => (a.label === sceneName(a.sceneId) ? a.label : `${a.label}（${sceneName(a.sceneId)}）`);
 </script>
 
 <template>
@@ -477,11 +506,29 @@ const sceneName = (sid: string) => SCENES.find((s) => s.id === sid)?.name ?? sid
                 <div v-for="p in cfg.people" :key="p.name" class="text-[13px] py-0.5">{{ p.name }}<span class="text-ink-3">（{{ p.relation }}）{{ p.note ? ` · ${p.note}` : '' }}</span></div>
               </template>
               <div class="text-[12px] text-ink-3 mt-2">
-                存在本机，能在这里重建，在角色卡的「背景」里给每个地点换背景。能一起做的事：{{ [...new Set(locations.flatMap((l) => l.activities.map((a) => sceneName(a.sceneId))))].join('、') }}
+                存在本机，能在这里优化（地点、布局、作息不动，只给地点补上还没写的能一起做的事）或重建，在角色卡的「背景」里给每个地点换背景。能一起做的事：{{ [...new Set(locations.flatMap((l) => l.activities.map((a) => sceneName(a.sceneId))))].join('、') }}
+                <template v-if="missing.length">；还没有地方（现在在住处做）：{{ missing.map(sceneName).join('、') }}</template>
               </div>
               <div class="flex gap-2 mt-3">
                 <van-button round block size="small" :to="{ path: app.mapPath, query: { world: c.id } }">在地图上看</van-button>
+                <van-button v-if="built" round block size="small" :loading="busy === 'refine'" loading-text="正在看…" data-testid="refine-world" @click="refineNow">优化小世界</van-button>
                 <van-button v-if="built" round block size="small" :loading="busy === 'build'" @click="rebuild">重建小世界</van-button>
+              </div>
+              <div v-if="refine" data-testid="refine-preview">
+                <div class="sub">要补上的（地点、布局、作息都不动，看过再用）</div>
+                <div v-for="r in refine.refinements" :key="r.locationId" class="loc">
+                  <span :class="locations.find((l) => l.id === r.locationId)?.icon" class="text-accent-ink shrink-0" />
+                  <span class="flex-1 min-w-0">
+                    <span class="text-[14px]">{{ locations.find((l) => l.id === r.locationId)?.name ?? r.locationId }}</span>
+                    <span class="block text-[12px] text-ink-3">＋ {{ r.activities.map(activityText).join('、') }}</span>
+                  </span>
+                </div>
+                <div class="text-[12px] text-ink-3 mt-2">{{ refine.model }} 写的</div>
+                <div class="flex gap-2 mt-3">
+                  <van-button round block size="small" :loading="busy === 'refine'" @click="refineNow">再生成一次</van-button>
+                  <van-button type="primary" round block size="small" data-testid="use-refine" @click="useRefine">补上这些</van-button>
+                </div>
+                <button class="text-[13px] text-ink-3 mt-2 w-full" @click="refine = null">先不用</button>
               </div>
               <ErrorDetails v-if="buildError && built" :title="buildError.reason" :detail="buildError.detail ?? buildError.reason" max-height="30vh" />
             </div>

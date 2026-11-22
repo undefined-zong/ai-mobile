@@ -415,12 +415,14 @@ export type ParallelTask = keyof typeof PARALLEL_TASKS;
  * - build-world 建世界：导入角色后做一次，生成她的地点、身边的人、作息模板、三餐习惯、衣柜；
  * - plan-day 排今天：每天一次；
  * - outfit-pick / outfit-new：排今天时穿着从衣柜里挑，还是每天新编（和 plan-day 一起发）；
- * - draw-town 画小镇：只按世界观重画像素小镇的样子（蓝图见 town.ts），地点和作息不动。
+ * - draw-town 画小镇：只按世界观重画像素小镇的样子（蓝图见 town.ts），地点和作息不动；
+ * - refine-world 优化小世界：已有的地点、布局、作息都不动，只给地点补上还没写的能一起做的事（新加的场景也能放进老世界）。
  */
 export const RHYTHM_TASKS = {
   'build-world': '建世界',
   'plan-day': '排今天',
   'draw-town': '画小镇',
+  'refine-world': '优化小世界',
   'outfit-pick': '穿着从衣柜挑',
   'outfit-new': '穿着每天新编',
 } as const;

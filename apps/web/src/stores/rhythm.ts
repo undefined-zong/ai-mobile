@@ -1,5 +1,6 @@
-import { buildRhythmMessages, errorReport, errorText, samplerRequest, planDayInput, type RhythmFill } from '@app/ai';
+import { buildRhythmMessages, errorReport, errorText, samplerRequest, planDayInput, refineWorldFills, rhythmTypes, type RhythmFill } from '@app/ai';
 import {
+  applyRefinement,
   dayFromTemplate,
   DEFAULT_RHYTHM_SETTINGS,
   getLocation,
@@ -7,6 +8,7 @@ import {
   outfitOfDay,
   parseBuiltWorld,
   parsePlanDay,
+  parseRefineWorld,
   registerWorld,
   rhythmDate,
   rhythmDayFromPlan,
@@ -20,6 +22,7 @@ import {
   type RhythmContext,
   slotIn,
   templateFromWorld,
+  triggerMatches,
   unregisterWorld,
   worldFromSpec,
   worldOf,
@@ -34,6 +37,7 @@ import {
   type RhythmSlot,
   type RhythmTemplate,
   type World,
+  type WorldRefinement,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -73,6 +77,12 @@ export interface WorldPreview {
   town?: TownDesign;
 }
 
+/** "优化小世界"的结果：每个地点要补的事，先给你看，确认后才加进去 */
+export interface RefinePreview {
+  refinements: WorldRefinement[];
+  model: string;
+}
+
 const DAY = 86_400_000;
 const KEEP_DAYS = 30;
 
@@ -98,8 +108,8 @@ export const useRhythmStore = defineStore('rhythm', () => {
   const towns = reactive<Record<string, TownDesign>>({});
   /** 已经拷过初始世界的演示角色：只拷一次，之后删了、重建了都按你的来 */
   const seededWorlds = reactive<string[]>([]);
-  /** 正在排 / 正在建 / 正在画小镇的角色 */
-  const busy = reactive<Record<string, 'plan' | 'build' | 'town' | undefined>>({});
+  /** 正在排 / 正在建 / 正在画小镇 / 正在优化小世界的角色 */
+  const busy = reactive<Record<string, 'plan' | 'build' | 'town' | 'refine' | undefined>>({});
   /** 最近一次排今天失败的原因（只在内存里）；节律页显示 */
   const errors = reactive<Record<string, { at: number; reason: string; detail?: string } | undefined>>({});
   /** 今天是哪个节律日（每分钟更新） */
@@ -353,7 +363,7 @@ export const useRhythmStore = defineStore('rhythm', () => {
   /** 调「节律」：按节律预设拼提示词，读回 JSON */
   async function callRhythm<T>(
     characterId: string,
-    task: 'build-world' | 'plan-day' | 'draw-town',
+    task: 'build-world' | 'plan-day' | 'draw-town' | 'refine-world',
     fills: Partial<Record<RhythmFill, string>>,
     parse: (v: unknown) => T | null,
     outfitMode?: 'pick' | 'new' | null,
@@ -473,6 +483,44 @@ export const useRhythmStore = defineStore('rhythm', () => {
     } finally {
       delete busy[characterId];
     }
+  }
+
+  /**
+   * 优化小世界：地点、布局（地图位置、底图、像素小镇）、背景、作息都不动，
+   * 让「节律」按角色卡和世界书给已有的地点补上还没写的能一起做的事（以后新加的场景也能这样放进老世界）；先返回给你看。
+   */
+  async function refineWorld(characterId: string): Promise<RhythmResult<RefinePreview>> {
+    const c = useCharacterStore().byId(characterId);
+    if (!c) return { ok: false, reason: '找不到这个角色' };
+    const w = worlds[characterId];
+    if (!w) return { ok: false, reason: '还没有小世界：先"建世界"' };
+    if (busy[characterId]) return { ok: false, reason: '正在忙' };
+    const preset = useLibraryStore().presetForUse('rhythm', c);
+    const types = new Set(rhythmTypes({ task: 'refine-world' }));
+    if (preset && !preset.blocks.some((b) => b.enabled && b.triggers?.length && triggerMatches(b.triggers, types))) {
+      return { ok: false, reason: `节律预设「${preset.name}」里没有"优化小世界"的块：去"我的 → 预设 → 节律"恢复自带的，或者加一块、触发条件选"优化小世界"` };
+    }
+    const user = userName(characterId);
+    busy[characterId] = 'refine';
+    try {
+      const snapshot = clone(w);
+      const r = await callRhythm(
+        characterId,
+        'refine-world',
+        { rhythmCharacter: characterLines(c, user), rhythmSource: sourceLines(c, user), ...refineWorldFills(snapshot, c) },
+        (v) => parseRefineWorld(v, snapshot),
+      );
+      if (!r.ok) return r;
+      return { ok: true, value: { refinements: r.value.value, model: r.value.model } };
+    } finally {
+      delete busy[characterId];
+    }
+  }
+
+  /** 确认"优化小世界"的结果：只把补的事接在各个地点原有的事后面（这期间换过的背景之类照旧）；返回加了几件 */
+  function applyRefine(characterId: string, preview: RefinePreview): number {
+    const w = worlds[characterId];
+    return w ? applyRefinement(w, preview.refinements) : 0;
   }
 
   /** 确认"建世界"的结果：存下世界、模板、身边的人；今天按新模板重来 */
@@ -612,6 +660,8 @@ export const useRhythmStore = defineStore('rhythm', () => {
     planToday,
     buildWorld,
     applyWorld,
+    refineWorld,
+    applyRefine,
     ensureWorld,
     removeWorld,
     editableWorld,

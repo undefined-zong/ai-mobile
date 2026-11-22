@@ -1,12 +1,13 @@
 import { characterPronoun } from '@app/shared';
-import { assembleTaskPrompt, backgroundLibraryPrompt, OUTFIT_KINDS, solarTermNote, substituteMacros, type RhythmContext, type RhythmDay, type RhythmSlot, type RhythmTask } from '@app/shared';
+import { assembleTaskPrompt, backgroundLibraryPrompt, getScene, missingScenes, OUTFIT_KINDS, solarTermNote, substituteMacros, WORLD_ACTIVITY_SCENES, type RhythmContext, type RhythmDay, type RhythmSlot, type RhythmTask, type World } from '@app/shared';
 import type { ChatMessage } from '../llm/types.ts';
 import type { TaskPreset } from './taskPreset.ts';
 
 /**
  * 节律智能体（设计文档 §4.1、§9 开头）：
  * - 建世界：从角色卡和世界书里找出她住哪、在哪读书或工作、常去哪、身边有谁，写出作息模板、三餐习惯、衣柜；
- * - 排今天：按她的世界、模板、今天的日期天气、最近几天，排今天的作息、三餐、穿着、手头的事。
+ * - 排今天：按她的世界、模板、今天的日期天气、最近几天，排今天的作息、三餐、穿着、手头的事；
+ * - 优化小世界：地点、布局、作息不动，只给已有的地点补上还没写的能一起做的事。
  * 提示词（任务、规则、输出格式）全在节律预设里，按触发条件只发这次的任务；这里只把这一次的输入填进程序填充块。
  * 输出用 @app/shared 的 parseBuiltWorld / parsePlanDay 读，再用 checkSchedule 检查。
  */
@@ -24,7 +25,7 @@ export type RhythmFill =
   | 'rhythmAsk';
 
 export interface RhythmPromptInput {
-  task: Extract<RhythmTask, 'build-world' | 'plan-day' | 'draw-town'>;
+  task: Extract<RhythmTask, 'build-world' | 'plan-day' | 'draw-town' | 'refine-world'>;
   /** 排今天、穿着每天变化时：从衣柜里挑（outfit-pick）还是每天新编（outfit-new） */
   outfitMode?: 'pick' | 'new' | null;
   characterName: string;
@@ -43,6 +44,26 @@ export function buildRhythmMessages(input: RhythmPromptInput, preset: TaskPreset
   for (const [k, v] of Object.entries(input.fills)) if (v) fills[k] = v;
   if (input.task === 'build-world') fills.rhythmAsk = [fills.rhythmAsk, backgroundLibraryPrompt()].filter(Boolean).join('\n\n');
   return assembleTaskPrompt({ preset, fills, macros: { pronoun: input.pronoun, char: input.characterName, user: input.userName ?? '' }, type: rhythmTypes(input) }).messages;
+}
+
+/**
+ * "优化小世界"这一次的输入：她的世界（每个地点已有的事带上 scene，免得重复写）、能放在地点上的事、哪儿都还没写的事。
+ * 能一起做的事从 @app/shared 的场景表读，以后再加场景这里自动跟上。
+ */
+export function refineWorldFills(world: World, character: { pronoun?: string }): Pick<Record<RhythmFill, string>, 'rhythmWorld' | 'rhythmAsk'> {
+  const missing = missingScenes(world);
+  return {
+    rhythmWorld: [
+      `${world.name}：${world.blurb}`,
+      '地点（id：名字 · 片区 · 室内或室外 · 已有的事（scene） · 一句话）：',
+      ...world.locations.map((l) => `- ${l.id}：${l.name} · ${l.area === 'real' ? '' : world.areaLabels[l.area]}${l.id === world.homeId ? '（住的地方）' : ''} · ${l.indoor ? '室内' : '室外'} · ${l.activities.map((a) => `${a.label}（${a.sceneId}）`).join('、') || '—'}${l.blurb ? ` · ${l.blurb}` : ''}`),
+    ].join('\n'),
+    rhythmAsk: [
+      '能放在地点上的事（scene：名字 · 是什么）：',
+      ...WORLD_ACTIVITY_SCENES.map((s) => getScene(s.id, character)).map((s) => `- ${s.id}：${s.name} · ${s.tagline}`),
+      missing.length ? `还没有地方的事：${missing.map((id) => getScene(id, character).name).join('、')}` : '每件事都至少有一个地方了；别的地点也合适的照样补上。',
+    ].join('\n'),
+  };
 }
 
 /** Rebuilt at execution time: cloud dates and recent days never depend on an open PWA. */
