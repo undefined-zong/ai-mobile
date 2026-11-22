@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { SCENES, type SceneId } from '@app/shared';
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { showToast } from 'vant';
 import { VoiceRecorder, type VoiceRecording } from '@/services/recorder';
 
-/** 输入栏：文字 / 按住说话 / ＋面板（相册、拍照、一起听歌、约会、戳一戳、健身、共同的家、心跳、平行时空……）；compact 时没有＋面板 */
+/** 输入栏：文字 / 按住说话 / ＋面板（相册、拍照、一起听歌、约会、戳一戳、健身、学习、哄睡、休息、共同的家、心跳、平行时空……）；compact 时没有＋面板 */
 const props = withDefaults(defineProps<{ busy?: boolean; voiceBusy?: boolean; placeholder?: string; compact?: boolean }>(), {
   busy: false,
   placeholder: '说点什么…',
@@ -30,6 +31,12 @@ let finishing = false;
 let gesture = 0;
 let pointerId: number | null = null;
 
+/** 进场景的入口：名字、图标跟着 @app/shared 的 SCENES 走，点了发 `scene:<场景 id>` */
+function sceneAction(id: SceneId) {
+  const s = SCENES.find((x) => x.id === id);
+  return { id: `scene:${id}`, label: s?.name ?? id, icon: s?.icon ?? '' };
+}
+
 const ACTIONS = [
   { id: 'album', label: '相册', icon: 'i-lucide-image' },
   { id: 'camera', label: '拍照', icon: 'i-lucide-camera' },
@@ -37,6 +44,7 @@ const ACTIONS = [
   { id: 'date', label: '约会邀请', icon: 'i-lucide-heart-handshake' },
   { id: 'poke', label: '戳一戳', icon: 'i-lucide-pointer' },
   { id: 'workout', label: '健身', icon: 'i-lucide-dumbbell' },
+  ...(['study', 'sleep', 'rest'] as const).map(sceneAction),
   { id: 'home', label: '共同的家', icon: 'i-lucide-house-heart' },
   { id: 'heart', label: '心跳', icon: 'i-lucide-heart-pulse' },
   { id: 'parallel', label: '平行时空', icon: 'i-lucide-orbit' },
