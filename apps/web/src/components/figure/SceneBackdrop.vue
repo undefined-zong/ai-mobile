@@ -17,6 +17,12 @@ const clock = useSceneTime();
 const t = computed(() => props.tod ?? clock.value);
 const selected = computed(() => pickBackground({ ...props.location, kind: props.kind, context: props.context }, t.value));
 const shown = shallowRef<ReturnType<typeof pickBackground>>();
+/** 系列没有黄昏 / 夜间图、拿日间图顶上时（固定了只有日间的系列）压暗一点，不至于半夜还阳光满屋 */
+const shade = computed(() => {
+  const s = shown.value;
+  const lent = s?.asset.period === 'day' ? { dusk: 0.15, night: 0.4 }[s.requestedPeriod as 'dusk' | 'night'] ?? 0 : 0;
+  return Math.max(props.dim, lent);
+});
 // 新图加载好再切换；离开地点或切时段后，旧请求不会把背景换回去。
 watch(selected, (next, _previous, cleanup) => {
   const bitmap = new Image();
@@ -33,7 +39,7 @@ watch(selected, (next, _previous, cleanup) => {
       <img v-if="shown" :key="shown.url" class="background-image" :src="shown.url" :width="shown.asset.width" :height="shown.asset.height" alt="" decoding="async" draggable="false" />
     </Transition>
     <div v-if="rain" class="rain" />
-    <div class="vignette" :style="{ '--dim': dim }" />
+    <div class="vignette" :style="{ '--dim': shade }" />
   </div>
 </template>
 

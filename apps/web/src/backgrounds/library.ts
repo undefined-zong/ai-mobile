@@ -154,11 +154,16 @@ export function pickBackground(request: BackgroundRequest, tod: TimeOfDay) {
   if (fixed) return { asset: fixed, url: backgroundUrl(fixed), kind: backgroundKind(request), requestedPeriod: period, periodFallback: false };
   const ranked = backgroundFamilies(request);
   const primary = ranked[0]!;
-  // 同一系列的对应时段 → 同系列室内通用 → 同用途其它系列对应时段 → 同用途室内通用。
-  let available = primary.assets.filter((a) => a.period === period);
-  if (!available.length) available = primary.assets.filter((a) => a.period === 'indoor');
-  if (!available.length) available = ranked.find((f) => f.assets.some((a) => a.period === period))?.assets.filter((a) => a.period === period) ?? [];
-  if (!available.length) available = ranked.find((f) => f.assets.some((a) => a.period === 'indoor'))?.assets.filter((a) => a.period === 'indoor') ?? [];
+  // 固定了系列（角色卡编辑里挑的、建世界时写的、约会 / 哄睡里选的）：只在这个系列里按时段挑，
+  // 系列没有这个时段（如古典书房只有日间）也不换成别的房间。
+  const pinned = ranked.filter((f) => f.id === request.backgroundSet || f.set === request.backgroundSet);
+  const own = pinned.length ? pinned : [primary];
+  const inOwn = (p: BackgroundPeriod) => own.find((f) => f.assets.some((a) => a.period === p))?.assets.filter((a) => a.period === p) ?? [];
+  // 同一系列的对应时段 → 同系列室内通用 → （没固定时）同用途其它系列对应时段 → 同用途室内通用。
+  let available = inOwn(period);
+  if (!available.length) available = inOwn('indoor');
+  if (!available.length && !pinned.length) available = ranked.find((f) => f.assets.some((a) => a.period === period))?.assets.filter((a) => a.period === period) ?? [];
+  if (!available.length && !pinned.length) available = ranked.find((f) => f.assets.some((a) => a.period === 'indoor'))?.assets.filter((a) => a.period === 'indoor') ?? [];
   // 素材本身没有该时段（如机场只有日间、游乐园没有黄昏）时保留该地点的真实素材。
   if (!available.length) available = primary.assets.filter((a) => a.period === (period === 'dusk' ? 'day' : 'dusk'));
   if (!available.length) available = primary.assets;
