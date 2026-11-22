@@ -154,7 +154,9 @@ function partToText(p: MessagePart, character: Character, user: string, mapText?
               ? '一起看平行时空'
               : p.kind === 'rest'
                 ? `一起${restActivity(p.activity)?.name ?? '休息'}`
-                : '';
+                : p.kind === 'home'
+                  ? `去共同的家做家务${p.chore ? `：${p.chore}` : ''}`
+                  : '';
       const what =
         p.kind === 'study'
           ? `一起学习${p.task ? `：${p.task}` : ''}${p.minutes ? `（${p.minutes} 分钟）` : ''}`

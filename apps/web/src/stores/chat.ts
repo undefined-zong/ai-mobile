@@ -561,6 +561,7 @@ export const useChatStore = defineStore('chat', () => {
         if (tag.kind === 'game') parts.push({ type: 'invite', kind: 'game', game: tag.game });
         if (tag.kind === 'sleep' || tag.kind === 'exercise' || tag.kind === 'parallel') parts.push({ type: 'invite', kind: tag.kind });
         if (tag.kind === 'rest') parts.push({ type: 'invite', kind: 'rest', activity: tag.activity });
+        if (tag.kind === 'home') parts.push({ type: 'invite', kind: 'home', ...(tag.chore ? { chore: tag.chore } : {}) });
         // 聊天里的玩具指令（心跳里的由心跳自己按位置执行）：卡片 + 连着时读到那里自动执行
         if (tag.kind === 'device' && scene.id === 'free') {
           const command = parseDeviceBlock(tag.value);

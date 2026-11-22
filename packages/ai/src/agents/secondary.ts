@@ -33,14 +33,23 @@ export function imageUseMoments(use: PresetUseId): Record<string, string> | unde
   return use.startsWith('image:') ? IMAGE_MOMENTS[use.slice(6) as keyof typeof IMAGE_MOMENTS] : undefined;
 }
 
-const FIELD_RE = new RegExp(`[ \\t]*\\b(${SECONDARY_IMAGE_FIELDS.join('|')})[ \\t]*###([^\\n]*?)###[ \\t]*(?:\\r?\\n)?`, 'gi');
+const FIELD_NAMES = SECONDARY_IMAGE_FIELDS.join('|');
+/**
+ * 画法那几行：照写法是 name###值###；模型常漏掉结尾的 ###（"mode###scene"），单独占一行的也认，免得漏进正文给你看到。
+ * 前一种可以夹在一行中间，后一种只认从行首写起、到行尾为止的
+ */
+const FIELD_RE = new RegExp(
+  `[ \\t]*\\b(${FIELD_NAMES})[ \\t]*###([^\\n]*?)###[ \\t]*(?:\\r?\\n)?|^[ \\t]*(${FIELD_NAMES})[ \\t]*###([^\\n#]*)#*[ \\t]*(?:\\r?\\n|$)`,
+  'gim',
+);
 
 /** 读副对话的输出；models 是这一轮给它选的生图模型 */
 export function parseSecondaryReply(text: string, models: readonly string[] = []): SecondaryReply {
   const raw: Partial<Record<ImageField, string>> = {};
   const append = text
-    .replace(FIELD_RE, (_m, name: string, value: string) => {
-      raw[name.toLowerCase() as ImageField] ??= value.trim();
+    .replace(FIELD_RE, (_m, name?: string, value?: string, bareName?: string, bareValue?: string) => {
+      const key = (name ?? bareName ?? '').toLowerCase() as ImageField;
+      raw[key] ??= (value ?? bareValue ?? '').trim();
       return '';
     })
     .trim();

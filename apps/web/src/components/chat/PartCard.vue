@@ -180,6 +180,10 @@ const invite = computed(() => {
       yes: a ? `一起${a.name}` : '歇会儿',
     };
   }
+  if (p.kind === 'home') {
+    const home = getScene('home');
+    return { head: '共同的家邀请', title: p.chore || '今天的家务', sub: p.chore ? '回家一起做，做的时候能聊天、放歌' : '照今天的清单一件件来，做的时候能聊天、放歌', icon: home.icon, tone: home.tint, yes: '这就去' };
+  }
   return { head: '一起游戏邀请', title: inviteGameLabel(p.game), sub: '去一起游戏里开一局', icon: 'i-lucide-gamepad-2', tone: '#e7b46a', yes: '来玩' };
 });
 function answerInvite(ok: boolean) {
@@ -198,6 +202,8 @@ function answerInvite(ok: boolean) {
   else if (p.kind === 'game') void router.push({ path: '/scene/game', query: { g: p.game } });
   else if (p.kind === 'parallel') void router.push(`/parallel/${encodeURIComponent(props.character.id)}`);
   else if (p.kind === 'rest') void router.push({ path: '/scene/rest', query: p.activity ? { do: p.activity } : {} });
+  // 共同的家在你的家（真实世界的家）；她点名了哪件，进去先摆出那一件
+  else if (p.kind === 'home') void router.push({ path: '/scene/home', query: { at: 'real:home', ...(p.chore ? { chore: p.chore } : {}) } });
   else void router.push(`/scene/${p.kind}`);
 }
 

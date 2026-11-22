@@ -1,4 +1,4 @@
-import { INVITE_GAMES, inviteGame, parseRestInvite, parseStudyInvite, parseWatchInvite, type InviteGameId, type RestInviteKind } from './chatModules.ts';
+import { INVITE_GAMES, inviteGame, parseHomeInvite, parseRestInvite, parseStudyInvite, parseWatchInvite, type InviteGameId, type RestInviteKind } from './chatModules.ts';
 
 /**
  * 隐藏控制标签：主对话模型在回复里夹带，用户看不到，客户端在流式输出时实时剥离并执行。
@@ -20,12 +20,13 @@ import { INVITE_GAMES, inviteGame, parseRestInvite, parseStudyInvite, parseWatch
  *   [exercise]            约你一起运动（进入健身，照计划练或随便动动）
  *   [parallel]            邀请你看平行时空（你们俩今天的安排和留言）
  *   [rest:午睡]           约你一起休息（午睡、散步、泡澡、静坐、听音乐；不写就是"歇会儿"，进去再选）
+ *   [home:洗衣服]          叫你去共同的家做家务（冒号后面是哪件；不写就照今天的清单按顺序来）
  *   <device>"VIBRATE": 40</device>   玩具的控制指令（尖括号写法，可以跨行；内容见 device.ts）
  *
  * 日常聊天支持全部主动卡片和游戏，世界书只提供提示词内容。
  * 兼容全角写法【expr：smile】。不认识的方括号（例如"[笑]"）原样保留为正文。
  */
-export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'rest'] as const;
+export const CONTROL_TAG_KINDS = ['expr', 'pose', 'outfit', 'bg', 'cg', 'music', 'call', 'choice', 'poke', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'rest', 'home'] as const;
 
 /** 尖括号写法、成对的标签：<device>…</device>（同 SillyTavern 的 Intiface 插件） */
 export const BLOCK_TAG_KINDS = ['device'] as const;
@@ -43,7 +44,8 @@ export type ControlTag =
   | { kind: 'sleep' }
   | { kind: 'exercise' }
   | { kind: 'parallel' }
-  | { kind: 'rest'; activity: RestInviteKind | null };
+  | { kind: 'rest'; activity: RestInviteKind | null }
+  | { kind: 'home'; chore: string };
 
 export type TagStreamEvent = { type: 'text'; text: string } | { type: 'tag'; tag: ControlTag };
 
@@ -71,6 +73,7 @@ export const CONTROL_TAG_DOCS: Record<ControlTagKind, { syntax: string; desc: st
   exercise: { syntax: '[exercise]', desc: '约对方一起运动，显示成邀请卡片；对方接受后进入健身，照今天的计划练或随便动动' },
   parallel: { syntax: '[parallel]', desc: '邀对方一起看你们今天的安排或留言，显示成平行时空邀请卡片；对方接受后打开你们的平行时空' },
   rest: { syntax: '[rest:午睡]', desc: '约对方一起休息，显示成休息邀请卡片；冒号后面可以写午睡、散步、泡澡、静坐或听音乐（不写就是歇会儿，进去再选）' },
+  home: { syntax: '[home:家务名]', desc: '叫对方去共同的家做家务，显示成共同的家邀请卡片；冒号后面写哪件家务（照"家务"里的叫法），不指定就只写 [home]。家务的事用这个，不要用 [study]' },
   device: {
     syntax: '<device>"VIBRATE": 强度</device>',
     desc: '对方连着成人玩具时，在发生的那句话后面写控制指令：VIBRATE / OSCILLATE / ROTATE（0–100 或 {"pattern": [..], "interval": [..]}）、LINEAR（{"start_position", "end_position", "duration"}）、"STOP": true',
@@ -106,6 +109,8 @@ function parseTag(kind: ControlTagKind, raw: string | undefined): ControlTag | n
     }
     case 'rest':
       return parseRestInvite(value);
+    case 'home':
+      return parseHomeInvite(value);
     case 'study':
       return parseStudyInvite(value);
     case 'watch':
