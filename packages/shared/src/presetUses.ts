@@ -150,6 +150,7 @@ const SCENE_USE_TEXT: Partial<Record<FeatureSceneId, { label?: string; desc: str
   heart: { desc: '心跳里打字聊天时Ta说的话' },
   game: { label: '一起游戏 · 海龟汤', desc: '一起游戏里玩海龟汤时：主持、判定、当队友、猜你出的题' },
   poke: { desc: '戳戳乐时Ta的反应：用手戳、用嘴亲、蹭一蹭各一块，尺度也在里面' },
+  rest: { desc: '休息（午睡、散步、泡澡、静坐）时Ta说的话：开始、换了画面、计时到点、回你说的话各一块' },
 };
 
 export const PRESET_USES: PresetUse[] = [

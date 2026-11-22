@@ -28,7 +28,8 @@ function resolveLocation(): MapLocation | null {
   if (at) return at;
   // 约会、出逃没指定地点时由场景自己决定（约会先让你挑，出逃去上次的去处）
   if (sceneId.value === 'date' || sceneId.value === 'escape') return null;
-  if (sceneId.value === 'home') return getLocation('real:home') ?? null;
+  // 共同的家、一个人休息都在你的家（真实世界的家）
+  if (sceneId.value === 'home' || alone.value) return getLocation('real:home') ?? null;
   const current = getLocation(chat.chatOfCharacter(app.activeCharacterId)?.togetherAt);
   if (current?.activities.some((a) => a.sceneId === sceneId.value)) return current;
   return defaultLocationFor(sceneId.value, app.activeCharacterId);
@@ -37,8 +38,9 @@ function resolveLocation(): MapLocation | null {
 const location = ref<MapLocation | null>(null);
 provide(SCENE_LOCATION, location);
 
-/** 一个人出逃（?solo=1）：没有她，不记进聊天；从带她变成一个人时，她这一段就结束了 */
-const alone = computed(() => sceneId.value === 'escape' && route.query.solo === '1');
+/** 一个人出逃、一个人休息、一个人听音乐（?solo=1）：没有她，不记进聊天；从带她变成一个人时，她这一段就结束了 */
+const SOLO_SCENES: SceneId[] = ['escape', 'rest', 'music'];
+const alone = computed(() => SOLO_SCENES.includes(sceneId.value) && route.query.solo === '1');
 
 /** ?how=visit 表示"去她那"（坐到她旁边）；默认连线；真实地点总是"带她来" */
 watch(
@@ -46,7 +48,7 @@ watch(
   () => {
     location.value = resolveLocation();
     if (alone.value) {
-      if (chat.chatOfCharacter(app.activeCharacterId)?.currentScene === 'escape') chat.leaveScene(app.activeCharacterId);
+      if (chat.chatOfCharacter(app.activeCharacterId)?.currentScene === sceneId.value) chat.leaveScene(app.activeCharacterId);
       return;
     }
     const how = route.query.how === 'visit' ? 'visit' : undefined;

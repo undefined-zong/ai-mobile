@@ -8,7 +8,8 @@ import { registerPlaces, type MapLocation } from './locations.ts';
  * - 插画（drawn）：场景素材库里现成的图（和立绘同一个画风），横图在竖屏里慢慢平移，再叠星星、云、光点这些会动的东西。
  * 画面的说明（desc）会写进给她的场景任务，她照着"眼前是什么"说话；不描述没写的东西。
  */
-export type EscapeFx = 'stars' | 'clouds' | 'warm-clouds' | 'glint' | 'motes' | 'streaks';
+/** 叠在插画上会动的东西：星星、云、海面的光、漂浮的光点、车窗外划过的灯、热气（泡澡、温泉）、飘落的花瓣 */
+export type EscapeFx = 'stars' | 'clouds' | 'warm-clouds' | 'glint' | 'motes' | 'streaks' | 'steam' | 'petals';
 
 export interface EscapeVideoView {
   kind: 'video';
@@ -70,6 +71,9 @@ const drawn = (dest: string, n: number, image: string, label: string, desc: stri
   motion,
   fx,
 });
+
+/** 休息（rest.ts）的散步、泡澡、静坐也用同样的画面：实拍和会动的插画 */
+export { pexels as pexelsView, drawn as drawnView };
 
 export const ESCAPE_DESTINATIONS: EscapeDestination[] = [
   {

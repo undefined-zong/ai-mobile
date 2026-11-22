@@ -406,8 +406,8 @@ export function parseBuiltWorld(value: unknown): BuiltWorldSpec | null {
   const homeRaw = str(value.homeKey ?? value.home);
   const home = locations.find((l) => l.key === keyFrom(homeRaw, 0) || l.name === homeRaw) ?? locations.find((l) => l.area === 'home') ?? locations[0]!;
   home.area = 'home';
-  // 住处总能哄睡、听歌、戳戳乐
-  for (const sceneId of ['sleep', 'music', 'poke'] as SceneId[]) {
+  // 住处总能哄睡、听歌、戳戳乐、休息
+  for (const sceneId of ['sleep', 'music', 'poke', 'rest'] as SceneId[]) {
     if (!home.activities.some((a) => a.sceneId === sceneId)) home.activities.push({ sceneId, label: SCENES.find((s) => s.id === sceneId)?.name ?? sceneId });
   }
   const wardrobe = (Array.isArray(value.wardrobe) ? value.wardrobe : [])

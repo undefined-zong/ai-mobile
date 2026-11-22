@@ -2,9 +2,10 @@
 import type { EscapeDrawnView, EscapeView } from '@app/shared';
 import { computed, nextTick, ref, watch } from 'vue';
 import { BACKGROUND_ASSETS, backgroundUrl } from '@/backgrounds/library';
+import { pexelsMedia } from '@/services/previewMedia';
 
 /**
- * 出逃的画面：实拍是一段静音循环的竖屏视频，插画是素材库里的图慢慢平移、叠上会动的东西。
+ * 出逃（和休息的散步、泡澡、静坐）的画面：实拍是一段静音循环的竖屏视频，插画是素材库里的图慢慢平移、叠上会动的东西。
  * 换画面时新的淡入、旧的淡出。
  * iPhone 低电量模式会拦住自动播放（静音的也拦）：播不起来时先停在封面上，点一下再播。
  */
@@ -43,6 +44,10 @@ watch(
 /** 漂浮的光点：位置、快慢错开 */
 const MOTES = Array.from({ length: 14 }, (_, i) => ({ left: `${(i * 37) % 100}%`, top: `${55 + ((i * 23) % 40)}%`, delay: `-${(i * 0.7).toFixed(1)}s`, dur: `${7 + (i % 5)}s` }));
 const STREAKS = Array.from({ length: 4 }, (_, i) => ({ top: `${34 + i * 5}%`, delay: `-${(i * 0.65).toFixed(2)}s`, dur: `${(2 + i * 0.4).toFixed(1)}s` }));
+/** 热气：几团从下往上飘、慢慢散开的雾 */
+const STEAM = Array.from({ length: 6 }, (_, i) => ({ left: `${8 + i * 15}%`, delay: `-${(i * 1.9).toFixed(1)}s`, dur: `${9 + (i % 3) * 2}s` }));
+/** 花瓣：从上往下斜着飘，左右轻轻摆 */
+const PETALS = Array.from({ length: 16 }, (_, i) => ({ left: `${(i * 41) % 100}%`, delay: `-${(i * 0.9).toFixed(1)}s`, dur: `${8 + (i % 5) * 1.5}s`, size: `${7 + (i % 3) * 2}px` }));
 </script>
 
 <template>
@@ -50,7 +55,7 @@ const STREAKS = Array.from({ length: 4 }, (_, i) => ({ top: `${34 + i * 5}%`, de
     <Transition name="view">
       <div :key="view.id" class="layer" :data-kind="view.kind" :data-view="view.id">
         <template v-if="view.kind === 'video'">
-          <video class="media" :src="view.src" :poster="view.poster" muted loop playsinline autoplay preload="auto" disablepictureinpicture aria-hidden="true" />
+          <video class="media" :src="pexelsMedia(view.src)" :poster="pexelsMedia(view.poster)" muted loop playsinline autoplay preload="auto" disablepictureinpicture aria-hidden="true" />
           <button v-if="blocked" type="button" class="tap-play" data-testid="escape-tap-play" @click="play">
             <span class="i-lucide-play" />点一下让画面动起来
           </button>
@@ -72,6 +77,12 @@ const STREAKS = Array.from({ length: 4 }, (_, i) => ({ top: `${34 + i * 5}%`, de
           <template v-if="view.fx.includes('streaks')">
             <div v-for="(s, i) in STREAKS" :key="i" class="streak" :style="{ top: s.top, animationDelay: s.delay, animationDuration: s.dur }" />
           </template>
+          <div v-if="view.fx.includes('steam')" class="steam">
+            <i v-for="(m, i) in STEAM" :key="i" :style="{ left: m.left, animationDelay: m.delay, animationDuration: m.dur }" />
+          </div>
+          <div v-if="view.fx.includes('petals')" class="petals">
+            <i v-for="(m, i) in PETALS" :key="i" :style="{ left: m.left, width: m.size, height: m.size, animationDelay: m.delay, animationDuration: m.dur }" />
+          </div>
         </template>
       </div>
     </Transition>
@@ -271,6 +282,67 @@ const STREAKS = Array.from({ length: 4 }, (_, i) => ({ top: `${34 + i * 5}%`, de
   }
 }
 
+.steam {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.steam i {
+  position: absolute;
+  bottom: 18%;
+  width: 46%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0));
+  filter: blur(10px);
+  animation: steam 10s ease-out infinite;
+}
+@keyframes steam {
+  0% {
+    transform: translate(-20%, 0) scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(10%, -130%) scale(1.5);
+    opacity: 0;
+  }
+}
+.petals {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.petals i {
+  position: absolute;
+  top: -5%;
+  border-radius: 80% 10% 80% 10%;
+  background: linear-gradient(135deg, #ffd3df, #f7a9c0);
+  opacity: 0.9;
+  animation: petal 10s linear infinite;
+}
+@keyframes petal {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(24px, 28vh) rotate(90deg);
+  }
+  50% {
+    transform: translate(-10px, 55vh) rotate(180deg);
+  }
+  75% {
+    transform: translate(30px, 82vh) rotate(270deg);
+  }
+  100% {
+    transform: translate(6px, 110vh) rotate(360deg);
+  }
+}
+
 .view-enter-active,
 .view-leave-active {
   transition: opacity 0.9s ease;
@@ -287,7 +359,9 @@ const STREAKS = Array.from({ length: 4 }, (_, i) => ({ top: `${34 + i * 5}%`, de
   .cloud,
   .glint,
   .motes i,
-  .streak {
+  .streak,
+  .steam i,
+  .petals i {
     animation: none;
   }
 }

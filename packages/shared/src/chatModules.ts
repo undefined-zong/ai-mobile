@@ -1,7 +1,7 @@
 import type { ControlTagKind } from './tags.ts';
 
 /**
- * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、哄睡 [sleep]、一起运动 [exercise]、平行时空 [parallel]、玩具指令 <device>。
+ * 聊天里她能主动调用的模块：分享歌曲 [music:]、打电话 [call]、约学习 [study:]、约看片 [watch:]、约游戏 [game:]、哄睡 [sleep]、一起运动 [exercise]、一起休息 [rest:午睡]、平行时空 [parallel]、玩具指令 <device>。
  *
  * 日常聊天默认支持全部模块和游戏，世界书只提供提示词内容。
  */
@@ -61,8 +61,24 @@ export function parseWatchInvite(value: string): { kind: 'watch'; title: string;
   return title || link ? { kind: 'watch', title, link } : null;
 }
 
+/**
+ * [rest:午睡]：约一起休息，冒号后面是哪一种（休息的 id 和 rest.ts 的 REST_ACTIVITIES 一一对应）；不写或认不出来是 null（进去再选）
+ */
+export type RestInviteKind = 'nap' | 'walk' | 'bath' | 'sit' | 'music';
+const REST_WORDS: [RestInviteKind, RegExp][] = [
+  ['nap', /午睡|午觉|小睡|睡一会|眯一会|nap/i],
+  ['walk', /散步|走走|遛弯|walk/i],
+  ['bath', /泡澡|泡个澡|洗澡|温泉|bath/i],
+  ['sit', /静坐|冥想|打坐|呼吸|meditat|sit/i],
+  ['music', /听音乐|听歌|音乐|music/i],
+];
+export function parseRestInvite(value: string): { kind: 'rest'; activity: RestInviteKind | null } {
+  const t = value.trim();
+  return { kind: 'rest', activity: (t && REST_WORDS.find(([, re]) => re.test(t))?.[0]) || null };
+}
+
 /** 日常聊天支持的主动卡片模块 */
-export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'device'] as const satisfies readonly ControlTagKind[];
+export const MODULE_TAGS = ['music', 'call', 'study', 'watch', 'game', 'sleep', 'exercise', 'parallel', 'rest', 'device'] as const satisfies readonly ControlTagKind[];
 export type ModuleTag = (typeof MODULE_TAGS)[number];
 
 /** 模块的中文名（和"聊天 · 主动卡片"世界书的条目标题一致） */
@@ -75,6 +91,7 @@ export const MODULE_LABELS: Record<ModuleTag, string> = {
   sleep: '哄睡',
   exercise: '一起运动',
   parallel: '平行时空',
+  rest: '一起休息',
   device: '玩具指令（成人）',
 };
 

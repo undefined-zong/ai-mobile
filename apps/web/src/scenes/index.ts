@@ -10,6 +10,7 @@ import MealScene from './MealScene.vue';
 import MusicScene from './MusicScene.vue';
 import PokeScene from './PokeScene.vue';
 import ReadScene from './ReadScene.vue';
+import RestScene from './RestScene.vue';
 import SleepScene from './SleepScene.vue';
 import StudyScene from './StudyScene.vue';
 import WatchScene from './WatchScene.vue';
@@ -29,4 +30,5 @@ export const SCENE_COMPONENTS: Partial<Record<SceneId, Component>> = {
   home: HomeScene,
   heart: HeartScene,
   escape: EscapeScene,
+  rest: RestScene,
 };

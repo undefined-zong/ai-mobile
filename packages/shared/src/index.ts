@@ -32,6 +32,7 @@ export * from './scenes.ts';
 export * from './backgrounds.ts';
 export * from './locations.ts';
 export * from './escape.ts';
+export * from './rest.ts';
 export * from './environment.ts';
 export * from './weather.ts';
 export * from './proactive.ts';

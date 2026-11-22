@@ -58,7 +58,7 @@ export function todayDate(): string {
 
 const GAME_NAME: Record<string, string> = { soup: '海龟汤', truthdare: '真心话大冒险', flight: '飞行棋', decor: '装修小屋', workshop: '创意工坊', brawl: '大乱斗' };
 /** 没有结束卡片、只看"开始"的那几件事 */
-const ENTER_ONLY = new Set(['sleep', 'music', 'heart', 'escape', 'home', 'poke']);
+const ENTER_ONLY = new Set(['sleep', 'music', 'heart', 'escape', 'home', 'poke', 'rest']);
 
 const minutes = (sec: number) => Math.max(1, Math.round(sec / 60));
 

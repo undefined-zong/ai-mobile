@@ -344,7 +344,8 @@ export const useHubStore = defineStore('hub', () => {
         },
         flags: lifeFlags(personaOf(chat)),
         environment: useEnvironmentStore().settings, rules: DEFAULT_PROACTIVE_RULES,
-        busyUntil: ['study', 'sleep'].includes(chat.currentScene ?? '') ? chat.lastMessageAt + 4 * 3_600_000 : 0,
+        // 正陪着你学习、哄睡、休息时不来打扰
+        busyUntil: ['study', 'sleep', 'rest'].includes(chat.currentScene ?? '') ? chat.lastMessageAt + 4 * 3_600_000 : 0,
         preview: config.preview })];
     });
   }
