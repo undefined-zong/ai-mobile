@@ -246,11 +246,31 @@ async function refineNow() {
     return;
   }
   refine.value = r.value.refinements.length ? r.value : null;
+  picked.value = new Set(refineItems.value);
   if (!refine.value) showToast('没有要补的：每个地点能一起做的事都写全了');
+}
+/** 一条要补的事：哪个地点 + 哪件事（同一个地点同一件事只会补一次） */
+const itemKey = (locationId: string, sceneId: string) => `${locationId}|${sceneId}`;
+const refineItems = computed(() => refine.value?.refinements.flatMap((r) => r.activities.map((a) => itemKey(r.locationId, a.sceneId))) ?? []);
+/** 勾上的条目：每次生成完默认全勾，只补勾上的 */
+const picked = ref(new Set<string>());
+const pickedCount = computed(() => refineItems.value.filter((k) => picked.value.has(k)).length);
+function togglePick(key: string, on: boolean) {
+  const next = new Set(picked.value);
+  if (on) next.add(key);
+  else next.delete(key);
+  picked.value = next;
+}
+function pickAll(on: boolean) {
+  picked.value = new Set(on ? refineItems.value : []);
 }
 function useRefine() {
   if (!refine.value) return;
-  const n = rhythm.applyRefine(id.value, refine.value);
+  const refinements = refine.value.refinements
+    .map((r) => ({ ...r, activities: r.activities.filter((a) => picked.value.has(itemKey(r.locationId, a.sceneId))) }))
+    .filter((r) => r.activities.length);
+  if (!refinements.length) return;
+  const n = rhythm.applyRefine(id.value, { ...refine.value, refinements });
   refine.value = null;
   showToast(n ? `补上了 ${n} 件能一起做的事，地点和布局没动` : '没有要补的了');
 }
@@ -515,18 +535,30 @@ const activityText = (a: LocationActivity) => (a.label === sceneName(a.sceneId) 
                 <van-button v-if="built" round block size="small" :loading="busy === 'build'" @click="rebuild">重建小世界</van-button>
               </div>
               <div v-if="refine" data-testid="refine-preview">
-                <div class="sub">要补上的（地点、布局、作息都不动，看过再用）</div>
+                <div class="sub flex items-center">
+                  <span class="flex-1 min-w-0">要补上的（勾上的才补；地点、布局、作息都不动）</span>
+                  <button class="text-accent-ink shrink-0" @click="pickAll(pickedCount < refineItems.length)">{{ pickedCount < refineItems.length ? '全选' : '全不选' }}</button>
+                </div>
                 <div v-for="r in refine.refinements" :key="r.locationId" class="loc">
                   <span :class="locations.find((l) => l.id === r.locationId)?.icon" class="text-accent-ink shrink-0" />
                   <span class="flex-1 min-w-0">
                     <span class="text-[14px]">{{ locations.find((l) => l.id === r.locationId)?.name ?? r.locationId }}</span>
-                    <span class="block text-[12px] text-ink-3">＋ {{ r.activities.map(activityText).join('、') }}</span>
+                    <van-checkbox
+                      v-for="a in r.activities"
+                      :key="a.sceneId"
+                      :model-value="picked.has(itemKey(r.locationId, a.sceneId))"
+                      icon-size="16px"
+                      class="pick"
+                      @update:model-value="(v: boolean) => togglePick(itemKey(r.locationId, a.sceneId), v)"
+                    >
+                      <span class="text-[13px]">{{ activityText(a) }}</span>
+                    </van-checkbox>
                   </span>
                 </div>
                 <div class="text-[12px] text-ink-3 mt-2">{{ refine.model }} 写的</div>
                 <div class="flex gap-2 mt-3">
                   <van-button round block size="small" :loading="busy === 'refine'" @click="refineNow">再生成一次</van-button>
-                  <van-button type="primary" round block size="small" data-testid="use-refine" @click="useRefine">补上这些</van-button>
+                  <van-button type="primary" round block size="small" :disabled="!pickedCount" data-testid="use-refine" @click="useRefine">{{ pickedCount ? `补上选中的 ${pickedCount} 件` : '还没勾' }}</van-button>
                 </div>
                 <button class="text-[13px] text-ink-3 mt-2 w-full" @click="refine = null">先不用</button>
               </div>
@@ -592,6 +624,9 @@ const activityText = (a: LocationActivity) => (a.label === sceneName(a.sceneId) 
   align-items: flex-start;
   gap: 8px;
   padding: 5px 0;
+}
+.pick {
+  margin-top: 6px;
 }
 .kv {
   display: flex;
