@@ -15,7 +15,7 @@ import { useCharacterStore } from '@/stores/characters';
 import { useChatStore } from '@/stores/chat';
 import { uid } from '@/utils/id';
 import { readTextFile } from '@/utils/text';
-import { fetchYouTubeMeta, parseVideoLink, PLATFORM_LABEL, trackYouTube, youTubeErrorText, type YouTubeInfo } from '@/utils/videoLink';
+import { EMBED_NO_FULLSCREEN, fetchYouTubeMeta, parseVideoLink, PLATFORM_LABEL, trackYouTube, youTubeErrorText, type YouTubeInfo } from '@/utils/videoLink';
 
 /**
  * 一起观影（设计文档 §9.9）。AI 不直接看视频，看法有三种：
@@ -460,11 +460,29 @@ const canTheater = computed(() => source.value !== 'elsewhere');
 /** 屏幕竖着：里面的内容框宽高对调、转 90° */
 const boxStyle = computed(() => (theaterRotated.value ? { width: `${theaterSize.value.h}px`, height: `${theaterSize.value.w}px`, left: `${theaterSize.value.w}px` } : {}));
 /**
- * 播放器自己的全屏会盖住弹幕：手机上把它关掉（YouTube 加 fs=0，iframe 不给全屏权限，视频不显示全屏按钮），全屏用放映厅。
+ * 播放器自己的全屏会盖住弹幕（iPhone 上是换成系统播放器，网页上的东西都盖不上去）：手机上全屏一律用放映厅。
+ * - 能关的关掉（EMBED_NO_FULLSCREEN：YouTube 加 fs=0），iframe 也不给全屏权限；
+ * - 关不掉的（B 站，iPhone 上不给权限也照样能进系统播放器）：它右下角的全屏按钮上盖一块透明的，点了进放映厅，在放映厅里点是叫出顶上那一条；
+ * - <video> 自带的全屏按钮 iPhone 上关不掉（controlslist 不认）：进了系统播放器马上退回页面里，同样进放映厅。
  * 电脑上照旧
  */
-const frameSrc = computed(() => (handheld && link.value?.platform === 'youtube' ? `${embedSrc.value}&fs=0` : embedSrc.value));
+const embedFsParam = computed(() => (link.value && link.value.platform !== 'direct' ? EMBED_NO_FULLSCREEN[link.value.platform] : null));
+const frameSrc = computed(() => (handheld && embedFsParam.value ? `${embedSrc.value}&${embedFsParam.value}` : embedSrc.value));
 const frameAllow = handheld ? 'autoplay; encrypted-media; picture-in-picture' : 'autoplay; fullscreen; encrypted-media; picture-in-picture';
+const fsShield = computed(() => handheld && canTheater.value && !embedFsParam.value);
+/** 播放器自己的全屏按钮被点了：没在放映厅就进，在了就叫出顶上那一条 */
+function onPlayerFullscreen() {
+  if (inTheater.value) pokeBar();
+  else enterTheater();
+}
+type PresentableVideo = HTMLVideoElement & { webkitPresentationMode?: string; webkitSetPresentationMode?: (mode: string) => void };
+function onPresentationMode(e: Event) {
+  const v = e.target as PresentableVideo;
+  if (!handheld || !canTheater.value || v.webkitPresentationMode !== 'fullscreen') return;
+  // 等这次切换的事件派发完再切回页面里
+  setTimeout(() => v.webkitSetPresentationMode?.('inline'));
+  onPlayerFullscreen();
+}
 // 视频放不了：出来看原因
 watch(videoError, (e) => e && exitTheater());
 
@@ -633,18 +651,13 @@ onBeforeUnmount(() => {
             @pause="playing = false"
             @seeked="onSeek"
             @loadedmetadata="videoDuration = videoEl?.duration ?? 0"
+            @webkitpresentationmodechanged="onPresentationMode"
             @error="videoError = source === 'link' ? '这个链接放不了：可能失效了、不是视频文件，或者网站不让别的网页播放' : '这个视频浏览器放不了'"
           />
-          <iframe
-            v-else-if="source === 'link' && link && link.platform !== 'direct'"
-            ref="frameEl"
-            class="video"
-            :src="frameSrc"
-            :title="`${PLATFORM_LABEL[link.platform]}播放器`"
-            :allow="frameAllow"
-            :allowfullscreen="!handheld"
-            data-testid="player-frame"
-          />
+          <template v-else-if="source === 'link' && link && link.platform !== 'direct'">
+            <iframe ref="frameEl" class="video" :src="frameSrc" :title="`${PLATFORM_LABEL[link.platform]}播放器`" :allow="frameAllow" :allowfullscreen="!handheld" data-testid="player-frame" />
+            <button v-if="fsShield" type="button" class="fs-shield" :aria-label="inTheater ? '显示按钮' : '全屏'" data-testid="player-fs-shield" @click="onPlayerFullscreen" />
+          </template>
           <div v-else class="elsewhere">
             <div class="num text-[34px] font-700">{{ mediaClock(t) }}</div>
             <div class="text-[13px] text-ink-2 mt-1 px-4 text-center line-clamp-2">{{ curCue?.text ?? '　' }}</div>
@@ -998,6 +1011,16 @@ onBeforeUnmount(() => {
   background: #000;
   border: 0;
   display: block;
+}
+/* 盖住嵌入播放器右下角它自己的全屏按钮（播放器的控制条贴着底边，全屏按钮在最右） */
+.fs-shield {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  width: 56px;
+  height: 48px;
+  background: transparent;
 }
 .elsewhere {
   height: 100%;
