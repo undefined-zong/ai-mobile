@@ -109,6 +109,11 @@ export const syncState = reactive({
   needsReload: false,
   /** 云端还有更早消息没拉下来的聊天 */
   older: {} as Record<string, true>,
+  /**
+   * 本机没有的图片、语音可以再去云端取一次了（每次加一）：别的设备的文件传上来了、刚连上云端、上次没取成的到了重试的时候。
+   * 显示不出来的图（components 里的 AssetImg、GenImage）看着它，变了就再取一次，不用重新打开页面
+   */
+  arrivals: 0,
 });
 
 let api: SyncApi | null = null;
@@ -231,6 +236,17 @@ function hooks() {
     changed: on ? soon : undefined,
     miss: fetchMissing,
   });
+  noteReachable();
+}
+
+/** 现在能不能从云端取大文件（fetchMissing 的条件） */
+const canFetch = () => !!api && !!blobs && meta.enabled && !!meta.hub && meta.hub === hubUrl;
+let reachable = false;
+/** 刚能从云端取大文件（打开 App 后连上了 Worker、第一次对齐完）：之前取不到的图再取一次 */
+function noteReachable() {
+  const now = canFetch();
+  if (now && !reachable) syncState.arrivals++;
+  reachable = now;
 }
 
 // —— 对外 ——
@@ -366,6 +382,7 @@ async function cycle() {
       if (!(await pushAll())) break;
     }
     syncState.lastAt = Date.now();
+    retryMisses();
   } catch (e) {
     syncState.error = e instanceof Error ? e.message : String(e);
     throw e;
@@ -504,6 +521,8 @@ async function applyStore(store: StoreName, list: SyncRecord[]) {
   const statePuts: { key: string; value: RecordState }[] = [];
   const settled: OutboxEntry[] = [];
   const changes: RemoteChange[] = [];
+  /** 本机没有的大文件到了云端（另一台设备刚传上来的图） */
+  let arrived = false;
   for (let i = 0; i < recs.length; i++) {
     const r = recs[i]!;
     const st = states[i];
@@ -521,6 +540,13 @@ async function applyStore(store: StoreName, list: SyncRecord[]) {
       } else {
         statePuts.push({ key: stateKey(store, r.id), value: { s: r.seq, h: hashText(canonical(r.data)), ...(exists.get(r.id) ? {} : { lazy: r.data }) } });
         if (pending) settled.push(pending);
+        if (!exists.get(r.id)) {
+          // 之前去云端取过、那时还没有的（朋友圈先到、图后到）：不用等重试的时间，马上能取
+          const id = missKey(store, r.id);
+          notThere.delete(id);
+          if (fetching.has(id)) landed.add(id);
+          arrived = true;
+        }
       }
       continue;
     }
@@ -561,6 +587,8 @@ async function applyStore(store: StoreName, list: SyncRecord[]) {
   }
   if (!(await write(store, puts, dels, { sync: true }))) throw new Error('同步的数据写不进本机存储');
   await write('syncState', statePuts, [], { sync: true });
+  // 引用记下了再告诉界面：显示不出来的图这时再取就取得到
+  if (arrived) syncState.arrivals++;
   if (settled.length) await removeOutbox(settled);
   if (changes.length) {
     const unhandled = applyRemote(store, changes).filter((key) => !memoryless(store, key));
@@ -764,17 +792,45 @@ export async function cloudBackedAssets(keys: string[]): Promise<boolean[]> {
 // —— 用到时再下载 ——
 
 const fetching = new Map<string, Promise<unknown>>();
-const notThere = new Map<string, number>();
+/**
+ * 去云端没取成的（云端还没有：另一台设备先推了朋友圈、图还在传；下载出错）：until 之前不再去取。
+ * 一直取不到时越等越久（30 秒起，每次翻倍，最多 30 分钟）；这个文件同步过来了就马上能取（applyStore 里清掉）。
+ * told：到了重试的时间、已经告诉界面再取一次了
+ */
+const notThere = new Map<string, { until: number; wait: number; told?: boolean }>();
+const MISS_FIRST = 30_000;
+const MISS_MAX = 30 * 60_000;
+const missKey = (store: string, key: string) => `${store}\u0000${key}`;
+/** 正在取的时候同步过来了的：这次没取到也不用等，界面马上再取 */
+const landed = new Set<string>();
 let downloads = 0;
 const waiters: (() => void)[] = [];
+
+function missedAgain(id: string) {
+  if (landed.delete(id)) return;
+  const wait = Math.min(MISS_MAX, (notThere.get(id)?.wait ?? MISS_FIRST / 2) * 2);
+  notThere.set(id, { until: Date.now() + wait, wait });
+}
+
+/** 同步完一轮：上次没取成、到了重试时间的，让界面上显示不出来的图再取一次 */
+function retryMisses() {
+  const now = Date.now();
+  let due = false;
+  for (const m of notThere.values()) {
+    if (m.told || m.until > now) continue;
+    m.told = true;
+    due = true;
+  }
+  if (due) syncState.arrivals++;
+}
 
 /** 本机读不到的大文件（图片、模型、书的原文件）：在别的设备上同步过的话从云端取回来 */
 async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
   if (!isLazy(store, key) || !api || !blobs || !meta.enabled || !meta.hub || meta.hub !== hubUrl) return undefined;
-  const id = `${store}\u0000${key}`;
+  const id = missKey(store, key);
   const running = fetching.get(id);
   if (running) return running;
-  if ((notThere.get(id) ?? 0) > Date.now()) return undefined;
+  if ((notThere.get(id)?.until ?? 0) > Date.now()) return undefined;
   const job = (async () => {
     // 同时最多下载 3 个
     if (downloads >= 3) await new Promise<void>((resolve) => waiters.push(resolve));
@@ -787,7 +843,7 @@ async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
         // 记录还没拉到（别的设备先推了消息、后推的图）：单独问一下
         const { record } = await api!.json<{ record: SyncRecord | null }>(`/v1/sync/record?kind=${encodeURIComponent(store)}&parent=&id=${encodeURIComponent(key)}`);
         if (!record || record.deleted) {
-          notThere.set(id, Date.now() + 60_000);
+          missedAgain(id);
           return undefined;
         }
         ref = record.data;
@@ -795,10 +851,12 @@ async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
       const value = await decodeBinary(await expand(ref), blobs!);
       await write(store, [{ key, value }], [], { sync: true });
       if (st) await write('syncState', [{ key: stateKey(store, key), value: { s: st.s, h: st.h } }], [], { sync: true });
+      notThere.delete(id);
+      landed.delete(id);
       return value;
     } catch (e) {
       console.warn(`同步：取不回 ${store} ${key}`, e);
-      notThere.set(id, Date.now() + 60_000);
+      missedAgain(id);
       return undefined;
     } finally {
       downloads--;

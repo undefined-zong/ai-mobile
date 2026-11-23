@@ -1,31 +1,19 @@
 <script setup lang="ts">
 import type { Character, MessagePart } from '@app/shared';
-import { ref, watch } from 'vue';
 import CgArt from './CgArt.vue';
-import { assetUrl } from '@/services';
+import { useAssetSrc } from '@/composables/useAssetSrc';
 
 /**
  * 配图：生成好的图从本机素材库按 key 取出来显示；还在画、画失败或者是演示数据时显示占位画。
  * key 也可能直接是链接（服务商只给了链接、浏览器取不回字节时）。
+ * 别的设备画的、图还没传上云端时先显示占位画，传上来以后自己换成图（useAssetSrc）。
  */
 const props = withDefaults(defineProps<{ part: Extract<MessagePart, { type: 'image' }>; character: Character; scene?: string; expression?: string }>(), {
   scene: 'library',
   expression: 'shy',
 });
 
-const url = ref<string | null>(null);
-let token = 0;
-watch(
-  () => props.part.assetKey,
-  async (key) => {
-    const mine = (token += 1);
-    url.value = null;
-    if (!key) return;
-    const resolved = /^(?:https?:|data:|blob:)/.test(key) ? key : await assetUrl(key);
-    if (mine === token) url.value = resolved;
-  },
-  { immediate: true },
-);
+const { src: url } = useAssetSrc(() => ({ key: props.part.assetKey }));
 </script>
 
 <template>

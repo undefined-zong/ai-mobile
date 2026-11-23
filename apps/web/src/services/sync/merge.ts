@@ -127,7 +127,8 @@ function uniqueStrings(a: unknown[]): a is string[] {
  * 三方合并：base 是上次同步时的样子（不知道时为 undefined），local 是本机改过的，remote 是别的设备改过的。
  * - 只有一边改了：用改了的那边；
  * - 对象按键、带 id 的数组按 id 逐个合并（一边加的、一边删的都保留下来）；
- * - 长度不变的简单数组按位置合并，不重复的字符串数组按集合合并；
+ * - 长度不变的简单数组、长度不变的没有 id 的对象数组按位置合并，不重复的字符串数组按集合合并；
+ * - 没有底稿时一边是 null、一边有值：留有值的；
  * - 同一个值两边改得不一样：preferLocal（本机改得更晚）时用本机的，否则用云端的。
  */
 export function mergeValue(base: unknown, local: unknown, remote: unknown, preferLocal: boolean): unknown {
@@ -135,6 +136,10 @@ export function mergeValue(base: unknown, local: unknown, remote: unknown, prefe
   if (base !== undefined) {
     if (same(base, local)) return remote;
     if (same(base, remote)) return local;
+  } else {
+    // 没底稿（两台设备各自写下的同一处）：一边还是空的、一边有了值，留有值的（同一条朋友圈一台画好了图、一台还没有）
+    if (local === null) return remote;
+    if (remote === null) return local;
   }
   if (isPlainObject(local) && isPlainObject(remote)) {
     const b = isPlainObject(base) ? base : undefined;
@@ -149,6 +154,12 @@ export function mergeValue(base: unknown, local: unknown, remote: unknown, prefe
   if (Array.isArray(local) && Array.isArray(remote)) {
     const b = Array.isArray(base) ? base : undefined;
     if ((local.length || remote.length) && idArray(local) && idArray(remote) && (!b || idArray(b))) return mergeById(b, local, remote, preferLocal);
+    // 长度没变、没有 id 的对象数组（朋友圈、帖子的配图）：按位置逐个合并。
+    // 一台设备画好了这张图、另一台记下了没画出来的原因时两样都留下，图不会被整组换掉
+    if (local.length && local.length === remote.length && (!b || b.length === local.length)
+      && local.every(isPlainObject) && remote.every(isPlainObject) && (!b || b.every(isPlainObject))) {
+      return local.map((x, i) => mergeValue(b?.[i], x, remote[i], preferLocal));
+    }
     if (primitives(local) && primitives(remote) && (!b || primitives(b))) {
       if (b && b.length === local.length && b.length === remote.length) {
         return local.map((x, i) => (same(b[i], x) ? remote[i] : same(b[i], remote[i]) ? x : preferLocal ? x : remote[i]));
