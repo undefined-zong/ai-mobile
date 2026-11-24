@@ -1,6 +1,7 @@
 import { SYNC_BLOB_PART_CHARS, SYNC_PUSH_MAX_BYTES, SYNC_PUSH_MAX_RECORDS, SYNC_RECORD_MAX_BYTES, syncBlobParts, type SyncBlobCheck, type SyncBlobInfo, type SyncPushRecord, type SyncPushResult } from '@app/shared';
 import type { Env } from './env.ts';
 import { assert, HttpError, json, readJson } from './http.ts';
+import { runSyncCleanup } from './syncCleanup.ts';
 
 /**
  * 多设备同步（设计文档 §12）：连着同一个 Worker 的设备看到同一份聊天、朋友圈、社群、记忆、角色和设置。
@@ -277,6 +278,8 @@ export async function syncApi(request: Request, env: Env, url: URL, deviceId: st
   if (path === '/v1/sync/older' && method === 'GET') return older(env, url);
   if (path === '/v1/sync/record' && method === 'GET') return one(env, url);
   if (path === '/v1/sync/blobs/check' && method === 'POST') return checkBlobs(request, env);
+  // 马上清一次云端的图片和文件（平时 Cron 每天清一次）
+  if (path === '/v1/sync/cleanup' && method === 'POST') return json({ ok: true, ...(await runSyncCleanup(env, Date.now(), true)) });
   const blob = path.match(/^\/v1\/sync\/blobs\/([0-9a-f]{64})$/);
   if (blob) {
     if (method === 'PUT') return putBlob(request, env, url, blob[1]!);

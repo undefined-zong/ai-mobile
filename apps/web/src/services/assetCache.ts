@@ -103,14 +103,14 @@ function pinnedKeys(): Set<string> {
 }
 
 /** 素材是哪天放进来的（按引用它的消息、朋友圈、帖子、图库、作品的时间）：以前没记过"上次用到"的按这个算 */
-function referenceDays(): Map<string, number> {
+function referenceDays(byCreation = false): Map<string, number> {
   const out = new Map<string, number>();
   const note = (time: number | undefined) => (key: string) => {
     const d = Math.floor((time || Date.now()) / DAY);
     if ((out.get(key) ?? -1) < d) out.set(key, d);
   };
   for (const list of Object.values(useChatStore().messages)) for (const m of list ?? []) collect(m.parts, note(m.createdAt));
-  for (const m of useSocialStore().moments) collect(m, note(m.updatedAt ?? m.createdAt));
+  for (const m of useSocialStore().moments) collect(m, note(byCreation ? m.createdAt : (m.updatedAt ?? m.createdAt)));
   for (const p of useCommunityStore().posts) collect(p, note(p.createdAt));
   for (const g of useGalleryStore().items) collect(g, note(g.at));
   for (const d of useWorkshopStore().drawings) collect(d, note(d.at));
@@ -159,10 +159,13 @@ export async function cleanAssetCache(): Promise<number> {
   }
 }
 
-/** 最近两周的消息、朋友圈、帖子、图库、作品里用到的图：这台设备推过的，核对云端真的有（没有的重传） */
+/**
+ * 最近两周新建的消息、朋友圈、帖子、图库、作品里用到的图：这台设备推过的，核对云端真的有（没有的重传）。
+ * 按新建的时间算：云端满 30 天会清掉聊天、朋友圈的图，老朋友圈最近有人点赞也不会把它的图传回去
+ */
 export async function verifyRecentUploads(): Promise<number> {
   const since = today() - 14;
-  const keys = [...referenceDays()].filter(([, d]) => d >= since).map(([k]) => k);
+  const keys = [...referenceDays(true)].filter(([, d]) => d >= since).map(([k]) => k);
   return verifyUploaded(keys);
 }
 

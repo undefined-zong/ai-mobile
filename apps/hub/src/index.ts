@@ -3,6 +3,7 @@ import { communitySettingsValid, type DiaryContext, type DiaryEntry, normalizeMc
 import { digest, equalSecret, seal } from './crypto.ts';
 import { assert, HttpError, json, readJson } from './http.ts';
 import { syncApi, syncStatus } from './sync.ts';
+import { runSyncCleanup } from './syncCleanup.ts';
 import type { Env } from './env.ts';
 import { PushDeliveryError, sendChannel, type Channel, type Webhook } from './push.ts';
 import { getMeta, runScheduled, setMeta } from './scheduler.ts';
@@ -830,7 +831,7 @@ export default {
     const jobs = await Promise.allSettled([runScheduled(env, controller.scheduledTime), runRhythmScheduled(env, controller.scheduledTime), runMemoryScheduled(env, controller.scheduledTime),
       runSocialScheduled(env, controller.scheduledTime), runCommunityScheduled(env, controller.scheduledTime), runPlannerScheduled(env, controller.scheduledTime),
       runParallelScheduled(env, controller.scheduledTime), runHealthScheduled(env, controller.scheduledTime), runParallelPlanScheduled(env, controller.scheduledTime),
-      runDiaryScheduled(env, controller.scheduledTime)]);
+      runDiaryScheduled(env, controller.scheduledTime), runSyncCleanup(env, controller.scheduledTime)]);
     const failure = jobs.find((r) => r.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
   },
