@@ -257,6 +257,28 @@ export const useMemoryStore = defineStore('memory', () => {
     return summariesOf(chatId).filter((s) => !s.mergedInto);
   }
 
+  /**
+   * 这条聊天整理到的那条消息：聊天上记的那条，或者时间线最后一段的终点（那条消息被删了、没同步到这台设备时按时间算）。
+   * 两者取靠后的：聊天上记的那条丢了、或者同步时被旧值盖掉，都不会让整理从头再来一遍。一段都没整理过时为 undefined
+   */
+  function summarizedMark(chat: Chat): ((m: Message) => boolean) | undefined {
+    let end: ChapterSummary | undefined;
+    for (const s of summaries.value) {
+      if (s.chatId === chat.id && !s.deleted && !s.duplicateOf && (!end || s.toAt > end.toAt)) end = s;
+    }
+    const id = chat.summaryUntilMessageId;
+    if (!id && !end) return undefined;
+    return (m) => m.id === id || (!!end && (m.id === end.toMessageId || m.createdAt <= end.toAt));
+  }
+
+  /** 整理到的那条在 list（从旧到新）里的位置；list 里一条都没整理过时为 -1 */
+  function summarizedIndex(chat: Chat, list: readonly Message[]): number {
+    const mark = summarizedMark(chat);
+    if (!mark) return -1;
+    for (let i = list.length - 1; i >= 0; i -= 1) if (mark(list[i] as Message)) return i;
+    return -1;
+  }
+
   /** 该合并的组：同一层最早的 4 段还没合并（四进制进位，从低层往高层） */
   function pendingRollups(chatId: string): ChapterSummary[][] {
     const open = timelineOf(chatId);
@@ -506,6 +528,8 @@ export const useMemoryStore = defineStore('memory', () => {
     removeSlice,
     summariesOf,
     timelineOf,
+    summarizedMark,
+    summarizedIndex,
     pendingRollups,
     addSummary,
     rollup,

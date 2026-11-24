@@ -29,7 +29,7 @@ import { useAiStore } from './ai';
 import { useAppStore } from './app';
 import { useCharacterStore } from './characters';
 import { useRealWorldStore } from './realworld';
-import { autoSave, chatMessageKeys, getAll, msgKey, recentMessages, splitMsgKey, write, writeTogether, type RemoteChange } from '@/db/idb';
+import { autoSave, chatMessageKeys, countRecentMessages, getAll, msgKey, recentMessages, splitMsgKey, write, writeTogether, type RemoteChange } from '@/db/idb';
 import { applyList } from '@/services/sync/apply';
 import { buildChats, buildMessages } from '@/mock/chats';
 import { services } from '@/services';
@@ -38,7 +38,7 @@ import { describePhoto } from '@/services/photos';
 import { sessionSummary as musicSummary, stop as stopMusic } from '@/services/musicPlayer';
 import { assembleForChat, messageToText, personaOf, sceneTags, storeRegex, toLLMMessages, type ChatPrompt } from '@/services/prompt';
 import { latestRecall, noteRecallUsed, prefetchRecall } from '@/services/recall';
-import { backfillChat, pendingForSummary, summarizeChat, type BackfillProgress, type SummaryOutcome } from '@/services/summary';
+import { backfillChat, pendingForSummary, summarizable, summarizeChat, SUMMARY_KEEP_RECENT, type BackfillProgress, type SummaryOutcome } from '@/services/summary';
 import { useMemoryStore } from './memory';
 import { useMessageSettingsStore } from './messageSettings';
 import { useToyStore } from './toys';
@@ -183,7 +183,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     // 每个聊天只把最近的读进内存（至少 WINDOW 条，没整理的那段也读进来，最多 WINDOW_CAP 条）：几十万条的聊天打开也不占几百 MB
     const pages = await Promise.all(cs.map((c) => recentMessages<Message>(c.id, {
-      n: WINDOW, cap: WINDOW_CAP, until: c.summaryUntilMessageId ? (m) => m.id === c.summaryUntilMessageId : undefined,
+      n: WINDOW, cap: WINDOW_CAP, until: useMemoryStore().summarizedMark(c),
     })));
     const fixed: { key: string; value: unknown }[] = [];
     cs.forEach((c, i) => {
@@ -242,19 +242,36 @@ export const useChatStore = defineStore('chat', () => {
     return add.length;
   }
 
+  /** 整理到的那条不在内存里（内存里只放了最近的），本机库里还有更早的：没整理的那段有一部分还在库里 */
+  function summaryOutsideMemory(chatId: string): boolean {
+    const chat = chatById(chatId);
+    return !!chat && !!earlierInDb[chatId] && useMemoryStore().summarizedIndex(chat, list(chatId)) < 0;
+  }
+
   /** 整理要从上次整理到的地方接着来：那条之后的都读进内存（从没整理过就全读） */
   async function loadSinceSummary(chatId: string) {
-    const p = chatById(chatId)?.summaryUntilMessageId;
-    if (!earlierInDb[chatId] || (p && list(chatId).some((m) => m.id === p))) return;
-    await loadEarlier(chatId, 0, { until: p ? (m) => m.id === p : () => false, cap: Infinity });
+    const chat = chatById(chatId);
+    if (!chat || !summaryOutsideMemory(chatId)) return;
+    await loadEarlier(chatId, 0, { until: useMemoryStore().summarizedMark(chat) ?? (() => false), cap: Infinity });
+  }
+
+  /**
+   * 还没整理的有几条，按本机库里的全部消息数（和开始补整理时读进内存的那段一样）；整理到的那条在内存里时为 null，直接按内存里的算。
+   * 只数不读进内存
+   */
+  async function storedPending(chatId: string): Promise<number | null> {
+    const chat = chatById(chatId);
+    if (!chat || !summaryOutsideMemory(chatId)) return null;
+    await messageSaver.flush();
+    return countRecentMessages<Message>(chatId, { skip: SUMMARY_KEEP_RECENT, keep: summarizable, stop: useMemoryStore().summarizedMark(chat) });
   }
 
   /** 离开聊天时：内存里只留最近 WINDOW 条（和还没整理的那段），更早的留在库里，用到时再读 */
   async function trimWindow(chatId: string) {
     const cur = messages.value[chatId];
-    if (!cur || cur.length <= WINDOW || streams[chatId] || summarizing[chatId]) return;
-    const p = chatById(chatId)?.summaryUntilMessageId;
-    const at = p ? cur.findIndex((m) => m.id === p) : -1;
+    const chat = chatById(chatId);
+    if (!chat || !cur || cur.length <= WINDOW || streams[chatId] || summarizing[chatId]) return;
+    const at = useMemoryStore().summarizedIndex(chat, cur);
     const from = Math.min(cur.length - WINDOW, at >= 0 ? at : Infinity);
     if (from <= 0) return;
     // 没写完的先写掉，再从内存里拿掉（不当成删除）
@@ -723,8 +740,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!chat || chat.currentScene || summarizing[chatId] || streams[chatId] || !useAiStore().isLive('summary')) return;
     if ((summaryBackoff.get(chatId) ?? 0) > Date.now()) return;
     // 上次整理到的那条不在内存里（没整理的太多，或者从没整理过的长聊天）：自动整理会跳过中间那段，交给"补整理"
-    const p = chat.summaryUntilMessageId;
-    if (earlierInDb[chatId] && !(p && list(chatId).some((m) => m.id === p))) return;
+    if (summaryOutsideMemory(chatId)) return;
     if (pendingForSummary(chat, list(chatId)).length < useMessageSettingsStore().summaryEvery()) return;
     summarizing[chatId] = true;
     try {
@@ -1084,9 +1100,10 @@ export const useChatStore = defineStore('chat', () => {
   /** 已经总结过的消息被改或删了：相关片段要重新生成，相关记忆标"来源改过"（记忆本里提示复核） */
   function sourceChanged(chatId: string, ids: string[]) {
     const chat = chatById(chatId);
-    if (!chat?.summaryUntilMessageId) return;
+    if (!chat) return;
     const msgs = list(chatId);
-    const until = msgs.findIndex((m) => m.id === chat.summaryUntilMessageId);
+    const until = useMemoryStore().summarizedIndex(chat, msgs);
+    if (until < 0) return;
     const covered = ids.filter((id) => {
       const i = msgs.findIndex((m) => m.id === id);
       return i >= 0 && i <= until;
@@ -1361,6 +1378,8 @@ export const useChatStore = defineStore('chat', () => {
     summarizeNow,
     backfills,
     backfill,
+    summaryOutsideMemory,
+    storedPending,
     pauseBackfill,
     refreshRecall,
     ensureRecall,

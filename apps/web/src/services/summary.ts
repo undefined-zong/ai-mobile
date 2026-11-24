@@ -39,10 +39,15 @@ export interface SummaryOutcome {
   presetName: string;
 }
 
-/** 还没总结、已经定稿的消息（失败的、被打断的不算） */
+/** 能整理的消息：已经定稿的（失败的、被打断的、空的不算） */
+export function summarizable(m: Message): boolean {
+  return !m.meta.error && !m.meta.interrupted && !!(m.text || m.parts.length);
+}
+
+/** 还没总结、已经定稿的消息（整理到哪了见记忆 store 的 summarizedIndex） */
 export function pendingForSummary(chat: Chat, list: Message[]): Message[] {
-  const at = chat.summaryUntilMessageId ? list.findIndex((m) => m.id === chat.summaryUntilMessageId) : -1;
-  return list.slice(at + 1, Math.max(at + 1, list.length - SUMMARY_KEEP_RECENT)).filter((m) => !m.meta.error && !m.meta.interrupted && (m.text || m.parts.length));
+  const at = useMemoryStore().summarizedIndex(chat, list);
+  return list.slice(at + 1, Math.max(at + 1, list.length - SUMMARY_KEEP_RECENT)).filter(summarizable);
 }
 
 const norm = (s: string) => s.replace(/[\s\p{P}]/gu, '');

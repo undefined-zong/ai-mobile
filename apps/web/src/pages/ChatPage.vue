@@ -103,7 +103,7 @@ watch(
 const shownFrom = computed(() => {
   const s = msgSettings.settings;
   const limitFrom = s.showLimit ? messages.value.length - s.showLast : 0;
-  const summarized = s.hideSummarized && chat.value?.summaryUntilMessageId ? messages.value.findIndex((m) => m.id === chat.value?.summaryUntilMessageId) + 1 : 0;
+  const summarized = s.hideSummarized && chat.value ? memoryStore.summarizedIndex(chat.value, messages.value) + 1 : 0;
   return Math.max(0, Math.max(limitFrom, summarized) - earlier.value);
 });
 async function showEarlier() {

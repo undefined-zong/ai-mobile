@@ -21,7 +21,7 @@ import { useCommunityStore } from './community';
 import { useEnvironmentStore } from './environment';
 import { useLibraryStore } from './library';
 import { useMemoryStore } from './memory';
-import { afterSummarized, lastN, useMessageSettingsStore } from './messageSettings';
+import { lastN, useMessageSettingsStore } from './messageSettings';
 import { useRhythmStore } from './rhythm';
 import { useHealthStore } from './health';
 import { useParallelStore } from './parallel';
@@ -333,7 +333,7 @@ export const useHubStore = defineStore('hub', () => {
         chatLength: chats.list(chat.id).filter((m) => !m.deleted && !m.meta.error && !m.meta.interrupted).length,
         // 消息设置 → 发送条数、已总结的消息不发送：云端主动消息的上下文同样截取
         history: lastN(
-          (msgSettings.settings.dropSummarized ? afterSummarized(chats.list(chat.id), chat.summaryUntilMessageId) : chats.list(chat.id)).filter((m) => !m.meta.error && !m.meta.interrupted),
+          (msgSettings.settings.dropSummarized ? chats.list(chat.id).slice(useMemoryStore().summarizedIndex(chat, chats.list(chat.id)) + 1) : chats.list(chat.id)).filter((m) => !m.meta.error && !m.meta.interrupted),
           msgSettings.sendCount(),
         ).slice(-200),
         // 只传排期要用的待跟进、每次都带的和最重要的几十条，记忆再多也不会超长

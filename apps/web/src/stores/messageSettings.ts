@@ -97,16 +97,6 @@ export const useMessageSettingsStore = defineStore('messageSettings', () => {
   return { settings, hydrate, sendCount, summaryEvery, memoryOptions };
 });
 
-/**
- * 已经总结过的消息之后的部分（总结覆盖到 untilId 那条为止）。untilId 为空或找不到时原样返回。
- * "已总结的消息不发送给 AI"和"自动隐藏已总结的消息"都用它
- */
-export function afterSummarized<T extends { id: string }>(list: readonly T[], untilId: string | null | undefined): T[] {
-  if (!untilId) return [...list];
-  const at = list.findIndex((m) => m.id === untilId);
-  return at < 0 ? [...list] : list.slice(at + 1);
-}
-
 /** 只留最后 n 条；n 不给时不限，为 0 时一条不留（slice(-0) 是整个数组，不能直接用） */
 export function lastN<T>(list: readonly T[], n: number | undefined): T[] {
   if (n === undefined) return [...list];
