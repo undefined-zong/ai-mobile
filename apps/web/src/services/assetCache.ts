@@ -1,7 +1,7 @@
 import { reactive } from 'vue';
 import { getKeys, getOne, registerFlusher, write } from '@/db/idb';
 import { setAssetUseHook } from '@/services/assets';
-import { cloudBackedAssets, syncState } from '@/services/sync';
+import { cloudBackedAssets, syncState, verifyUploaded } from '@/services/sync';
 import { useCharacterStore } from '@/stores/characters';
 import { usePersonaStore } from '@/stores/personas';
 import { useChatStore } from '@/stores/chat';
@@ -159,12 +159,23 @@ export async function cleanAssetCache(): Promise<number> {
   }
 }
 
+/** 最近两周的消息、朋友圈、帖子、图库、作品里用到的图：这台设备推过的，核对云端真的有（没有的重传） */
+export async function verifyRecentUploads(): Promise<number> {
+  const since = today() - 14;
+  const keys = [...referenceDays()].filter(([, d]) => d >= since).map(([k]) => k);
+  return verifyUploaded(keys);
+}
+
 let started = false;
-/** 打开 App 以后：读设置，过一会儿清一次，之后每 6 小时清一次 */
+/** 打开 App 以后：读设置，过一会儿清一次、核对一次最近的图传上云端没有，之后每 6 小时一次 */
 export async function startAssetCache() {
   if (started) return;
   started = true;
   await loadCacheSettings();
   setTimeout(() => void cleanAssetCache().catch(() => undefined), 60_000);
-  setInterval(() => void cleanAssetCache().catch(() => undefined), 6 * 3_600_000);
+  setTimeout(() => void verifyRecentUploads().catch(() => undefined), 90_000);
+  setInterval(() => {
+    void cleanAssetCache().catch(() => undefined);
+    void verifyRecentUploads().catch(() => undefined);
+  }, 6 * 3_600_000);
 }

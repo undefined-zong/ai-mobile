@@ -103,6 +103,10 @@ async function save() {
           <span :class="inAlbum ? 'i-lucide-images' : 'i-lucide-image-plus'" />
           <span>{{ inAlbum ? '已在相册' : '存到相册' }}</span>
         </button>
+        <button v-if="current?.check" type="button" class="viewer-btn press" aria-label="同步检查：这张图在这台设备和云端各是什么状态" data-testid="viewer-check" @click.stop="current.check()">
+          <span class="i-lucide-cloud" />
+          <span>同步检查</span>
+        </button>
         <button type="button" class="viewer-btn press" :disabled="saving" aria-label="下载这张图" data-testid="viewer-save" @click.stop="save">
           <span :class="saving ? 'i-lucide-loader-circle animate-spin' : 'i-lucide-download'" />
           <span>下载</span>

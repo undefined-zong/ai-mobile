@@ -78,6 +78,16 @@ async function bytesOf(v: Binary): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(await v.arrayBuffer());
 }
 
+/** 下载出错时 Worker 给的原因（{ error }），没有就只说状态码 */
+async function failure(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  try {
+    const error = (JSON.parse(text) as { error?: unknown }).error;
+    if (typeof error === 'string' && error) return `下载文件失败（HTTP ${res.status}）：${error}`;
+  } catch { /* 不是 JSON */ }
+  return `下载文件失败 HTTP ${res.status}`;
+}
+
 /** 一台 Worker 上的大文件：问有没有、传、下载（同一个文件同时只做一次） */
 export class BlobClient {
   /** 这次打开 App 以来确认过云端有的 */
@@ -139,14 +149,14 @@ export class BlobClient {
     let bytes: Uint8Array<ArrayBuffer>;
     if (info.parts === 0) {
       const res = await this.api.raw(`/v1/sync/blobs/${hash}`, { timeout: 300_000 });
-      if (!res.ok) throw new Error(`下载文件失败 HTTP ${res.status}`);
+      if (!res.ok) throw new Error(await failure(res));
       bytes = new Uint8Array(await res.arrayBuffer());
     } else {
       bytes = new Uint8Array(info.size);
       let offset = 0;
       for (let part = 0; part < info.parts; part++) {
         const res = await this.api.raw(`/v1/sync/blobs/${hash}?part=${part}`, { timeout: 120_000 });
-        if (!res.ok) throw new Error(`下载文件失败 HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await failure(res));
         const chunk = fromBase64(await res.text());
         bytes.set(chunk, offset);
         offset += chunk.byteLength;
