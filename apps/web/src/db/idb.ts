@@ -247,6 +247,28 @@ export function recentMessages<T>(chatId: string, opts: { n: number; cap?: numbe
   });
 }
 
+/**
+ * 从最新往前数一个聊天在本机库里的消息，数到 stop 为真的那条为止（不含它）：最新的 skip 条不算，其余满足 keep 的有几条。
+ * 只数不留，几十万条的聊天也不用读进内存
+ */
+export function countRecentMessages<T>(chatId: string, opts: { skip: number; keep: (value: T) => boolean; stop?: (value: T) => boolean }): Promise<number> {
+  return read('chatMessages', (os) => {
+    let seen = 0;
+    let n = 0;
+    const req = os.index('chat').openCursor(IDBKeyRange.bound([chatId, -Infinity], [chatId, Infinity]), 'prev');
+    req.onsuccess = () => {
+      const c = req.result;
+      if (!c) return;
+      const value = c.value as T;
+      if (opts.stop?.(value)) return;
+      if (seen >= opts.skip && opts.keep(value)) n += 1;
+      seen += 1;
+      c.continue();
+    };
+    return () => n;
+  });
+}
+
 /** 一个聊天在本机的全部消息的键（删聊天时连同没读进内存的一起删） */
 export function chatMessageKeys(chatId: string): Promise<string[]> {
   return read('chatMessages', (os) => {

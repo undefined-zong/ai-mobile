@@ -3,7 +3,7 @@ import { characterPronoun } from '@app/shared';
 import { assetCache } from '@/services/assetCache';
 import { AGENT_META, type AgentRole } from '@app/shared';
 import { closeToast, showLoadingToast, showToast } from 'vant';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Avatar from '@/components/common/Avatar.vue';
 import PersonaAvatar from '@/components/common/PersonaAvatar.vue';
@@ -93,23 +93,37 @@ function pickHomeTheme(t: HomeTheme) {
   app.setHomeTheme(t);
   themeOpen.value = false;
 }
+/** 整理到的那条不在内存里的聊天（内存里只放了最近的）：打开面板时按本机库里的全部消息数，和开始补整理时一样 */
+const storedPending = ref<Record<string, number>>({});
 const backfillRows = computed(() =>
   chars.list.flatMap((c) => {
     const ch = chat.chatOfCharacter(c.id);
     if (!ch) return [];
-    return [{ character: c, chatId: ch.id, pending: pendingForSummary(ch, chat.list(ch.id)).length, progress: chat.backfills[ch.id], busy: !!chat.summarizing[ch.id] }];
+    const loaded = pendingForSummary(ch, chat.list(ch.id)).length;
+    // 内存里的只是一部分时，库里的还没数完为 null
+    const pending = chat.summaryOutsideMemory(ch.id) ? (storedPending.value[ch.id] ?? null) : loaded;
+    return [{ character: c, chatId: ch.id, pending, loaded, progress: chat.backfills[ch.id], busy: !!chat.summarizing[ch.id] }];
   }),
 );
 type BackfillRow = (typeof backfillRows.value)[number];
+watch(backfillOpen, async (open) => {
+  if (!open) return;
+  storedPending.value = {};
+  await Promise.all(backfillRows.value.map(async (r) => {
+    const n = await chat.storedPending(r.chatId);
+    if (n !== null) storedPending.value[r.chatId] = n;
+  }));
+});
 const backfillValue = computed(() => {
   const running = backfillRows.value.filter((r) => r.progress).length;
   if (running) return `正在整理 ${running} 个`;
-  const ready = backfillRows.value.filter((r) => r.pending >= every.value).length;
+  const ready = backfillRows.value.filter((r) => (r.pending ?? r.loaded) >= every.value).length;
   return ready ? `${ready} 个可以补整理` : '';
 });
 function backfillNote(r: BackfillRow): string {
   if (r.progress) return `已整理 ${r.progress.done} 批，还剩 ${r.progress.remaining} 条`;
   if (r.busy) return '正在整理…';
+  if (r.pending === null) return '正在数还有多少条没整理…';
   if (r.pending >= every.value) return `待整理 ${r.pending} 条，能整理 ${Math.floor(r.pending / every.value)} 批`;
   return r.pending ? `待整理 ${r.pending} 条，不够一批，攒够了会自动整理` : '都整理过了';
 }
@@ -356,7 +370,7 @@ function drawStory() {
               <div class="text-[12px] text-ink-3">{{ backfillNote(r) }}</div>
             </div>
             <van-button v-if="r.progress" size="small" round type="warning" @click="chat.pauseBackfill(r.chatId)">暂停</van-button>
-            <van-button v-else size="small" round :disabled="!ai.isLive('summary') || r.busy || r.pending < every" @click="startBackfill(r)">补整理</van-button>
+            <van-button v-else size="small" round :disabled="!ai.isLive('summary') || r.busy || r.pending === null || r.pending < every" @click="startBackfill(r)">补整理</van-button>
           </div>
         </div>
       </div>

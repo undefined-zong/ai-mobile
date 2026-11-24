@@ -40,7 +40,8 @@ import { useAiStore } from '@/stores/ai';
 import { usePersonaStore } from '@/stores/personas';
 import { useEnvironmentStore } from '@/stores/environment';
 import { useLibraryStore } from '@/stores/library';
-import { afterSummarized, lastN, useMessageSettingsStore } from '@/stores/messageSettings';
+import { useMemoryStore } from '@/stores/memory';
+import { lastN, useMessageSettingsStore } from '@/stores/messageSettings';
 import { useRealWorldStore } from '@/stores/realworld';
 import { useRhythmStore } from '@/stores/rhythm';
 import { useWeatherStore } from '@/stores/weather';
@@ -440,7 +441,7 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   // "已总结的消息不发送给 AI"：总结覆盖到的那条之前的不发（提示词里用时间线和取到的记忆代替）
   const msgSettings = useMessageSettingsStore();
   const last = msgSettings.sendCount();
-  const sendable = msgSettings.settings.dropSummarized ? afterSummarized(history, chat.summaryUntilMessageId) : history;
+  const sendable = msgSettings.settings.dropSummarized ? history.slice(useMemoryStore().summarizedIndex(chat, history) + 1) : history;
   const turnStats = { total: 0, dropped: 0, regexed: 0 };
   const turns = toTurns(sendable, character, persona.name, { last, regex: preset.regex, stats: turnStats });
   const loreHistory = toTurns(history, character, persona.name, { regex: preset.regex });
