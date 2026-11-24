@@ -230,7 +230,8 @@ async function saveMeta() {
 }
 
 function hooks() {
-  const on = tracking && meta.enabled && meta.joined;
+  // 首次对齐的扫描期间也要记账：assets 扫过以后才画好的图不能漏出发件箱。
+  const on = tracking && meta.enabled;
   setSyncHooks({
     track: on ? isSynced : null,
     changed: on ? soon : undefined,
@@ -261,6 +262,9 @@ export async function startSyncTracking(opts: { busy: () => boolean; hold: (stor
   await loadMeta();
   tracking = true;
   hooks();
+  // 旧版首次扫描期间生成的素材可能只有本机文件、没有同步账本和发件箱。
+  // 每次启动只补这些漏记的素材；已同步过的只读键和账本，不重传图片。
+  if (meta.enabled && meta.joined) await scanAll(false, ['assets']);
   void countPending();
 }
 
@@ -615,12 +619,12 @@ async function retryParked() {
 
 // —— 第一次加入（或关了又开）：本机有、和上次同步不一样的都记进发件箱 ——
 
-async function scanAll(join: boolean) {
+async function scanAll(join: boolean, stores: readonly StoreName[] = STORES) {
   const now = Date.now();
   let n = 0;
   const outbox: { key: string; value: OutboxEntry }[] = [];
   const add = (store: StoreName, key: string) => outbox.push({ key: outboxKey(store, key), value: { store, key, at: now, n: ++n, ...(join ? { join: true } : {}) } });
-  for (const store of STORES) {
+  for (const store of stores) {
     if (LOCAL_STORES.has(store)) continue;
     if (store === 'assets' || store === 'live2d' || store === 'books') {
       // 大文件只看键：同步过的不再比内容（同一个键内容不变）；书目和正文推的时候再比
