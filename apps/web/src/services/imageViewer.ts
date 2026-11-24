@@ -20,6 +20,8 @@ export interface ViewerImage {
   compareVibe?: () => Promise<ViewerImage | null>;
   /** 生成的图：存到相册要的东西（哪个角色、在哪个场景、什么时候画的、画的是什么）；拍的照片、背景素材不给 */
   album?: AlbumDraft;
+  /** 同步检查：这张图在这台设备和云端各是什么状态（别的设备看不到这张图时用） */
+  check?: () => Promise<void>;
 }
 
 export const imageViewer = reactive({

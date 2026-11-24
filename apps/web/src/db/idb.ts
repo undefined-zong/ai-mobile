@@ -315,27 +315,32 @@ export function setSyncHooks(hooks: { track: ((store: StoreName, key: string) =>
  * opts.sync：这是同步从云端拿来的，不再记进发件箱
  */
 export async function write(store: StoreName, puts: { key: string; value: unknown }[], dels: string[] = [], opts: { sync?: boolean } = {}): Promise<boolean> {
-  if (!puts.length && !dels.length) return true;
-  if (frozen) return false;
   try {
-    const db = await open();
-    const track = !opts.sync && tracker ? tracker : null;
-    const tracked = track ? [...new Set([...puts.map((p) => p.key), ...dels])].filter((k) => track(store, k)) : [];
-    const tx = db.transaction(tracked.length ? [store, 'syncOutbox'] : [store], 'readwrite');
-    const os = tx.objectStore(store);
-    for (const p of puts) os.put(p.value, p.key);
-    for (const k of dels) os.delete(k);
-    if (tracked.length) {
-      const outbox = tx.objectStore('syncOutbox');
-      const at = Date.now();
-      for (const key of tracked) outbox.put({ store, key, at, n: ++writeCount } satisfies OutboxEntry, outboxKey(store, key));
-    }
-    await done(tx);
-    if (tracked.length) onTracked?.();
+    await writeOrThrow(store, puts, dels, opts);
     return true;
   } catch {
     return false;
   }
+}
+
+/** 同 write，写不进去时抛出原因（存图片这种丢了就找不回来的，要让调用的地方知道） */
+export async function writeOrThrow(store: StoreName, puts: { key: string; value: unknown }[], dels: string[] = [], opts: { sync?: boolean } = {}): Promise<void> {
+  if (!puts.length && !dels.length) return;
+  if (frozen) throw new Error('正在恢复备份，重新打开 App 后再试');
+  const db = await open();
+  const track = !opts.sync && tracker ? tracker : null;
+  const tracked = track ? [...new Set([...puts.map((p) => p.key), ...dels])].filter((k) => track(store, k)) : [];
+  const tx = db.transaction(tracked.length ? [store, 'syncOutbox'] : [store], 'readwrite');
+  const os = tx.objectStore(store);
+  for (const p of puts) os.put(p.value, p.key);
+  for (const k of dels) os.delete(k);
+  if (tracked.length) {
+    const outbox = tx.objectStore('syncOutbox');
+    const at = Date.now();
+    for (const key of tracked) outbox.put({ store, key, at, n: ++writeCount } satisfies OutboxEntry, outboxKey(store, key));
+  }
+  await done(tx);
+  if (tracked.length) onTracked?.();
 }
 
 /** 导入的聊天和消息一起提交，保存失败时整批回滚；同步也使用同一份发件箱。 */

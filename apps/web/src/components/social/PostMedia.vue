@@ -6,6 +6,8 @@ import { computed } from 'vue';
 import HtmlFrame from '@/components/chat/HtmlFrame.vue';
 import AssetImg from '@/components/common/AssetImg.vue';
 import { assetUrl } from '@/services';
+import { showAssetCheck } from '@/services/assetCheck';
+import { syncState } from '@/services/sync';
 
 /**
  * 一条朋友圈 / 社群里一帖带的东西：图（你的照片 / AI 画的，没画出来时显示要画的画面和"画这张图"）
@@ -26,6 +28,10 @@ const emit = defineEmits<{ (e: 'draw', index: number): void }>();
 
 const cols = computed(() => (props.images.length === 1 ? 1 : props.images.length <= 4 ? 2 : 3));
 
+const LINK = /^(?:https?:|data:|blob:)/;
+/** 素材库里的图（不是链接）、连着支持同步的云端时能做同步检查 */
+const checkable = (img: MomentImage | undefined) => !!img?.assetKey && !LINK.test(img.assetKey) && syncState.supported;
+
 async function urlOf(i: MomentImage | undefined): Promise<string | null> {
   if (!i) return null;
   return i.assetKey ? (/^(?:https?:|data:|blob:)/.test(i.assetKey) ? i.assetKey : assetUrl(i.assetKey)) : (i.url ?? null);
@@ -41,6 +47,7 @@ async function viewerOf(n: number): Promise<ViewerImage | null> {
   return {
     url,
     name: img.caption,
+    ...(checkable(img) ? { check: () => showAssetCheck(img.assetKey!) } : {}),
     ...(redraw && !img.photo
       ? {
           redraw: async () => {
@@ -69,14 +76,20 @@ async function viewerOf(n: number): Promise<ViewerImage | null> {
 
 async function preview(index: number) {
   const list: ViewerImage[] = [];
-  let start = 0;
+  let start = -1;
   for (const n of props.images.keys()) {
     const v = await viewerOf(n);
     if (!v) continue;
     if (n === index) start = list.length;
     list.push(v);
   }
-  if (list.length) previewImages(list, { startPosition: start });
+  // 点的这张本机和云端都取不到：直接做同步检查，告诉你卡在哪一步
+  const img = props.images[index];
+  if (start < 0) {
+    if (checkable(img)) await showAssetCheck(img!.assetKey!);
+    return;
+  }
+  previewImages(list, { startPosition: start });
 }
 </script>
 

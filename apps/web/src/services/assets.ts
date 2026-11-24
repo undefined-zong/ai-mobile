@@ -1,4 +1,4 @@
-import { getOne, write } from '@/db/idb';
+import { getOne, write, writeOrThrow } from '@/db/idb';
 import { uid } from '@/utils/id';
 
 /**
@@ -34,12 +34,27 @@ async function contentKey(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   return uid('asset');
 }
 
+/**
+ * 存一份素材，返回它的 key。存不进本机库时（存储满了、数据库连接断了）重试一次，还不行就报错：
+ * 以前写失败也照样返回 key、图放在内存里显示——这台设备看着有图，库里却没有，也不会进发件箱，
+ * 别的设备永远拿不到，重新打开 App 后这台也没了
+ */
 export async function putAsset(bytes: Uint8Array<ArrayBuffer>, mime: string): Promise<string> {
   const key = await contentKey(bytes);
   const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  await write('assets', [{ key, value: { mime, data, createdAt: Date.now() } satisfies StoredAsset }]);
+  const value = { mime, data, createdAt: Date.now() } satisfies StoredAsset;
+  try {
+    await writeOrThrow('assets', [{ key, value }]);
+  } catch {
+    // 数据库连接断了时 open() 会重新连
+    try {
+      await writeOrThrow('assets', [{ key, value }]);
+    } catch (e) {
+      const why = e instanceof Error ? `${e.name && e.name !== 'Error' ? `${e.name}：` : ''}${e.message}` : String(e);
+      throw new Error(`图片存不进这台设备的本机存储（${why}）`);
+    }
+  }
   noteAssetUse(key);
-  // 本机数据库不可用（无痕模式）时也能马上显示
   if (!urls.has(key)) urls.set(key, URL.createObjectURL(new Blob([bytes], { type: mime })));
   return key;
 }

@@ -4,7 +4,7 @@ import {
   applyRemote, clearStore, databaseState, flushAll, getAll, getChatMessages, getEntries, getKeys, getMany, getOne, hasKeys, msgKey, outboxKey, removeOutbox, setSyncHooks, splitMsgKey, STORES, write,
   type OutboxEntry, type RemoteChange, type StoreName,
 } from '@/db/idb';
-import { BlobClient, BlobSkipped, decodeBinary, encodeBinary, hasBinary, hasBinRef, isBlobRef, packJson, unpackJson, type SyncApi } from './blobs';
+import { BlobClient, BlobSkipped, decodeBinary, encodeBinary, hasBinary, hasBinRef, isBinRef, isBlobRef, packJson, unpackJson, type SyncApi } from './blobs';
 import { canonical, hashText, mergeValue } from './merge';
 
 /**
@@ -810,7 +810,11 @@ const landed = new Set<string>();
 let downloads = 0;
 const waiters: (() => void)[] = [];
 
-function missedAgain(id: string) {
+/** 每张图上次没取到的原因（同步检查里显示） */
+const missWhy = new Map<string, string>();
+
+function missedAgain(id: string, why: string) {
+  missWhy.set(id, why);
   if (landed.delete(id)) return;
   const wait = Math.min(MISS_MAX, (notThere.get(id)?.wait ?? MISS_FIRST / 2) * 2);
   notThere.set(id, { until: Date.now() + wait, wait });
@@ -847,7 +851,7 @@ async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
         // 记录还没拉到（别的设备先推了消息、后推的图）：单独问一下
         const { record } = await api!.json<{ record: SyncRecord | null }>(`/v1/sync/record?kind=${encodeURIComponent(store)}&parent=&id=${encodeURIComponent(key)}`);
         if (!record || record.deleted) {
-          missedAgain(id);
+          missedAgain(id, record?.deleted ? '云端这张图被删掉了' : '云端还没有这张图的记录（画它的设备没传上来）');
           return undefined;
         }
         ref = record.data;
@@ -857,10 +861,11 @@ async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
       if (st) await write('syncState', [{ key: stateKey(store, key), value: { s: st.s, h: st.h } }], [], { sync: true });
       notThere.delete(id);
       landed.delete(id);
+      missWhy.delete(id);
       return value;
     } catch (e) {
       console.warn(`同步：取不回 ${store} ${key}`, e);
-      missedAgain(id);
+      missedAgain(id, `下载失败：${e instanceof Error ? e.message : String(e)}`);
       return undefined;
     } finally {
       downloads--;
@@ -871,3 +876,133 @@ async function fetchMissing(store: StoreName, key: string): Promise<unknown> {
   return job;
 }
 
+/**
+ * 这台设备上的图，账本记着推过，云端真的有吗（按文件哈希一次问 100 张）：没有的（同步漏掉了、云端丢了）账本作废、放回发件箱重传。
+ * 打开 App 后查一次最近用到的图（services/assetCache）。返回放回去几张
+ */
+export async function verifyUploaded(keys: string[]): Promise<number> {
+  await loadMeta();
+  if (!canFetch() || !meta.joined) return 0;
+  // 素材的 key 就是文件的 SHA-256，和云端存文件用的哈希是同一个
+  const hex = [...new Set(keys)].filter((k) => /^[0-9a-f]{64}$/.test(k));
+  if (!hex.length) return 0;
+  const [have, states, outs] = await Promise.all([
+    hasKeys('assets', hex),
+    getMany<RecordState>('syncState', hex.map((k) => stateKey('assets', k))),
+    getMany<OutboxEntry>('syncOutbox', hex.map((k) => outboxKey('assets', k))),
+  ]);
+  const mine = hex.filter((_, i) => have[i] && states[i] && states[i]!.h !== DELETED && !states[i]!.lazy && !outs[i]);
+  if (!mine.length) return 0;
+  const missing = await blobs!.missing(mine);
+  const redo = mine.filter((k) => missing.has(k));
+  if (!redo.length) return 0;
+  console.warn(`同步：${redo.length} 张图账本记着推过、云端却没有，重新上传`);
+  await write('syncState', [], redo.map((k) => stateKey('assets', k)), { sync: true });
+  const at = Date.now();
+  await write('syncOutbox', redo.map((key, n) => ({ key: outboxKey('assets', key), value: { store: 'assets', key, at, n } satisfies OutboxEntry })), [], { sync: true });
+  void runSync().catch(() => undefined);
+  return redo.length;
+}
+
+// —— 查一张图：本机、发件箱、云端的记录和文件、能不能下载 ——
+
+export interface AssetCheck {
+  /** 一句话：卡在哪一步 */
+  verdict: string;
+  /** 每一步看到的（可以复制给别人看） */
+  lines: string[];
+  /** 这次检查顺手从云端取回来了（界面再取一次就显示） */
+  fixed: boolean;
+}
+
+const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(2)} MB` : `${Math.round(n / 1024)} KB`);
+const when = (t: number | null | undefined) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '—');
+
+/**
+ * 一张图（素材 key）在这台设备和云端是什么状态：本机有没有、同步账本和发件箱怎么记的、云端有没有这条记录和文件、能不能下载。
+ * 别的设备的图显示不出来、或者这台设备画的图别的设备看不到时，点一下就知道卡在哪一步；本机没有、云端下载得下来时顺手存进本机
+ */
+export async function checkAsset(key: string): Promise<AssetCheck> {
+  await loadMeta();
+  const lines: string[] = [];
+  let verdict = '';
+  let fixed = false;
+  const id = missKey('assets', key);
+  const [local, st, out] = await Promise.all([
+    getOne<{ mime?: string; data?: ArrayBuffer }>('assets', key, { local: true }).catch(() => undefined),
+    getOne<RecordState>('syncState', stateKey('assets', key), { local: true }).catch(() => undefined),
+    getOne<OutboxEntry>('syncOutbox', outboxKey('assets', key), { local: true }).catch(() => undefined),
+  ]);
+  lines.push(`图：${key.slice(0, 16)}…`);
+  lines.push(local ? `本机：有（${local.mime ?? '?'}，${kb(local.data?.byteLength ?? 0)}）` : '本机：没有');
+  lines.push(!st ? '同步账本：没有这张图（这台设备没推过、也没收到过它的记录）'
+    : st.h === DELETED ? `同步账本：已删除（seq ${st.s}）`
+      : `同步账本：seq ${st.s}${st.lazy ? '，收到了记录、还没下载' : ''}`);
+  lines.push(out ? `发件箱：在等着上传（记下于 ${when(out.at)}）` : '发件箱：没有');
+  lines.push(`这台设备的同步：${meta.enabled ? '开着' : '关着'}，${api ? (syncState.supported ? '连着云端' : '连着的 Worker 不支持同步') : '没连上云端'}，上次同步 ${when(syncState.lastAt)}，发件箱 ${syncState.pending} 条`);
+  if (syncState.error) lines.push(`上次同步的错误：${syncState.error}`);
+  if (syncState.blobNote) lines.push(`传图片的提示：${syncState.blobNote}`);
+  const why = missWhy.get(id);
+  if (why) lines.push(`上次取图：${why}`);
+  if (!canFetch()) {
+    lines.push('云端：这台设备现在连不上（看上面的同步状态）');
+    return { verdict: local ? '本机有这张图，但这台设备没连上云端，没法传给别的设备' : '这台设备没连上云端，取不到别的设备画的图', lines, fixed };
+  }
+  try {
+    const { record } = await api!.json<{ record: SyncRecord | null }>(`/v1/sync/record?kind=assets&parent=&id=${encodeURIComponent(key)}`);
+    if (!record) {
+      lines.push('云端记录：没有');
+      if (local && !out) {
+        // 本机有、云端没有、也不在发件箱里（同步漏掉了它；或者账本记着推过、云端却没有）：账本作废，放回发件箱马上重传
+        await write('syncState', [], [stateKey('assets', key)], { sync: true });
+        await write('syncOutbox', [{ key: outboxKey('assets', key), value: { store: 'assets', key, at: Date.now(), n: 0 } satisfies OutboxEntry }], [], { sync: true });
+        void runSync().catch(() => undefined);
+        lines.push(st ? '处理：账本记着推过、云端却没有，已经作废、放回发件箱重新上传' : '处理：已经放回发件箱重新上传');
+        fixed = true;
+        verdict = '这张图没传上云端（同步漏掉了它），已经放回发件箱重新上传，过一会儿别的设备就能看到';
+      } else {
+        verdict = local
+          ? '这张图还在这台设备的发件箱里，没传上云端：看上面的同步错误'
+          : '云端没有这张图：画它的那台设备没把它传上来（在那台设备上点这张图的「同步检查」看原因）';
+      }
+      return { verdict, lines, fixed };
+    }
+    lines.push(record.deleted ? `云端记录：已删除（seq ${record.seq}，${when(record.updatedAt)}）` : `云端记录：有（seq ${record.seq}，${when(record.updatedAt)}）`);
+    if (record.deleted) return { verdict: '这张图在云端被删掉了', lines, fixed };
+    const data = (isBlobRef(record.data) ? await unpackJson(record.data, blobs!) : record.data) as { data?: unknown } | null;
+    const ref = data && typeof data === 'object' ? data.data : undefined;
+    if (!isBinRef(ref)) {
+      lines.push('云端记录里没有文件引用');
+      return { verdict: '云端的记录不完整', lines, fixed };
+    }
+    lines.push(`文件：${ref.$bin.slice(0, 16)}…，${kb(ref.size)}`);
+    const missing = await blobs!.missing([ref.$bin]);
+    if (missing.has(ref.$bin)) {
+      lines.push('云端文件：没有');
+      return { verdict: '云端有记录、没有文件（传到一半？）', lines, fixed };
+    }
+    lines.push(`云端文件：有（存在 ${blobs!.store === 'r2' ? 'R2' : 'D1'}）`);
+    try {
+      const value = await decodeBinary(data, blobs!);
+      lines.push('下载：成功，哈希对得上');
+      if (!local) {
+        await write('assets', [{ key, value }], [], { sync: true });
+        if (st) await write('syncState', [{ key: stateKey('assets', key), value: { s: st.s, h: st.h } }], [], { sync: true });
+        notThere.delete(id);
+        missWhy.delete(id);
+        fixed = true;
+        syncState.arrivals++;
+      }
+      verdict = local ? '这张图本机和云端都有，同步正常' : '刚从云端取回来了，现在应该显示出来';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      lines.push(`下载：失败（${msg}）`);
+      verdict = `云端有这张图，这台设备下载失败：${msg}`;
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    lines.push(`问云端：失败（${msg}）`);
+    verdict = `问云端出错：${msg}`;
+  }
+  return { verdict, lines, fixed };
+}
