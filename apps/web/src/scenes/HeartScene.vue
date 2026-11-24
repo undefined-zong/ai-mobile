@@ -3,7 +3,7 @@ import { characterPronoun } from '@app/shared';
 import { previewImages } from '@/services/imageViewer';
 import { shotViewerImage, shotViewerImages } from '@/services/redraw';
 import { errorText } from '@app/ai';
-import { DEVICE_INLINE_FLAG, getLocation, parseDeviceBlock, type ControlTagKind, type ParsedReply } from '@app/shared';
+import { AGENT_META, DEVICE_INLINE_FLAG, getLocation, parseDeviceBlock, type AgentRole, type ControlTagKind, type ParsedReply } from '@app/shared';
 import { showToast } from 'vant';
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -44,7 +44,7 @@ import { hhmm } from '@/utils/time';
  *
  * - 背景：NovelAI 按"心跳"的生图预设画（氛围 / 第一视角 / 亲密，设置 → 画面里换），竖图铺满屏幕；
  *   进来时用今天在同一个地方画过的，没有就画一张"开场"；之后每几句换一张"这一刻"（可以关），右上角魔杖马上画。衣服不锁，按对话画。
- * - 打字：主对话按"心跳"功能预设（心跳 · 文字）回；连麦：「陪伴 · 快速」按"心跳 · 语音"预设回，用她的声音念
+ * - 打字：「心跳」按"心跳"功能预设（心跳 · 文字）回（API 默认跟随主对话，可以在 API 设置里单独设置）；连麦：「陪伴 · 快速」按"心跳 · 语音"预设回，用她的声音念
  *   （composables/useMicLink.ts，和哄睡的连麦一样：说话检测 → 语音识别 → 流式回复 → 按句合成）。两种的预设在设置 → 预设里换。
  * - 玩具：Intiface Central（stores/toys.ts）。指令都写在 <device> 里：默认由"控制指令"预设把她每一句话照抄一遍、在要变的地方插 <device>（单独生成），
  *   也可以让她在回复里自己写；读到 / 念到那几个字时执行（services/toyPlayer.ts 的 ReplyTimeline）。
@@ -116,6 +116,8 @@ let directCtrl: AbortController | null = null;
 let inlineSeen = 0;
 const deviceIssue = ref<{ text: string; settings: boolean } | null>(null);
 const inlineOn = computed(() => toys.wanted && toys.settings.source === 'inline');
+/** 打字聊天用哪个功能的 API：「心跳」（默认跟随主对话，可以在 API 设置里单独设置） */
+const HEART_AGENT: AgentRole = 'heart';
 const replyTags = (): ControlTagKind[] => (inlineOn.value ? ['expr', 'device'] : ['expr']);
 const replyFlags = (): string[] => (inlineOn.value ? [DEVICE_INLINE_FLAG] : []);
 
@@ -174,7 +176,7 @@ function stopToys() {
   showToast({ message: '都停下了', duration: 1800 });
 }
 
-// —— 她说的话（打字）：主对话按"心跳 · 文字"回 ——
+// —— 她说的话（打字）：「心跳」按"心跳 · 文字"回 ——
 const herLine = ref('');
 /** 气泡里那句是哪条消息（点气泡改、重新生成、切换备选回复都对它） */
 const herMsgId = ref<string | null>(null);
@@ -212,7 +214,7 @@ function toyLine(): string {
 async function herTurn(task: 'heart-open' | 'heart-chat', target?: string) {
   const id = chatId.value;
   if (!id) return;
-  const s = ai.status('main');
+  const s = ai.status(HEART_AGENT);
   if (!s.live) {
     notConnected.value = `${her.value.name}先不说话：${s.reason}`;
     return;
@@ -225,7 +227,7 @@ async function herTurn(task: 'heart-open' | 'heart-chat', target?: string) {
   }
   const tl = newTimeline('read');
   const input = task === 'heart-open' ? `${situation()}\n${userName.value}刚来到"心跳"。你先开口。` : `${situation()}\n回${userName.value}刚才说的话。`;
-  const opts = { agent: 'main' as const, task: { name: task, input }, allowedTags: replyTags(), flags: replyFlags(), onParsed };
+  const opts = { agent: HEART_AGENT, task: { name: task, input }, allowedTags: replyTags(), flags: replyFlags(), onParsed };
   const msgId = target ? await chat.regenerate(id, target, opts) : await chat.generate(id, undefined, opts);
   const msg = msgId ? chat.list(id).find((m) => m.id === msgId) : undefined;
   if (!msg) return;
@@ -542,7 +544,7 @@ const pulseStatus = computed(() => {
 // —— 写一行的提示：没接通、没画出来、指令没写出来…… ——
 const notices = computed(() => {
   const out: { key: string; icon: string; text: string; action?: { label: string; run(): void } }[] = [];
-  if (notConnected.value) out.push({ key: 'main', icon: 'i-lucide-plug-zap', text: notConnected.value, action: { label: '去设置', run: () => void router.push('/me/api?feature=main') } });
+  if (notConnected.value) out.push({ key: 'main', icon: 'i-lucide-plug-zap', text: notConnected.value, action: { label: '去设置', run: () => void router.push(`/me/api?feature=${HEART_AGENT}`) } });
   const li = inputMode.value === 'voice' ? link.state.llmIssue || link.state.micIssue || link.state.sttIssue : '';
   if (li) out.push({ key: 'link', icon: 'i-lucide-mic-off', text: li, action: /接通/.test(li) ? { label: '去设置', run: () => void router.push(`/me/api?feature=${/语音识别/.test(li) ? 'stt' : 'companion'}`) } : undefined });
   if (herIssue.value) out.push({ key: 'her', icon: 'i-lucide-message-circle-warning', text: herIssue.value });
@@ -575,7 +577,7 @@ const PRESET_TABS: { value: PresetTab; label: string }[] = [
   { value: 'device', label: '控制指令' },
 ];
 const PRESET_HINT = computed<Record<PresetTab, string>>(() => ({
-  text: `打字聊天时${characterPronoun(her.value)}怎么说（主对话的模型）。自带"心跳 · 文字"；也可以跟随这个角色自己的对话预设。`,
+  text: `打字聊天时${characterPronoun(her.value)}怎么说（「${AGENT_META[HEART_AGENT].label}」的模型）。自带"心跳 · 文字"；也可以跟随这个角色自己的对话预设。`,
   voice: `连麦时${characterPronoun(her.value)}怎么说（「陪伴 · 快速」的模型，边写边念）。自带"心跳 · 语音"：短句、口语、不写动作。`,
   device: '玩具的指令怎么写（"单独生成"时用，「控制指令」的模型）：轻重怎么对应剧情、变速怎么写。',
 }));

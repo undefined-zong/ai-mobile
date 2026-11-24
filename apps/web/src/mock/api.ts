@@ -5,7 +5,7 @@ import type { AgentRoute } from '@app/shared';
  * 第一次打开时各功能的设置。API 设置按功能分：每个功能自己选渠道、填地址、Key、模型。
  * - 主对话还没设置：选渠道、填 Key 之后真的调用；
  * - 「陪伴 · 快速」先跟随主对话，想用便宜快的模型就单独设置；
- * - 生图提示词、节律、控制指令、约会、休息跟随「陪伴 · 快速」；番外、创作 · 小说、总结、健康计划、主动消息、社媒（朋友圈和社群）、日记、平行时空、助手、识图跟随主对话；
+ * - 生图提示词、节律、控制指令、约会、休息跟随「陪伴 · 快速」；心跳、番外、创作 · 小说、总结、健康计划、主动消息、社媒（朋友圈和社群）、日记、平行时空、助手、识图跟随主对话；
  * - 向量化、语音合成、语音识别先选好硅基流动，生图先选好 NovelAI，只差 Key。
  * 没填 Key 的功能继续用演示模型，所以不填也能逛。
  */
@@ -19,6 +19,8 @@ export function defaultRoutes(): AgentRoute[] {
     { role: 'date', follow: 'companion', api: null, backup: null, runsOn: 'device' },
     // 休息：同约会，单独的一项设置，没单独设置前先跟随「陪伴 · 快速」
     { role: 'rest', follow: 'companion', api: null, backup: null, runsOn: 'device' },
+    // 心跳（打字聊天）：单独的一项设置，没单独设置前先跟随主对话（改成单独设置后只给心跳用，不和主对话共用）
+    { role: 'heart', follow: 'main', api: null, backup: null, runsOn: 'device' },
     { role: 'sidestory', follow: 'main', api: null, backup: null, runsOn: 'auto', params: { temperature: 1 }, dailyTokenBudget: 60_000 },
     // 创意工坊写小说：要写长文，默认跟随主对话（想用文笔更好、上下文更长的模型就单独设置）
     { role: 'novel', follow: 'main', api: null, backup: null, runsOn: 'device', params: { temperature: 1 } },

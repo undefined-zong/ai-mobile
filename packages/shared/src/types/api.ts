@@ -136,6 +136,7 @@ export type AgentRole =
   | 'decor'
   | 'date'
   | 'rest'
+  | 'heart'
   | 'sidestory'
   | 'novel'
   | 'summary'
@@ -247,6 +248,13 @@ export const AGENT_META: Record<
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-leaf',
+  },
+  heart: {
+    label: '心跳',
+    desc: '心跳里打字聊天时Ta说的话（开场、回你说的话）。默认跟随主对话，改成单独设置后只给心跳用、不和它共用；提示词在"功能 → 心跳"预设里调。连麦时的话用「陪伴 · 快速」，玩具指令用「控制指令」',
+    capability: 'chat',
+    runsOn: 'client',
+    icon: 'i-lucide-heart',
   },
   sidestory: {
     label: '番外 · Ta的生活',
