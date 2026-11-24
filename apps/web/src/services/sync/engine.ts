@@ -787,10 +787,21 @@ export async function cloudBackedAssets(keys: string[]): Promise<boolean[]> {
     getMany<RecordState>('syncState', keys.map((k) => stateKey('assets', k))),
     getMany<OutboxEntry>('syncOutbox', keys.map((k) => outboxKey('assets', k))),
   ]);
-  return keys.map((_, i) => {
+  const ledger = keys.map((_, i) => {
     const st = states[i];
     return !!st && st.s > 0 && st.h !== DELETED && !pend[i];
   });
+  // 账本说推过还不够：云端会清掉没人用的、满 30 天的图，问一下云端文件真的还在（素材的 key 就是文件的哈希）
+  const ask = keys.filter((k, i) => ledger[i] && /^[0-9a-f]{64}$/.test(k));
+  if (!ask.length || !blobs) return keys.map(() => false);
+  let missing: Set<string>;
+  try {
+    missing = await blobs.missing(ask);
+  } catch {
+    return keys.map(() => false);
+  }
+  const asked = new Set(ask);
+  return keys.map((k, i) => ledger[i] && asked.has(k) && !missing.has(k));
 }
 
 // —— 用到时再下载 ——
