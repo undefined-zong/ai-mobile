@@ -5,6 +5,7 @@ import {
   appContextBeforeHistory,
   categoryMarkers,
   copyBlocks,
+  copyRegex,
   markerBlock,
   markerChoices as categoryMarkerChoices,
   markerInsertIndex,
@@ -27,6 +28,7 @@ import {
   type PresetUse,
   type PresetUseId,
   type PromptBlock,
+  type RegexScript,
 } from '@app/shared';
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
@@ -1197,6 +1199,15 @@ export const useLibraryStore = defineStore('library', () => {
     return res;
   }
 
+  /** 把几条正则复制到另一个预设（换新 id，按原来的先后接在最后）；那边已经有一样的（查找、替换、作用范围都相同）跳过 */
+  function copyRegexTo(scripts: RegexScript[], toId: string): { added: RegexScript[]; skipped: number } | undefined {
+    const to = presetById(toId);
+    if (!to) return undefined;
+    const added = copyRegex(to, scripts, uid);
+    if (added.length) to.updatedAt = Date.now();
+    return { added, skipped: scripts.length - added.length };
+  }
+
   /** 任意分类都能用所有模板；当前分类的排在前面。 */
   function templatesFor(category: PresetCategory): { file: string; name: string; description: string }[] {
     return [...TEMPLATES].sort((a, b) => Number(b.preset.category === category) - Number(a.preset.category === category))
@@ -1292,6 +1303,7 @@ export const useLibraryStore = defineStore('library', () => {
     markerChoices,
     addMarker,
     copyBlocksTo,
+    copyRegexTo,
     templatesFor,
     createPreset,
     restoreFromFile,
