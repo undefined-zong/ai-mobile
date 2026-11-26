@@ -80,6 +80,8 @@ export interface FeatureApi {
   includeBody?: Record<string, unknown>;
   /** 仅 OpenAI 格式的对话：从请求体里去掉的字段（同 SillyTavern 的 Exclude Body Parameters） */
   excludeBody?: string[];
+  /** 请求经自己的云端 Hub 转发（服务商不让浏览器直连时用）；不写按渠道默认（渠道表的 noBrowserCors） */
+  viaHub?: boolean;
   /** 上次"测试连接"的结果；失败时 detail 是完整报错 */
   lastTest?: { ok: boolean; at: number; latencyMs?: number; message: string; detail?: string };
 }

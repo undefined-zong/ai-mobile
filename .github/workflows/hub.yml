@@ -17,6 +17,7 @@ jobs:
       HUB_APP_URL: ${{ vars.HUB_APP_URL }}
       HUB_R2_BUCKET: ${{ vars.HUB_R2_BUCKET }}
       HUB_BLOB_QUOTA_MB: ${{ vars.HUB_BLOB_QUOTA_MB }}
+      HUB_RELAY_HOSTS: ${{ vars.HUB_RELAY_HOSTS }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

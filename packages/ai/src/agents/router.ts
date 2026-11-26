@@ -2,6 +2,7 @@ import { AGENT_META, apiKeyId, followOf, type AgentRole, type AgentRoute, type C
 import { apiLabel, kindOf, needsKey } from '../channels.ts';
 import { transportOf, type Endpoint } from '../core/endpoint.ts';
 import type { LabeledTransport } from '../core/requestLog.ts';
+import type { Transport } from '../core/http.ts';
 import { AiError, annotateError, errorText, shouldFailover } from '../core/errors.ts';
 import { canEmbed } from '../embedding/client.ts';
 import { canDraw } from '../image/client.ts';
@@ -22,6 +23,8 @@ export interface AgentConfig {
   textObfuscation?(): TextObfuscationSettings | undefined;
   /** 这台设备上保存的 Key（键见 apiKeyId）；没有返回 null */
   keyOf(id: string): string | null;
+  /** 这个 API 的请求怎么发出去（例如经云端 Hub 转发）；不给或返回 undefined 时直连 */
+  transportFor?(api: FeatureApi): Transport | undefined;
 }
 
 export interface Attempt {
@@ -175,7 +178,7 @@ export class AgentRouter {
         continue;
       }
       // 请求记录里标上是哪个功能发的
-      const base = transportOf(e.endpoint);
+      const base = this.config.transportFor?.(item.api) ?? transportOf(e.endpoint);
       const labeled: LabeledTransport = (url, init) => base(url, init);
       labeled.role = role;
       out.push({ endpoint: { ...e.endpoint, transport: labeled }, source, fallback: item.fallback, api: item.api });

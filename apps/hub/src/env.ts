@@ -12,4 +12,6 @@ export interface Env {
   SYNC_BUCKET?: R2Bucket;
   /** 没绑 R2 时同步的大文件在 D1 里最多占多少 MB（wrangler.jsonc 的 vars；没有就不限） */
   SYNC_BLOB_QUOTA_MB?: string;
+  /** /v1/relay 除了不让浏览器直连的渠道的默认主机，还允许转发到哪些主机（逗号隔开，例如自己的 Fish Audio 镜像） */
+  RELAY_HOSTS?: string;
 }

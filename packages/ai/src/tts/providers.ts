@@ -138,6 +138,18 @@ export async function minimaxSpeech(ep: Endpoint, call: TtsCall): Promise<TtsOut
   return { bytes, mime: sniffAudioMime(bytes, MIME[format]), model };
 }
 
+/** 音色可以直接粘 Fish Audio 模型页的网址（…/m/<id>、…?modelId=<id>）：取出里面的 reference_id */
+export function fishReferenceId(voice: string): string {
+  const v = voice.trim();
+  if (!/^https?:\/\//i.test(v)) return v;
+  try {
+    const u = new URL(v);
+    return u.searchParams.get('modelId') || u.pathname.match(/\/m\/([^/]+)/)?.[1] || v;
+  } catch {
+    return v;
+  }
+}
+
 /**
  * Fish Audio：POST https://api.fish.audio/v1/tts，模型放在 model 请求头（s1 / speech-1.6 / speech-1.5），
  * voiceId 是音色模型页上的 reference_id。S1 支持在正文前加情绪标记。
@@ -149,7 +161,7 @@ export async function fishSpeech(ep: Endpoint, call: TtsCall): Promise<TtsOutput
   const marker = /^s1/i.test(model) ? fishEmotion(call.emotion) : undefined;
   const body: Record<string, unknown> = {
     text: marker ? `(${marker}) ${call.text}` : call.text,
-    reference_id: req.voice.voiceId || undefined,
+    reference_id: fishReferenceId(req.voice.voiceId) || undefined,
     format,
     mp3_bitrate: 128,
     normalize: true,
