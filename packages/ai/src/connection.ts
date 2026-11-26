@@ -1,6 +1,6 @@
 import type { Capability, TextObfuscationSettings } from '@app/shared';
 import { anthropicBase, bearerHeaders, deepseekBase, geminiBase, isFullChatUrl, joinUrl, openaiModelsUrl, transportOf, type Endpoint } from './core/endpoint.ts';
-import { VERTEX_MODELS } from './channels.ts';
+import { FISH_MODELS, VERTEX_MODELS } from './channels.ts';
 import { AiError, annotateError, errorReport, errorText, httpError } from './core/errors.ts';
 import { readText, request } from './core/http.ts';
 import { embedTexts } from './embedding/client.ts';
@@ -24,7 +24,7 @@ export const STATIC_MODELS: Partial<Record<Endpoint['kind'], string[]>> = {
   minimax: ['speech-02-hd', 'speech-02-turbo', 'speech-2.5-hd-preview', 'speech-2.5-turbo-preview'],
   // 火山引擎的"模型"就是 Resource ID
   volcengine: ['seed-tts-2.0', 'seed-tts-1.0', 'seed-icl-2.0', 'seed-icl-1.0'],
-  'fish-audio': ['s1', 'speech-1.6', 'speech-1.5'],
+  'fish-audio': FISH_MODELS,
   'gpt-sovits': ['gpt-sovits'],
   'workers-ai': ['@cf/baai/bge-m3', '@cf/baai/bge-large-en-v1.5', '@cf/baai/bge-base-en-v1.5'],
 };

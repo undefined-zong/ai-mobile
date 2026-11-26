@@ -21,6 +21,9 @@ export const VERTEX_MODELS = [
 
 const GEMINI_MODELS = VERTEX_MODELS.filter((m) => m.startsWith('gemini-'));
 
+/** Fish Audio 的模型（model 请求头，官方 API 文档的取值；不填时服务端用它的默认模型）。s1 官方定在 2026-12-31 退役，之后按 s2.1-pro 出声和计费 */
+export const FISH_MODELS = ['s2.1-pro', 's2.1-pro-free', 's2-pro', 's3-pro', 'drama-3', 's1'];
+
 export interface ChannelInfo {
   id: ApiChannel;
   label: string;
@@ -142,7 +145,7 @@ export const CHANNELS: Record<ApiChannel, ChannelInfo> = {
     baseUrl: 'https://api.fish.audio',
     urlPlaceholder: 'https://api.fish.audio',
     hint: 'Fish Audio 语音合成；音色填模型页上的 reference_id（或直接粘模型页网址）。官方接口不让浏览器直连，要连上云端 Hub 由它转发',
-    models: { tts: ['s1', 'speech-1.6', 'speech-1.5'] },
+    models: { tts: FISH_MODELS },
     noBrowserCors: true,
   },
   'gpt-sovits': {

@@ -151,16 +151,17 @@ export function fishReferenceId(voice: string): string {
 }
 
 /**
- * Fish Audio：POST https://api.fish.audio/v1/tts，模型放在 model 请求头（s1 / speech-1.6 / speech-1.5），
- * voiceId 是音色模型页上的 reference_id。S1 支持在正文前加情绪标记。
+ * Fish Audio：POST https://api.fish.audio/v1/tts，模型放在 model 请求头（不填时服务端用它的默认模型），
+ * voiceId 是音色模型页上的 reference_id。情绪标记加在正文前：S1 用圆括号，S2 以后（含不填模型时的默认模型）用方括号。
  */
 export async function fishSpeech(ep: Endpoint, call: TtsCall): Promise<TtsOutput> {
   const { req } = call;
-  const model = req.voice.model || ep.model || 's1';
+  const model = (req.voice.model || ep.model).trim();
   const format = req.format === 'wav' || req.format === 'opus' || req.format === 'pcm' ? req.format : 'mp3';
-  const marker = /^s1/i.test(model) ? fishEmotion(call.emotion) : undefined;
+  const emotion = fishEmotion(call.emotion);
+  const marker = !emotion ? '' : /^s1/i.test(model) ? `(${emotion}) ` : !model || /^s[2-9]/i.test(model) ? `[${emotion}] ` : '';
   const body: Record<string, unknown> = {
-    text: marker ? `(${marker}) ${call.text}` : call.text,
+    text: `${marker}${call.text}`,
     reference_id: fishReferenceId(req.voice.voiceId) || undefined,
     format,
     mp3_bitrate: 128,
@@ -172,12 +173,12 @@ export async function fishSpeech(ep: Endpoint, call: TtsCall): Promise<TtsOutput
   const url = joinUrl(base, 'v1/tts');
   const res = await request(transportOf(ep), ep.name, url, {
     method: 'POST',
-    headers: { ...bearerHeaders(ep), model },
+    headers: { ...bearerHeaders(ep), ...(model ? { model } : {}) },
     body: JSON.stringify(body),
     signal: req.signal,
   });
   if (!res.ok) throw httpError(ep.name, res.status, await readText(res), res);
-  return { ...(await audioOrError(res, ep.name, format)), model };
+  return { ...(await audioOrError(res, ep.name, format)), model: model || 'Fish Audio 默认模型' };
 }
 
 /**
