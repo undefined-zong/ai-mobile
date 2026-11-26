@@ -21,6 +21,9 @@ export const VERTEX_MODELS = [
 
 const GEMINI_MODELS = VERTEX_MODELS.filter((m) => m.startsWith('gemini-'));
 
+/** Fish Audio 的模型（model 请求头，官方 API 文档的取值；不填时服务端用它的默认模型）。s1 官方定在 2026-12-31 退役，之后按 s2.1-pro 出声和计费 */
+export const FISH_MODELS = ['s2.1-pro', 's2.1-pro-free', 's2-pro', 's3-pro', 'drama-3', 's1'];
+
 export interface ChannelInfo {
   id: ApiChannel;
   label: string;
@@ -37,6 +40,8 @@ export interface ChannelInfo {
   /** Key 框的名字和提示 */
   keyLabel?: string;
   keyPlaceholder?: string;
+  /** 官方接口不让浏览器直连（没有 CORS 头）：默认经云端 Hub 转发；Hub 默认只转发这些渠道的默认地址的主机 */
+  noBrowserCors?: boolean;
 }
 
 export const CHANNELS: Record<ApiChannel, ChannelInfo> = {
@@ -139,8 +144,9 @@ export const CHANNELS: Record<ApiChannel, ChannelInfo> = {
     label: 'Fish Audio',
     baseUrl: 'https://api.fish.audio',
     urlPlaceholder: 'https://api.fish.audio',
-    hint: 'Fish Audio 语音合成；音色填模型页上的 reference_id',
-    models: { tts: ['s1', 'speech-1.6', 'speech-1.5'] },
+    hint: 'Fish Audio 语音合成；音色填模型页上的 reference_id（或直接粘模型页网址）。官方接口不让浏览器直连，要连上云端 Hub 由它转发',
+    models: { tts: FISH_MODELS },
+    noBrowserCors: true,
   },
   'gpt-sovits': {
     id: 'gpt-sovits',
@@ -152,6 +158,18 @@ export const CHANNELS: Record<ApiChannel, ChannelInfo> = {
     keyless: true,
   },
 };
+
+/** 这个 API 的请求要不要经云端 Hub 转发：设置里选过就按选的，没选按渠道 */
+export function viaHub(api: Pick<FeatureApi, 'channel' | 'viaHub'>): boolean {
+  return api.viaHub ?? !!CHANNELS[api.channel]?.noBrowserCors;
+}
+
+/** Hub 默认允许转发的主机：不让浏览器直连的渠道的默认地址（别的主机在 Hub 的 RELAY_HOSTS 里加） */
+export function relayHosts(): string[] {
+  return Object.values(CHANNELS)
+    .filter((c) => c.noBrowserCors && c.baseUrl)
+    .map((c) => new URL(c.baseUrl).host.toLowerCase());
+}
 
 /** 文本功能的渠道（按 math-reader 的顺序：自定义、Claude、OpenAI 兼容、Gemini、Vertex Agent、DeepSeek） */
 export const TEXT_CHANNELS: readonly ApiChannel[] = ['custom', 'anthropic', 'openai', 'gemini', 'vertex', 'deepseek'];

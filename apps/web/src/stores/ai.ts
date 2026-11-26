@@ -11,6 +11,7 @@ import {
   errorText,
   isAbortError,
   MemoryAudioCache,
+  viaHub,
   type AgentConfig,
   type Endpoint,
   type RouteStatus,
@@ -35,6 +36,7 @@ import { showToast } from 'vant';
 import { markRaw, reactive, ref } from 'vue';
 import { autoSave, getEntries, getOne, write } from '@/db/idb';
 import { defaultRoutes } from '@/mock/api';
+import { useHubStore } from './hub';
 
 const ROLES = Object.keys(AGENT_META) as AgentRole[];
 
@@ -263,6 +265,8 @@ export const useAiStore = defineStore('ai', () => {
     routes: () => routes.value,
     textObfuscation: () => textObfuscation,
     keyOf: (id) => keys[id] || null,
+    // 服务商不让浏览器直连（或设置里打开了"经云端 Hub 转发"）：请求经自己的 Hub 转发
+    transportFor: (api) => (viaHub(api) ? useHubStore().relay : undefined),
   };
 
   function noteError(role: AgentRole, e: unknown) {
@@ -412,7 +416,7 @@ export const useAiStore = defineStore('ai', () => {
     const target = opts.listing && !api.model.trim() ? { ...api, model: '-' } : api;
     const r = endpointOfApi(target, role, key || 'x', { backup: opts.backup });
     if ('reason' in r) return { reason: r.reason };
-    return { ...r.endpoint, key: key?.trim() || null, model: opts.listing ? api.model.trim() : r.endpoint.model };
+    return { ...r.endpoint, key: key?.trim() || null, model: opts.listing ? api.model.trim() : r.endpoint.model, transport: config.transportFor?.(api) };
   }
 
   return {

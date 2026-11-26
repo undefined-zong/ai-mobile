@@ -86,7 +86,7 @@ docs/DESIGN.md       完整设计
 - 第一次部署前，在仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**。
 - 可以装成 App（PWA）：iPhone 用 Safari 打开 → 分享 → 添加到主屏幕；安卓用 Chrome 打开 → 菜单 → 安装应用，或者在「我的 → 装成 App」里点安装。装好后全屏打开，断网也能进（AI 请求仍要联网）。
   - 卸载后装不回去：以前 manifest 的 `id` 写的是 `./`，浏览器按站点根目录解析成 `https://undefined-zong.github.io/`，可能和同一个 github.io 下的其他网页 App 撞在一起；现在是 `/ai-mobile/`。「我的 → 装成 App」里可以清理后台服务和缓存再刷新（聊天、角色、Key 不受影响），也写了各平台还装不上时怎么办。
-- 在「我的 → API 设置」里按功能设置：点一个功能（主对话、番外、语音合成、生图……），选渠道、填地址和 Key、选模型（可以拉取列表），点「测试连接」。Key 只存在这台设备的浏览器里，请求从浏览器直接发给服务商。
+- 在「我的 → API 设置」里按功能设置：点一个功能（主对话、番外、语音合成、生图……），选渠道、填地址和 Key、选模型（可以拉取列表），点「测试连接」。Key 只存在这台设备的浏览器里，请求从浏览器直接发给服务商；Fish Audio 这类不让浏览器直连的服务默认经你的云端 Hub 转发（`/v1/relay`，只转发这些渠道的官方主机，别的主机加进 `apps/hub/wrangler.jsonc` 的 `RELAY_HOSTS` 或仓库 Variables 的 `HUB_RELAY_HOSTS`），API 设置里每个功能都能开关"经云端 Hub 转发"。
 
 ## 本地运行
 

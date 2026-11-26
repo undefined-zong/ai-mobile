@@ -15,6 +15,8 @@ if (process.env.HUB_BLOB_QUOTA_MB) {
   if (!Number.isFinite(mb) || mb <= 0) throw new Error('HUB_BLOB_QUOTA_MB must be a positive number of MB');
   config.vars.SYNC_BLOB_QUOTA_MB = String(mb);
 }
+// /v1/relay 额外允许转发的主机（逗号隔开）：不设就用 wrangler.jsonc 里 vars 的 RELAY_HOSTS
+if (process.env.HUB_RELAY_HOSTS) config.vars.RELAY_HOSTS = process.env.HUB_RELAY_HOSTS;
 // 多设备同步的图片、语音、模型放进 R2（可选）：没设时 base64 分块存在 D1
 if (process.env.HUB_R2_BUCKET) {
   if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(process.env.HUB_R2_BUCKET)) throw new Error('HUB_R2_BUCKET is not a valid R2 bucket name');

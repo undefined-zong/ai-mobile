@@ -75,7 +75,7 @@ const VOICE_HINT: Record<string, string> = {
   openai: '硅基流动系统音色写名字即可（claire、anna、alex…），上传的音色写 speech:…；OpenAI 写 alloy、coral…',
   minimax: 'voice_id，例如 female-shaonv，或你克隆的音色 id',
   volcengine: '音色 ID，例如 zh_female_vv_uranus_bigtts；复刻的音色是 S_ 开头的 Speaker ID',
-  'fish-audio': '音色模型页上的 reference_id（不填用默认音色）',
+  'fish-audio': '音色模型页上的 reference_id，或者直接粘模型页的网址（不填用默认音色）',
   'gpt-sovits': '参考音频在服务器上的路径，例如 /data/ref/suwan.wav',
 };
 function openVoice(c: Character) {

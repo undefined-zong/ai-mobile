@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CHANNELS, channelsFor, CUSTOM_FORMAT_LABEL, errorReport, errorText, kindOf, listModels, needsKey, newFeatureApi, testConnection, type VoiceSpec } from '@app/ai';
+import { CHANNELS, channelsFor, CUSTOM_FORMAT_LABEL, errorReport, errorText, kindOf, listModels, needsKey, newFeatureApi, testConnection, viaHub, type VoiceSpec } from '@app/ai';
 import { AGENT_META, isTextRole, type AgentRole, type ApiChannel, type CustomFormat, type FeatureApi, type PromptProcessing } from '@app/shared';
 import { computed, ref, watch } from 'vue';
 import ErrorDetails from '@/components/common/ErrorDetails.vue';
@@ -52,6 +52,17 @@ function setExtra(field: string, value: string) {
 const cosyEmotion = computed({
   get: () => api.value?.extra?.emotion === 'on',
   set: (on: boolean) => setExtra('emotion', on ? 'on' : ''),
+});
+
+/** 经云端 Hub 转发：和渠道默认一样时不存，渠道默认以后改了也跟着变 */
+const relayOn = computed({
+  get: () => !!api.value && viaHub(api.value),
+  set: (on: boolean) => {
+    const a = api.value;
+    if (!a) return;
+    if (on === !!CHANNELS[a.channel].noBrowserCors) delete a.viaHub;
+    else a.viaHub = on;
+  },
 });
 
 // —— Key ——
@@ -171,7 +182,7 @@ async function runTest() {
 
 // 换了地址、Key、模型，上次的测试结果就不作数了
 watch(
-  () => [api.value?.channel, api.value?.format, api.value?.baseUrl, api.value?.model, key.value],
+  () => [api.value?.channel, api.value?.format, api.value?.baseUrl, api.value?.model, api.value?.viaHub, key.value],
   (now, before) => {
     if (before && api.value?.lastTest && JSON.stringify(now) !== JSON.stringify(before)) api.value.lastTest = undefined;
   },
@@ -197,6 +208,14 @@ watch(
 
       <label class="field-label" :for="`${uid}-url`">地址</label>
       <input :id="`${uid}-url`" v-model="api.baseUrl" class="input" inputmode="url" autocomplete="off" spellcheck="false" :placeholder="info.urlPlaceholder" />
+
+      <div class="flex items-center justify-between gap-3 mt-3">
+        <div>
+          <div class="text-[14px]">经云端 Hub 转发{{ info.noBrowserCors ? '（这个渠道默认开）' : '' }}</div>
+          <div class="text-[12px] text-ink-3">服务商不让浏览器直连（报 CORS、连不上）时打开：请求先发给你连的 Hub，再由 Hub 发给服务商，Key 只随请求经过、Hub 不存。Hub 默认只转发不让直连的渠道的官方地址，别的地址要加进 Hub 的 RELAY_HOSTS</div>
+        </div>
+        <van-switch v-model="relayOn" class="shrink-0" size="22px" />
+      </div>
 
       <label class="field-label" :for="`${uid}-key`">{{ info.keyLabel ?? 'Key' }}{{ keyOptional ? '（可以不填）' : '' }}</label>
       <div class="key-row">

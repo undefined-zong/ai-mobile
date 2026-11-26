@@ -1,5 +1,5 @@
 import { AgentSystem, discoverOAuth, exchangeOAuthCode, openMcpSession, registerOAuthClient } from '@app/ai';
-import { communitySettingsValid, type DiaryContext, type DiaryEntry, normalizeMcpServer, WEREAD_HEADERS, normalizePlanner, PARALLEL_PER_DAY_MAX, shiftDate, SOCIAL_PER_DAY_MAX, zonedParts, type CommunityContext, type ParallelContext, type ParallelNote, type ParallelPlan, type ParallelPlanContext, type HealthPlanContext, type HealthRunResult, type McpOAuthToken, type McpServerSecret, type PlannerContext, type PlannerRunResult, type CommunityPost, type MemoryConsolidationContext, type MemoryJobResult, type Moment, type ProactiveContext, type ProactiveCredentials, type RhythmContext, type SocialContext, type Touchpoint } from '@app/shared';
+import { RELAY_HEADERS, RELAY_MARK, communitySettingsValid, type DiaryContext, type DiaryEntry, normalizeMcpServer, WEREAD_HEADERS, normalizePlanner, PARALLEL_PER_DAY_MAX, shiftDate, SOCIAL_PER_DAY_MAX, zonedParts, type CommunityContext, type ParallelContext, type ParallelNote, type ParallelPlan, type ParallelPlanContext, type HealthPlanContext, type HealthRunResult, type McpOAuthToken, type McpServerSecret, type PlannerContext, type PlannerRunResult, type CommunityPost, type MemoryConsolidationContext, type MemoryJobResult, type Moment, type ProactiveContext, type ProactiveCredentials, type RhythmContext, type SocialContext, type Touchpoint } from '@app/shared';
 import { digest, equalSecret, seal } from './crypto.ts';
 import { assert, HttpError, json, readJson } from './http.ts';
 import { syncApi, syncStatus } from './sync.ts';
@@ -19,6 +19,7 @@ import { mcpSecret, runPlannerNow, runPlannerScheduled, saveMcpSecret } from './
 import { bilibiliFavFolders, bilibiliFavVideos, bilibiliIds, searchBilibili, VIDEO_BATCH_MAX } from './video.ts';
 import { wereadMcp } from './weread.ts';
 import { publicPage } from './publicPages.ts';
+import { relay } from './relay.ts';
 import { INGEST_POST_PATHS, ingestApi, ingestPost, ingestStatus } from './ingest.ts';
 
 const body = <T>(request: Request): Promise<T> => readJson<T>(request);
@@ -139,6 +140,9 @@ async function api(request: Request, env: Env): Promise<Response> {
 
   // 一起看书：内置的微信读书 MCP（书架、笔记和章节正文；微信读书的登录信息在请求头里，Hub 不存）
   if (path === '/v1/weread/mcp') return wereadMcp(request);
+
+  // 不让浏览器直连的服务（Fish Audio……）：App 的请求经这里转发，只转发白名单里的主机
+  if (path === '/v1/relay' && request.method === 'POST') return relay(request, env);
 
   // 多设备同步：聊天、朋友圈、社群、记忆、角色、设置……（按条推拉），图片和文件按哈希存
   if (path.startsWith('/v1/sync/')) return syncApi(request, env, url, device.id);
@@ -822,8 +826,8 @@ export default {
     response.headers.set('Vary', 'Origin');
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     // MCP 客户端会带协议版本和会话号；微信读书 MCP 的登录信息也在请求头里；同步的大文件分块传时类型放在 X-Blob-Type
-    response.headers.set('Access-Control-Allow-Headers', ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'MCP-Protocol-Version', 'X-Blob-Type', ...Object.values(WEREAD_HEADERS)].join(', '));
-    response.headers.set('Access-Control-Expose-Headers', ['Mcp-Session-Id', 'X-Blob-Type', WEREAD_HEADERS.cookie].join(', '));
+    response.headers.set('Access-Control-Allow-Headers', ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'MCP-Protocol-Version', 'X-Blob-Type', ...Object.values(WEREAD_HEADERS), ...Object.values(RELAY_HEADERS)].join(', '));
+    response.headers.set('Access-Control-Expose-Headers', ['Mcp-Session-Id', 'X-Blob-Type', WEREAD_HEADERS.cookie, RELAY_MARK].join(', '));
     return response;
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {

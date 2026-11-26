@@ -74,7 +74,7 @@ export function emotionInChinese(emotion: string | null): string | undefined {
   return COSYVOICE_ZH[emotion] ?? (/[\u4e00-\u9fff]/.test(emotion) ? emotion : undefined);
 }
 
-/** Fish Audio S1 在正文前加情绪标记，如 "(embarrassed) …" */
+/** Fish Audio 在正文前加的情绪标记（S1 写成 "(embarrassed) …"，S2 以后写成 "[embarrassed] …"） */
 const FISH: Record<string, string> = {
   happy: 'joyful',
   sad: 'sad',

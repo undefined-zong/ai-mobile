@@ -1,5 +1,5 @@
-import type { McpCallResult, McpOAuthDiscovery } from '@app/ai';
-import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, packProactiveContext, watchWorkoutLine, type HubWatchWorkouts, type WatchWorkout, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
+import type { McpCallResult, McpOAuthDiscovery, Transport } from '@app/ai';
+import { AGENT_META, apiKeyId, DEFAULT_PROACTIVE_RULES, RELAY_HEADERS, RELAY_MARK, packProactiveContext, watchWorkoutLine, type HubWatchWorkouts, type WatchWorkout, type HubCommunityPosts, type HubHealthResults, type HubParallelNotes, type HubParallelPlans, type HubPlannerResults, type McpOAuthConfig, type McpOAuthToken, type McpServerConfig, type McpToolInfo, type PlannerRunResult, type HubInbox, type HubMemoryResults, type HubMoments, type HubStatus, type HubTouchpoint,
   type Character, type HubDiaries, type HubRhythms, type Message, type NotificationPreview, type ProactiveContext, type ProactiveCredentials, type VideoHit, type VideoPage, type BiliFavFolder } from '@app/shared';
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
@@ -1083,6 +1083,25 @@ export const useHubStore = defineStore('hub', () => {
     if (!connected.value) throw new Error('还没连云端 Hub');
     return request<{ aid: number; cid: number }>(`/v1/video/ids?id=${encodeURIComponent(id)}&p=${page}`);
   }
+  /** 经 Hub 转发一个请求（不让浏览器直连的服务，见 Hub 的 /v1/relay）：签名同 fetch，回来的是目标服务的原样回应 */
+  const relay: Transport = async (url, init) => {
+    if (!connected.value) throw new Error('这个服务不让浏览器直连，要先连上云端 Hub（我的 → 云端与同步）由它转发，或者在 API 设置里关掉"经云端 Hub 转发"、换支持网页调用的地址');
+    const headers = Object.fromEntries(new Headers(init.headers).entries());
+    const response = await fetch(`${config.url}/v1/relay`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token.value}`,
+        [RELAY_HEADERS.url]: url,
+        [RELAY_HEADERS.method]: init.method ?? 'GET',
+        [RELAY_HEADERS.headers]: encodeURIComponent(JSON.stringify(headers)),
+      },
+      body: init.body, signal: init.signal, cache: 'no-store',
+    });
+    if (response.headers.has(RELAY_MARK)) return response;
+    const result = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.status === 404) throw new Error('云端 Hub 是旧版，不能转发：部署最新 main 的 Hub');
+    throw new Error(`云端 Hub 转发失败：${result?.error || `Worker HTTP ${response.status}`}`);
+  };
   /** 直接连 Hub 上的一个端点（例如内置的微信读书 MCP）：地址和登录用的请求头 */
   function endpoint(path: string): { url: string; headers: Record<string, string> } | null {
     return connected.value ? { url: `${config.url}${path}`, headers: { Authorization: `Bearer ${token.value}` } } : null;
@@ -1123,6 +1142,6 @@ export const useHubStore = defineStore('hub', () => {
       clearTimeout(debounce); debounce = setTimeout(() => void syncNow(), 500);
     }, { deep: true });
   }
-  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, diaryErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsDiary, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsVideoBrowse, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, favFolders, favVideos, videoIds, endpoint,
+  return { config, savedPassword, connected, status, points, error, syncing, lastSyncAt, memoryErrors, socialErrors, communityErrors, parallelErrors, diaryErrors, supportsRhythm, supportsMemory, supportsSocial, supportsCommunity, supportsPlanner, supportsParallel, supportsDiary, supportsParallelPlan, supportsHealth, supportsWeread, supportsMcpCall, supportsVideoBrowse, supportsSync, supportsIngest, upgradeRequired, hydrate, connect, resyncFromDevice, disconnect, syncNow, enable, disable, subscribe, addWebhook, removeChannel, testChannel, searchVideos, favFolders, favVideos, videoIds, endpoint, relay,
     ensureStatus, pushMcpSecret, syncPlannerNow, runPlanner, mcpCall, plannerTools, oauthDiscover, oauthRegister, oauthToken, pullWatchWorkouts, createIngestToken, revokeIngestToken, start };
 });

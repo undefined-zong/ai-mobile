@@ -11,7 +11,9 @@
     "APP_ORIGIN": "https://undefined-zong.github.io",
     "APP_URL": "https://undefined-zong.github.io/ai-mobile/",
     // 没绑 R2 时多设备同步的图片在 D1 里最多占多少 MB；部署时可用 HUB_BLOB_QUOTA_MB 改，删掉这一项就不限
-    "SYNC_BLOB_QUOTA_MB": "5120"
+    "SYNC_BLOB_QUOTA_MB": "5120",
+    // /v1/relay 除了不让浏览器直连的渠道（Fish Audio……）的默认主机，还转发到哪些主机（逗号隔开）；部署时可用 HUB_RELAY_HOSTS 改
+    "RELAY_HOSTS": ""
   },
   "d1_databases": [{
     "binding": "DB",
