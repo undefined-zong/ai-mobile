@@ -397,8 +397,13 @@ export interface ChatAssembleOptions {
   task?: { name: string; input: string };
   /** 指定按哪个用途选预设（语音通话用 call）；不给时按主动消息 / 场景 / 对话预设 */
   use?: PresetUseId;
-  /** 重新生成的那条回复：沿用它原来用的记忆 */
+  /** 重新生成的那条回复：沿用它原来用的记忆（副对话传主回复这一条，用主回复用的那些） */
   targetId?: string;
+  /**
+   * 副对话：主对话这一轮刚写好的那条回复，作为角色的最后一条消息接在聊天记录后面，副对话参考它往下接。
+   * 发送条数多算这一条，发给 AI 的正则从它算深度，世界书也扫它；"距上次聊天"和记忆检索照旧按你那句算
+   */
+  reply?: Message;
   /** 这一次另外打开的触发条件（心跳连着玩具、指令由她自己写时是 device-inline）：块写了它就发送 */
   flags?: string[];
   /** 本轮实际执行的标签（副对话接管卡片时，主对话只保留实时表情等） */
@@ -430,7 +435,7 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
     content: tagsLine(getScene(chat.currentScene ?? 'free'), character, opts.allowedTags),
     source: '本轮实际可用的标签',
   };
-  if (opts.delegatedTags?.length) app.sceneRules!.content += `\n本轮由并行的副对话负责这些标签：${opts.delegatedTags.join('、')}。主回复结束后程序会追加副对话结果。你只生成主对话正文和上面列出的标签，不重复发卡片或配图，也不要预先声称已调用这些功能。`;
+  if (opts.delegatedTags?.length) app.sceneRules!.content += `\n本轮由副对话负责这些标签：${opts.delegatedTags.join('、')}。你写完这条回复后，程序会把它交给副对话，副对话参考你的回复决定接不接卡片、配不配图，结果追加在回复末尾。你只写主对话正文和上面列出的标签，不写这些标签，也不要预先声称已调用这些功能。`;
   // 家务和健康：你人设里开着的系统今天的情况（都没开时没有这一块）
   const flags: string[] = [...lifeFlags(persona), ...(opts.flags ?? [])];
   const home = homeBlock(persona);
@@ -443,8 +448,10 @@ export function assembleForChat(chat: Chat, character: Character, history: Messa
   const last = msgSettings.sendCount();
   const sendable = msgSettings.settings.dropSummarized ? history.slice(useMemoryStore().summarizedIndex(chat, history) + 1) : history;
   const turnStats = { total: 0, dropped: 0, regexed: 0 };
-  const turns = toTurns(sendable, character, persona.name, { last, regex: preset.regex, stats: turnStats });
-  const loreHistory = toTurns(history, character, persona.name, { regex: preset.regex });
+  // 副对话：主回复作为最后一条接在聊天记录后面；不放进 history，"距上次聊天"和世界书计时用的条数照旧
+  const reply = opts.reply ? [opts.reply] : [];
+  const turns = toTurns([...sendable, ...reply], character, persona.name, { last: last === undefined ? undefined : last + reply.length, regex: preset.regex, stats: turnStats });
+  const loreHistory = toTurns([...history, ...reply], character, persona.name, { regex: preset.regex });
   const result = assemblePrompt({
     preset,
     character,

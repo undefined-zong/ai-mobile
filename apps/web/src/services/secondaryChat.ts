@@ -5,11 +5,12 @@ import { useAiStore } from '@/stores/ai';
 import { useLibraryStore } from '@/stores/library';
 
 /**
- * 和主回复使用同一份历史及时间，只读世界书状态；不再次推进冷却、变量或记忆使用次数。
+ * 主回复写完后才调用：reply 是主对话这一轮写好的那条回复，接在聊天记录最后交给副对话，卡片、配图和附加任务参考它来写。
+ * 和主回复使用同一份历史及时间，只读世界书状态（chat 传主回复发出前的那份）；不再次推进冷却、变量或记忆使用次数。
  * 输出是要追加的正文和隐藏标签（不是 JSON）：主动卡片的写法在副对话预设自己的块里，
  * 按这一轮处理的标签发送对应卡片块（cardFlags），全部游戏都可用。
  */
-export async function secondaryChat(chat: Chat, character: Character, history: Message[], opts: ChatAssembleOptions, signal: AbortSignal) {
+export async function secondaryChat(chat: Chat, character: Character, history: Message[], reply: Message, opts: ChatAssembleOptions, signal: AbortSignal) {
   const ai = useAiStore();
   const lib = useLibraryStore();
   const tags = opts.allowedTags ?? [];
@@ -37,6 +38,7 @@ export async function secondaryChat(chat: Chat, character: Character, history: M
   }
   const prompt = assembleForChat(chat, character, history, {
     ...opts,
+    reply,
     agent: 'secondary',
     use: 'secondary',
     dryRun: true,

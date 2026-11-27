@@ -451,7 +451,8 @@ export const useChatStore = defineStore('chat', () => {
     const scene = getScene(chat.currentScene ?? 'free');
     const allowedTags = opts.allowedTags ?? sceneTags(scene, character);
     const ai = useAiStore();
-    const withSecondary = agent === 'main' && ai.isLive('main') && ai.isLive('secondary');
+    // 语音、视频通话（用途 call）不调用副对话：通话里只换表情和动作，没有卡片、配图要接，说完一句不用再等它
+    const withSecondary = agent === 'main' && opts.use !== 'call' && ai.isLive('main') && ai.isLive('secondary');
     const delegatedTags = withSecondary
       ? allowedTags.filter((tag) => SECONDARY_TAGS.includes(tag) && !(tag === 'cg' && opts.sceneArt))
       : [];
@@ -466,11 +467,8 @@ export const useChatStore = defineStore('chat', () => {
       abort.signal.throwIfAborted();
       const turn = { now, type: target ? 'swipe' as const : 'normal' as const, task: opts.task, targetId: target, flags: opts.flags };
       const prompt = assembleForChat(chat, character, history, { ...turn, agent, use: opts.use, allowedTags: mainTags, delegatedTags });
-      // 不 await：主、副请求一起开始，副对话提前完成时也只暂存结果，不执行任何卡片。
-      const secondary = withSecondary ? secondaryChat(chat, character, history, { ...turn, allowedTags: delegatedTags }, abort.signal).catch((e) => {
-        if (!isAbortError(e) && !abort.signal.aborted) ai.lastErrors.secondary = { at: Date.now(), summary: errorText(e), detail: errorReport(e) };
-        return null;
-      }) : null;
+      // 副对话等主回复写完才拼提示词：先留一份这一轮发出前的聊天状态，世界书计时和变量同主回复看到的一样
+      const turnChat: Chat = { ...chat };
       // 记下这条回复用了哪些记忆（重新生成时沿用）；重新生成不重复记"想起过"
       noteRecallUsed(id, prompt.recall.lines, !prompt.recall.reused);
       chat.loreState = prompt.loreState;
@@ -526,7 +524,7 @@ export const useChatStore = defineStore('chat', () => {
       raw = storeRegex(chat, character, result.text || raw, 'assistant', { preset: prompt.preset });
       let parsed = parseControlTags(raw, mainTags);
       msg.text = parsed.visible.trim();
-      // 主回复先显示完整正文；较慢的副对话只影响末尾追加，不阻塞主回复流式显示。
+      // 主回复先显示完整正文，再交给副对话；副对话写的只往末尾追加
       msg.parts = [{ type: 'text', text: msg.text }];
       msg.meta.error = undefined;
       msg.meta.errorDetail = undefined;
@@ -540,7 +538,14 @@ export const useChatStore = defineStore('chat', () => {
         msg.meta.tokens = result.tokens;
         msg.meta.fellBack = result.fellBack || undefined;
       }
-      const supplement = await secondary;
+      // 主回复写完了才问副对话：这条回复接在聊天记录最后交给它，记忆用主回复用的那些。
+      // 副对话失败或在写时被停止：保留主回复，不追加
+      const supplement = withSecondary
+        ? await secondaryChat(turnChat, character, history, msg, { ...turn, targetId: id, allowedTags: delegatedTags }, abort.signal).catch((e) => {
+            if (!isAbortError(e) && !abort.signal.aborted) ai.lastErrors.secondary = { at: Date.now(), summary: errorText(e), detail: errorReport(e) };
+            return null;
+          })
+        : null;
       msg = find(chatId, id);
       if (!msg) return;
       // 副对话给 [cg:] 选的画法（用途、时刻、模型）；主对话这一轮不发 [cg:]，所以只用在副对话的配图上
@@ -631,7 +636,7 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
     } finally {
-      // 主请求失败、消息被删或用户停止时，连同仍在运行的副请求一起取消。
+      // 这一轮结束（写完、失败、消息被删或停止）：取消还没结束的请求，清掉生成状态
       abort.abort();
       delete streams[chatId];
     }
