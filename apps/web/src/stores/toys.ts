@@ -6,7 +6,20 @@ import { useAiStore } from './ai';
 import { useLibraryStore } from './library';
 import { blockedReason, IntifaceClient, normalizeIntifaceUrl, type ToyDevice } from '@/services/intiface';
 import { MissingPresetError } from '@/services/prompt';
-import { DEFAULT_HEAD_LIMIT, emptyLevels, intensityOf, listHeads, ToyPlayer, type HeadLimit, type ToyHead, type ToyLevels, type ToyOutput } from '@/services/toyPlayer';
+import {
+  DEFAULT_HEAD_LIMIT,
+  emptyLevels,
+  intensityOf,
+  listHeads,
+  outputDuration,
+  outputLevel,
+  outputPosition,
+  ToyPlayer,
+  type HeadLimit,
+  type ToyHead,
+  type ToyLevels,
+  type ToyOutput,
+} from '@/services/toyPlayer';
 
 /**
  * 心跳里的玩具（设计文档 §9.14）：连 Intiface Central、列出连着的玩具、把指令放上去、按设置守着上限和安全时间。
@@ -147,6 +160,8 @@ export const useToyStore = defineStore('toys', () => {
   /** 指令没发出去（玩具断开、Intiface 报错）：最近一次 */
   const sendError = ref('');
   const server = ref('');
+  /** 连上用的协议版本（Intiface Central 3.0 起是 4） */
+  const protocol = ref<3 | 4 | null>(null);
   const scanning = ref(false);
   const devices = ref<ToyDevice[]>([]);
   const battery = reactive<Record<number, number | null>>({});
@@ -192,17 +207,18 @@ export const useToyStore = defineStore('toys', () => {
     scalar: (d, s) => void client.scalar(d, s).catch(fail),
     linear: (d, s) => void client.linear(d, s).catch(fail),
     rotate: (d, s) => void client.rotate(d, s).catch(fail),
+    output: (d, f, type, value, ms) => void client.output(d, f, type, value, ms).catch(fail),
     stopAll: () => {
       if (client.connected) void client.stopAll().catch(() => undefined);
     },
   };
-  /** 这个头的上限：单独设过的 → 以前按种类设的 → 默认 */
-  function headLimit(head: Pick<ToyHead, 'key' | 'kind'>): HeadLimit {
-    return settings.limits[head.key] ?? readLimit(settings.kindDefaults[head.kind], DEFAULT_HEAD_LIMIT);
+  /** 这个头的上限：单独设过的（新版 Intiface 上也认以前按 v3 存的键）→ 以前按种类设的 → 默认 */
+  function headLimit(head: Pick<ToyHead, 'key' | 'kind' | 'alias'>): HeadLimit {
+    return settings.limits[head.key] ?? (head.alias ? settings.limits[head.alias] : undefined) ?? readLimit(settings.kindDefaults[head.kind], DEFAULT_HEAD_LIMIT);
   }
 
   /** 改一个头的上限（设置里拖滑块） */
-  function setHeadLimit(head: Pick<ToyHead, 'key' | 'kind'>, patch: Partial<HeadLimit>) {
+  function setHeadLimit(head: Pick<ToyHead, 'key' | 'kind' | 'alias'>, patch: Partial<HeadLimit>) {
     settings.limits[head.key] = readLimit({ ...headLimit(head), ...patch }, DEFAULT_HEAD_LIMIT);
   }
 
@@ -258,6 +274,7 @@ export const useToyStore = defineStore('toys', () => {
     try {
       await client.connect(target);
       server.value = client.serverName;
+      protocol.value = client.protocol;
       status.value = 'connected';
       settings.autoConnect = true;
       devices.value = (await client.deviceList().catch(() => [] as ToyDevice[])).sort((a, b) => a.index - b.index);
@@ -300,6 +317,14 @@ export const useToyStore = defineStore('toys', () => {
       if (scalars.length) void client.scalar(d.index, scalars.map((h) => ({ Index: h.feature!.index, Scalar: amount(h), ActuatorType: h.feature!.actuator }))).catch(fail);
       if (rotations.length) void client.rotate(d.index, rotations.map((h) => ({ Index: h.feature!.index, Speed: amount(h), Clockwise: true }))).catch(fail);
       for (const h of mine) if (h.kind === 'linear' && h.feature!.via === 'linear') void client.linear(d.index, [{ Index: h.feature!.index, Duration: TEST.strokeMs, Position: place(h) }]).catch(fail);
+      // v4：一个头一条
+      for (const h of mine) {
+        const f = h.feature!;
+        if (f.via !== 'output') continue;
+        if (h.kind !== 'linear') void client.output(d.index, f.index, f.actuator, outputLevel(f, amount(h) * 100)).catch(fail);
+        else if (f.actuator === 'HwPositionWithDuration') void client.output(d.index, f.index, f.actuator, outputPosition(f, place(h) * 100), outputDuration(f, TEST.strokeMs)).catch(fail);
+        else void client.output(d.index, f.index, f.actuator, outputPosition(f, place(h) * 100)).catch(fail);
+      }
     };
     send(TEST.level, TEST.to);
     setTimeout(() => {
@@ -471,6 +496,7 @@ export const useToyStore = defineStore('toys', () => {
     error,
     sendError,
     server,
+    protocol,
     scanning,
     devices,
     battery,

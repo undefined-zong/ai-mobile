@@ -40,7 +40,7 @@ const SAFETY = [
 const deviceStatus = computed(() => ai.status('device'));
 const statusText = computed(() => {
   if (toys.status === 'connecting') return '正在连 Intiface Central…';
-  if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
+  if (toys.status === 'connected') return `已连上 ${toys.server || 'Intiface Central'}${toys.protocol ? `（v${toys.protocol}）` : ''}${toys.devices.length ? ` · ${toys.devices.length} 个玩具` : ' · 还没有玩具'}`;
   return '没连';
 });
 /** 这个玩具的每个头（上限各设各的） */
