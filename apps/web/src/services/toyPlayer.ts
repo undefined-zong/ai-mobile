@@ -21,6 +21,8 @@ import type { LinearSub, RotateSub, ScalarSub, ToyDevice, ToyFeature } from './i
  *   变速按 pattern / interval 走，loop 放完停在 0，不写 loop 一直循环；伸缩在两个位置之间来回。
  *   指令里的强度都是 0–100，写多少发多少，只有超过这个头的上限时压到上限（上限 80 时写 100 发 80、写 60 还是 60）；
  *   伸缩的位置超出这个头的范围时压回范围里，不快于它的"一下最快"；和上一次发的一样就不再发（省蓝牙）。
+ *   v4（Intiface Central 3.0 起）发整数档位：0–100 按这个头的 Value 范围换算，100 就是最高一档（同 Intiface 面板上拉满）。
+ *   开着的头每秒再发一遍现在的值：玩具重连、Intiface 那边被停过、中间转发丢了一条时，一秒内回到该有的强度。
  *   没连玩具时（"不连玩具也试试"）只在界面上算每个头的数值，心跳照样跟着走。
  * - ReplyTimeline：她一句话里的几条指令，读到 / 念到那个位置时执行。打字时按"读多快"往前走（不超过已经写出来的字），
  *   连麦时跟着她念到第几句（每句里按语速往前走）；指令来晚了（单独生成要等她说完）一下子到的几条合成一条再执行。
@@ -50,6 +52,8 @@ export interface ToyHead {
   name: string;
   device: ToyDevice | null;
   feature: ToyFeature | null;
+  /** 同一个头以前（v3）的键：按它存过的上限照用 */
+  alias?: string;
 }
 
 /** 按顺序排好的每个头（指令里写数组时按这个顺序对应）；简称里的序号在同一种里按顺序数 */
@@ -67,7 +71,8 @@ export function listHeads(devices: ToyDevice[]): ToyHead[] {
       at.set(feature.kind, i);
       const many = (perKind.get(feature.kind) ?? 0) > 1;
       const name = `${TOY_KIND_LABEL[feature.kind]}${many ? ` ${i}` : ''}${feature.descriptor && feature.descriptor !== 'N/A' ? `（${feature.descriptor}）` : ''}`;
-      return { key: `${dk}|${feature.via}:${feature.index}`, kind: feature.kind, name, device, feature };
+      const at4 = feature.via === 'output' ? `:${feature.actuator}` : '';
+      return { key: `${dk}|${feature.via}:${feature.index}${at4}`, kind: feature.kind, name, device, feature, ...(feature.legacy ? { alias: `${dk}|${feature.legacy}` } : {}) };
     });
   });
   return withShort(raw);
@@ -133,12 +138,37 @@ export interface ToyOutput {
   scalar(device: number, subs: ScalarSub[]): void;
   linear(device: number, subs: LinearSub[]): void;
   rotate(device: number, subs: RotateSub[]): void;
+  /** v4：一个头一个整数档位（伸缩带时长） */
+  output(device: number, feature: number, type: string, value: number, durationMs?: number): void;
   stopAll(): void;
+}
+
+/** v4：强度 0–100 → 这个头的整数档位（100 是最高一档）；旋转能反转（范围有负的）时逆时针发负数 */
+export function outputLevel(feature: ToyFeature, v: number, clockwise?: boolean): number {
+  const [lo, hi] = feature.range ?? [0, feature.steps];
+  const p = clamp(v, 0, 100) / 100;
+  if (p === 0) return clamp(0, lo, hi);
+  if (feature.kind === 'rotate' && clockwise === false && lo < 0) return -Math.max(1, Math.round(p * -lo));
+  return clamp(Math.max(1, Math.round(p * hi)), lo, hi);
+}
+
+/** v4：位置 0–100 → 这个头的 Value 范围里的整数 */
+export function outputPosition(feature: ToyFeature, pos: number): number {
+  const [lo, hi] = feature.range ?? [0, 100];
+  return Math.round(lo + (clamp(pos, 0, 100) / 100) * (hi - lo));
+}
+
+/** v4 HwPositionWithDuration：时长压到这个头能接受的范围里 */
+export function outputDuration(feature: ToyFeature, ms: number): number {
+  const [lo, hi] = feature.duration ?? [0, 100_000];
+  return Math.round(clamp(ms, lo, hi));
 }
 
 const ACTUATOR: Record<ScalarKind, string> = { vibrate: 'Vibrate', oscillate: 'Oscillate', rotate: 'Rotate', constrict: 'Constrict', inflate: 'Inflate' };
 /** 没连玩具时一种最多显示几个头（同 parseDeviceBlock 里数组最多几项） */
 const MAX_VIRTUAL = 8;
+/** 开着的头多久再发一遍现在的值（毫秒） */
+const HOLD_MS = 1000;
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
@@ -148,6 +178,9 @@ export class ToyPlayer {
   private timers: Partial<Record<ToyKind, ReturnType<typeof setTimeout>>> = {};
   /** 上一次发给每个头的值（一样就不再发） */
   private sent = new Map<string, number>();
+  /** 开着（不是 0）的头：上一次发的时候、怎么再发一遍；每秒再发一遍 */
+  private held = new Map<string, { at: number; send: () => void }>();
+  private holdTimer: ReturnType<typeof setInterval> | undefined;
   private towardTo = true;
   /** 没连玩具时每一种显示几个头（指令写了几个就几个） */
   private virtualCount: Partial<Record<ToyKind, number>> = {};
@@ -203,6 +236,8 @@ export class ToyPlayer {
     for (const t of Object.values(this.timers)) clearTimeout(t);
     this.timers = {};
     this.sent.clear();
+    this.held.clear();
+    this.unhold();
     this.out.stopAll();
     for (const h of this.levels.heads) {
       h.value = 0;
@@ -220,6 +255,37 @@ export class ToyPlayer {
     return this.levels.heads.find((h) => h.key === key);
   }
 
+  /** 记下这个头现在的值怎么发：不是 0 的每秒再发一遍，0 的不用 */
+  private hold(key: string, on: boolean, send: () => void) {
+    if (!on) {
+      this.held.delete(key);
+      if (!this.held.size) this.unhold();
+      return;
+    }
+    this.held.set(key, { at: Date.now(), send });
+    if (this.holdTimer) return;
+    this.holdTimer = setInterval(() => {
+      const devices = new Set(this.out.devices().map((d) => d.index));
+      const now = Date.now();
+      for (const [key, h] of this.held) {
+        // 玩具断开了：不再发它
+        if (!devices.size || !this.heads().some((x) => x.key === key && x.device && devices.has(x.device.index))) {
+          this.held.delete(key);
+          continue;
+        }
+        if (now - h.at < HOLD_MS) continue;
+        h.at = now;
+        h.send();
+      }
+      if (!this.held.size) this.unhold();
+    }, HOLD_MS / 2);
+  }
+
+  private unhold() {
+    clearInterval(this.holdTimer);
+    this.holdTimer = undefined;
+  }
+
   /** 给这一种设一个强度（一个数是所有头，数组是每个头各自的），超过这个头上限的压到上限 */
   private setLevel(kind: ScalarKind, step: number | number[], clockwise?: boolean) {
     if (!this.out.devices().length && Array.isArray(step) && step.length > (this.virtualCount[kind] ?? 1)) this.virtualCount[kind] = Math.min(MAX_VIRTUAL, step.length);
@@ -232,13 +298,25 @@ export class ToyPlayer {
       if (lv) lv.value = v;
       const { device, feature } = head;
       if (!device || !feature) return;
+      if (feature.via === 'output') {
+        const value = outputLevel(feature, v, clockwise);
+        const send = () => this.out.output(device.index, feature.index, feature.actuator, value);
+        this.hold(head.key, value !== 0, send);
+        if (this.sent.get(head.key) === value) return;
+        this.sent.set(head.key, value);
+        send();
+        return;
+      }
       const scalar = Math.round((v / 100) * feature.steps) / feature.steps;
       const key = `${head.key}${feature.via === 'rotate' ? `:${clockwise !== false}` : ''}`;
+      const rotation: RotateSub = { Index: feature.index, Speed: scalar, Clockwise: clockwise !== false };
+      const sub: ScalarSub = { Index: feature.index, Scalar: scalar, ActuatorType: feature.actuator || ACTUATOR[kind] };
+      this.hold(head.key, scalar > 0, () => (feature.via === 'rotate' ? this.out.rotate(device.index, [rotation]) : this.out.scalar(device.index, [sub])));
       if (this.sent.get(key) === scalar) return;
       this.sent.set(key, scalar);
       const g = byDevice.get(device.index) ?? { scalars: [], rotations: [] };
-      if (feature.via === 'rotate') g.rotations.push({ Index: feature.index, Speed: scalar, Clockwise: clockwise !== false });
-      else g.scalars.push({ Index: feature.index, Scalar: scalar, ActuatorType: feature.actuator || ACTUATOR[kind] });
+      if (feature.via === 'rotate') g.rotations.push(rotation);
+      else g.scalars.push(sub);
       byDevice.set(device.index, g);
     });
     for (const [device, g] of byDevice) {
@@ -345,7 +423,11 @@ export class ToyPlayer {
   private sendLinear(head: ToyHead, pos: number, ms: number) {
     const { device, feature } = head;
     if (!device || !feature) return;
-    if (feature.via === 'linear') this.out.linear(device.index, [{ Index: feature.index, Duration: ms, Position: Math.round(pos) / 100 }]);
+    if (feature.via === 'output') {
+      const value = outputPosition(feature, pos);
+      if (feature.actuator === 'HwPositionWithDuration') this.out.output(device.index, feature.index, feature.actuator, value, outputDuration(feature, ms));
+      else this.out.output(device.index, feature.index, feature.actuator, value);
+    } else if (feature.via === 'linear') this.out.linear(device.index, [{ Index: feature.index, Duration: ms, Position: Math.round(pos) / 100 }]);
     else this.out.scalar(device.index, [{ Index: feature.index, Scalar: Math.round(pos) / 100, ActuatorType: feature.actuator || 'Position' }]);
   }
 }
