@@ -451,7 +451,8 @@ export const useChatStore = defineStore('chat', () => {
     const scene = getScene(chat.currentScene ?? 'free');
     const allowedTags = opts.allowedTags ?? sceneTags(scene, character);
     const ai = useAiStore();
-    const withSecondary = agent === 'main' && ai.isLive('main') && ai.isLive('secondary');
+    // 语音、视频通话（用途 call）不调用副对话：通话里只换表情和动作，没有卡片、配图要接，说完一句不用再等它
+    const withSecondary = agent === 'main' && opts.use !== 'call' && ai.isLive('main') && ai.isLive('secondary');
     const delegatedTags = withSecondary
       ? allowedTags.filter((tag) => SECONDARY_TAGS.includes(tag) && !(tag === 'cg' && opts.sceneArt))
       : [];
