@@ -1,4 +1,4 @@
-import { BACKGROUND_KINDS, backdropKindFor, getScene, type BackgroundPlace, type BackdropKey, type Character, type MapLocation, type SceneFigureAdjust, type TimeOfDay } from '@app/shared';
+import { BACKGROUND_KINDS, backdropKindFor, getScene, worldOfLocation, type BackgroundPlace, type BackdropKey, type Character, type MapLocation, type SceneFigureAdjust, type TimeOfDay } from '@app/shared';
 import type { InjectionKey, Ref } from 'vue';
 import { SLEEP_PRESET_PLACES, sleepSceneLayoutKey } from './sleep/places';
 
@@ -21,6 +21,10 @@ export function backgroundPlaceAt(loc: MapLocation | null | undefined, sceneId: 
   if (!loc) return null;
   if (!atHome(loc)) return loc;
   const backdrop = backdropAt(loc, sceneId) as BackdropKey;
+  // 住处那一片里单独写了这个房间（如"静心书斋"）：在家学习就用那间屋子和它选好的背景，和角色卡 → 背景里看到的一致
+  const room = backdrop === backdropKindFor(loc) ? undefined
+    : worldOfLocation(loc.id)?.locations.find((l) => l.area === 'home' && l.id !== loc.id && backdropKindFor(l) === backdrop);
+  if (room) return room;
   return {
     id: `${loc.id}:${backdrop}`, name: BACKGROUND_KINDS[backdrop].label, backdrop, indoor: true,
     // 一个卧室系列不能被套用到厨房或书房；风格由 StageView 的世界观上下文继续保留。

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { previewImages } from '@/services/imageViewer';
-import type { Character, MapLocation } from '@app/shared';
+import { backdropKindFor, type Character, type MapLocation } from '@app/shared';
 
 import { computed, ref, watch } from 'vue';
 import {
@@ -24,7 +24,9 @@ const periods = (f: BackgroundFamily) => [...new Set(f.assets.map((a) => a.perio
 const rows = computed(() => (world.value?.locations ?? []).map((loc) => {
   const fixed = rhythm.backgroundSetOf(props.character.id, loc.id);
   const used = ranked(loc, fixed)[0]!;
-  return { loc, fixed, used };
+  /** 住处的主房间（卧室、客厅这类）：在家做别的事时换到书房、厨房等 */
+  const mainRoom = loc.area === 'home' && ['bedroom', 'room', 'living'].includes(backdropKindFor(loc));
+  return { loc, fixed, used, mainRoom };
 }));
 
 // —— 选择面板 ——
@@ -74,7 +76,7 @@ const isOn = (f: BackgroundFamily) => !!current.value && (f.id === current.value
         <span class="flex-1 min-w-0">
           <span class="block text-[14px] truncate"><span :class="r.loc.icon" class="text-accent-ink mr-1" />{{ r.loc.name }}</span>
           <span class="block text-[12px] text-ink-3 truncate">{{ r.fixed ? '固定' : '自动' }} · {{ r.used.scene }} · {{ r.used.style }}</span>
-          <span v-if="r.loc.area === 'home'" class="block text-[11.5px] text-ink-3 truncate">只换主房间；书房、厨房等仍按房间自动选</span>
+          <span v-if="r.mainRoom" class="block text-[11.5px] text-ink-3 truncate">只换主房间；书房、厨房等用住处里对应的地点，没有就自动选</span>
         </span>
         <span class="i-lucide-chevron-right text-ink-3" />
       </button>
