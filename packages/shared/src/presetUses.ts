@@ -154,7 +154,7 @@ const SCENE_USE_TEXT: Partial<Record<FeatureSceneId, { label?: string; desc: str
 };
 
 export const PRESET_USES: PresetUse[] = [
-  { id: 'secondary', category: 'feature', label: '副对话', desc: '与主对话并行决定主动卡片、生图和附加任务，生成内容在主回复结束后追加', icon: 'i-lucide-messages-square', follow: null },
+  { id: 'secondary', category: 'feature', label: '副对话', desc: '主回复写完后参考它决定主动卡片、生图和附加任务，生成内容追加在主回复末尾', icon: 'i-lucide-messages-square', follow: null },
   { id: 'call', category: 'chat', label: '语音通话', desc: '打电话时Ta说的话：短句、口语、不写动作，方便边生成边合成语音', icon: 'i-lucide-phone', follow: 'chat' },
   ...SCENES.map((s): PresetUse => {
     const text = SCENE_USE_TEXT[s.id as FeatureSceneId];

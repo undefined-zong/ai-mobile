@@ -216,7 +216,7 @@ export const AGENT_META: Record<
   },
   secondary: {
     label: '副对话',
-    desc: '与主对话同时生成，决定主动卡片、是否配图及生图模型和用途，并完成预设中的附加任务；结果在主回复结束后追加。默认跟随「陪伴 · 快速」，也可单独设置 API',
+    desc: '主回复写完后参考它生成，决定主动卡片、是否配图及生图模型和用途，并完成预设中的附加任务；结果追加在主回复末尾。默认跟随「陪伴 · 快速」，也可单独设置 API',
     capability: 'chat',
     runsOn: 'client',
     icon: 'i-lucide-messages-square',
