@@ -85,6 +85,11 @@ export const useHomeStore = defineStore('home', () => {
     return toMinutes(useEnvironmentStore().settings.sleepTime) ?? 24 * 60;
   }
 
+  /** 起床时间：早上的家务从起床前一小时才算"该做了"（凌晨 4 点家务日翻篇时还没睡的，不会被催早上的） */
+  function wakeMin(): number {
+    return toMinutes(useEnvironmentStore().settings.wakeTime) ?? 7 * 60;
+  }
+
   /** 这个人设最近的记录：日期 → 那天 */
   function history(personaId: string): Record<ISODate, ChoreDay> {
     const out: Record<ISODate, ChoreDay> = {};
@@ -95,18 +100,18 @@ export const useHomeStore = defineStore('home', () => {
   /** 今天的清单（没开家务系统时是空的） */
   function itemsFor(persona: Persona): ChoreItem[] {
     void now.value;
-    return choreItems({ settings: persona.housework ?? DEFAULT_HOUSEWORK, date: today.value, nowMin: nowMin(), sleepMin: sleepMin(), history: history(persona.id) });
+    return choreItems({ settings: persona.housework ?? DEFAULT_HOUSEWORK, date: today.value, nowMin: nowMin(), sleepMin: sleepMin(), wakeMin: wakeMin(), history: history(persona.id) });
   }
 
   /** 某一天的清单（今天的同 itemsFor；以后的那天按那天一开始算，还没有过了时间的） */
   function itemsOn(persona: Persona, date: ISODate): ChoreItem[] {
     if (date === today.value) return itemsFor(persona);
-    return choreItems({ settings: persona.housework ?? DEFAULT_HOUSEWORK, date, nowMin: 0, sleepMin: sleepMin(), history: history(persona.id) });
+    return choreItems({ settings: persona.housework ?? DEFAULT_HOUSEWORK, date, nowMin: 0, sleepMin: sleepMin(), wakeMin: wakeMin(), history: history(persona.id) });
   }
 
   /** 最近 7 天（不含今天）做完几件、没做几件、拖得最多的 */
   function recentFor(persona: Persona) {
-    return choreRecent({ settings: persona.housework ?? DEFAULT_HOUSEWORK, date: today.value, sleepMin: sleepMin(), history: history(persona.id) });
+    return choreRecent({ settings: persona.housework ?? DEFAULT_HOUSEWORK, date: today.value, sleepMin: sleepMin(), wakeMin: wakeMin(), history: history(persona.id) });
   }
 
   /** 今天这件的记录（没有就建一个） */

@@ -173,21 +173,29 @@ function sleepOf(sleepMin: number): number {
   return sleepMin < 720 ? sleepMin + 1440 : sleepMin;
 }
 
-/** 这一次最晚什么时候做完（从家务日 0 点算的分钟；过了半夜的大于 1440） */
-export function slotDeadline(slot: ChoreWhen, sleepMin: number): number {
+/**
+ * 早上（和"随时"）的从什么时候开始算：起床前一小时。家务日凌晨 4 点就翻篇了，
+ * 熬到四点多还没睡的人这时候被催"早上洗脸"不对；起床时间写得很早的也不早于 4 点。
+ */
+function dayOpens(wakeMin: number): number {
+  return Math.max(4 * 60, wakeMin - 60);
+}
+
+/** 这一次最晚什么时候做完（从家务日 0 点算的分钟；过了半夜的大于 1440）。早上的最晚到起床后 3 小时，不早于 11 点 */
+export function slotDeadline(slot: ChoreWhen, sleepMin: number, wakeMin: number): number {
   const sleep = sleepOf(sleepMin);
-  if (slot === 'morning') return 11 * 60;
+  if (slot === 'morning') return Math.max(11 * 60, wakeMin + 180);
   if (slot === 'noon') return 14 * 60;
   if (slot === 'evening') return Math.min(22 * 60, sleep);
   return sleep;
 }
 
 /** 这一次从什么时候开始算"该做了"（之前提了也是"还没到时候"） */
-export function slotOpens(slot: ChoreWhen, sleepMin: number): number {
+export function slotOpens(slot: ChoreWhen, sleepMin: number, wakeMin: number): number {
   if (slot === 'noon') return 10 * 60 + 30;
   if (slot === 'evening') return 17 * 60;
   if (slot === 'bedtime') return Math.max(20 * 60, sleepOf(sleepMin) - 180);
-  return 4 * 60;
+  return dayOpens(wakeMin);
 }
 
 // —— 今天的清单 ——
@@ -228,6 +236,8 @@ export interface ChoreDayInput {
   nowMin: number;
   /** 你的睡觉时间（"环境与作息"，分钟） */
   sleepMin: number;
+  /** 你的起床时间（"环境与作息"，分钟）：早上的家务从起床前一小时才算"该做了" */
+  wakeMin: number;
   /** 最近的记录（含今天） */
   history: Record<ISODate, ChoreDay | undefined>;
 }
@@ -257,7 +267,7 @@ function lastDoneBefore(history: ChoreDayInput['history'], c: ChoreDef, date: IS
 
 /** 今天要做的家务（还没开的系统返回空）。按什么时候该做排好 */
 export function choreItems(input: ChoreDayInput): ChoreItem[] {
-  const { settings, date, nowMin, sleepMin, history } = input;
+  const { settings, date, nowMin, sleepMin, wakeMin, history } = input;
   if (!settings.enabled) return [];
   const weekday = weekdayOf(date);
   const today = history[date]?.marks ?? {};
@@ -273,7 +283,7 @@ export function choreItems(input: ChoreDayInput): ChoreItem[] {
       for (const slot of c.slots) {
         const key = `${c.id}:${slot}`;
         const mark = today[key] ?? EMPTY;
-        const dueMin = slotDeadline(slot, sleepMin);
+        const dueMin = slotDeadline(slot, sleepMin, wakeMin);
         out.push({
           ...base,
           key,
@@ -282,7 +292,7 @@ export function choreItems(input: ChoreDayInput): ChoreItem[] {
           when: CHORE_WHEN[slot].label,
           mark,
           overdue: mark.status !== 'done' && nowMin >= dueMin,
-          early: mark.status === 'todo' && nowMin < slotOpens(slot, sleepMin),
+          early: mark.status === 'todo' && nowMin < slotOpens(slot, sleepMin, wakeMin),
           dueMin,
           missedDays: missed,
         });
@@ -292,7 +302,7 @@ export function choreItems(input: ChoreDayInput): ChoreItem[] {
     const slot = c.slots[0] ?? 'any';
     const key = `${c.id}:w`;
     const mark = today[key] ?? EMPTY;
-    const dueMin = slotDeadline(slot, sleepMin);
+    const dueMin = slotDeadline(slot, sleepMin, wakeMin);
     if (c.days.length) {
       // 固定日子：今天就是那天，或者最近那天没做、一直拖到今天
       let due: ISODate | null = null;
@@ -318,7 +328,7 @@ export function choreItems(input: ChoreDayInput): ChoreItem[] {
         when: carried ? `${WEEKDAY_LABEL[weekdayOf(carried)]}的，拖到了今天` : choreSchedule(c),
         mark,
         overdue: mark.status !== 'done' && (!!carried || nowMin >= dueMin),
-        early: !carried && mark.status === 'todo' && nowMin < slotOpens(slot, sleepMin),
+        early: !carried && mark.status === 'todo' && nowMin < slotOpens(slot, sleepMin, wakeMin),
         dueMin,
         ...(carried ? { carriedFrom: carried } : {}),
         missedDays: 0,
@@ -353,7 +363,7 @@ export function choreItems(input: ChoreDayInput): ChoreItem[] {
   for (const x of history[date]?.extra ?? []) {
     const key = `extra:${x.id}`;
     const mark = today[key] ?? EMPTY;
-    const dueMin = slotDeadline(x.slot, sleepMin);
+    const dueMin = slotDeadline(x.slot, sleepMin, wakeMin);
     out.push({
       key,
       chore: extraChoreDef(x),
@@ -362,7 +372,7 @@ export function choreItems(input: ChoreDayInput): ChoreItem[] {
       when: `${CHORE_WHEN[x.slot].label}${x.meal ? ` · 给${x.meal}` : ''}`,
       mark,
       overdue: mark.status !== 'done' && nowMin >= dueMin,
-      early: mark.status === 'todo' && nowMin < slotOpens(x.slot, sleepMin),
+      early: mark.status === 'todo' && nowMin < slotOpens(x.slot, sleepMin, wakeMin),
       dueMin,
       lastDone: null,
       sinceDone: null,
@@ -456,7 +466,8 @@ export function formatChoreBlock(opts: {
   const lines = items.map((it) => {
     const extra = it.chore.freq === 'weekly' ? `（${it.week ? `每周 ${it.week.need} 次，这周做了 ${it.week.done} 次` : choreSchedule(it.chore)}）` : '';
     const label = it.extra ? `${it.label}（健康计划里要提前做的${it.extra.meal ? `，给${it.extra.meal}` : ''}）` : it.chore.freq === 'daily' ? it.label : `${it.label}${extra}`;
-    const pending = it.mark.status !== 'done' && (it.overdue || it.mark.status === 'later' || it.missedDays > 0);
+    // 还没到时候的不带"没做时"：之前几天没做也一样，不然中午就因为"昨天没刷牙"嫌弃睡前刷牙、凌晨四点催早上洗脸
+    const pending = it.mark.status !== 'done' && !it.early && (it.overdue || it.mark.status === 'later' || it.missedDays > 0);
     const effect = pending ? effectLine(it.chore, userName) : '';
     return `- ${label}：${choreStateText(it, opts.timeZone)}${effect ? `｜没做时：${effect}` : ''}`;
   });
